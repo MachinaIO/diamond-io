@@ -1,9 +1,13 @@
 [package]
-name = "bgg_encoding"
+name = "diamond-io"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-phantom-zone-crypto = { git = "https://github.com/gausslabs/phantom-zone", branch = "rewrite", features = ["dev"]}
-phantom-zone-math = { git = "https://github.com/gausslabs/phantom-zone", branch = "rewrite", features = ["dev"] }
+phantom-zone-crypto = { git = "https://github.com/gausslabs/phantom-zone", branch = "rewrite", features = [
+    "dev",
+] }
+phantom-zone-math = { git = "https://github.com/gausslabs/phantom-zone", branch = "rewrite", features = [
+    "dev",
+] }
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
