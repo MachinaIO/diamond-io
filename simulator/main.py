@@ -36,12 +36,15 @@ def derive_auto_params(
     # sigma_b = math.ceil(2 * math.sqrt(n * log_p))
     secpar_s = math.ceil(output_secpar(n, q, Binary, sigma_e))
     print("secpar_n:", secpar_s)
-    secpar_t = math.ceil(output_secpar(n_t, q, UniformMod(q), sigma_e))
+    secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
     print("secpar_t", secpar_t)
     secpar = min(target_secpar, secpar_s, secpar_t)
     print("secpar:", secpar)
     sigma_b = math.ceil(math.sqrt(math.log(2 * n * 2 ** (80)) / 3.14))
     print("sigma_b:", sigma_b)
+    print("sigma_b**2", sigma_b**2)
+    print("n * math.ceil(log_q / math.log2(t)))", n * math.ceil(log_q / math.log2(t)))
+    print("math.sqrt(2 * n)", math.sqrt(2 * n))
     sigma_b = math.ceil(
         1.3
         * (t + 1)
@@ -92,7 +95,7 @@ def derive_auto_params(
     }
 
 
-def estimate_noise_norm(params, input: int, output: int, depth: int):
+def estimate_noise_norm(params, input: int, output: int, depth: int, scale: int = 0):
     q = params["q"]
     log_q = params["log_q"]
     n = params["n"]
@@ -121,7 +124,7 @@ def estimate_noise_norm(params, input: int, output: int, depth: int):
     )
     # print("b_c", b_c)
     print("log b_c", math.log2(b_c) if b_c > 0 else 0)
-    input_ext = 1 + input
+    input_ext = 1 + input + 256
     # 1 + input + m * (256 + 2 * secpar) * (n + 1) * log_q
     # b_f_exp1 = math.ceil(
     #     depth * math.ceil(math.log2(m_s)) * math.ceil(math.log2(log_q))
@@ -187,10 +190,10 @@ def estimate_obf_size(params, input: int, output: int, depth: int):
     # print("FHE size", (m * (256 + 2 * secpar) * (n + 1) * log_q) / 8 / 10**9)
 
     # input_ext = 1 + input + m * (256) * (n + 1) * log_q
-    input_ext = 1 + input
+    input_ext = 1 + input + 256
     # 2252 + 6000
     # c_att
-    # print("poly size", log_q * n / 8 / 10**6)
+    print("poly size", log_q * n / 8 / 10**6)
     c_att_size = log_q * n * input_ext * m
     size += c_att_size
     print("c_att", c_att_size / 8 / 10**9)
@@ -206,16 +209,24 @@ def estimate_obf_size(params, input: int, output: int, depth: int):
     # M/N size
     m_n_size = math.log(bound_b) * n * m_b * m_b
     print("m_n_size", m_n_size / 8 / 10**9)
-    size += 2 * input * 2 * m_n_size
+    print("m_n_size total", m_n_size * 4 / 8 / 10**9)
+    size += 2 * 2 * m_n_size
     # K size
     # k_size = math.log(bound_b) * m_b * (input_ext + n + 1) * m_s
     # print("log_q", log_q)
     # print("(2 + log_q)", m_b)
     # print("(input_ext + n + 1)", (input_ext + n + 1))
     # print("n_s", n_s)
+    print("log bound_b", math.log(bound_b))
+    print("n", n)
+    print("m_b", m_b)
+    print("input_ext", input_ext)
+    # print("(2 * input_ext + log_q)", (2 * input_ext + log_q))
     k_size = math.log(bound_b) * n * m_b * (input_ext + 1) * m
+    # (input_ext + 1) * m
     # log_q * (2 + log_q) * 2 * (input_ext + n + 1) * log_q * n_s
     print("k_size", k_size / 8 / 10**9)
+    print("k_size total", k_size * 2 * input / 8 / 10**9)
     size += input * 2 * k_size
     # K_f
     k_f_size = math.log(bound_b) * n * m_b * output
@@ -233,8 +244,8 @@ if __name__ == "__main__":
     depth = 1
     n = 2**14
     n_t = 2**14
-    q = 2**600
-    alpha = 2 ** (-500)
+    q = 2**360
+    alpha = 2 ** (-350)
     # target_secpar = 80
     params = derive_auto_params(n, n_t, q, math.ceil(alpha * q))
     print(params)
@@ -306,3 +317,5 @@ if __name__ == "__main__":
 # Feb 6, 2025
 # use entral Limit Theorem in the same manner as https://eprint.iacr.org/2017/844.pdf#page=2.10
 # input=2, output=1, depth=1, n=2**14, q=2**266, sigma_e= 2 ** (266 - 280), secpar=80, size = 86.15488343974047 GB
+# input=4, output=1, depth=1, n=2**14, q=2**415, sigma_e= 2 ** (415 - 400), secpar=80, size = 588.9914980146344 GB
+# input=4, output=1, depth=1, n=2**14, q=2**360, sigma_e= 2 ** (360 - 350), secpar=45, size = 47.30886415590917 GB
