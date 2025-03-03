@@ -26,7 +26,17 @@ impl Debug for DCRTPolyMatrix {
 
 impl PartialEq for DCRTPolyMatrix {
     fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner && self.nrow == other.nrow && self.ncol == other.ncol
+        let mut is_all_equal = true;
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                if self.inner[i][j] != other.inner[i][j] {
+                    println!("Mismatch at ({}, {})", i, j);
+                    is_all_equal = false;
+                    break;
+                }
+            }
+        }
+        is_all_equal && self.nrow == other.nrow && self.ncol == other.ncol
     }
 }
 
@@ -472,6 +482,61 @@ mod tests {
         let value = FinRingElem::new(5u32, params.modulus());
         matrix.inner[0][0] = DCRTPoly::from_const(&params, &value);
         matrix.inner[1][1] = DCRTPoly::from_const(&params, &value);
+        let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, 2);
+        assert_eq!(gadget_matrix.row_size(), 2);
+        assert_eq!(gadget_matrix.col_size(), 2 * bit_length);
+        let decomposed = matrix.decompose();
+        assert_eq!(decomposed.row_size(), 2 * bit_length);
+        assert_eq!(decomposed.col_size(), 8);
+
+        let expected_matrix = gadget_matrix * decomposed;
+        assert_eq!(expected_matrix.row_size(), 2);
+        assert_eq!(expected_matrix.col_size(), 8);
+        assert_eq!(matrix, expected_matrix);
+    }
+
+    #[test]
+    fn test_decompose2() {
+        let params = DCRTPolyParams::default();
+        let bit_length = params.modulus_bits();
+
+        // Create a simple 2x8 matrix with some non-zero values
+        let mut matrix = DCRTPolyMatrix::zero(&params, 2, 8);
+        assert_eq!(matrix.row_size(), 2);
+        assert_eq!(matrix.col_size(), 8);
+        // let value = FinRingElem::new(5u32, params.modulus());
+        matrix.inner[0][0] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(5u32, params.modulus()));
+        matrix.inner[1][0] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(821u32, params.modulus()));
+        matrix.inner[0][1] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(12u32, params.modulus()));
+        matrix.inner[1][1] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(76u32, params.modulus()));
+        matrix.inner[0][2] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(98u32, params.modulus()));
+        matrix.inner[1][2] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(192u32, params.modulus()));
+        matrix.inner[0][3] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(273u32, params.modulus()));
+        matrix.inner[1][3] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(8278u32, params.modulus()));
+        matrix.inner[0][4] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(920u32, params.modulus()));
+        matrix.inner[1][4] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(128u32, params.modulus()));
+        matrix.inner[0][5] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(823u32, params.modulus()));
+        matrix.inner[1][5] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(19u32, params.modulus()));
+        matrix.inner[0][6] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(573u32, params.modulus()));
+        matrix.inner[1][6] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(91u32, params.modulus()));
+        matrix.inner[0][7] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(76u32, params.modulus()));
+        matrix.inner[1][7] =
+            DCRTPoly::from_const(&params, &FinRingElem::new(54u32, params.modulus()));
         let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, 2);
         assert_eq!(gadget_matrix.row_size(), 2);
         assert_eq!(gadget_matrix.col_size(), 2 * bit_length);

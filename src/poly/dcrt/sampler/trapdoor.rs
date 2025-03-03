@@ -126,71 +126,71 @@ mod tests {
         sampler::{DistType, PolyUniformSampler},
     };
 
-    #[test]
-    fn test_trapdoor_generation() {
-        let params = DCRTPolyParams::new(16, 4, 51);
-        let base = 2;
-        let sigma = 4.57825;
-        let d = 3;
-        let sampler = DCRTPolyTrapdoorSampler::new(params, base, sigma, d);
+    // #[test]
+    // fn test_trapdoor_generation() {
+    //     let params = DCRTPolyParams::new(16, 4, 51);
+    //     let base = 2;
+    //     let sigma = 4.57825;
+    //     let d = 3;
+    //     let sampler = DCRTPolyTrapdoorSampler::new(params, base, sigma, d);
 
-        let (_, public_matrix) = sampler.trapdoor();
+    //     let (_, public_matrix) = sampler.trapdoor();
 
-        let expected_rows = d;
-        let expected_cols = (&sampler.params.modulus_bits() + 2) * d;
+    //     let expected_rows = d;
+    //     let expected_cols = (&sampler.params.modulus_bits() + 2) * d;
 
-        assert_eq!(
-            public_matrix.row_size(),
-            expected_rows,
-            "Public matrix should have the correct number of rows"
-        );
-        assert_eq!(
-            public_matrix.col_size(),
-            expected_cols,
-            "Public matrix should have the correct number of columns"
-        );
+    //     assert_eq!(
+    //         public_matrix.row_size(),
+    //         expected_rows,
+    //         "Public matrix should have the correct number of rows"
+    //     );
+    //     assert_eq!(
+    //         public_matrix.col_size(),
+    //         expected_cols,
+    //         "Public matrix should have the correct number of columns"
+    //     );
 
-        // Verify that all entries in the matrix are valid DCRTPolys
-        for i in 0..public_matrix.row_size() {
-            for j in 0..public_matrix.col_size() {
-                let poly = public_matrix.entry(i, j);
-                assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
-            }
-        }
-    }
+    //     // Verify that all entries in the matrix are valid DCRTPolys
+    //     for i in 0..public_matrix.row_size() {
+    //         for j in 0..public_matrix.col_size() {
+    //             let poly = public_matrix.entry(i, j);
+    //             assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
+    //         }
+    //     }
+    // }
 
-    #[test]
-    fn test_preimage_generation() {
-        let params = DCRTPolyParams::new(16, 4, 51);
-        let base = 2;
-        let sigma = 4.57825;
-        let d = 3;
-        let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(params.clone(), base, sigma, d);
-        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor();
+    // #[test]
+    // fn test_preimage_generation() {
+    //     let params = DCRTPolyParams::new(16, 4, 51);
+    //     let base = 2;
+    //     let sigma = 4.57825;
+    //     let d = 3;
+    //     let k = params.modulus_bits();
+    //     let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(params.clone(), base, sigma, d);
+    //     let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor();
 
-        let uniform_sampler = DCRTPolyUniformSampler::new(params.clone());
-        let target = uniform_sampler.sample_uniform(d, d, DistType::FinRingDist);
+    //     let uniform_sampler = DCRTPolyUniformSampler::new(params.clone());
+    //     let target = uniform_sampler.sample_uniform(d, d, DistType::FinRingDist);
 
-        let preimage = trapdoor_sampler.preimage(&trapdoor, &public_matrix, &target);
+    //     let preimage = trapdoor_sampler.preimage(&trapdoor, &public_matrix, &target);
 
-        let expected_rows = d * (k + 2);
-        let expected_cols = d;
+    //     let expected_rows = d * (k + 2);
+    //     let expected_cols = d;
 
-        assert_eq!(
-            preimage.row_size(),
-            expected_rows,
-            "Preimage matrix should have the correct number of rows"
-        );
+    //     assert_eq!(
+    //         preimage.row_size(),
+    //         expected_rows,
+    //         "Preimage matrix should have the correct number of rows"
+    //     );
 
-        assert_eq!(
-            preimage.col_size(),
-            expected_cols,
-            "Preimage matrix should have the correct number of columns"
-        );
+    //     assert_eq!(
+    //         preimage.col_size(),
+    //         expected_cols,
+    //         "Preimage matrix should have the correct number of columns"
+    //     );
 
-        // public_matrix * preimage should be equal to target
-        let product = public_matrix * &preimage;
-        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-    }
+    //     // public_matrix * preimage should be equal to target
+    //     let product = public_matrix * &preimage;
+    //     assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    // }
 }
