@@ -230,7 +230,7 @@ mod tests {
             key in any::<[u8; 32]>(),
             tag in any::<u64>(),
         ) {
-            let params = DCRTPolyParams::default();
+            let params = DCRTPolyParams::default(); // replace with let params = DCRTPolyParams::new(32, 4, 51);
             let tag_bytes = tag.to_le_bytes();
             let sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params.clone());
             let matrix = sampler.sample_hash(tag_bytes, rows, columns, DistType::BitDist);
