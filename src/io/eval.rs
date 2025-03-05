@@ -1,5 +1,5 @@
 use super::utils::*;
-use super::Obfuscation;
+use super::{Obfuscation, ObfuscationParams};
 use crate::bgg::sampler::BGGPublicKeySampler;
 use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
 use crate::utils::*;
@@ -7,7 +7,7 @@ use itertools::Itertools;
 use std::sync::Arc;
 
 pub fn eval_obf<M, S>(
-    params: <M::P as Poly>::Params,
+    obf_params: ObfuscationParams<M>,
     mut sampler: S,
     obfuscation: Obfuscation<M>,
     input: &[bool],
@@ -17,19 +17,19 @@ where
     S: PolyHashSampler<[u8; 32], M = M>,
 {
     sampler.set_key(obfuscation.hash_key);
-    let params = Arc::new(params);
+    let params = Arc::new(obf_params.params.clone());
     let sampler = Arc::new(sampler);
     let dim = params.as_ref().ring_dimension() as usize;
-    let input_size = input.len();
-    let packed_input_size = input_size.div_ceil(dim);
+    #[cfg(debug_assertions)]
+    assert_eq!(input.len(), obf_params.input_size);
+    let packed_input_size = obf_params.input_size.div_ceil(dim);
+    let packed_output_size = obf_params.output_size.div_ceil(dim);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(params.clone(), sampler.clone());
     let public_data = PublicSampledData::sample(
-        params.as_ref(),
-        sampler,
+        &obf_params,
         &bgg_pubkey_sampler,
-        input_size,
         packed_input_size,
-        1,
+        packed_output_size,
     );
     let (mut ps, mut cs_input, mut cs_fhe_key) = (vec![], vec![], vec![]);
     ps.push(obfuscation.p_init.clone());

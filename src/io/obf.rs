@@ -1,5 +1,5 @@
 use super::utils::*;
-use super::Obfuscation;
+use super::{Obfuscation, ObfuscationParams};
 use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
 use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
 use crate::utils::*;
@@ -7,10 +7,8 @@ use rand::{Rng, RngCore};
 use std::sync::Arc;
 
 pub fn obfuscate<M, S, R>(
-    params: <M::P as Poly>::Params,
+    obf_params: ObfuscationParams<M>,
     mut sampler: S,
-    input_size: usize,
-    error_gauss_sigma: f64,
     rng: &mut R,
 ) -> Obfuscation<M>
 where
@@ -21,21 +19,24 @@ where
     let hash_key = rng.random::<[u8; 32]>();
     sampler.set_key(hash_key);
     let sampler = Arc::new(sampler);
-    let params = Arc::new(params);
+    let params = Arc::new(obf_params.params.clone());
     let dim = params.as_ref().ring_dimension() as usize;
-    let packed_input_size = input_size.div_ceil(dim);
+    let packed_input_size = obf_params.input_size.div_ceil(dim);
+    let packed_output_size = obf_params.output_size.div_ceil(dim);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(params.clone(), sampler.clone());
     let public_data = PublicSampledData::sample(
-        params.as_ref(),
-        sampler.clone(),
+        &obf_params,
         &bgg_pubkey_sampler,
-        input_size,
         packed_input_size,
-        1,
+        packed_output_size,
     );
     let s_bar = sampler.sample_uniform(1, 1, DistType::BitDist).entry(1, 1).clone();
-    let bgg_encode_sampler =
-        BGGEncodingSampler::new(&s_bar, params.clone(), sampler.clone(), error_gauss_sigma);
+    let bgg_encode_sampler = BGGEncodingSampler::new(
+        &s_bar,
+        params.clone(),
+        sampler.clone(),
+        obf_params.error_gauss_sigma,
+    );
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar = sampler.sample_uniform(1, 1, DistType::BitDist);
     let minus_one_poly =
@@ -45,8 +46,11 @@ where
     let a_fhe_bar = &public_data.a_fhe_bar;
     let b_fhe = {
         let muled = t_bar * a_fhe_bar;
-        let error =
-            sampler.sample_uniform(1, 2 * log_q, DistType::GaussDist { sigma: error_gauss_sigma });
+        let error = sampler.sample_uniform(
+            1,
+            2 * log_q,
+            DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
+        );
         muled + error
     };
     // let a_fhe = a_fhe_bar.concat_rows(&[b_fhe]);
@@ -64,7 +68,7 @@ where
         bgg_encode_sampler.sample(&public_data.pubkeys_fhe_key[0], &t.get_row(1), false);
     let mut bs = vec![];
     let mut b_trapdoors = vec![];
-    for _ in 0..=input_size {
+    for _ in 0..=obf_params.input_size {
         let (b_0_trapdoor, b_0) = sampler.trapdoor();
         let (b_1_trapdoor, b_1) = sampler.trapdoor();
         let (b_star_trapdoor, b_star) = sampler.trapdoor();
@@ -75,8 +79,11 @@ where
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init.clone()]);
         let s_b = s_connect * &bs[0].2;
-        let error =
-            sampler.sample_uniform(1, m_b, DistType::GaussDist { sigma: error_gauss_sigma });
+        let error = sampler.sample_uniform(
+            1,
+            m_b,
+            DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
+        );
         s_b + error
     };
     let identity_2 = M::identity(params.as_ref(), 2, None);
@@ -89,7 +96,7 @@ where
     };
     let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
     let (mut m_preimages, mut n_preimages, mut k_preimages) = (vec![], vec![], vec![]);
-    for idx in 0..input_size {
+    for idx in 0..obf_params.input_size {
         let (_, _, b_cur_star) = &bs[idx];
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
@@ -154,8 +161,8 @@ where
     // here we support only inner product between the fhe secret key t and the input x
     let mut ip_pubkey = None;
     for idx in 0..packed_input_size {
-        let muled = public_data.pubkeys_input[input_size][idx].clone()
-            * &public_data.pubkeys_fhe_key[input_size][0];
+        let muled = public_data.pubkeys_input[obf_params.input_size][idx].clone()
+            * &public_data.pubkeys_fhe_key[obf_params.input_size][0];
         match ip_pubkey {
             None => {
                 ip_pubkey = Some(muled);
@@ -165,11 +172,11 @@ where
             }
         }
     }
-    let ip_pubkey = ip_pubkey.unwrap();
+    let ip_pubkey = ip_pubkey.unwrap().matrix + &public_data.a_prf;
     let final_preimage_target =
-        ip_pubkey.matrix.concat_rows(&[M::zero(params.as_ref(), 2, ip_pubkey.matrix.col_size())]);
-    let (_, _, b_final) = &bs[input_size];
-    let (_, _, b_final_trapdoor) = &b_trapdoors[input_size];
+        ip_pubkey.concat_rows(&[M::zero(params.as_ref(), 2, ip_pubkey.col_size())]);
+    let (_, _, b_final) = &bs[obf_params.input_size];
+    let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage = sampler.preimage(b_final_trapdoor, b_final, &final_preimage_target);
 
     Obfuscation {
