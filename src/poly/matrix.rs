@@ -19,6 +19,8 @@ pub trait PolyMatrix:
     + for<'a> Mul<&'a Self, Output = Self>
     + Mul<Self::P, Output = Self>
     + for<'a> Mul<&'a Self::P, Output = Self>
+    + Send
+    + Sync
 {
     type P: Poly;
 

@@ -2,7 +2,6 @@ use super::utils::*;
 use super::{Obfuscation, ObfuscationParams};
 use crate::bgg::sampler::BGGPublicKeySampler;
 use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
-use crate::utils::*;
 use itertools::Itertools;
 use std::sync::Arc;
 
@@ -24,7 +23,7 @@ where
     assert_eq!(input.len(), obf_params.input_size);
     let packed_input_size = obf_params.input_size.div_ceil(dim);
     let packed_output_size = obf_params.output_size.div_ceil(dim);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(params.clone(), sampler.clone());
+    let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone());
     let public_data = PublicSampledData::sample(
         &obf_params,
         &bgg_pubkey_sampler,
