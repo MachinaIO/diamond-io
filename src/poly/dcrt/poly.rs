@@ -1,5 +1,6 @@
-use num_bigint::{BigInt, BigUint};
-use num_traits::Num;
+use super::{element::FinRingElem, params::DCRTPolyParams};
+use crate::poly::{Poly, PolyParams};
+use num_bigint::BigUint;
 use openfhe::{
     cxx::UniquePtr,
     ffi::{self, DCRTPolyImpl},
@@ -7,12 +8,8 @@ use openfhe::{
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
-    str::FromStr,
     sync::Arc,
 };
-
-use super::{fin_ring::FinRingElem, params::DCRTPolyParams};
-use crate::poly::{Poly, PolyParams};
 
 #[derive(Clone, Debug)]
 pub struct DCRTPoly {
@@ -43,18 +40,14 @@ impl Poly for DCRTPoly {
     type Params = DCRTPolyParams;
 
     fn coeffs(&self) -> Vec<Self::Elem> {
-        let coeffs = self
-            .ptr_poly
-            .GetCoefficients()
-            .iter()
-            .map(|s| {
-                FinRingElem::new(
-                    BigInt::from_str(s).unwrap(),
-                    BigUint::from_str_radix(&self.ptr_poly.GetModulus(), 10).unwrap().into(),
-                )
-            })
-            .collect();
-        coeffs
+        let coeffs = self.ptr_poly.GetCoefficients();
+        let mut result = Vec::with_capacity(coeffs.len());
+        for s in coeffs.iter() {
+            result.push(
+                FinRingElem::from_str(s, &self.ptr_poly.GetModulus()).expect("invalid string"),
+            );
+        }
+        result
     }
 
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
@@ -63,7 +56,7 @@ impl Poly for DCRTPoly {
         for coeff in coeffs {
             let coeff_modulus = coeff.modulus();
             #[cfg(debug_assertions)]
-            assert_eq!(&coeff_modulus.clone(), modulus.as_ref());
+            assert_eq!(coeff_modulus, modulus.as_ref());
             coeffs_cxx.push(coeff.value().to_string());
         }
         DCRTPoly::new(ffi::DCRTPolyGenFromVec(params.get_params(), &coeffs_cxx))
@@ -85,12 +78,12 @@ impl Poly for DCRTPoly {
     }
 
     fn const_minus_one(params: &Self::Params) -> Self {
-        let constant_value = params.modulus().as_ref() - BigUint::from(1u32);
-        DCRTPoly::new(ffi::DCRTPolyGenFromConst(params.get_params(), &constant_value.to_string()))
+        DCRTPoly::new(ffi::DCRTPolyGenFromConst(
+            params.get_params(),
+            &(params.modulus().as_ref() - BigUint::from(1u32)).to_string(),
+        ))
     }
 }
-
-// ====== Arithmetic ======
 
 impl Add for DCRTPoly {
     type Output = Self;
@@ -104,8 +97,7 @@ impl<'a> Add<&'a DCRTPoly> for DCRTPoly {
     type Output = Self;
 
     fn add(self, rhs: &'a Self) -> Self::Output {
-        let res = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly);
-        DCRTPoly::new(res)
+        DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))
     }
 }
 
@@ -121,8 +113,7 @@ impl<'a> Mul<&'a DCRTPoly> for DCRTPoly {
     type Output = Self;
 
     fn mul(self, rhs: &'a Self) -> Self::Output {
-        let res = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly);
-        DCRTPoly::new(res)
+        DCRTPoly::new(ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly))
     }
 }
 
@@ -147,15 +138,14 @@ impl Neg for DCRTPoly {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        let res = self.ptr_poly.Negate();
-        DCRTPoly::new(res)
+        DCRTPoly::new(self.ptr_poly.Negate())
     }
 }
 
 impl PartialEq for DCRTPoly {
     fn eq(&self, other: &Self) -> bool {
         if self.ptr_poly.is_null() || other.ptr_poly.is_null() {
-            return self.ptr_poly.is_null() && other.ptr_poly.is_null();
+            return false;
         }
         self.ptr_poly.IsEqual(&other.ptr_poly)
     }
@@ -165,56 +155,67 @@ impl Eq for DCRTPoly {}
 
 impl AddAssign for DCRTPoly {
     fn add_assign(&mut self, rhs: Self) {
-        let res = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly);
-        self.ptr_poly = res.into();
+        self.ptr_poly = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly).into();
     }
 }
 
 impl<'a> AddAssign<&'a DCRTPoly> for DCRTPoly {
     fn add_assign(&mut self, rhs: &'a Self) {
-        let res = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly);
-        self.ptr_poly = res.into();
+        self.ptr_poly = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly).into();
     }
 }
 
 impl MulAssign for DCRTPoly {
     fn mul_assign(&mut self, rhs: Self) {
-        let res = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly);
-        self.ptr_poly = res.into();
+        self.ptr_poly = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly).into();
     }
 }
 
 impl<'a> MulAssign<&'a DCRTPoly> for DCRTPoly {
     fn mul_assign(&mut self, rhs: &'a Self) {
-        let res = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly);
-        self.ptr_poly = res.into();
+        self.ptr_poly = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly).into();
     }
 }
 
 impl SubAssign for DCRTPoly {
     fn sub_assign(&mut self, rhs: Self) {
-        // Negate rhs and then add it to self
         let neg_rhs = rhs.neg();
-        let res = ffi::DCRTPolyAdd(&neg_rhs.ptr_poly, &self.ptr_poly);
-        self.ptr_poly = res.into();
+        self.ptr_poly = ffi::DCRTPolyAdd(&neg_rhs.ptr_poly, &self.ptr_poly).into();
     }
 }
 
 impl<'a> SubAssign<&'a DCRTPoly> for DCRTPoly {
     fn sub_assign(&mut self, rhs: &'a Self) {
-        // Clone the reference to negate it
         let neg_rhs = rhs.clone().neg();
-        let res = ffi::DCRTPolyAdd(&neg_rhs.ptr_poly, &self.ptr_poly);
-        self.ptr_poly = res.into();
+        self.ptr_poly = ffi::DCRTPolyAdd(&neg_rhs.ptr_poly, &self.ptr_poly).into();
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use crate::poly::PolyParams;
-
     use super::*;
+    use crate::poly::PolyParams;
+    use rand::prelude::*;
+
+    #[test]
+    fn test_dcrtpoly_coeffs() {
+        let mut rng = rand::rng();
+        // todo: if x=0, n=1: libc++abi: terminating due to uncaught exception of type lbcrypto::OpenFHEException: /Users/piapark/Documents/GitHub/openfhe-development/src/core/include/math/nbtheory.h:l.156:ReverseBits(): msbb value not handled:0
+        // todo: if x=1, n=2: value mismatch from_coeffs & coeffs
+        let x = rng.random_range(12..20);
+        let size = rng.random_range(1..20);
+        let n = 2_i32.pow(x) as u32;
+        let params = DCRTPolyParams::new(n, size, 51);
+        let q = params.modulus();
+        let mut coeffs: Vec<FinRingElem> = Vec::new();
+        for _ in 0..n {
+            let value = rng.random_range(0..10000);
+            coeffs.push(FinRingElem::new(value, q.clone()));
+        }
+        let poly = DCRTPoly::from_coeffs(&params, &coeffs);
+        let extracted_coeffs = poly.coeffs();
+        assert_eq!(coeffs, extracted_coeffs);
+    }
 
     #[test]
     fn test_dcrtpoly_arithmetic() {

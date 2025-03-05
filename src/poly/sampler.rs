@@ -1,6 +1,7 @@
 use super::PolyMatrix;
 
 #[derive(Debug)]
+/// Enum representing different types of distributions for random sampling.
 pub enum DistType {
     /// Distribution over a finite ring, typically samples elements from a ring in a uniform or near-uniform manner
     FinRingDist,
@@ -14,6 +15,7 @@ pub enum DistType {
     BitDist,
 }
 
+/// Trait for sampling a polynomial based on a hash function.
 pub trait PolyHashSampler<K: AsRef<[u8]>> {
     type M: PolyMatrix;
 
@@ -28,8 +30,8 @@ pub trait PolyHashSampler<K: AsRef<[u8]>> {
         dist: DistType,
     ) -> Self::M;
 
+    // Set the key of the sampler.
     fn set_key(&mut self, key: K);
-    fn expose_key(&self) -> &[u8];
 }
 
 pub trait PolyUniformSampler {

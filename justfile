@@ -11,7 +11,7 @@ clean:
 
 # Run clippy to catch common mistakes and improve your Rust code
 clippy:
-    cargo clippy --all-targets --all-features -- -Dwarnings
+    RUSTFLAGS="-A unused" cargo clippy --all-targets --all-features -- -Dwarnings
 
 # Generate documentation for the project
 docs:

@@ -1,9 +1,5 @@
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
-use phantom_zone_math::{
-    prelude::ModulusOps,
-    ring::{PrimeRing, RingOps},
-};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
@@ -47,16 +43,4 @@ pub fn print_vector_ring(label: &str, vec: &[Vec<u64>]) {
         print!("{}[{}]: ", label, i);
         print_ring_element("", inner_vec);
     }
-}
-
-pub fn empty_matrix_ring(ring: &PrimeRing, rows: usize, cols: usize) -> Vec<Vec<Vec<u64>>> {
-    vec![vec![vec![ring.zero(); ring.ring_size()]; cols]; rows]
-}
-
-pub fn empty_vector_ring(ring: &PrimeRing, cols: usize) -> Vec<Vec<u64>> {
-    vec![vec![ring.zero(); ring.ring_size()]; cols]
-}
-
-pub fn empty_ring_element(ring: &PrimeRing) -> Vec<u64> {
-    vec![ring.zero(); ring.ring_size()]
 }

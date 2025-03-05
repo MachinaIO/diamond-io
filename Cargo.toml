@@ -7,16 +7,12 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "feat/sampler" }
-phantom-zone-math = { git = "https://github.com/gausslabs/phantom-zone", branch = "rewrite", features = [
-    "dev",
-    "serde",
-] }
 # thiserror = "2"
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
 num-traits = "0.2"
-thiserror = "2.0.11"
-rand = { version = "0.9.0", default-features = false, features = ["std_rng"] }
+# thiserror = "2.0.11"
+rand = { version = "0.9.0", features = ["std_rng"] }
 itertools = "0.14.0"
 # serde = { version = "1.0.218", features = ["derive"] }
 

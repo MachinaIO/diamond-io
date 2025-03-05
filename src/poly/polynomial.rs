@@ -1,36 +1,10 @@
+use super::PolyElem;
 use crate::poly::params::PolyParams;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-pub trait PolyElem:
-    Sized
-    + Debug
-    + Eq
-    + Ord
-    + Send
-    + Sync
-    + Clone
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + Neg<Output = Self>
-    + AddAssign
-    + SubAssign
-    + MulAssign
-    + for<'a> Add<&'a Self, Output = Self>
-    + for<'a> Sub<&'a Self, Output = Self>
-    + for<'a> Mul<&'a Self, Output = Self>
-{
-    type Modulus: Clone;
-    fn zero(modulus: &Self::Modulus) -> Self;
-    fn one(modulus: &Self::Modulus) -> Self;
-    fn minus_one(modulus: &Self::Modulus) -> Self;
-    fn extract_highest_bits(&self) -> bool;
-}
-
-/// Describes the common interface polynomials
 pub trait Poly:
     Sized
     + Clone
@@ -57,7 +31,7 @@ pub trait Poly:
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
     fn extract_highest_bits(&self) -> Vec<bool> {
-        let mut bits = Vec::new();
+        let mut bits = Vec::with_capacity(self.coeffs().len());
         for elem in self.coeffs() {
             bits.push(elem.extract_highest_bits());
         }
