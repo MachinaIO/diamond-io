@@ -15,12 +15,16 @@ pub struct DCRTPolyMatrix {
     ncol: usize,
 }
 
+unsafe impl Send for DCRTPolyMatrix {}
+unsafe impl Sync for DCRTPolyMatrix {}
+
 impl Debug for DCRTPolyMatrix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DCRTPolyMatrix")
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
             .field("params", &self.params)
+            .field("inner", &self.inner)
             .finish()
     }
 }

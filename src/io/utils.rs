@@ -30,17 +30,18 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         input_size: usize,
         packed_input_size: usize,
     ) -> Self {
-        let r_0_bar = hash_sampler.sample_hash(TAG_R_0, 1, 1, DistType::BitDist);
-        let r_1_bar = hash_sampler.sample_hash(TAG_R_1, 1, 1, DistType::BitDist);
+        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
+        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
         let one = S::M::identity(params, 1, None);
         let r_0 = r_0_bar.concat_diag(&[one.clone()]);
         let r_1 = r_1_bar.concat_diag(&[one.clone()]);
         let log_q = params.modulus_bits();
         let a_fhe_bar =
-            hash_sampler.sample_hash(TAG_A_FHE_BAR, 2, 2 * log_q, DistType::FinRingDist);
+            hash_sampler.sample_hash(params, TAG_A_FHE_BAR, 2, 2 * log_q, DistType::FinRingDist);
         let pubkeys_input = (0..input_size + 1)
             .map(|idx| {
                 bgg_pubkey_sampler.sample(
+                    params,
                     &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
                     packed_input_size + 1,
                 )
@@ -48,8 +49,11 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             .collect_vec();
         let pubkeys_fhe_key = (0..input_size + 1)
             .map(|idx| {
-                bgg_pubkey_sampler
-                    .sample(&[TAG_BGG_PUBKEY_FHEKEY_PREFIX, &idx.to_le_bytes()].concat(), 2)
+                bgg_pubkey_sampler.sample(
+                    params,
+                    &[TAG_BGG_PUBKEY_FHEKEY_PREFIX, &idx.to_le_bytes()].concat(),
+                    2,
+                )
             })
             .collect_vec();
         let identity_input = S::M::identity(params, packed_input_size + 1, None);
