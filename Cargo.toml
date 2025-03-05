@@ -6,7 +6,7 @@ rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "feat/sampler" }
+openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "refactor2" }
 # thiserror = "2"
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
