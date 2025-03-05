@@ -1,15 +1,14 @@
 use crate::poly::params::PolyParams;
 use num_bigint::BigUint;
 use num_traits::Num;
-use openfhe::{
-    cxx::UniquePtr,
-    ffi::{self, ILDCRTParamsImpl},
-};
+use openfhe::ffi::{self};
 use std::{fmt::Debug, sync::Arc};
 
 #[derive(Clone)]
 pub struct DCRTPolyParams {
-    ptr_params: Arc<UniquePtr<ILDCRTParamsImpl>>,
+    ring_dimension: u32,
+    size: usize,
+    k_res: usize,
     modulus: Arc<BigUint>,
 }
 
@@ -26,7 +25,7 @@ impl PolyParams for DCRTPolyParams {
     type Modulus = Arc<BigUint>;
 
     fn ring_dimension(&self) -> u32 {
-        self.ptr_params.as_ref().GetRingDimension()
+        self.ring_dimension
     }
     fn modulus(&self) -> Self::Modulus {
         self.modulus.clone()
@@ -44,15 +43,24 @@ impl Default for DCRTPolyParams {
 }
 
 impl DCRTPolyParams {
-    /// 2 * n = order, size = depth, bits= k
-    pub fn new(n: u32, size: u32, k_res: u32) -> Self {
-        let ptr_params = ffi::GenILDCRTParamsByOrderSizeBits(2 * n, size, k_res);
-        let modulus = BigUint::from_str_radix(&ptr_params.GetModulus(), 10).unwrap();
-        Self { ptr_params: ptr_params.into(), modulus: Arc::new(modulus) }
+    pub fn new(n: u32, size: usize, k_res: usize) -> Self {
+        // assert that n is a power of 2
+        assert!(n.is_power_of_two(), "n must be a power of 2");
+        let modulus = ffi::GenModulus(n, size, k_res);
+        Self {
+            ring_dimension: n,
+            size,
+            k_res,
+            modulus: Arc::new(BigUint::from_str_radix(&modulus, 10).unwrap()),
+        }
     }
 
-    pub fn get_params(&self) -> &UniquePtr<ILDCRTParamsImpl> {
-        &self.ptr_params
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    pub fn k_res(&self) -> usize {
+        self.k_res
     }
 }
 
@@ -69,27 +77,12 @@ mod tests {
         assert_eq!(p.ring_dimension(), n);
         assert_eq!(p.modulus_bits(), 204);
 
-        let n = 20;
-        let size = 4;
-        let k_res = 51;
-        let p = DCRTPolyParams::new(n, size, k_res);
-        // ring dimension returning closest 2^n form
-        assert_eq!(p.ring_dimension(), 16);
-        assert_eq!(p.modulus_bits(), 204);
-
         let n = 2;
         let size = 4;
         let k_res = 51;
         let p = DCRTPolyParams::new(n, size, k_res);
         assert_eq!(p.ring_dimension(), 2);
         assert_eq!(p.modulus_bits(), 204);
-
-        let n = 0;
-        let size = 4;
-        let k_res = 51;
-        let p = DCRTPolyParams::new(n, size, k_res);
-        assert_eq!(p.ring_dimension(), 0);
-        assert_eq!(p.modulus_bits(), 0);
 
         let n = 1;
         let size = 4;
@@ -106,27 +99,41 @@ mod tests {
         let k_res = 51;
         let p = DCRTPolyParams::new(n, size, k_res);
         assert_eq!(p.ring_dimension(), n);
-        assert_eq!(p.modulus_bits() as u32, size * k_res);
+        assert_eq!(p.modulus_bits() as u32, (size * k_res) as u32);
 
         let n = 16;
         let size = 5;
         let k_res = 51;
         let p = DCRTPolyParams::new(n, size, k_res);
         assert_eq!(p.ring_dimension(), n);
-        assert_eq!(p.modulus_bits() as u32, size * k_res);
+        assert_eq!(p.modulus_bits() as u32, (size * k_res) as u32);
 
         let n = 16;
         let size = 6;
         let k_res = 51;
         let p = DCRTPolyParams::new(n, size, k_res);
         assert_eq!(p.ring_dimension(), n);
-        assert_eq!(p.modulus_bits() as u32, size * k_res);
+        assert_eq!(p.modulus_bits() as u32, (size * k_res) as u32);
 
         let n = 16;
         let size = 7;
         let k_res = 20;
         let p = DCRTPolyParams::new(n, size, k_res);
         assert_eq!(p.ring_dimension(), n);
-        assert_eq!(p.modulus_bits() as u32, size * k_res);
+        assert_eq!(p.modulus_bits() as u32, (size * k_res) as u32);
+    }
+
+    #[test]
+    #[should_panic(expected = "n must be a power of 2")]
+    fn test_params_initiation_non_power_of_two() {
+        let n = 20;
+        let size = 4;
+        let k_res = 51;
+        let _p = DCRTPolyParams::new(n, size, k_res); // This should panic
+
+        let n = 0;
+        let size = 4;
+        let k_res = 51;
+        let _p = DCRTPolyParams::new(n, size, k_res); // This should panic
     }
 }

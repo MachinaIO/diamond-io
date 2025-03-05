@@ -8,4 +8,4 @@ pub use element::FinRingElem;
 pub use matrix::DCRTPolyMatrix;
 pub use params::DCRTPolyParams;
 pub use poly::DCRTPoly;
-pub use sampler::{DCRTPolyHashSampler, DCRTPolyUniformSampler};
+pub use sampler::{DCRTPolyHashSampler, DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler};

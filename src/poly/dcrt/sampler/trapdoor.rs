@@ -9,20 +9,20 @@ use crate::poly::{
 use openfhe::{
     cxx::UniquePtr,
     ffi::{
-        DCRTMatrixCreate, DCRTPolySquareMatGaussSamp, DCRTPolySquareMatTrapdoorGen,
-        RLWETrapdoorPair,
+        DCRTSquareMatTrapdoorGaussSamp, DCRTSquareMatTrapdoorGen, GetMatrixElement, MatrixGen,
+        RLWETrapdoorPair, SetMatrixElement,
     },
 };
 
 pub struct DCRTPolyTrapdoorSampler {
     base: usize,
     sigma: f64,
-    size: usize,
+    d: usize,
 }
 
 impl DCRTPolyTrapdoorSampler {
-    pub fn new(base: usize, sigma: f64, size: usize) -> Self {
-        Self { base, sigma, size }
+    pub fn new(base: usize, sigma: f64, d: usize) -> Self {
+        Self { base, sigma, d }
     }
 }
 
@@ -34,24 +34,25 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
     ) -> (Self::Trapdoor, Self::M) {
-        let trapdoor_output = DCRTPolySquareMatTrapdoorGen(
-            params.get_params(),
+        let trapdoor_output = DCRTSquareMatTrapdoorGen(
+            params.ring_dimension(),
+            params.size(),
+            params.k_res(),
+            self.d,
             self.sigma,
-            self.size,
             self.base as i64,
             false,
         );
-        let trapdoor = trapdoor_output.GetTrapdoorPtr();
-        let public_matrix_ptr = trapdoor_output.GetPublicMatrixPtr();
-        let nrow = self.size;
-        let ncol = (&params.modulus_bits() + 2) * self.size;
+        let trapdoor = trapdoor_output.GetTrapdoorPair();
+        let nrow = self.d;
+        let ncol = (&params.modulus_bits() + 2) * self.d;
 
         // Construct the public matrix from its elements
         let mut matrix_inner = Vec::with_capacity(nrow);
         for i in 0..nrow {
             let mut row = Vec::with_capacity(ncol);
             for j in 0..ncol {
-                let poly = public_matrix_ptr.GetElement(i, j);
+                let poly = trapdoor_output.GetPublicMatrixElement(i, j);
                 let dcrt_poly = DCRTPoly::new(poly);
                 row.push(dcrt_poly);
             }
@@ -70,31 +71,37 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         public_matrix: &Self::M,
         target: &Self::M,
     ) -> Self::M {
-        let n = params.get_params().GetRingDimension() as usize;
+        let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
 
-        let mut public_matrix_ptr =
-            DCRTMatrixCreate(params.get_params(), self.size, (k + 2) * self.size);
+        let mut public_matrix_ptr = MatrixGen(
+            params.ring_dimension(),
+            params.size(),
+            params.k_res(),
+            self.d,
+            (k + 2) * self.d,
+        );
 
-        for i in 0..self.size {
-            for j in 0..(k + 2) * self.size {
+        for i in 0..self.d {
+            for j in 0..(k + 2) * self.d {
                 let poly = public_matrix.entry(i, j).get_poly();
-                public_matrix_ptr.as_mut().unwrap().SetElement(i, j, poly);
+                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
         }
 
-        let mut target_matrix_ptr = DCRTMatrixCreate(params.get_params(), self.size, self.size);
+        let mut target_matrix_ptr =
+            MatrixGen(params.ring_dimension(), params.size(), params.k_res(), self.d, self.d);
 
-        for i in 0..self.size {
-            for j in 0..self.size {
+        for i in 0..self.d {
+            for j in 0..self.d {
                 let poly = target.entry(i, j).get_poly();
-                target_matrix_ptr.as_mut().unwrap().SetElement(i, j, poly);
+                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
         }
 
-        let preimage_matrix_ptr = DCRTPolySquareMatGaussSamp(
-            n,
-            k,
+        let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
+            n as u32,
+            k as u32,
             &public_matrix_ptr,
             trapdoor,
             &target_matrix_ptr,
@@ -102,14 +109,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.sigma,
         );
 
-        let nrow = self.size * (k + 2);
-        let ncol = self.size;
+        let nrow = self.d * (k + 2);
+        let ncol = self.d;
 
         let mut matrix_inner = Vec::with_capacity(nrow);
         for i in 0..nrow {
             let mut row = Vec::with_capacity(ncol);
             for j in 0..ncol {
-                let poly = preimage_matrix_ptr.GetElement(i, j);
+                let poly = GetMatrixElement(&preimage_matrix_ptr, i, j);
                 let dcrt_poly = DCRTPoly::new(poly);
                 row.push(dcrt_poly);
             }
@@ -124,7 +131,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 mod tests {
     use super::*;
     use crate::poly::{
-        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
         sampler::{DistType, PolyUniformSampler},
     };
 
