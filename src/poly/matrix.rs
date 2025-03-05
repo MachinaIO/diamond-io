@@ -1,4 +1,4 @@
-use super::Poly;
+use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
@@ -19,6 +19,8 @@ pub trait PolyMatrix:
     + for<'a> Mul<&'a Self, Output = Self>
     + Mul<Self::P, Output = Self>
     + for<'a> Mul<&'a Self::P, Output = Self>
+    + Send
+    + Sync
 {
     type P: Poly;
 
@@ -84,4 +86,5 @@ pub trait PolyMatrix:
     /// under the ring modulus.
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
     fn decompose(&self) -> Self;
+    fn modulus_switch(&self, new_params: &<Self::P as Poly>::Params) -> Self;
 }

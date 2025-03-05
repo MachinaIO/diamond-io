@@ -16,6 +16,9 @@ pub struct DCRTPoly {
     ptr_poly: Arc<UniquePtr<DCRTPolyImpl>>,
 }
 
+unsafe impl Send for DCRTPoly {}
+unsafe impl Sync for DCRTPoly {}
+
 impl DCRTPoly {
     pub fn new(ptr_poly: UniquePtr<DCRTPolyImpl>) -> Self {
         Self { ptr_poly: ptr_poly.into() }
@@ -23,6 +26,15 @@ impl DCRTPoly {
 
     pub fn get_poly(&self) -> &UniquePtr<DCRTPolyImpl> {
         &self.ptr_poly
+    }
+
+    pub fn modulus_switch(&self, new_params: DCRTPolyParams) -> Self {
+        let coeffs = self.coeffs();
+        let new_coeffs = coeffs
+            .iter()
+            .map(|coeff| coeff.modulus_switch(new_params.modulus()))
+            .collect::<Vec<FinRingElem>>();
+        DCRTPoly::from_coeffs(&new_params, &new_coeffs)
     }
 }
 
@@ -46,6 +58,7 @@ impl Poly for DCRTPoly {
         let modulus = params.modulus();
         for coeff in coeffs {
             let coeff_modulus = coeff.modulus();
+            #[cfg(debug_assertions)]
             assert_eq!(coeff_modulus, modulus.as_ref());
             coeffs_cxx.push(coeff.value().to_string());
         }

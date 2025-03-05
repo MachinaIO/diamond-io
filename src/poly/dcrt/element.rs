@@ -39,6 +39,12 @@ impl FinRingElem {
     pub fn modulus(&self) -> &BigUint {
         &self.modulus
     }
+
+    pub fn modulus_switch(&self, new_modulus: Arc<BigUint>) -> Self {
+        let value =
+            ((&self.value * new_modulus.as_ref()) / self.modulus.as_ref()) % new_modulus.as_ref();
+        Self { value, modulus: new_modulus }
+    }
 }
 
 impl PolyElem for FinRingElem {

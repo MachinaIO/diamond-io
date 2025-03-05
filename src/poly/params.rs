@@ -1,4 +1,5 @@
-pub trait PolyParams: Clone {
+use std::fmt::Debug;
+pub trait PolyParams: Clone + Debug {
     type Modulus: Clone;
     /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n - 1)`.
     fn modulus(&self) -> Self::Modulus;

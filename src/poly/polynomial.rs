@@ -21,6 +21,8 @@ pub trait Poly:
     + for<'a> Add<&'a Self, Output = Self>
     + for<'a> Sub<&'a Self, Output = Self>
     + for<'a> Mul<&'a Self, Output = Self>
+    + Send
+    + Sync
 {
     type Elem: PolyElem;
     type Params: PolyParams<Modulus = <Self::Elem as PolyElem>::Modulus>;
