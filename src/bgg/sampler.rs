@@ -14,7 +14,7 @@ pub struct BGGPublicKeySampler<K: AsRef<[u8]>, S: PolyHashSampler<K>> {
 impl<K: AsRef<[u8]>, S> BGGPublicKeySampler<K, S>
 where
     S: PolyHashSampler<K>,
-    <S as PolySampler>::M: Send + Sync,
+    <S as PolyHashSampler<K>>::M: Send + Sync,
 {
     /// Create a new public key sampler
     /// # Arguments
@@ -34,13 +34,19 @@ where
     /// A vector of public key matrices
     pub fn sample(
         &self,
+        params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
         tag: &[u8],
         packed_input_size: usize,
-    ) -> Vec<BggPublicKey<<S as PolySampler>::M>> {
-        let log_q = self.sampler.get_params().modulus_bits();
+    ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
+        let log_q = params.modulus_bits();
         let columns = 2 * log_q;
-        let all_matrix =
-            self.sampler.sample_hash(tag, 2, columns * packed_input_size, DistType::FinRingDist);
+        let all_matrix = self.sampler.sample_hash(
+            params,
+            tag,
+            2,
+            columns * packed_input_size,
+            DistType::FinRingDist,
+        );
         (0..packed_input_size)
             .into_par_iter()
             .map(|idx| {
@@ -65,8 +71,8 @@ pub struct BGGEncodingSampler<S: PolyUniformSampler> {
 impl<S> BGGEncodingSampler<S>
 where
     S: PolyUniformSampler,
-    <S as PolySampler>::M: Send + Sync,
-    <<S as PolySampler>::M as PolyMatrix>::P: Send + Sync,
+    <S as PolyUniformSampler>::M: Send + Sync,
+    <<S as PolyUniformSampler>::M as PolyMatrix>::P: Send + Sync,
 {
     /// Create a new encoding sampler
     /// # Arguments
@@ -75,25 +81,30 @@ where
     /// * `gauss_sigma`: The standard deviation of the Gaussian distribution
     /// # Returns
     /// A new encoding sampler
-    pub fn new(secret: &<S::M as PolyMatrix>::P, error_sampler: Arc<S>, gauss_sigma: f64) -> Self {
-        let params = error_sampler.get_params();
-        let minus_one_poly = <S::M as PolyMatrix>::P::const_minus_one(&params);
+    pub fn new(
+        params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
+        secret: &<S::M as PolyMatrix>::P,
+        error_sampler: Arc<S>,
+        gauss_sigma: f64,
+    ) -> Self {
+        let minus_one_poly = <S::M as PolyMatrix>::P::const_minus_one(params);
         // 1*2 row vector
-        let secret_vec = S::M::from_poly_vec_row(&params, vec![secret.clone(), minus_one_poly]);
+        let secret_vec = S::M::from_poly_vec_row(params, vec![secret.clone(), minus_one_poly]);
         Self { secret_vec, error_sampler, gauss_sigma }
     }
 
     pub fn sample(
         &self,
+        params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
         public_keys: &[BggPublicKey<S::M>],
         plaintexts: &[<S::M as PolyMatrix>::P],
         reveal_plaintexts: bool,
     ) -> Vec<BggEncoding<S::M>> {
-        let params = self.error_sampler.get_params();
         let log_q = params.modulus_bits();
         let packed_input_size = plaintexts.len();
         let columns = 2 * log_q * packed_input_size;
         let error = self.error_sampler.sample_uniform(
+            params,
             1,
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
@@ -105,9 +116,9 @@ where
             .concat_columns(&public_keys[1..].iter().map(|pk| pk.matrix.clone()).collect_vec());
         let first_term = self.secret_vec.clone() * all_public_key_matrix;
         // second term x \tensor sG
-        let gadget = S::M::gadget_matrix(&params, 2);
+        let gadget = S::M::gadget_matrix(params, 2);
         let sg = self.secret_vec.clone() * gadget;
-        let encoded_polys_vec = S::M::from_poly_vec_row(&params, plaintexts.to_vec());
+        let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
         let second_term = encoded_polys_vec.tensor(&sg);
 
         // all_vector = sA + x \tensor sG + e
@@ -146,10 +157,10 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
-        let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params);
+        let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
         let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into());
-        let sampled_pub_keys = bgg_sampler.sample(&tag_bytes, packed_input_size);
-        let log_q = bgg_sampler.sampler.get_params().modulus_bits();
+        let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, packed_input_size);
+        let log_q = params.modulus_bits();
         let columns = 2 * log_q;
         assert_eq!(sampled_pub_keys.len(), packed_input_size);
         for m in sampled_pub_keys {
@@ -166,15 +177,14 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
-        let bgg_sampler = BGGPublicKeySampler::new(
-            DCRTPolyHashSampler::<Keccak256>::new(key, params.clone()).into(),
-        );
-        let sampled_pub_keys = bgg_sampler.sample(&tag_bytes, packed_input_size);
-        let uniform_sampler = DCRTPolyUniformSampler::new(params.clone());
+        let bgg_sampler =
+            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into());
+        let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, packed_input_size);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
         let secret = uniform_sampler.sample_poly(&params, &DistType::BitDist);
         let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
-        let bgg_sampler = BGGEncodingSampler::new(&secret, uniform_sampler.into(), 0.0);
-        let bgg_encodings = bgg_sampler.sample(&sampled_pub_keys, &plaintexts, false);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
+        let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts, false);
         assert_eq!(bgg_encodings.len(), packed_input_size);
     }
 }

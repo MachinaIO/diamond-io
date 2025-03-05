@@ -15,19 +15,15 @@ pub enum DistType {
     BitDist,
 }
 
-pub trait PolySampler {
-    type M: PolyMatrix + Send + Sync;
-
-    fn get_params(&self) -> <<Self::M as PolyMatrix>::P as Poly>::Params;
-}
-
 /// Trait for sampling a polynomial based on a hash function.
-pub trait PolyHashSampler<K: AsRef<[u8]>>: PolySampler {
+pub trait PolyHashSampler<K: AsRef<[u8]>> {
+    type M: PolyMatrix;
     /// Samples a matrix of ring elements from a pseudorandom source defined by a hash function `H` Compute H(key || tag || i)
     ///
     /// and a distribution type specified by `dist`.
     fn sample_hash<B: AsRef<[u8]>>(
         &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         tag: B,
         rows: usize,
         columns: usize,
@@ -38,15 +34,29 @@ pub trait PolyHashSampler<K: AsRef<[u8]>>: PolySampler {
     fn set_key(&mut self, key: K);
 }
 
-pub trait PolyUniformSampler: PolySampler {
-    fn sample_uniform(&self, rows: usize, columns: usize, dist: DistType) -> Self::M;
+pub trait PolyUniformSampler {
+    type M: PolyMatrix;
+
+    fn sample_uniform(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        rows: usize,
+        columns: usize,
+        dist: DistType,
+    ) -> Self::M;
 }
 
-pub trait PolyTrapdoorSampler: PolySampler {
+pub trait PolyTrapdoorSampler {
+    type M: PolyMatrix;
     type Trapdoor;
-    fn trapdoor(&self) -> (Self::Trapdoor, Self::M);
+
+    fn trapdoor(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+    ) -> (Self::Trapdoor, Self::M);
     fn preimage(
         &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
