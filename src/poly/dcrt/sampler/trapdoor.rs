@@ -8,19 +8,22 @@ use crate::poly::{
 
 use openfhe::{
     cxx::UniquePtr,
-    ffi::{DCRTSquareMatTrapdoorGen, RLWETrapdoorPair},
+    ffi::{
+        DCRTSquareMatGaussSamp, DCRTSquareMatTrapdoorGen, GetMatrixElement, MatrixGen,
+        RLWETrapdoorPair, SetMatrixElement,
+    },
 };
 
 pub struct DCRTPolyTrapdoorSampler {
     params: DCRTPolyParams,
     base: usize,
     sigma: f64,
-    size: usize,
+    d: usize,
 }
 
 impl DCRTPolyTrapdoorSampler {
-    pub fn new(params: DCRTPolyParams, base: usize, sigma: f64, size: usize) -> Self {
-        Self { params, base, sigma, size }
+    pub fn new(params: DCRTPolyParams, base: usize, sigma: f64, d: usize) -> Self {
+        Self { params, base, sigma, d }
     }
 }
 
@@ -33,14 +36,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.params.ring_dimension(),
             self.params.size(),
             self.params.k_res(),
-            self.size,
+            self.d,
             self.sigma,
             self.base as i64,
             false,
         );
         let trapdoor = trapdoor_output.GetTrapdoorPair();
-        let nrow = self.size;
-        let ncol = (&self.params.modulus_bits() + 2) * self.size;
+        let nrow = self.d;
+        let ncol = (&self.params.modulus_bits() + 2) * self.d;
 
         // Construct the public matrix from its elements
         let mut matrix_inner = Vec::with_capacity(nrow);
@@ -65,62 +68,74 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         public_matrix: &Self::M,
         target: &Self::M,
     ) -> Self::M {
-        // let n = self.params.get_params().GetRingDimension() as usize;
-        // let k = self.params.modulus_bits();
+        let n = self.params.ring_dimension() as usize;
+        let k = self.params.modulus_bits();
 
-        // let mut public_matrix_ptr =
-        //     DCRTMatrixCreate(self.params.get_params(), self.size, (k + 2) * self.size);
+        let mut public_matrix_ptr = MatrixGen(
+            self.params.ring_dimension(),
+            self.params.size(),
+            self.params.k_res(),
+            self.d,
+            (k + 2) * self.d,
+        );
 
-        // for i in 0..self.size {
-        //     for j in 0..(k + 2) * self.size {
-        //         let poly = public_matrix.entry(i, j).get_poly();
-        //         public_matrix_ptr.as_mut().unwrap().SetElement(i, j, poly);
-        //     }
-        // }
+        for i in 0..self.d {
+            for j in 0..(k + 2) * self.d {
+                let poly = public_matrix.entry(i, j).get_poly();
+                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
+            }
+        }
 
-        // let mut target_matrix_ptr =
-        //     DCRTMatrixCreate(self.params.get_params(), self.size, self.size);
+        let mut target_matrix_ptr = MatrixGen(
+            self.params.ring_dimension(),
+            self.params.size(),
+            self.params.k_res(),
+            self.d,
+            self.d,
+        );
 
-        // for i in 0..self.size {
-        //     for j in 0..self.size {
-        //         let poly = target.entry(i, j).get_poly();
-        //         target_matrix_ptr.as_mut().unwrap().SetElement(i, j, poly);
-        //     }
-        // }
+        for i in 0..self.d {
+            for j in 0..self.d {
+                let poly = target.entry(i, j).get_poly();
+                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
+            }
+        }
 
-        // let preimage_matrix_ptr = DCRTPolySquareMatGaussSamp(
-        //     n,
-        //     k,
-        //     &public_matrix_ptr,
-        //     trapdoor,
-        //     &target_matrix_ptr,
-        //     self.base as i64,
-        //     self.sigma,
-        // );
+        let preimage_matrix_ptr = DCRTSquareMatGaussSamp(
+            n as u32,
+            k as u32,
+            &public_matrix_ptr,
+            trapdoor,
+            &target_matrix_ptr,
+            self.base as i64,
+            self.sigma,
+        );
 
-        // let nrow = self.size * (k + 2);
-        // let ncol = self.size;
+        let nrow = self.d * (k + 2);
+        let ncol = self.d;
 
-        // let mut matrix_inner = Vec::with_capacity(nrow);
-        // for i in 0..nrow {
-        //     let mut row = Vec::with_capacity(ncol);
-        //     for j in 0..ncol {
-        //         let poly = preimage_matrix_ptr.GetElement(i, j);
-        //         let dcrt_poly = DCRTPoly::new(poly);
-        //         row.push(dcrt_poly);
-        //     }
-        //     matrix_inner.push(row);
-        // }
+        let mut matrix_inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = GetMatrixElement(&preimage_matrix_ptr, i, j);
+                let dcrt_poly = DCRTPoly::new(poly);
+                row.push(dcrt_poly);
+            }
+            matrix_inner.push(row);
+        }
 
-        // DCRTPolyMatrix::from_poly_vec(&self.params, matrix_inner)
-        todo!()
+        DCRTPolyMatrix::from_poly_vec(&self.params, matrix_inner)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::dcrt::DCRTPolyParams;
+    use crate::poly::{
+        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
+        sampler::{DistType, PolyUniformSampler},
+    };
 
     #[test]
     fn test_trapdoor_generation() {
@@ -155,38 +170,38 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_preimage_generation() {
-    //     let params = DCRTPolyParams::default();
-    //     let base = 2;
-    //     let sigma = 4.57825;
-    //     let d = 3;
-    //     let k = params.modulus_bits();
-    //     let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(params.clone(), base, sigma, d);
-    //     let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor();
+    #[test]
+    fn test_preimage_generation() {
+        let params = DCRTPolyParams::default();
+        let base = 2;
+        let sigma = 4.57825;
+        let d = 3;
+        let k = params.modulus_bits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(params.clone(), base, sigma, d);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor();
 
-    //     let uniform_sampler = DCRTPolyUniformSampler::new(params.clone());
-    //     let target = uniform_sampler.sample_uniform(d, d, DistType::FinRingDist);
+        let uniform_sampler = DCRTPolyUniformSampler::new(params.clone());
+        let target = uniform_sampler.sample_uniform(d, d, DistType::FinRingDist);
 
-    //     let preimage = trapdoor_sampler.preimage(&trapdoor, &public_matrix, &target);
+        let preimage = trapdoor_sampler.preimage(&trapdoor, &public_matrix, &target);
 
-    //     let expected_rows = d * (k + 2);
-    //     let expected_cols = d;
+        let expected_rows = d * (k + 2);
+        let expected_cols = d;
 
-    //     assert_eq!(
-    //         preimage.row_size(),
-    //         expected_rows,
-    //         "Preimage matrix should have the correct number of rows"
-    //     );
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
 
-    //     assert_eq!(
-    //         preimage.col_size(),
-    //         expected_cols,
-    //         "Preimage matrix should have the correct number of columns"
-    //     );
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns"
+        );
 
-    //     // public_matrix * preimage should be equal to target
-    //     let product = public_matrix * &preimage;
-    //     assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-    // }
+        // public_matrix * preimage should be equal to target
+        let product = public_matrix * &preimage;
+        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    }
 }
