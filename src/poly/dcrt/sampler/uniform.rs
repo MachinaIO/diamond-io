@@ -3,7 +3,7 @@ use openfhe::ffi;
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
     sampler::{DistType, PolyUniformSampler},
-    Poly, PolyMatrix,
+    Poly, PolyMatrix, PolyParams,
 };
 
 pub struct DCRTPolyUniformSampler {
@@ -17,9 +17,18 @@ impl DCRTPolyUniformSampler {
 
     fn sample_poly(&self, params: &DCRTPolyParams, dist: &DistType) -> DCRTPoly {
         let sampled_poly = match dist {
-            DistType::FinRingDist => ffi::DCRTPolyGenFromDug(params.get_params()),
-            DistType::GaussDist { sigma } => ffi::DCRTPolyGenFromDgg(params.get_params(), *sigma),
-            DistType::BitDist => ffi::DCRTPolyGenFromBug(params.get_params()),
+            DistType::FinRingDist => {
+                ffi::DCRTPolyGenFromDug(params.ring_dimension(), params.size(), params.k_res())
+            }
+            DistType::GaussDist { sigma } => ffi::DCRTPolyGenFromDgg(
+                params.ring_dimension(),
+                params.size(),
+                params.k_res(),
+                *sigma,
+            ),
+            DistType::BitDist => {
+                ffi::DCRTPolyGenFromBug(params.ring_dimension(), params.size(), params.k_res())
+            }
         };
         DCRTPoly::new(sampled_poly)
     }

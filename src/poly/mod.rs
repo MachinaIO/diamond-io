@@ -5,7 +5,7 @@ pub mod element;
 pub mod matrix;
 pub mod params;
 pub mod polynomial;
-// pub mod sampler;
+pub mod sampler;
 
 pub use element::PolyElem;
 pub use matrix::PolyMatrix;

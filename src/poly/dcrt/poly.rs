@@ -20,6 +20,10 @@ impl DCRTPoly {
     pub fn new(ptr_poly: UniquePtr<DCRTPolyCxx>) -> Self {
         Self { ptr_poly: ptr_poly.into() }
     }
+
+    pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
+        &self.ptr_poly
+    }
 }
 
 impl Poly for DCRTPoly {
