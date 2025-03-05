@@ -2,6 +2,7 @@
 // pub mod circuit;
 // pub mod operations;
 // pub mod parameters;
+pub mod circuits;
 pub mod eval;
 pub mod sampler;
 use crate::poly::matrix::*;

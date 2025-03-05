@@ -11,9 +11,9 @@ openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "feat/
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
 num-traits = "0.2"
-# thiserror = "2.0.11"
 rand = { version = "0.9.0", features = ["std_rng"] }
 itertools = "0.14.0"
+
 # serde = { version = "1.0.218", features = ["derive"] }
 
 # TODO: for now not using
