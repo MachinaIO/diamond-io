@@ -163,9 +163,20 @@ mod tests {
         let log_q = params.modulus_bits();
         let columns = 2 * log_q;
         assert_eq!(sampled_pub_keys.len(), packed_input_size);
-        for m in sampled_pub_keys {
-            assert_eq!(m.matrix.row_size(), 2);
-            assert_eq!(m.matrix.col_size(), columns);
+
+        for pair in sampled_pub_keys.chunks(2) {
+            if let [a, b] = pair {
+                assert_eq!(a.matrix.row_size(), 2);
+                assert_eq!(a.matrix.col_size(), columns);
+                assert_eq!(b.matrix.row_size(), 2);
+                assert_eq!(b.matrix.col_size(), columns);
+                let addition = a.clone() + b.clone();
+                assert_eq!(addition.matrix.row_size(), 2);
+                assert_eq!(addition.matrix.col_size(), columns);
+                let multiplication = a.clone() * b.clone();
+                assert_eq!(multiplication.matrix.row_size(), 2);
+                assert_eq!(multiplication.matrix.col_size(), columns);
+            }
         }
     }
 
@@ -184,7 +195,28 @@ mod tests {
         let secret = uniform_sampler.sample_poly(&params, &DistType::BitDist);
         let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
         let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
-        let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts, false);
+        let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts, true);
         assert_eq!(bgg_encodings.len(), packed_input_size);
+
+        for pair in bgg_encodings.chunks(2) {
+            if let [a, b] = pair {
+                let a_pubkey = a.pubkey.clone();
+                let b_pubkey = b.pubkey.clone();
+                let a_plaintext = a.plaintext.clone();
+                let b_plaintext = b.plaintext.clone();
+                let addition = a.clone() + b.clone();
+                assert_eq!(addition.pubkey, a_pubkey.clone() + b_pubkey.clone());
+                assert_eq!(
+                    addition.plaintext.unwrap(),
+                    a_plaintext.clone().unwrap() + b_plaintext.clone().unwrap()
+                );
+                let multiplication = a.clone() * b.clone();
+                assert_eq!(multiplication.pubkey, a_pubkey * b_pubkey);
+                assert_eq!(
+                    multiplication.plaintext.unwrap(),
+                    a_plaintext.unwrap() * b_plaintext.unwrap()
+                );
+            }
+        }
     }
 }
