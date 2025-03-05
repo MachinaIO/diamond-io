@@ -48,7 +48,7 @@ impl<M: PolyMatrix> Add<&Self> for BggEncoding<M> {
 impl<M: PolyMatrix> Mul for BggEncoding<M> {
     type Output = Self;
     fn mul(self, other: Self) -> Self {
-        self + &other
+        self * &other
     }
 }
 
@@ -66,7 +66,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
             (Some(a), Some(b)) => Some(a.clone() * b),
             _ => None,
         };
-        let new_pubkey = self.pubkey.clone() + &other.pubkey;
+        let new_pubkey = self.pubkey.clone() * &other.pubkey;
         Self { vector: new_vector, pubkey: new_pubkey, plaintext: new_plaintext }
     }
 }
