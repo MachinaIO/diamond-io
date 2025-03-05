@@ -10,13 +10,15 @@ use num_bigint::BigUint;
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     key: [u8; 32],
-    params: DCRTPolyParams,
     _h: PhantomData<H>,
 }
 
-impl<H: OutputSizeUser + digest::Digest> DCRTPolyHashSampler<H> {
-    pub fn new(key: [u8; 32], params: DCRTPolyParams) -> Self {
-        Self { key, params, _h: PhantomData }
+impl<H> DCRTPolyHashSampler<H>
+where
+    H: OutputSizeUser + digest::Digest,
+{
+    pub fn new(key: [u8; 32]) -> Self {
+        Self { key, _h: PhantomData }
     }
 
     fn _set_key(&mut self, key: [u8; 32]) {
@@ -28,12 +30,12 @@ impl<H: OutputSizeUser + digest::Digest> DCRTPolyHashSampler<H> {
     }
 
     fn ring_elems_to_matrix(
-        &self,
+        params: &DCRTPolyParams,
         ring_elems: Vec<FinRingElem>,
         nrow: usize,
         ncol: usize,
     ) -> DCRTPolyMatrix {
-        let n = self.params.ring_dimension() as usize;
+        let n = params.ring_dimension() as usize;
         // Check if we have enough field elements (not sure if this will ever happen)
         if ring_elems.len() < nrow * ncol * n {
             panic!("Not enough ring elements to sample hash")
@@ -46,7 +48,7 @@ impl<H: OutputSizeUser + digest::Digest> DCRTPolyHashSampler<H> {
         for _ in 0..total_poly {
             let coeffs = &ring_elems[offset..offset + n];
             offset += n;
-            let poly = DCRTPoly::from_coeffs(&self.params, coeffs);
+            let poly = DCRTPoly::from_coeffs(params, coeffs);
             all_polys.push(poly);
         }
 
@@ -59,29 +61,33 @@ impl<H: OutputSizeUser + digest::Digest> DCRTPolyHashSampler<H> {
             matrix_inner.push(row_polys);
         }
 
-        DCRTPolyMatrix::from_poly_vec(&self.params, matrix_inner)
+        DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 }
 
-impl<H: OutputSizeUser + digest::Digest> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H> {
+impl<H> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H>
+where
+    H: OutputSizeUser + digest::Digest,
+{
     type M = DCRTPolyMatrix;
 
     fn sample_hash<B: AsRef<[u8]>>(
         &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         tag: B,
         nrow: usize,
         ncol: usize,
         dist: DistType,
     ) -> DCRTPolyMatrix {
         let hash_output_size = <H as digest::Digest>::output_size() * 8;
-        let n = self.params.ring_dimension() as usize;
-        let q = self.params.modulus();
+        let n = params.ring_dimension() as usize;
+        let q = params.modulus();
 
         let ring_elems = match dist {
             DistType::FinRingDist => {
                 // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) / hash_output_size)
                 // field_elements = number of field elements sampled = (bits / ceil(log2(q)))
-                let bit_length = self.params.modulus_bits();
+                let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
                 let mut bits = Vec::with_capacity(hash_output_size * index);
@@ -152,7 +158,7 @@ impl<H: OutputSizeUser + digest::Digest> PolyHashSampler<[u8; 32]> for DCRTPolyH
             }
         };
 
-        Self::ring_elems_to_matrix(self, ring_elems, nrow, ncol)
+        Self::ring_elems_to_matrix(params, ring_elems, nrow, ncol)
     }
 
     fn set_key(&mut self, key: [u8; 32]) {
@@ -163,6 +169,7 @@ impl<H: OutputSizeUser + digest::Digest> PolyHashSampler<[u8; 32]> for DCRTPolyH
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::poly::dcrt::DCRTPolyParams;
     use itertools::Itertools;
     use keccak_asm::Keccak256;
     use proptest::prelude::*;
@@ -171,11 +178,11 @@ mod tests {
     fn test_poly_hash_sampler() {
         let key = [0u8; 32];
         let params = DCRTPolyParams::default();
-        let mut sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params);
+        let mut sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
         let nrow = 100;
         let ncol = 300;
         let tag = b"MyTag";
-        let matrix_result = sampler.sample_hash(tag, nrow, ncol, DistType::BitDist);
+        let matrix_result = sampler.sample_hash(&params, tag, nrow, ncol, DistType::BitDist);
         // [TODO] Test the norm of each coefficient of polynomials in the matrix.
 
         let new_key = [1u8; 32];
@@ -190,11 +197,11 @@ mod tests {
     fn test_poly_hash_sampler_fin_ring_dist() {
         let key = [0u8; 32];
         let params = DCRTPolyParams::default();
-        let mut sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params);
+        let mut sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
         let nrow = 100;
         let ncol = 300;
         let tag = b"MyTag";
-        let matrix_result = sampler.sample_hash(tag, nrow, ncol, DistType::FinRingDist);
+        let matrix_result = sampler.sample_hash(&params, tag, nrow, ncol, DistType::FinRingDist);
 
         let new_key = [1u8; 32];
         sampler.set_key(new_key);
@@ -216,8 +223,8 @@ mod tests {
         ) {
             let params = DCRTPolyParams::default();
             let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params.clone());
-            let matrix = sampler.sample_hash(tag_bytes, rows, columns, DistType::FinRingDist);
+            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
+            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::FinRingDist);
             let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, rows);
             let decomposed = matrix.decompose();
             let expected_matrix = gadget_matrix * decomposed;
@@ -233,8 +240,8 @@ mod tests {
         ) {
             let params = DCRTPolyParams::default();
             let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params.clone());
-            let matrix = sampler.sample_hash(tag_bytes, rows, columns, DistType::BitDist);
+            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
+            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::BitDist);
             let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, rows);
             let decomposed = matrix.decompose();
             let expected_matrix = gadget_matrix * decomposed;
@@ -251,8 +258,8 @@ mod tests {
             let params = DCRTPolyParams::default();
 
             let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params.clone());
-            let matrix = sampler.sample_hash(tag_bytes, rows, columns, DistType::FinRingDist);
+            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
+            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::FinRingDist);
 
             let new_params = DCRTPolyParams::new(4, 15, 51);
             let new_modulus = new_params.modulus();
@@ -283,8 +290,8 @@ mod tests {
             let params = DCRTPolyParams::default();
 
             let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key, params.clone());
-            let matrix = sampler.sample_hash(tag_bytes, rows, columns, DistType::BitDist);
+            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
+            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::BitDist);
 
             let new_params = DCRTPolyParams::new(4, 15, 51);
             let new_modulus = new_params.modulus();

@@ -16,6 +16,9 @@ pub struct DCRTPoly {
     ptr_poly: Arc<UniquePtr<DCRTPolyImpl>>,
 }
 
+unsafe impl Send for DCRTPoly {}
+unsafe impl Sync for DCRTPoly {}
+
 impl DCRTPoly {
     pub fn new(ptr_poly: UniquePtr<DCRTPolyImpl>) -> Self {
         Self { ptr_poly: ptr_poly.into() }
