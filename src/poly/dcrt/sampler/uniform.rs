@@ -2,7 +2,7 @@ use openfhe::ffi;
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
-    sampler::{DistType, PolyUniformSampler},
+    sampler::{DistType, PolySampler, PolyUniformSampler},
     Poly, PolyMatrix,
 };
 
@@ -15,7 +15,7 @@ impl DCRTPolyUniformSampler {
         Self { params }
     }
 
-    fn sample_poly(&self, params: &DCRTPolyParams, dist: &DistType) -> DCRTPoly {
+    pub fn sample_poly(&self, params: &DCRTPolyParams, dist: &DistType) -> DCRTPoly {
         let sampled_poly = match dist {
             DistType::FinRingDist => ffi::DCRTPolyGenFromDug(params.get_params()),
             DistType::GaussDist { sigma } => ffi::DCRTPolyGenFromDgg(params.get_params(), *sigma),
@@ -25,9 +25,15 @@ impl DCRTPolyUniformSampler {
     }
 }
 
-impl PolyUniformSampler for DCRTPolyUniformSampler {
+impl PolySampler for DCRTPolyUniformSampler {
     type M = DCRTPolyMatrix;
 
+    fn get_params(&self) -> <<Self::M as PolyMatrix>::P as Poly>::Params {
+        self.params.clone()
+    }
+}
+
+impl PolyUniformSampler for DCRTPolyUniformSampler {
     fn sample_uniform(&self, rows: usize, columns: usize, dist: DistType) -> Self::M {
         let mut c: Vec<Vec<DCRTPoly>> =
             vec![vec![DCRTPoly::const_zero(&self.params); columns]; rows];

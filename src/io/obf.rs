@@ -2,7 +2,6 @@ use super::utils::*;
 use super::Obfuscation;
 use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
 use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
-use crate::utils::*;
 use rand::{Rng, RngCore};
 use std::sync::Arc;
 
@@ -24,7 +23,7 @@ where
     let params = Arc::new(params);
     let dim = params.as_ref().ring_dimension() as usize;
     let packed_input_size = input_size.div_ceil(dim);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(params.clone(), sampler.clone());
+    let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone());
     let public_data = PublicSampledData::sample(
         params.as_ref(),
         sampler.clone(),
@@ -33,8 +32,7 @@ where
         packed_input_size,
     );
     let s_bar = sampler.sample_uniform(1, 1, DistType::BitDist).entry(1, 1).clone();
-    let bgg_encode_sampler =
-        BGGEncodingSampler::new(&s_bar, params.clone(), sampler.clone(), error_gauss_sigma);
+    let bgg_encode_sampler = BGGEncodingSampler::new(&s_bar, sampler.clone(), error_gauss_sigma);
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar = sampler.sample_uniform(1, 1, DistType::BitDist);
     let minus_one_poly =

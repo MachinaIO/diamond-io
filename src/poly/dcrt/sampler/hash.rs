@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem},
-    sampler::{DistType, PolyHashSampler},
+    sampler::{DistType, PolyHashSampler, PolySampler},
     Poly, PolyMatrix, PolyParams,
 };
 use digest::OutputSizeUser;
@@ -14,7 +14,21 @@ pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     _h: PhantomData<H>,
 }
 
-impl<H: OutputSizeUser + digest::Digest> DCRTPolyHashSampler<H> {
+impl<H> PolySampler for DCRTPolyHashSampler<H>
+where
+    H: OutputSizeUser + digest::Digest,
+{
+    type M = DCRTPolyMatrix;
+
+    fn get_params(&self) -> <<Self::M as PolyMatrix>::P as Poly>::Params {
+        self.params.clone()
+    }
+}
+
+impl<H> DCRTPolyHashSampler<H>
+where
+    H: OutputSizeUser + digest::Digest,
+{
     pub fn new(key: [u8; 32], params: DCRTPolyParams) -> Self {
         Self { key, params, _h: PhantomData }
     }
@@ -63,9 +77,10 @@ impl<H: OutputSizeUser + digest::Digest> DCRTPolyHashSampler<H> {
     }
 }
 
-impl<H: OutputSizeUser + digest::Digest> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H> {
-    type M = DCRTPolyMatrix;
-
+impl<H> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H>
+where
+    H: OutputSizeUser + digest::Digest,
+{
     fn sample_hash<B: AsRef<[u8]>>(
         &self,
         tag: B,

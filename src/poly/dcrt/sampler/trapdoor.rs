@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
-    sampler::PolyTrapdoorSampler,
-    PolyMatrix, PolyParams,
+    sampler::{PolySampler, PolyTrapdoorSampler},
+    Poly, PolyMatrix, PolyParams,
 };
 
 use openfhe::{
@@ -27,8 +27,15 @@ impl DCRTPolyTrapdoorSampler {
     }
 }
 
-impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
+impl PolySampler for DCRTPolyTrapdoorSampler {
     type M = DCRTPolyMatrix;
+
+    fn get_params(&self) -> <<Self::M as PolyMatrix>::P as Poly>::Params {
+        self.params.clone()
+    }
+}
+
+impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     type Trapdoor = Arc<UniquePtr<RLWETrapdoorPair>>;
 
     fn trapdoor(&self) -> (Self::Trapdoor, Self::M) {

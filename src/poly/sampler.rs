@@ -1,4 +1,4 @@
-use super::PolyMatrix;
+use super::{Poly, PolyMatrix};
 
 #[derive(Debug)]
 /// Enum representing different types of distributions for random sampling.
@@ -15,10 +15,14 @@ pub enum DistType {
     BitDist,
 }
 
-/// Trait for sampling a polynomial based on a hash function.
-pub trait PolyHashSampler<K: AsRef<[u8]>> {
-    type M: PolyMatrix;
+pub trait PolySampler {
+    type M: PolyMatrix + Send + Sync;
 
+    fn get_params(&self) -> <<Self::M as PolyMatrix>::P as Poly>::Params;
+}
+
+/// Trait for sampling a polynomial based on a hash function.
+pub trait PolyHashSampler<K: AsRef<[u8]>>: PolySampler {
     /// Samples a matrix of ring elements from a pseudorandom source defined by a hash function `H` Compute H(key || tag || i)
     ///
     /// and a distribution type specified by `dist`.
@@ -34,14 +38,11 @@ pub trait PolyHashSampler<K: AsRef<[u8]>> {
     fn set_key(&mut self, key: K);
 }
 
-pub trait PolyUniformSampler {
-    type M: PolyMatrix;
-
+pub trait PolyUniformSampler: PolySampler {
     fn sample_uniform(&self, rows: usize, columns: usize, dist: DistType) -> Self::M;
 }
 
-pub trait PolyTrapdoorSampler {
-    type M: PolyMatrix;
+pub trait PolyTrapdoorSampler: PolySampler {
     type Trapdoor;
     fn trapdoor(&self) -> (Self::Trapdoor, Self::M);
     fn preimage(
