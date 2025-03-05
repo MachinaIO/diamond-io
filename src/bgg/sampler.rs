@@ -103,12 +103,13 @@ where
         let log_q = params.modulus_bits();
         let packed_input_size = plaintexts.len();
         let columns = 2 * log_q * packed_input_size;
-        let error = self.error_sampler.sample_uniform(
+        let error: S::M = self.error_sampler.sample_uniform(
             params,
             1,
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
+        println!("err {:?}, ", error);
         // first term sA
         // [TODO] Avoid memory cloning here.
         let all_public_key_matrix: S::M = public_keys[0]
@@ -125,7 +126,7 @@ where
         let all_vector = first_term + second_term + error;
 
         let encoding: Vec<BggEncoding<S::M>> = plaintexts
-            .to_vec() // Convert &[T] to Vec<T> if needed
+            .to_vec()
             .into_par_iter()
             .enumerate()
             .map(|(idx, plaintext)| {
@@ -145,7 +146,7 @@ where
 mod tests {
     use super::*;
     use crate::poly::dcrt::{
-        DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler,
+        DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
     };
     use keccak_asm::Keccak256;
 
@@ -181,6 +182,7 @@ mod tests {
                 let addition = a.clone() + b.clone();
                 assert_eq!(addition.matrix.row_size(), 2);
                 assert_eq!(addition.matrix.col_size(), columns);
+                assert_eq!(addition.matrix, a.matrix.clone() + b.matrix.clone());
             }
         }
     }
@@ -203,6 +205,7 @@ mod tests {
                 let multiplication = a.clone() * b.clone();
                 assert_eq!(multiplication.matrix.row_size(), 2);
                 assert_eq!(multiplication.matrix.col_size(), columns);
+                assert_eq!(multiplication.matrix, (a.matrix.clone() * b.matrix.decompose().clone()))
             }
         }
     }
@@ -247,9 +250,15 @@ mod tests {
                 let addition = a.clone() + b.clone();
                 assert_eq!(addition.pubkey, a.pubkey.clone() + b.pubkey.clone());
                 assert_eq!(
-                    addition.plaintext.unwrap(),
+                    addition.clone().plaintext.unwrap(),
                     a.plaintext.clone().unwrap() + b.plaintext.clone().unwrap()
                 );
+                let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+                assert_eq!(
+                    addition.vector,
+                    bgg_sampler.secret_vec.clone()
+                        * (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
+                )
             }
         }
     }
@@ -275,9 +284,15 @@ mod tests {
                 let multiplication = a.clone() * b.clone();
                 assert_eq!(multiplication.pubkey, (a.clone().pubkey * b.clone().pubkey));
                 assert_eq!(
-                    multiplication.plaintext.unwrap(),
+                    multiplication.clone().plaintext.unwrap(),
                     a.clone().plaintext.unwrap() * b.clone().plaintext.unwrap()
                 );
+                let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+                assert_eq!(
+                    multiplication.vector,
+                    (bgg_sampler.secret_vec.clone()
+                        * (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
+                )
             }
         }
     }

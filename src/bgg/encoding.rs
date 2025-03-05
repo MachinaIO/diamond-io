@@ -44,7 +44,6 @@ impl<M: PolyMatrix> Add<&Self> for BggEncoding<M> {
     }
 }
 
-#[allow(clippy::suspicious_arithmetic_impl)]
 impl<M: PolyMatrix> Mul for BggEncoding<M> {
     type Output = Self;
     fn mul(self, other: Self) -> Self {
