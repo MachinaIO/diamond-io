@@ -7,6 +7,8 @@ use std::{fmt::Debug, sync::Arc};
 #[derive(Clone)]
 pub struct DCRTPolyParams {
     ring_dimension: u32,
+    size: usize,
+    k_res: usize,
     modulus: Arc<BigUint>,
 }
 
@@ -47,8 +49,18 @@ impl DCRTPolyParams {
         let modulus = ffi::GenModulus(n, size, k_res);
         Self {
             ring_dimension: n,
+            size,
+            k_res,
             modulus: Arc::new(BigUint::from_str_radix(&modulus, 10).unwrap()),
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    pub fn k_res(&self) -> usize {
+        self.k_res
     }
 }
 
