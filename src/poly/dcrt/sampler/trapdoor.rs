@@ -9,7 +9,7 @@ use crate::poly::{
 use openfhe::{
     cxx::UniquePtr,
     ffi::{
-        DCRTSquareMatGaussSamp, DCRTSquareMatTrapdoorGen, GetMatrixElement, MatrixGen,
+        DCRTSquareMatTrapdoorGaussSamp, DCRTSquareMatTrapdoorGen, GetMatrixElement, MatrixGen,
         RLWETrapdoorPair, SetMatrixElement,
     },
 };
@@ -99,7 +99,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             }
         }
 
-        let preimage_matrix_ptr = DCRTSquareMatGaussSamp(
+        let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
             n as u32,
             k as u32,
             &public_matrix_ptr,
