@@ -27,6 +27,12 @@ impl FinRingElem {
     pub fn modulus(&self) -> &BigUint {
         &self.modulus
     }
+
+    pub fn modulus_switch(&self, new_modulus: Arc<BigUint>) -> Self {
+        let value =
+            ((&self.value * new_modulus.as_ref()) / self.modulus.as_ref()) % new_modulus.as_ref();
+        Self { value, modulus: new_modulus }
+    }
 }
 
 impl PolyElem for FinRingElem {
@@ -246,5 +252,14 @@ mod tests {
         let c = FinRingElem::new(13, modulus.clone());
         let d = FinRingElem::new(15, modulus.clone());
         assert_eq!((c * d).value(), &BigUint::from(8u8)); // 195 ≡ 8 (mod 17)
+    }
+
+    #[test]
+    fn test_arithmetic_modulus_switch() {
+        let modulus = setup();
+
+        let a = FinRingElem::new(15, modulus);
+        let new_modulus = Arc::new(BigUint::from(5u8));
+        assert_eq!(a.modulus_switch(new_modulus).value(), &BigUint::from(4u8));
     }
 }

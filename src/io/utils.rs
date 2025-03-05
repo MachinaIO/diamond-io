@@ -9,6 +9,7 @@ const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_FHE_BAR: &[u8] = b"A_FHE_BAR";
 const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 const TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
+const TAG_A_PRF: &[u8] = b"A_PRF:";
 
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
@@ -19,6 +20,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub pubkeys_fhe_key: Vec<Vec<BggPublicKey<S::M>>>,
     pub t_0: (S::M, S::M),
     pub t_1: (S::M, S::M),
+    pub a_prf: S::M,
     _s: PhantomData<S>,
 }
 
@@ -29,6 +31,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
         input_size: usize,
         packed_input_size: usize,
+        packed_output_size: usize,
     ) -> Self {
         let r_0_bar = hash_sampler.sample_hash(TAG_R_0, 1, 1, DistType::BitDist);
         let r_1_bar = hash_sampler.sample_hash(TAG_R_1, 1, 1, DistType::BitDist);
@@ -64,6 +67,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
             ts.push((t_input, t_fhe_key));
         }
+        let a_prf =
+            hash_sampler.sample_hash(TAG_A_PRF, 2, packed_output_size, DistType::FinRingDist);
         Self {
             r_0,
             r_1,
@@ -72,6 +77,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             pubkeys_fhe_key,
             t_0: ts[0].clone(),
             t_1: ts[1].clone(),
+            a_prf,
             _s: PhantomData,
         }
     }

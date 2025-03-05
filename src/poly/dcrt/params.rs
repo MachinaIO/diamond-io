@@ -62,11 +62,8 @@ mod tests {
 
     #[test]
     fn test_params_initiation() {
-        let n = 16;
-        let size = 4;
-        let k_res = 51;
-        let p = DCRTPolyParams::new(n, size, k_res);
-        assert_eq!(p.ring_dimension(), n);
-        assert_eq!(p.modulus_bits(), 204);
+        let p = DCRTPolyParams::default();
+        assert_eq!(p.ring_dimension(), 4);
+        assert_eq!(p.modulus_bits(), 816);
     }
 }

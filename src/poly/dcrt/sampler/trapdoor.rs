@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_trapdoor_generation() {
-        let params = DCRTPolyParams::new(16, 4, 51);
+        let params = DCRTPolyParams::default();
         let base = 2;
         let sigma = 4.57825;
         let d = 3;
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_preimage_generation() {
-        let params = DCRTPolyParams::new(16, 4, 51);
+        let params = DCRTPolyParams::default();
         let base = 2;
         let sigma = 4.57825;
         let d = 3;

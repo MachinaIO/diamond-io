@@ -31,6 +31,7 @@ where
         &bgg_pubkey_sampler,
         input_size,
         packed_input_size,
+        1,
     );
     let s_bar = sampler.sample_uniform(1, 1, DistType::BitDist).entry(1, 1).clone();
     let bgg_encode_sampler =

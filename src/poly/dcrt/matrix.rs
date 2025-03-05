@@ -20,6 +20,7 @@ impl Debug for DCRTPolyMatrix {
         f.debug_struct("DCRTPolyMatrix")
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
+            .field("inner", &self.inner)
             .finish()
     }
 }
@@ -294,6 +295,16 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
         Self { nrow: new_nrow, ncol: self.ncol, inner: new_inner, params: self.params.clone() }
     }
+
+    fn modulus_switch(&self, new_params: &<Self::P as Poly>::Params) -> Self {
+        let mut new_inner = self.clone().inner;
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                new_inner[i][j] = self.inner[i][j].modulus_switch(new_params.clone());
+            }
+        }
+        Self { inner: new_inner, params: new_params.clone(), nrow: self.nrow, ncol: self.ncol }
+    }
 }
 
 // ====== Arithmetic ======
@@ -562,6 +573,51 @@ mod tests {
         // Check that the (0,0) element is the product of the (0,0) elements
         let value_25 = FinRingElem::new(25u32, params.modulus());
         assert_eq!(tensor.entry(0, 0).coeffs()[0], value_25);
+    }
+
+    #[test]
+    fn test_modulus_switch() {
+        let params = DCRTPolyParams::default();
+
+        let value00 = FinRingElem::new(1023782870921908217643761278891282178u128, params.modulus());
+        let value01 = FinRingElem::new(8179012198875468938912873783289218738u128, params.modulus());
+        let value10 = FinRingElem::new(2034903202902173762872163465127672178u128, params.modulus());
+        let value11 = FinRingElem::new(1990091289902891278121564387120912660u128, params.modulus());
+        let matrix = DCRTPolyMatrix::from_poly_vec(
+            &params,
+            vec![
+                vec![
+                    DCRTPoly::from_const(&params, &value00),
+                    DCRTPoly::from_const(&params, &value01),
+                ],
+                vec![
+                    DCRTPoly::from_const(&params, &value10),
+                    DCRTPoly::from_const(&params, &value11),
+                ],
+            ],
+        );
+        let new_params = DCRTPolyParams::new(4, 15, 51);
+        let new_modulus = new_params.modulus();
+        let switched = matrix.modulus_switch(&new_params);
+        assert_eq!(switched.params().modulus(), new_params.modulus());
+        let new_value00 = value00.modulus_switch(new_modulus.clone());
+        let new_value01 = value01.modulus_switch(new_modulus.clone());
+        let new_value10 = value10.modulus_switch(new_modulus.clone());
+        let new_value11 = value11.modulus_switch(new_modulus.clone());
+        let expected = DCRTPolyMatrix::from_poly_vec(
+            &new_params,
+            vec![
+                vec![
+                    DCRTPoly::from_const(&new_params, &new_value00),
+                    DCRTPoly::from_const(&new_params, &new_value01),
+                ],
+                vec![
+                    DCRTPoly::from_const(&new_params, &new_value10),
+                    DCRTPoly::from_const(&new_params, &new_value11),
+                ],
+            ],
+        );
+        assert_eq!(switched, expected);
     }
 
     #[test]

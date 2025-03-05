@@ -29,6 +29,7 @@ where
         &bgg_pubkey_sampler,
         input_size,
         packed_input_size,
+        1,
     );
     let (mut ps, mut cs_input, mut cs_fhe_key) = (vec![], vec![], vec![]);
     ps.push(obfuscation.p_init.clone());

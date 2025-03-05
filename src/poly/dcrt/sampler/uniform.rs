@@ -46,12 +46,15 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
 
 #[cfg(test)]
 mod tests {
+    use crate::poly::PolyParams;
+
     use super::*;
+    use itertools::Itertools;
     use proptest::prelude::*;
 
     #[test]
     fn test_ring_dist() {
-        let params = DCRTPolyParams::new(16, 4, 51);
+        let params = DCRTPolyParams::default();
 
         // Test FinRingDist
         let sampler = DCRTPolyUniformSampler::new(params.clone());
@@ -77,7 +80,7 @@ mod tests {
 
     #[test]
     fn test_gaussian_dist() {
-        let params = DCRTPolyParams::new(16, 4, 51);
+        let params = DCRTPolyParams::default();
 
         // Test GaussianDist
         let sampler = DCRTPolyUniformSampler::new(params.clone());
@@ -103,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_bit_dist() {
-        let params = DCRTPolyParams::new(16, 4, 51);
+        let params = DCRTPolyParams::default();
 
         // Test BitDist
         let sampler = DCRTPolyUniformSampler::new(params.clone());
@@ -178,6 +181,97 @@ mod tests {
             let decomposed = matrix.decompose();
             let expected_matrix = gadget_matrix * decomposed;
             assert_eq!(matrix, expected_matrix);
+        }
+
+        #[test]
+        fn test_modulus_switch_uniform_sampler_ring(
+            rows in 1usize..5usize,
+            columns in 1usize..5usize,
+        ) {
+            let params = DCRTPolyParams::default();
+            println!("Testing with: rows={}, columns={}, dist={:?}", rows, columns,  DistType::FinRingDist);
+            let s = DCRTPolyUniformSampler::new(params.clone());
+            let matrix = s.sample_uniform(rows, columns, DistType::FinRingDist);
+            assert!(rows > 0 && columns > 0, "Invalid dimensions");
+
+            let new_params = DCRTPolyParams::new(4, 15, 51);
+            let new_modulus = new_params.modulus();
+            let switched = matrix.modulus_switch(&new_params);
+            assert_eq!(switched.params().modulus(), new_params.modulus());
+            let mut expected_matrix_vec = vec![];
+            for i in 0..rows {
+                let mut row = vec![];
+                for j in 0..columns {
+                    let poly = matrix.entry(i, j);
+                    let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
+                    let new_poly = DCRTPoly::from_coeffs(&new_params, &coeffs);
+                    row.push(new_poly);
+                }
+                expected_matrix_vec.push(row);
+            }
+            let expected = DCRTPolyMatrix::from_poly_vec(&new_params, expected_matrix_vec);
+            assert_eq!(switched, expected);
+        }
+
+        #[test]
+        fn test_modulus_switch_uniform_sampler_bit(
+            rows in 1usize..5usize,
+            columns in 1usize..5usize,
+        ) {
+            let params = DCRTPolyParams::default();
+            println!("Testing with: rows={}, columns={}, dist={:?}", rows, columns,  DistType::BitDist);
+            let s = DCRTPolyUniformSampler::new(params.clone());
+            let matrix = s.sample_uniform(rows, columns, DistType::BitDist);
+            assert!(rows > 0 && columns > 0, "Invalid dimensions");
+
+            let new_params = DCRTPolyParams::new(4, 15, 51);
+            let new_modulus = new_params.modulus();
+            let switched = matrix.modulus_switch(&new_params);
+            assert_eq!(switched.params().modulus(), new_params.modulus());
+            let mut expected_matrix_vec = vec![];
+            for i in 0..rows {
+                let mut row = vec![];
+                for j in 0..columns {
+                    let poly = matrix.entry(i, j);
+                    let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
+                    let new_poly = DCRTPoly::from_coeffs(&new_params, &coeffs);
+                    row.push(new_poly);
+                }
+                expected_matrix_vec.push(row);
+            }
+            let expected = DCRTPolyMatrix::from_poly_vec(&new_params, expected_matrix_vec);
+            assert_eq!(switched, expected);
+        }
+
+        #[test]
+        fn test_modulus_switch_uniform_sampler_gaussian(
+            rows in 1usize..5usize,
+            columns in 1usize..5usize,
+            sigma in 1.0f64..10.0f64,
+        ) {
+            let params = DCRTPolyParams::default();
+            println!("Testing with: rows={}, columns={}, dist={:?}", rows, columns,  DistType::GaussDist { sigma });
+            let s = DCRTPolyUniformSampler::new(params.clone());
+            let matrix = s.sample_uniform(rows, columns, DistType::GaussDist { sigma });
+            assert!(rows > 0 && columns > 0, "Invalid dimensions");
+
+            let new_params = DCRTPolyParams::new(4, 15, 51);
+            let new_modulus = new_params.modulus();
+            let switched = matrix.modulus_switch(&new_params);
+            assert_eq!(switched.params().modulus(), new_params.modulus());
+            let mut expected_matrix_vec = vec![];
+            for i in 0..rows {
+                let mut row = vec![];
+                for j in 0..columns {
+                    let poly = matrix.entry(i, j);
+                    let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
+                    let new_poly = DCRTPoly::from_coeffs(&new_params, &coeffs);
+                    row.push(new_poly);
+                }
+                expected_matrix_vec.push(row);
+            }
+            let expected = DCRTPolyMatrix::from_poly_vec(&new_params, expected_matrix_vec);
+            assert_eq!(switched, expected);
         }
     }
 }
