@@ -1,4 +1,4 @@
-pub trait PolyParams: Clone {
+pub trait PolyParams: Clone + Send + Sync {
     type Modulus: Clone;
     /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n - 1)`.
     fn modulus(&self) -> Self::Modulus;
