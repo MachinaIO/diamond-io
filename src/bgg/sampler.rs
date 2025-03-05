@@ -100,6 +100,7 @@ where
         plaintexts: &[<S::M as PolyMatrix>::P],
         reveal_plaintexts: bool,
     ) -> Vec<BggEncoding<S::M>> {
+        let secret_vec = &self.secret_vec;
         let log_q = params.modulus_bits();
         let packed_input_size = plaintexts.len();
         let columns = 2 * log_q * packed_input_size;
@@ -109,22 +110,18 @@ where
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
-        println!("err {:?}, ", error);
         // first term sA
         // [TODO] Avoid memory cloning here.
         let all_public_key_matrix: S::M = public_keys[0]
             .matrix
             .concat_columns(&public_keys[1..].iter().map(|pk| pk.matrix.clone()).collect_vec());
-        let first_term = self.secret_vec.clone() * all_public_key_matrix;
+        let first_term = secret_vec.clone() * all_public_key_matrix;
         // second term x \tensor sG
         let gadget = S::M::gadget_matrix(params, 2);
-        let sg = self.secret_vec.clone() * gadget;
         let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
-        let second_term = encoded_polys_vec.tensor(&sg);
-
+        let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
         // all_vector = sA + x \tensor sG + e
-        let all_vector = first_term + second_term + error;
-
+        let all_vector = first_term - second_term + error;
         let encoding: Vec<BggEncoding<S::M>> = plaintexts
             .to_vec()
             .into_par_iter()
@@ -226,7 +223,14 @@ mod tests {
         let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
         let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts, true);
+        let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
         assert_eq!(bgg_encodings.len(), packed_input_size);
+        assert_eq!(
+            bgg_encodings[0].vector,
+            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone()
+                - bgg_sampler.secret_vec.clone()
+                    * (g * bgg_encodings[0].plaintext.clone().unwrap())
+        )
     }
 
     #[test]
@@ -254,6 +258,7 @@ mod tests {
                     a.plaintext.clone().unwrap() + b.plaintext.clone().unwrap()
                 );
                 let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+                assert_eq!(addition.vector, a.clone().vector + b.clone().vector);
                 assert_eq!(
                     addition.vector,
                     bgg_sampler.secret_vec.clone()
