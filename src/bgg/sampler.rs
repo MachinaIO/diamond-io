@@ -110,7 +110,6 @@ where
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
-        println!("err {:?}, ", error);
         // first term sA
         // [TODO] Avoid memory cloning here.
         let all_public_key_matrix: S::M = public_keys[0]
