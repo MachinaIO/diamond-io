@@ -63,7 +63,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let gadget_2 = S::M::gadget_matrix(params, 2);
         let identity_2 = S::M::identity(params, 2, None);
         let mut ts = vec![];
-        for bit in 0..1 {
+        for bit in 0..2 {
             let r = if bit == 0 { r_0.clone() } else { r_1.clone() };
             let rg = r * &gadget_2;
             let rg_decomposed = rg.decompose();
