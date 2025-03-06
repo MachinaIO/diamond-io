@@ -1,4 +1,4 @@
-use crate::poly::{Poly, PolyMatrix};
+use crate::poly::Poly;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolyGateType<P: Poly> {

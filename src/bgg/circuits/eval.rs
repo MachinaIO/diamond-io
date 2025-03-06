@@ -96,7 +96,7 @@ mod tests {
     use super::*;
     use crate::poly::{
         dcrt::{params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler},
-        sampler::{DistType, PolyUniformSampler},
+        sampler::DistType,
     };
 
     // Helper function to create a random polynomial using UniformSampler

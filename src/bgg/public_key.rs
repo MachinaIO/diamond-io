@@ -83,7 +83,7 @@ mod tests {
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
         sampler::uniform::DCRTPolyUniformSampler,
     };
-    use crate::poly::sampler::{DistType, PolyUniformSampler};
+    use crate::poly::sampler::DistType;
     use keccak_asm::Keccak256;
     use std::sync::Arc;
 

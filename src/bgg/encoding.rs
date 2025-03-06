@@ -100,10 +100,7 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
         let decomposed = scalared.decompose();
         let vector = self.vector.clone() * decomposed;
         let pubkey = self.pubkey.scalar_mul(params, scalar);
-        let plaintext = match self.plaintext.as_ref() {
-            Some(p) => Some(p.clone() * scalar),
-            None => None,
-        };
+        let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
         Self { vector, pubkey, plaintext }
     }
 }
@@ -117,7 +114,7 @@ mod tests {
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
         sampler::uniform::DCRTPolyUniformSampler,
     };
-    use crate::poly::sampler::{DistType, PolyUniformSampler};
+    use crate::poly::sampler::DistType;
     use keccak_asm::Keccak256;
     use std::sync::Arc;
 

@@ -1,4 +1,4 @@
-use super::{Poly, PolyParams};
+use super::Poly;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},

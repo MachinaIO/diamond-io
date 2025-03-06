@@ -9,6 +9,12 @@ pub struct PolyCircuit<P: Poly> {
     pub num_input: usize,
 }
 
+impl<P: Poly> Default for PolyCircuit<P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<P: Poly> PolyCircuit<P> {
     pub fn new() -> Self {
         Self { gates: BTreeMap::new(), output_ids: vec![], num_input: 0 }

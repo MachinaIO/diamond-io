@@ -72,7 +72,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             ts.push((t_input, t_fhe_key));
         }
         let a_prf_raw = hash_sampler.sample_hash(
-            &params,
+            params,
             TAG_A_PRF,
             2,
             packed_output_size,
