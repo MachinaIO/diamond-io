@@ -3,7 +3,7 @@ use crate::poly::{Poly, PolyParams};
 use num_bigint::BigUint;
 use openfhe::{
     cxx::UniquePtr,
-    ffi::{self, DCRTPolyImpl},
+    ffi::{self, DCRTPoly as DCRTPolyCxx},
 };
 use std::{
     fmt::Debug,
@@ -13,18 +13,18 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct DCRTPoly {
-    ptr_poly: Arc<UniquePtr<DCRTPolyImpl>>,
+    ptr_poly: Arc<UniquePtr<DCRTPolyCxx>>,
 }
 
 unsafe impl Send for DCRTPoly {}
 unsafe impl Sync for DCRTPoly {}
 
 impl DCRTPoly {
-    pub fn new(ptr_poly: UniquePtr<DCRTPolyImpl>) -> Self {
+    pub fn new(ptr_poly: UniquePtr<DCRTPolyCxx>) -> Self {
         Self { ptr_poly: ptr_poly.into() }
     }
 
-    pub fn get_poly(&self) -> &UniquePtr<DCRTPolyImpl> {
+    pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
         &self.ptr_poly
     }
 
@@ -35,6 +35,24 @@ impl DCRTPoly {
             .map(|coeff| coeff.modulus_switch(new_params.modulus()))
             .collect::<Vec<FinRingElem>>();
         DCRTPoly::from_coeffs(&new_params, &new_coeffs)
+    }
+
+    fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
+        DCRTPoly::new(ffi::DCRTPolyGenFromVec(
+            params.ring_dimension(),
+            params.crt_depth(),
+            params.crt_bits(),
+            &values,
+        ))
+    }
+
+    fn poly_gen_from_const(params: &DCRTPolyParams, value: String) -> Self {
+        DCRTPoly::new(ffi::DCRTPolyGenFromConst(
+            params.ring_dimension(),
+            params.crt_depth(),
+            params.crt_bits(),
+            &value,
+        ))
     }
 }
 
@@ -62,29 +80,26 @@ impl Poly for DCRTPoly {
             assert_eq!(coeff_modulus, modulus.as_ref());
             coeffs_cxx.push(coeff.value().to_string());
         }
-        DCRTPoly::new(ffi::DCRTPolyGenFromVec(params.get_params(), &coeffs_cxx))
+        Self::poly_gen_from_vec(params, coeffs_cxx)
     }
 
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self {
-        DCRTPoly::new(ffi::DCRTPolyGenFromConst(params.get_params(), &constant.value().to_string()))
+        Self::poly_gen_from_const(params, constant.value().to_string())
     }
 
     fn const_zero(params: &Self::Params) -> Self {
-        DCRTPoly::new(ffi::DCRTPolyGenFromConst(params.get_params(), &BigUint::ZERO.to_string()))
+        Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
 
     fn const_one(params: &Self::Params) -> Self {
-        DCRTPoly::new(ffi::DCRTPolyGenFromConst(
-            params.get_params(),
-            &BigUint::from(1u32).to_string(),
-        ))
+        Self::poly_gen_from_const(params, BigUint::from(1u32).to_string())
     }
 
     fn const_minus_one(params: &Self::Params) -> Self {
-        DCRTPoly::new(ffi::DCRTPolyGenFromConst(
-            params.get_params(),
-            &(params.modulus().as_ref() - BigUint::from(1u32)).to_string(),
-        ))
+        Self::poly_gen_from_const(
+            params,
+            (params.modulus().as_ref() - BigUint::from(1u32)).to_string(),
+        )
     }
 }
 

@@ -4,7 +4,7 @@ use std::ops::{Add, Mul, Sub};
 use super::circuits::Evaluable;
 use crate::poly::{Poly, PolyMatrix};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
     pub matrix: M,
 }

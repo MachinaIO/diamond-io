@@ -25,6 +25,7 @@ impl Debug for DCRTPolyMatrix {
             .field("ncol", &self.ncol)
             .field("inner", &self.inner)
             .field("params", &self.params)
+            .field("inner", &self.inner)
             .finish()
     }
 }
