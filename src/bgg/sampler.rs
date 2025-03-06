@@ -100,10 +100,7 @@ where
         plaintexts: &[<S::M as PolyMatrix>::P],
         reveal_plaintexts: bool,
     ) -> Vec<BggEncoding<S::M>> {
-<<<<<<< HEAD
-=======
         let secret_vec = &self.secret_vec;
->>>>>>> main
         let log_q = params.modulus_bits();
         let packed_input_size = plaintexts.len();
         let columns = 2 * log_q * packed_input_size;
