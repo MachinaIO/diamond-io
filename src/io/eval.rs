@@ -1,7 +1,7 @@
 use super::utils::*;
 use super::{Obfuscation, ObfuscationParams};
 use crate::bgg::sampler::BGGPublicKeySampler;
-use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
+use crate::poly::{matrix::*, sampler::*, PolyParams};
 use itertools::Itertools;
 use std::sync::Arc;
 

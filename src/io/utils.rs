@@ -1,9 +1,8 @@
 use super::ObfuscationParams;
 use crate::bgg::{sampler::*, BggPublicKey};
-use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
+use crate::poly::{matrix::*, sampler::*, PolyParams};
 use itertools::Itertools;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -73,7 +72,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             ts.push((t_input, t_fhe_key));
         }
         let a_prf_raw = hash_sampler.sample_hash(
-            &params,
+            params,
             TAG_A_PRF,
             2,
             packed_output_size,

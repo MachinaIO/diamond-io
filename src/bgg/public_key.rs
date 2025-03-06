@@ -3,7 +3,7 @@ use std::ops::{Add, Mul};
 
 use crate::poly::PolyMatrix;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
     pub matrix: M,
 }
