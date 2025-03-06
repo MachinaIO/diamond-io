@@ -17,12 +17,13 @@ use openfhe::{
 pub struct DCRTPolyTrapdoorSampler {
     base: usize,
     sigma: f64,
-    d: usize,
+    /// size of the target square matrix (size X size)
+    size: usize,
 }
 
 impl DCRTPolyTrapdoorSampler {
-    pub fn new(base: usize, sigma: f64, d: usize) -> Self {
-        Self { base, sigma, d }
+    pub fn new(base: usize, sigma: f64, size: usize) -> Self {
+        Self { base, sigma, size }
     }
 }
 
@@ -38,14 +39,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
-            self.d,
+            self.size,
             self.sigma,
             self.base as i64,
             false,
         );
         let trapdoor = trapdoor_output.GetTrapdoorPair();
-        let nrow = self.d;
-        let ncol = (&params.modulus_bits() + 2) * self.d;
+        let nrow = self.size;
+        let ncol = (&params.modulus_bits() + 2) * self.size;
 
         // Construct the public matrix from its elements
         let mut matrix_inner = Vec::with_capacity(nrow);
@@ -78,12 +79,12 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
-            self.d,
-            (k + 2) * self.d,
+            self.size,
+            (k + 2) * self.size,
         );
 
-        for i in 0..self.d {
-            for j in 0..(k + 2) * self.d {
+        for i in 0..self.size {
+            for j in 0..(k + 2) * self.size {
                 let poly = public_matrix.entry(i, j).get_poly();
                 SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
@@ -93,12 +94,12 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
-            self.d,
-            self.d,
+            self.size,
+            self.size,
         );
 
-        for i in 0..self.d {
-            for j in 0..self.d {
+        for i in 0..self.size {
+            for j in 0..self.size {
                 let poly = target.entry(i, j).get_poly();
                 SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
@@ -114,8 +115,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.sigma,
         );
 
-        let nrow = self.d * (k + 2);
-        let ncol = self.d;
+        let nrow = self.size * (k + 2);
+        let ncol = self.size;
 
         let mut matrix_inner = Vec::with_capacity(nrow);
         for i in 0..nrow {
@@ -144,14 +145,14 @@ mod tests {
     fn test_trapdoor_generation() {
         let base = 2;
         let sigma = 4.57825;
-        let d = 3;
-        let sampler = DCRTPolyTrapdoorSampler::new(base, sigma, d);
+        let size: usize = 3;
+        let sampler = DCRTPolyTrapdoorSampler::new(base, sigma, size);
         let params = DCRTPolyParams::default();
 
         let (_, public_matrix) = sampler.trapdoor(&params);
 
-        let expected_rows = d;
-        let expected_cols = (&params.modulus_bits() + 2) * d;
+        let expected_rows = size;
+        let expected_cols = (&params.modulus_bits() + 2) * size;
 
         assert_eq!(
             public_matrix.row_size(),
@@ -178,18 +179,18 @@ mod tests {
         let params = DCRTPolyParams::default();
         let base = 2;
         let sigma = 4.57825;
-        let d = 3;
+        let size = 3;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma, d);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma, size);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params);
 
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let target = uniform_sampler.sample_uniform(&params, d, d, DistType::FinRingDist);
+        let target = uniform_sampler.sample_uniform(&params, size, size, DistType::FinRingDist);
 
         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
 
-        let expected_rows = d * (k + 2);
-        let expected_cols = d;
+        let expected_rows = size * (k + 2);
+        let expected_cols = size;
 
         assert_eq!(
             preimage.row_size(),
