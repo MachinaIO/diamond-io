@@ -36,8 +36,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     ) -> (Self::Trapdoor, Self::M) {
         let trapdoor_output = DCRTSquareMatTrapdoorGen(
             params.ring_dimension(),
-            params.size(),
-            params.k_res(),
+            params.crt_depth(),
+            params.crt_bits(),
             self.d,
             self.sigma,
             self.base as i64,
@@ -76,8 +76,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let mut public_matrix_ptr = MatrixGen(
             params.ring_dimension(),
-            params.size(),
-            params.k_res(),
+            params.crt_depth(),
+            params.crt_bits(),
             self.d,
             (k + 2) * self.d,
         );
@@ -89,8 +89,13 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             }
         }
 
-        let mut target_matrix_ptr =
-            MatrixGen(params.ring_dimension(), params.size(), params.k_res(), self.d, self.d);
+        let mut target_matrix_ptr = MatrixGen(
+            params.ring_dimension(),
+            params.crt_depth(),
+            params.crt_bits(),
+            self.d,
+            self.d,
+        );
 
         for i in 0..self.d {
             for j in 0..self.d {

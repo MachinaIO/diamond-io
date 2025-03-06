@@ -21,18 +21,22 @@ impl DCRTPolyUniformSampler {
 
     pub fn sample_poly(&self, params: &DCRTPolyParams, dist: &DistType) -> DCRTPoly {
         let sampled_poly = match dist {
-            DistType::FinRingDist => {
-                ffi::DCRTPolyGenFromDug(params.ring_dimension(), params.size(), params.k_res())
-            }
+            DistType::FinRingDist => ffi::DCRTPolyGenFromDug(
+                params.ring_dimension(),
+                params.crt_depth(),
+                params.crt_bits(),
+            ),
             DistType::GaussDist { sigma } => ffi::DCRTPolyGenFromDgg(
                 params.ring_dimension(),
-                params.size(),
-                params.k_res(),
+                params.crt_depth(),
+                params.crt_bits(),
                 *sigma,
             ),
-            DistType::BitDist => {
-                ffi::DCRTPolyGenFromBug(params.ring_dimension(), params.size(), params.k_res())
-            }
+            DistType::BitDist => ffi::DCRTPolyGenFromBug(
+                params.ring_dimension(),
+                params.crt_depth(),
+                params.crt_bits(),
+            ),
         };
         DCRTPoly::new(sampled_poly)
     }
