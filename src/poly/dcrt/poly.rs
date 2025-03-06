@@ -101,6 +101,29 @@ impl Poly for DCRTPoly {
             (params.modulus().as_ref() - BigUint::from(1u32)).to_string(),
         )
     }
+
+    /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}
+    /// where b_{j, h} is the h-th bit of the j-th coefficient of the polynomial.
+    /// Return a vector of polynomials, where the h-th polynomial is defined as
+    /// b_{0, h} + b_{1, h} * x + b_{2, h} * x^2 + ... + b_{n-1, h} * x^{n-1}.
+    fn decompose(&self, params: &Self::Params) -> Vec<Self> {
+        let coeffs = self.coeffs();
+        let coeff_len = coeffs.len();
+        let bit_length = params.modulus_bits();
+        let mut result = Vec::with_capacity(bit_length);
+        for h in 0..bit_length {
+            let mut bit_coeffs = Vec::with_capacity(coeff_len);
+            for j in &coeffs {
+                // bit_value in {0, 1}
+                let val = (j.value() >> h) & BigUint::from(1u32);
+                let elem = FinRingElem::new(val, params.modulus());
+                bit_coeffs.push(elem);
+            }
+            let bit_poly = DCRTPoly::from_coeffs(params, &bit_coeffs);
+            result.push(bit_poly);
+        }
+        result
+    }
 }
 
 impl Add for DCRTPoly {
@@ -212,7 +235,7 @@ impl<'a> SubAssign<&'a DCRTPoly> for DCRTPoly {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::PolyParams;
+    use crate::poly::{dcrt::DCRTPolyUniformSampler, sampler::DistType, PolyParams};
     use rand::prelude::*;
 
     #[test]
@@ -302,5 +325,23 @@ mod tests {
             DCRTPoly::from_coeffs(&params, &[FinRingElem::new(1, q); 1]),
             "one_poly should produce a polynomial with all coeffs = 1"
         );
+    }
+
+    #[test]
+    fn test_dcrtpoly_decompose() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+        let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
+        let decomposed = poly.decompose(&params);
+        assert_eq!(decomposed.len(), params.modulus_bits());
+
+        let mut reconstructed = DCRTPoly::const_zero(&params);
+        for (i, bit_poly) in decomposed.iter().enumerate() {
+            let power_of_two = BigUint::from(2u32).pow(i as u32);
+            let const_poly_power_of_two =
+                DCRTPoly::from_const(&params, &FinRingElem::new(power_of_two, params.modulus()));
+            reconstructed += bit_poly.clone() * const_poly_power_of_two;
+        }
+        assert_eq!(reconstructed, poly);
     }
 }

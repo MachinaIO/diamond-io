@@ -39,4 +39,5 @@ pub trait Poly:
         }
         bits
     }
+    fn decompose(&self, params: &Self::Params) -> Vec<Self>;
 }

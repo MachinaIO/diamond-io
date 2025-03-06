@@ -1,4 +1,4 @@
-use num_bigint::{BigInt, BigUint};
+use num_bigint::BigInt;
 
 use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::poly::{Poly, PolyMatrix, PolyParams};
@@ -283,18 +283,9 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         for i in 0..self.nrow {
             for j in 0..self.ncol {
-                let coeffs = self.inner[i][j].coeffs();
-                let coeff_len = coeffs.len();
+                let decomposed = self.inner[i][j].decompose(&self.params);
                 for bit in 0..bit_length {
-                    let mut bit_coeffs = Vec::with_capacity(coeff_len);
-                    for coeff_val in &coeffs {
-                        // bit_value in {0, 1}
-                        let val = (coeff_val.value() >> bit) & BigUint::from(1u32);
-                        let elem = FinRingElem::new(val, self.params.modulus());
-                        bit_coeffs.push(elem);
-                    }
-                    let bit_poly = DCRTPoly::from_coeffs(&self.params, &bit_coeffs);
-                    new_inner[i * bit_length + bit][j] = bit_poly;
+                    new_inner[i * bit_length + bit][j] = decomposed[bit].clone();
                 }
             }
         }
