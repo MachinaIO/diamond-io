@@ -19,7 +19,7 @@ docs:
 
 # Execute all unit tests in the workspace
 test:
-    cargo llvm-cov nextest
+    cargo llvm-cov nextest --test-threads=1
 
 # Run the entire CI pipeline including format, clippy, docs, and test checks
 ci: format clippy docs test
