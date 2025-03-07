@@ -103,6 +103,17 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
         let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
         Self { vector, pubkey, plaintext }
     }
+
+    fn one(&self, params: &Self::Params) -> Self {
+        let gadget = M::gadget_matrix(params, 2);
+        let scalar = M::P::const_one(params);
+        let scalared = gadget * &scalar;
+        let decomposed = scalared.decompose();
+        let vector = self.vector.clone() * decomposed;
+        let pubkey = self.pubkey.scalar_mul(params, &scalar);
+        let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
+        Self { vector, pubkey, plaintext }
+    }
 }
 
 #[cfg(test)]

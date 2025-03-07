@@ -12,7 +12,7 @@ pub enum PolyGateType<P: Poly> {
 impl<P: Poly> PolyGateType<P> {
     pub fn num_input(&self) -> usize {
         match self {
-            PolyGateType::Input => 1,
+            PolyGateType::Input => 0,
             PolyGateType::Add => 2,
             PolyGateType::Sub => 2,
             PolyGateType::ScalarMul(_) => 1,

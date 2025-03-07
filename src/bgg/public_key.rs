@@ -72,6 +72,15 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
         let matrix = self.matrix.clone() * decomposed;
         Self { matrix }
     }
+
+    fn one(&self, params: &Self::Params) -> Self {
+        let gadget = M::gadget_matrix(params, 2);
+        let scalar = M::P::const_one(params);
+        let scalared = gadget * scalar;
+        let decomposed = scalared.decompose();
+        let matrix = self.matrix.clone() * decomposed;
+        Self { matrix }
+    }
 }
 
 #[cfg(test)]
