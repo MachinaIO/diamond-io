@@ -74,19 +74,17 @@ impl<P: Poly> PolyCircuit<P> {
         self.sub_gate(add, mul) // A + B - A*B
     }
 
-    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
-    /// This operation assumes that `x` is restricted to binary values (0 or 1),
-    /// meaning it should only be used with polynomials sampled from a bit distribution.
-    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
+    /// Computes the NAND gate as `NOT(AND(left, right))`.
+    /// This operation follows the same restriction as the NOT gate:
+    /// `left` and `right` must be bit distribution (0 or 1)
     pub fn nand_gate(&mut self, left: usize, right: usize) -> usize {
         let and_result = self.and_gate(left, right);
         self.not_gate(and_result) // NOT AND
     }
 
-    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
-    /// This operation assumes that `x` is restricted to binary values (0 or 1),
-    /// meaning it should only be used with polynomials sampled from a bit distribution.
-    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
+    /// Computes the NOR gate as `NOT(OR(left, right))`.
+    /// This operation follows the same restriction as the NOT gate:
+    /// `left` and `right` must be bit distribution (0 or 1)
     pub fn nor_gate(&mut self, left: usize, right: usize) -> usize {
         let or_result = self.or_gate(left, right);
         self.not_gate(or_result) // NOT OR
@@ -100,10 +98,9 @@ impl<P: Poly> PolyCircuit<P> {
         self.sub_gate(add, two_mul) // A + B - 2*A*B
     }
 
-    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
-    /// This operation assumes that `x` is restricted to binary values (0 or 1),
-    /// meaning it should only be used with polynomials sampled from a bit distribution.
-    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
+    /// Computes the XNOR gate as `NOT(XOR(left, right))`.
+    /// This operation follows the same restriction as the NOT gate:
+    /// `left` and `right` must be bit distribution (0 or 1)
     pub fn xnor_gate(&mut self, left: usize, right: usize) -> usize {
         let xor_result = self.xor_gate(left, right);
         self.not_gate(xor_result) // NOT XOR
