@@ -60,9 +60,12 @@ impl<P: Poly> PolyCircuit<P> {
         self.mul_gate(left, right)
     }
 
+    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
+    /// This operation assumes that `x` is restricted to binary values (0 or 1),
+    /// meaning it should only be used with polynomials sampled from a bit distribution.
+    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
     pub fn not_gate(&mut self, input: usize) -> usize {
-        let zero = self.sub_gate(0, 0);
-        self.sub_gate(zero, input)
+        self.sub_gate(0, input)
     }
 
     pub fn or_gate(&mut self, left: usize, right: usize) -> usize {
@@ -71,11 +74,19 @@ impl<P: Poly> PolyCircuit<P> {
         self.sub_gate(add, mul) // A + B - A*B
     }
 
+    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
+    /// This operation assumes that `x` is restricted to binary values (0 or 1),
+    /// meaning it should only be used with polynomials sampled from a bit distribution.
+    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
     pub fn nand_gate(&mut self, left: usize, right: usize) -> usize {
         let and_result = self.and_gate(left, right);
         self.not_gate(and_result) // NOT AND
     }
 
+    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
+    /// This operation assumes that `x` is restricted to binary values (0 or 1),
+    /// meaning it should only be used with polynomials sampled from a bit distribution.
+    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
     pub fn nor_gate(&mut self, left: usize, right: usize) -> usize {
         let or_result = self.or_gate(left, right);
         self.not_gate(or_result) // NOT OR
@@ -89,6 +100,10 @@ impl<P: Poly> PolyCircuit<P> {
         self.sub_gate(add, two_mul) // A + B - 2*A*B
     }
 
+    /// Computes the NOT gate using arithmetic inversion: `1 - x`.
+    /// This operation assumes that `x` is restricted to binary values (0 or 1),
+    /// meaning it should only be used with polynomials sampled from a bit distribution.
+    /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
     pub fn xnor_gate(&mut self, left: usize, right: usize) -> usize {
         let xor_result = self.xor_gate(left, right);
         self.not_gate(xor_result) // NOT XOR
@@ -476,7 +491,7 @@ mod tests {
         circuit.output(vec![not_result]);
         let poly1 = create_bit_random_poly(&params);
         let result = circuit.eval_poly_circuit(&params, &[poly1.clone()]);
-        let expected = DCRTPoly::const_zero(&params) - poly1.clone();
+        let expected = DCRTPoly::const_one(&params) - poly1.clone();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -506,7 +521,7 @@ mod tests {
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_zero(&params) - (poly1 * poly2);
+        let expected = DCRTPoly::const_one(&params) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -522,7 +537,7 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
         let expected =
-            DCRTPoly::const_zero(&params) - ((poly1.clone() + poly2.clone()) - (poly1 * poly2));
+            DCRTPoly::const_one(&params) - ((poly1.clone() + poly2.clone()) - (poly1 * poly2));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -555,7 +570,7 @@ mod tests {
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_zero(&params)
+        let expected = DCRTPoly::const_one(&params)
             - ((poly1.clone() + poly2.clone())
                 - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
                     * poly1
