@@ -87,6 +87,17 @@ impl Poly for DCRTPoly {
         Self::poly_gen_from_const(params, constant.value().to_string())
     }
 
+    fn from_decomposed(params: &DCRTPolyParams, decomposed: &[Self]) -> Self {
+        let mut reconstructed = Self::const_zero(params);
+        for (i, bit_poly) in decomposed.iter().enumerate() {
+            let power_of_two = BigUint::from(2u32).pow(i as u32);
+            let const_poly_power_of_two =
+                Self::from_const(params, &FinRingElem::new(power_of_two, params.modulus()));
+            reconstructed += bit_poly.clone() * const_poly_power_of_two;
+        }
+        reconstructed
+    }
+
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
@@ -334,14 +345,7 @@ mod tests {
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
         let decomposed = poly.decompose(&params);
         assert_eq!(decomposed.len(), params.modulus_bits());
-
-        let mut reconstructed = DCRTPoly::const_zero(&params);
-        for (i, bit_poly) in decomposed.iter().enumerate() {
-            let power_of_two = BigUint::from(2u32).pow(i as u32);
-            let const_poly_power_of_two =
-                DCRTPoly::from_const(&params, &FinRingElem::new(power_of_two, params.modulus()));
-            reconstructed += bit_poly.clone() * const_poly_power_of_two;
-        }
-        assert_eq!(reconstructed, poly);
+        let recomposed = DCRTPoly::from_decomposed(&params, &decomposed);
+        assert_eq!(recomposed, poly);
     }
 }
