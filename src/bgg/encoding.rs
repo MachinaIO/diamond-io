@@ -550,12 +550,12 @@ mod tests {
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
         let inputs = circuit.input((params.modulus_bits() * 2) + 1);
 
-        let mut output_ids = Vec::with_capacity(c0_bits.len() + c1_bits.len());
         let k_id = inputs[inputs.len() - 1];
-        for i in 0..inputs.len() - 1 {
-            let output_id = circuit.mul_gate(inputs[i], k_id);
-            output_ids.push(output_id);
-        }
+        let output_ids = inputs
+            .iter()
+            .take(inputs.len() - 1)
+            .map(|&input_id| circuit.mul_gate(input_id, k_id))
+            .collect();
 
         circuit.output(output_ids);
 

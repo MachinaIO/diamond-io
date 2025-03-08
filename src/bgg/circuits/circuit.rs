@@ -637,11 +637,8 @@ mod tests {
         let k = create_bit_random_poly(&params); // Scalar
 
         // Output: decomposed_m[0] * k, ..., decomposed_m[modulus_bits - 1] * k
-        let mut output_ids = Vec::with_capacity(decomposed_m.len());
-        for i in 0..decomposed_m.len() {
-            let output_id = circuit.scalar_mul_gate(inputs[i], k.clone());
-            output_ids.push(output_id);
-        }
+        let output_ids =
+            inputs.iter().map(|&input_id| circuit.scalar_mul_gate(input_id, k.clone())).collect();
 
         circuit.output(output_ids);
 
@@ -681,12 +678,12 @@ mod tests {
 
         // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ..., c1_bits[modulus_bits - 1], k
         // Output: c0_bits[0] * k, ..., c0_bits[modulus_bits - 1] * k, c1_bits[0] * k, ..., c1_bits[modulus_bits - 1] * k
-        let mut output_ids = Vec::with_capacity(c0_bits.len() + c1_bits.len());
         let k_id = inputs[inputs.len() - 1];
-        for i in 0..inputs.len() - 1 {
-            let output_id = circuit.mul_gate(inputs[i], k_id);
-            output_ids.push(output_id);
-        }
+        let output_ids = inputs
+            .iter()
+            .take(inputs.len() - 1)
+            .map(|&input_id| circuit.mul_gate(input_id, k_id))
+            .collect();
 
         circuit.output(output_ids);
 
