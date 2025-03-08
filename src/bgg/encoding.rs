@@ -566,16 +566,16 @@ mod tests {
         let c0_bits_eval_bgg = result[..params.modulus_bits()].to_vec();
         let c1_bits_eval_bgg = result[params.modulus_bits()..].to_vec();
 
-        let mut c0_bits_eval_plaintext = Vec::with_capacity(params.modulus_bits());
-        let mut c1_bits_eval_plaintext = Vec::with_capacity(params.modulus_bits());
+        let mut c0_bits_eval = Vec::with_capacity(params.modulus_bits());
+        let mut c1_bits_eval = Vec::with_capacity(params.modulus_bits());
 
         for i in 0..params.modulus_bits() {
-            c0_bits_eval_plaintext.push(c0_bits_eval_bgg[i].plaintext.as_ref().unwrap().clone());
-            c1_bits_eval_plaintext.push(c1_bits_eval_bgg[i].plaintext.as_ref().unwrap().clone());
+            c0_bits_eval.push(c0_bits_eval_bgg[i].plaintext.as_ref().unwrap().clone());
+            c1_bits_eval.push(c1_bits_eval_bgg[i].plaintext.as_ref().unwrap().clone());
         }
 
-        let c0_eval = DCRTPoly::from_decomposed(&params, &c0_bits_eval_plaintext);
-        let c1_eval = DCRTPoly::from_decomposed(&params, &c1_bits_eval_plaintext);
+        let c0_eval = DCRTPoly::from_decomposed(&params, &c0_bits_eval);
+        let c1_eval = DCRTPoly::from_decomposed(&params, &c1_bits_eval);
 
         // Verify the result
         assert_eq!(result.len(), params.modulus_bits() * 2);

@@ -655,55 +655,58 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_fhe_poly_bits_by_scalar_circuit() {
+    fn test_mul_fhe_poly_bits_mul_by_poly_circuit() {
         let params = DCRTPolyParams::default();
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
-        let m = create_bit_random_poly(&params);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // encrypt a polynomial m using a RLWE secret key encryption
         // c0 = a*s + e + m (where m is the plaintext polynomial)
         // c1 = -a
-        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let m = create_bit_random_poly(&params);
         let s = uniform_sampler.sample_poly(&params, &DistType::BitDist);
         let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 });
         let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
         let c0 = -a.clone();
         let c1 = a * s.clone() + e + m.clone();
 
-        let decomposed_c0 = c0.decompose(&params);
-        let decomposed_c1 = c1.decompose(&params);
+        // k is a polynomial from bit distribution
+        let k = uniform_sampler.sample_poly(&params, &DistType::BitDist);
 
-        let inputs = circuit.input(decomposed_c1.len() + decomposed_c0.len());
-        assert_eq!(inputs.len(), params.modulus_bits() * 2);
+        let c0_bits = c0.decompose(&params);
+        let c1_bits = c1.decompose(&params);
 
-        let k = create_bit_random_poly(&params); // Scalar
+        let inputs = circuit.input(c0_bits.len() + c1_bits.len() + 1);
+        assert_eq!(inputs.len(), params.modulus_bits() * 2 + 1);
 
-        // Output: decomposed_c0[0] * k, ..., decomposed_c0[modulus_bits - 1] * k, decomposed_c1[0] * k, ..., decomposed_c1[modulus_bits - 1] * k
-        let mut output_ids = Vec::with_capacity(decomposed_c1.len() + decomposed_c0.len());
-        for i in 0..inputs.len() {
-            let output_id = circuit.scalar_mul_gate(inputs[i], k.clone());
+        // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ..., c1_bits[modulus_bits - 1], k
+        // Output: c0_bits[0] * k, ..., c0_bits[modulus_bits - 1] * k, c1_bits[0] * k, ..., c1_bits[modulus_bits - 1] * k
+        let mut output_ids = Vec::with_capacity(c0_bits.len() + c1_bits.len());
+        let k_id = inputs[inputs.len() - 1];
+        for i in 0..inputs.len() - 1 {
+            let output_id = circuit.mul_gate(inputs[i], k_id);
             output_ids.push(output_id);
         }
 
         circuit.output(output_ids);
 
-        // concatenate decomposed_c0 and decomposed_c1
-        let input = [decomposed_c0, decomposed_c1].concat();
+        // concatenate decomposed_c0 and decomposed_c1 and k
+        let input = [c0_bits, c1_bits, vec![k.clone()]].concat();
         let result = circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &input);
 
         assert_eq!(result.len(), params.modulus_bits() * 2);
 
-        let c0_eval = result[..params.modulus_bits()].to_vec();
-        let c1_eval = result[params.modulus_bits()..].to_vec();
+        let c0_bits_eval = result[..params.modulus_bits()].to_vec();
+        let c1_bits_eval = result[params.modulus_bits()..].to_vec();
 
-        let recomposed_c0_eval = DCRTPoly::from_decomposed(&params, &c0_eval);
-        let recomposed_c1_eval = DCRTPoly::from_decomposed(&params, &c1_eval);
+        let c0_eval = DCRTPoly::from_decomposed(&params, &c0_bits_eval);
+        let c1_eval = DCRTPoly::from_decomposed(&params, &c1_bits_eval);
 
-        assert_eq!(recomposed_c0_eval, c0.clone() * k.clone());
-        assert_eq!(recomposed_c1_eval, c1.clone() * k.clone());
+        assert_eq!(c0_eval, c0.clone() * k.clone());
+        assert_eq!(c1_eval, c1.clone() * k.clone());
 
         // decrypt the result
-        let plaintext = recomposed_c1_eval + recomposed_c0_eval * s;
+        let plaintext = c1_eval + c0_eval * s;
         assert_eq!(plaintext, m * k);
     }
 }
