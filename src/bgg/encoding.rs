@@ -103,17 +103,6 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
         let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
         Self { vector, pubkey, plaintext }
     }
-
-    fn one(&self, params: &Self::Params) -> Self {
-        let gadget = M::gadget_matrix(params, 2);
-        let scalar = M::P::const_one(params);
-        let scalared = gadget * &scalar;
-        let decomposed = scalared.decompose();
-        let vector = self.vector.clone() * decomposed;
-        let pubkey = self.pubkey.scalar_mul(params, &scalar);
-        let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
-        Self { vector, pubkey, plaintext }
-    }
 }
 
 #[cfg(test)]
@@ -151,17 +140,22 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 2);
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 3);
 
         // Create secret and plaintexts
         let secret = create_random_poly(&params);
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
+        let plaintexts = vec![
+            DCRTPoly::const_one(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+        ];
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-        let enc1 = encodings[0].clone();
-        let enc2 = encodings[1].clone();
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
 
         // Create a simple circuit with an Add operation
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
@@ -170,7 +164,8 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[enc1.clone(), enc2.clone()]);
+        let result =
+            circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() + enc2.clone();
@@ -198,17 +193,22 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 2);
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 3);
 
         // Create secret and plaintexts
         let secret = create_random_poly(&params);
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
+        let plaintexts = vec![
+            DCRTPoly::const_one(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+        ];
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-        let enc1 = encodings[0].clone();
-        let enc2 = encodings[1].clone();
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
 
         // Create a simple circuit with a Sub operation
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
@@ -217,7 +217,8 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[enc1.clone(), enc2.clone()]);
+        let result =
+            circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() - enc2.clone();
@@ -245,17 +246,22 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 2);
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 3);
 
         // Create secret and plaintexts
         let secret = create_random_poly(&params);
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
+        let plaintexts = vec![
+            DCRTPoly::const_one(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+        ];
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-        let enc1 = encodings[0].clone();
-        let enc2 = encodings[1].clone();
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
 
         // Create a simple circuit with a Mul operation
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
@@ -264,7 +270,8 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[enc1.clone(), enc2.clone()]);
+        let result =
+            circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
@@ -292,16 +299,17 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 1);
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 2);
 
         // Create secret and plaintexts
         let secret = create_random_poly(&params);
-        let plaintexts = vec![create_random_poly(&params)];
+        let plaintexts = vec![DCRTPoly::const_one(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-        let enc = encodings[0].clone();
+        let enc_one = encodings[0].clone();
+        let enc = encodings[1].clone();
 
         // Create scalar
         let scalar = create_random_poly(&params);
@@ -313,7 +321,7 @@ mod tests {
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[enc.clone()]);
+        let result = circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc.clone()]);
 
         // Expected result
         let expected = enc.scalar_mul(&params, &scalar);
@@ -341,11 +349,12 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 3);
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 4);
 
         // Create secret and plaintexts
         let secret = create_random_poly(&params);
         let plaintexts = vec![
+            DCRTPoly::const_one(&params),
             create_random_poly(&params),
             create_random_poly(&params),
             create_random_poly(&params),
@@ -354,9 +363,10 @@ mod tests {
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-        let enc1 = encodings[0].clone();
-        let enc2 = encodings[1].clone();
-        let enc3 = encodings[2].clone();
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
+        let enc3 = encodings[3].clone();
 
         // Create a scalar
         let scalar = create_random_poly(&params);
@@ -377,8 +387,11 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, &[enc1.clone(), enc2.clone(), enc3.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            enc_one.clone(),
+            &[enc1.clone(), enc2.clone(), enc3.clone()],
+        );
 
         // Expected result: ((enc1 + enc2) * scalar) - enc3
         let expected = ((enc1.clone() + enc2.clone()).scalar_mul(&params, &scalar)) - enc3.clone();
@@ -406,11 +419,12 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 4);
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 5);
 
         // Create secret and plaintexts
         let secret = create_random_poly(&params);
         let plaintexts = vec![
+            DCRTPoly::const_one(&params),
             create_random_poly(&params),
             create_random_poly(&params),
             create_random_poly(&params),
@@ -420,10 +434,11 @@ mod tests {
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-        let enc1 = encodings[0].clone();
-        let enc2 = encodings[1].clone();
-        let enc3 = encodings[2].clone();
-        let enc4 = encodings[3].clone();
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
+        let enc3 = encodings[3].clone();
+        let enc4 = encodings[4].clone();
 
         // Create a scalar
         let scalar = create_random_poly(&params);
@@ -455,8 +470,11 @@ mod tests {
         circuit.output(vec![f]);
 
         // Evaluate the circuit
-        let result = circuit
-            .eval_poly_circuit(&params, &[enc1.clone(), enc2.clone(), enc3.clone(), enc4.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            enc_one.clone(),
+            &[enc1.clone(), enc2.clone(), enc3.clone(), enc4.clone()],
+        );
 
         // Expected result: (((enc1 + enc2) * (enc3 * enc4)) + (enc1 - enc3)) * scalar
         let sum1 = enc1.clone() + enc2.clone();

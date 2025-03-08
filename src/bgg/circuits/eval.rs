@@ -13,15 +13,12 @@ pub trait Evaluable<P: Poly>:
 {
     type Params;
     fn scalar_mul(&self, params: &Self::Params, scalar: &P) -> Self;
-    fn one(&self, params: &Self::Params) -> Self;
+    // fn one(&self, params: &Self::Params) -> Self;
 }
 
 impl<P: Poly> Evaluable<P> for P {
     type Params = P::Params;
     fn scalar_mul(&self, _: &Self::Params, scalar: &P) -> Self {
         self.clone() * scalar
-    }
-    fn one(&self, params: &Self::Params) -> Self {
-        P::const_one(params)
     }
 }

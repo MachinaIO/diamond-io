@@ -72,15 +72,6 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
         let matrix = self.matrix.clone() * decomposed;
         Self { matrix }
     }
-
-    fn one(&self, params: &Self::Params) -> Self {
-        let gadget = M::gadget_matrix(params, 2);
-        let scalar = M::P::const_one(params);
-        let scalared = gadget * scalar;
-        let decomposed = scalared.decompose();
-        let matrix = self.matrix.clone() * decomposed;
-        Self { matrix }
-    }
 }
 
 #[cfg(test)]
@@ -117,9 +108,10 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 2);
-        let pk1 = pubkeys[0].clone();
-        let pk2 = pubkeys[1].clone();
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
 
         // Create a simple circuit with an Add operation
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
@@ -128,7 +120,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() + pk2.clone();
@@ -153,9 +145,10 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 2);
-        let pk1 = pubkeys[0].clone();
-        let pk2 = pubkeys[1].clone();
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
 
         // Create a simple circuit with a Sub operation
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
@@ -164,7 +157,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() - pk2.clone();
@@ -189,9 +182,10 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 2);
-        let pk1 = pubkeys[0].clone();
-        let pk2 = pubkeys[1].clone();
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
 
         // Create a simple circuit with a Mul operation
         let mut circuit = PolyCircuit::<DCRTPoly>::new();
@@ -200,7 +194,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() * pk2.clone();
@@ -225,8 +219,9 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public key
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 1);
-        let pk = pubkeys[0].clone();
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 2);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
 
         // Create scalar
         let scalar = create_random_poly(&params);
@@ -238,10 +233,10 @@ mod tests {
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[pk.clone()]);
+        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone()]);
 
         // Expected result
-        let expected = pk.scalar_mul(&params, &scalar);
+        let expected = pk1.scalar_mul(&params, &scalar);
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -263,10 +258,11 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
-        let pk1 = pubkeys[0].clone();
-        let pk2 = pubkeys[1].clone();
-        let pk3 = pubkeys[2].clone();
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 4);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
+        let pk3 = pubkeys[3].clone();
 
         // Create a scalar
         let scalar = create_random_poly(&params);
@@ -287,7 +283,8 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result =
+            circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 + pk2) * scalar) - pk3
         let expected = ((pk1.clone() + pk2.clone()).scalar_mul(&params, &scalar)) - pk3.clone();
@@ -312,11 +309,12 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 4);
-        let pk1 = pubkeys[0].clone();
-        let pk2 = pubkeys[1].clone();
-        let pk3 = pubkeys[2].clone();
-        let pk4 = pubkeys[3].clone();
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 5);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
+        let pk3 = pubkeys[3].clone();
+        let pk4 = pubkeys[4].clone();
 
         // Create a scalar
         let scalar = create_random_poly(&params);
@@ -348,8 +346,11 @@ mod tests {
         circuit.output(vec![f]);
 
         // Evaluate the circuit
-        let result = circuit
-            .eval_poly_circuit(&params, &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            pk_one,
+            &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()],
+        );
 
         // Expected result: (((pk1 + pk2) * (pk3 * pk4)) + (pk1 - pk3)) * scalar
         let sum1 = pk1.clone() + pk2.clone();

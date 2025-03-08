@@ -137,15 +137,19 @@ impl<P: Poly> PolyCircuit<P> {
         gate_id
     }
 
-    pub fn eval_poly_circuit<E: Evaluable<P>>(self, params: &E::Params, input: &[E]) -> Vec<E> {
+    pub fn eval_poly_circuit<E: Evaluable<P>>(
+        self,
+        params: &E::Params,
+        one: E,
+        input: &[E],
+    ) -> Vec<E> {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), input.len());
         }
 
         let mut wires = BTreeMap::new();
-        let index_0 = E::one(&input[0], params);
-        wires.insert(0, index_0);
+        wires.insert(0, one);
         for (idx, input) in input.iter().enumerate() {
             wires.insert(idx + 1, input.clone());
         }
@@ -240,7 +244,11 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
 
         // Expected result: poly1 + poly2
         let expected = poly1 + poly2;
@@ -266,7 +274,11 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
 
         // Expected result: poly1 - poly2
         let expected = poly1 - poly2;
@@ -294,7 +306,8 @@ mod tests {
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[poly.clone()]);
+        let result =
+            circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &[poly.clone()]);
 
         // Expected result: poly * scalar
         let expected = poly * scalar;
@@ -320,7 +333,11 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
 
         // Expected result: poly1 * poly2
         let expected = poly1 * poly2;
@@ -359,8 +376,11 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone(), poly3.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone(), poly3.clone()],
+        );
 
         // Expected result: ((poly1 + poly2) * scalar) - poly3
         let expected = ((poly1 + poly2) * scalar) - poly3;
@@ -395,7 +415,11 @@ mod tests {
         circuit.output(vec![add_gate, sub_gate, mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
 
         // Expected results
         let expected_add = poly1.clone() + poly2.clone();
@@ -452,6 +476,7 @@ mod tests {
         // Evaluate the circuit
         let result = circuit.eval_poly_circuit(
             &params,
+            DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone(), poly4.clone()],
         );
 
@@ -473,7 +498,11 @@ mod tests {
         circuit.output(vec![and_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
         let expected = poly1.clone() * poly2;
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -487,7 +516,8 @@ mod tests {
         let not_result = circuit.not_gate(inputs[0]);
         circuit.output(vec![not_result]);
         let poly1 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone()]);
+        let result =
+            circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &[poly1.clone()]);
         let expected = DCRTPoly::const_one(&params) - poly1.clone();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -502,7 +532,11 @@ mod tests {
         circuit.output(vec![or_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
         let expected = (poly1.clone() + poly2.clone()) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -517,7 +551,11 @@ mod tests {
         circuit.output(vec![nand_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
         let expected = DCRTPoly::const_one(&params) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -532,7 +570,11 @@ mod tests {
         circuit.output(vec![nor_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
         let expected =
             DCRTPoly::const_one(&params) - ((poly1.clone() + poly2.clone()) - (poly1 * poly2));
         assert_eq!(result.len(), 1);
@@ -548,7 +590,11 @@ mod tests {
         circuit.output(vec![nor_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
         let expected = (poly1.clone() + poly2.clone())
             - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
                 * poly1
@@ -566,7 +612,11 @@ mod tests {
         circuit.output(vec![xnor_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
-        let result = circuit.eval_poly_circuit(&params, &[poly1.clone(), poly2.clone()]);
+        let result = circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
         let expected = DCRTPoly::const_one(&params)
             - ((poly1.clone() + poly2.clone())
                 - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
