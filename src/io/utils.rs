@@ -22,6 +22,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub ts: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
+    pub packed_output_size: usize,
     _s: PhantomData<S>,
 }
 
@@ -29,7 +30,6 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
     pub fn sample(
         obf_params: &ObfuscationParams<S::M>,
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
-        packed_output_size: usize,
     ) -> Self {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
@@ -42,6 +42,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
         let packed_input_size = log_q + obf_params.input_size.div_ceil(dim) + 1;
+        let packed_output_size = obf_params.public_circuit.num_output() / 2 / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         let reveal_plaintexts = vec![vec![true; packed_input_size - 1], vec![false; 1]].concat();
@@ -84,7 +85,17 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.modulus_switch_params);
-        Self { r_0, r_1, a_rlwe_bar, pubkeys, ts, a_prf, packed_input_size, _s: PhantomData }
+        Self {
+            r_0,
+            r_1,
+            a_rlwe_bar,
+            pubkeys,
+            ts,
+            a_prf,
+            packed_input_size,
+            packed_output_size,
+            _s: PhantomData,
+        }
     }
 }
 

@@ -25,11 +25,10 @@ where
     let log_q = params.as_ref().modulus_bits();
     let dim = params.as_ref().ring_dimension() as usize;
     // let packed_input_size = obf_params.input_size.div_ceil(dim);
-    let packed_output_size = public_circuit.num_output() / 2 / log_q;
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone());
-    let public_data =
-        PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler, packed_output_size);
+    let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     let packed_input_size = public_data.packed_input_size;
+    let packed_output_size = public_data.packed_output_size;
 
     let s_bar = sampler.sample_uniform(&params, 1, 1, DistType::BitDist).entry(1, 1).clone();
     let bgg_encode_sampler = BGGEncodingSampler::new(
