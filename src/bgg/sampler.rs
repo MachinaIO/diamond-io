@@ -109,7 +109,7 @@ where
         let log_q = params.modulus_bits();
         let packed_input_size = 1 + plaintexts.len();
         let plaintexts: Vec<<S::M as PolyMatrix>::P> =
-            vec![&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
+            [&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
                 .concat();
         let columns = 2 * log_q * packed_input_size;
         let error: S::M = self.error_sampler.sample_uniform(
