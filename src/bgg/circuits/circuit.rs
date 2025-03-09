@@ -74,13 +74,26 @@ impl<P: Poly> PolyCircuit<P> {
         input_gates
     }
 
-    pub fn output(&mut self, output_gates: Vec<usize>) {
+    pub fn output(&mut self, outputs: Vec<usize>) {
         #[cfg(debug_assertions)]
         assert_eq!(self.output_ids.len(), 0);
 
-        for gate_id in output_gates.iter() {
+        for gate_id in outputs.iter() {
             self.output_ids.push(*gate_id);
         }
+    }
+
+    pub fn const_zero_gate(&mut self) -> usize {
+        self.not_gate(0)
+    }
+
+    pub fn const_one_gate(&mut self) -> usize {
+        0
+    }
+
+    pub fn const_minus_one_gate(&mut self) -> usize {
+        let zero = self.const_zero_gate();
+        self.sub_gate(zero, 0)
     }
 
     pub fn and_gate(&mut self, left: usize, right: usize) -> usize {
@@ -216,6 +229,9 @@ impl<P: Poly> PolyCircuit<P> {
         wires: &mut BTreeMap<usize, E>,
         gate: &PolyGate<P>,
     ) {
+        if wires.contains_key(&gate.gate_id) {
+            return;
+        }
         let input_ids = &gate.input_gates;
         for input_id in input_ids.iter() {
             if !wires.contains_key(input_id) {
@@ -225,7 +241,7 @@ impl<P: Poly> PolyCircuit<P> {
         }
         match &gate.gate_type {
             PolyGateType::Input => {
-                panic!("The wire for the input gate should be already inserted");
+                panic!("The wire for the input gate {:?} should be already inserted", gate);
             }
             PolyGateType::Add => {
                 let left = wires.get(&input_ids[0]).unwrap();
@@ -882,6 +898,82 @@ mod tests {
 
         // Expected result: ((poly1 * poly2) + poly3) * scalar
         let expected = ((poly1 * poly2) + poly3) * scalar;
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_const_zero_gate() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a circuit with a const_zero_gate
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        // We need to call input() to initialize the circuit
+        circuit.input(1);
+        let zero_gate = circuit.const_zero_gate();
+        circuit.output(vec![zero_gate]);
+
+        // Evaluate the circuit with any input (it won't be used)
+        let dummy_input = create_random_poly(&params);
+        let result =
+            circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &[dummy_input]);
+
+        // Expected result: 0
+        let expected = DCRTPoly::const_zero(&params);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_const_one_gate() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a circuit with a const_one_gate
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        // We need to call input() to initialize the circuit
+        circuit.input(1);
+        let one_gate = circuit.const_one_gate();
+        circuit.output(vec![one_gate]);
+
+        // Evaluate the circuit with any input (it won't be used)
+        let dummy_input = create_random_poly(&params);
+        let result =
+            circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &[dummy_input]);
+
+        // Expected result: 1
+        let expected = DCRTPoly::const_one(&params);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_const_minus_one_gate() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a circuit with a const_minus_one_gate
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        // We need to call input() to initialize the circuit
+        circuit.input(1);
+        let minus_one_gate = circuit.const_minus_one_gate();
+        circuit.output(vec![minus_one_gate]);
+
+        // Evaluate the circuit with any input (it won't be used)
+        let dummy_input = create_random_poly(&params);
+        let result =
+            circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &[dummy_input]);
+
+        // Expected result: -1
+        // We can compute -1 as 0 - 1
+        let expected = DCRTPoly::const_zero(&params) - DCRTPoly::const_one(&params);
 
         // Verify the result
         assert_eq!(result.len(), 1);

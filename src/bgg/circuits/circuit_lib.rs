@@ -2,7 +2,7 @@ use super::{Evaluable, PolyCircuit};
 use crate::poly::*;
 
 /// Build a circuit that takes as input a public circuit and a private input, and outputs inner products between the `num_priv_input`-sized output of the public circuit and the private input.
-pub fn build_ip_priv_and_pub_circuit_outputs<P: Poly, E: Evaluable<P>>(
+pub fn build_circuit_ip_priv_and_pub_outputs<P: Poly, E: Evaluable<P>>(
     public_circuit: PolyCircuit<P>,
     num_priv_input: usize,
 ) -> PolyCircuit<P> {
@@ -12,8 +12,8 @@ pub fn build_ip_priv_and_pub_circuit_outputs<P: Poly, E: Evaluable<P>>(
     let num_input = num_pub_input + num_priv_input;
     let mut circuit = PolyCircuit::<P>::new();
     let inputs = circuit.input(num_input);
-    let priv_inputs = &inputs[0..num_priv_input];
-    let pub_inputs = &inputs[num_priv_input..];
+    let pub_inputs = &inputs[0..num_pub_input];
+    let priv_inputs = &inputs[num_pub_input..];
     let circuit_id = circuit.register_sub_circuit(public_circuit);
     let pub_outputs = circuit.call_sub_circuit(circuit_id, pub_inputs);
     let mut ip_outputs = Vec::new();
@@ -37,7 +37,7 @@ pub fn build_ip_priv_and_pub_circuit_outputs<P: Poly, E: Evaluable<P>>(
 }
 
 /// Build a circuit that takes as input `num_bits` bits and outputs the integer represented by the bits.
-pub fn build_bits_to_int_circuit<P: Poly, E: Evaluable<P>>(
+pub fn build_circuit_bits_to_int<P: Poly, E: Evaluable<P>>(
     params: &P::Params,
     num_bits: usize,
 ) -> PolyCircuit<P> {
@@ -54,6 +54,35 @@ pub fn build_bits_to_int_circuit<P: Poly, E: Evaluable<P>>(
         }
     }
     circuit.output(vec![output.unwrap()]);
+    circuit
+}
+
+pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
+    params: &P::Params,
+    public_circuit: PolyCircuit<P>,
+    num_priv_input: usize,
+    num_bits: usize,
+) -> PolyCircuit<P> {
+    let num_pub_input = public_circuit.num_input();
+    debug_assert_eq!(public_circuit.num_output() % num_priv_input, 0);
+    let num_ip_outputs = public_circuit.num_output() / num_priv_input;
+    debug_assert_eq!(num_ip_outputs % num_bits, 0);
+    let num_input = num_pub_input + num_priv_input;
+    let mut circuit = PolyCircuit::<P>::new();
+    let inputs = circuit.input(num_input);
+    let ip_circuit = build_circuit_ip_priv_and_pub_outputs::<P, E>(public_circuit, num_priv_input);
+    let ip_circuit_id = circuit.register_sub_circuit(ip_circuit);
+    let ip_outputs = circuit.call_sub_circuit(ip_circuit_id, &inputs);
+    let num_ints = num_ip_outputs / num_bits;
+    let b2i_circuit = build_circuit_bits_to_int::<P, E>(params, num_bits);
+    let b2i_circuit_id = circuit.register_sub_circuit(b2i_circuit);
+    let mut int_outputs = Vec::new();
+    for idx in 0..num_ints {
+        let b2i_inputs = &ip_outputs[(idx * num_bits)..((idx + 1) * num_bits)];
+        let int_output = circuit.call_sub_circuit(b2i_circuit_id, b2i_inputs);
+        int_outputs.push(int_output[0]);
+    }
+    circuit.output(int_outputs);
     circuit
 }
 
@@ -154,7 +183,7 @@ mod tests {
         assert_eq!(pub_circuit_outputs[5], expected_out6);
 
         // Build the inner product circuit
-        let ip_circuit = build_ip_priv_and_pub_circuit_outputs::<DCRTPoly, DCRTPoly>(
+        let ip_circuit = build_circuit_ip_priv_and_pub_outputs::<DCRTPoly, DCRTPoly>(
             public_circuit,
             num_priv_input,
         );
@@ -168,13 +197,12 @@ mod tests {
         let mut expected_ip2 = DCRTPoly::const_zero(&params);
 
         for i in 0..num_priv_input {
-            expected_ip1 += (pub_circuit_outputs[i].clone() * priv_polys[i].clone());
-            expected_ip2 +=
-                (pub_circuit_outputs[i + num_priv_input].clone() * priv_polys[i].clone());
+            expected_ip1 += pub_circuit_outputs[i].clone() * priv_polys[i].clone();
+            expected_ip2 += pub_circuit_outputs[i + num_priv_input].clone() * priv_polys[i].clone();
         }
 
         // Evaluate the inner product circuit
-        let all_inputs = [priv_polys, pub_polys].concat();
+        let all_inputs = [pub_polys, priv_polys].concat();
         let result =
             ip_circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &all_inputs);
 
@@ -191,7 +219,7 @@ mod tests {
 
         // Test with 4 bits
         let num_bits = 4;
-        let circuit = build_bits_to_int_circuit::<DCRTPoly, DCRTPoly>(&params, num_bits);
+        let circuit = build_circuit_bits_to_int::<DCRTPoly, DCRTPoly>(&params, num_bits);
 
         // Verify the circuit structure
         assert_eq!(circuit.num_input(), num_bits);

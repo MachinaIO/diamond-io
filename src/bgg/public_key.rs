@@ -7,11 +7,12 @@ use crate::poly::{Poly, PolyMatrix};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
     pub matrix: M,
+    pub reveal_plaintext: bool,
 }
 
 impl<M: PolyMatrix> BggPublicKey<M> {
-    pub fn new(matrix: M) -> Self {
-        Self { matrix }
+    pub fn new(matrix: M, reveal_plaintext: bool) -> Self {
+        Self { matrix, reveal_plaintext }
     }
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
@@ -29,7 +30,8 @@ impl<M: PolyMatrix> Add for BggPublicKey<M> {
 impl<M: PolyMatrix> Add<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn add(self, other: &Self) -> Self {
-        Self { matrix: self.matrix + &other.matrix }
+        let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        Self { matrix: self.matrix + &other.matrix, reveal_plaintext }
     }
 }
 
@@ -43,7 +45,8 @@ impl<M: PolyMatrix> Sub for BggPublicKey<M> {
 impl<M: PolyMatrix> Sub<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn sub(self, other: &Self) -> Self {
-        Self { matrix: self.matrix - &other.matrix }
+        let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        Self { matrix: self.matrix - &other.matrix, reveal_plaintext }
     }
 }
 
@@ -59,7 +62,8 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     fn mul(self, other: &Self) -> Self {
         let decomposed = other.matrix.decompose();
         let matrix = self.matrix.clone() * decomposed;
-        Self { matrix }
+        let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        Self { matrix, reveal_plaintext }
     }
 }
 
@@ -70,7 +74,8 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
         let scalared = gadget * scalar;
         let decomposed = scalared.decompose();
         let matrix = self.matrix.clone() * decomposed;
-        Self { matrix }
+        let reveal_plaintext = self.reveal_plaintext;
+        Self { matrix, reveal_plaintext }
     }
 }
 
@@ -108,7 +113,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -128,6 +134,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -145,7 +152,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -165,6 +173,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -182,7 +191,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -202,6 +212,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -219,7 +230,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public key
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 2);
+        let reveal_plaintexts = [true; 1];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
 
@@ -241,6 +253,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -258,7 +271,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 4);
+        let reveal_plaintexts = [true; 3];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -292,6 +306,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -309,7 +324,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 5);
+        let reveal_plaintexts = [true; 4];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -363,6 +379,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -380,7 +397,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -428,6 +446,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -445,7 +464,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 4);
+        let reveal_plaintexts = [true; 3];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -505,5 +525,6 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 }
