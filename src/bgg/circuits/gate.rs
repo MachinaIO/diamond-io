@@ -7,6 +7,7 @@ pub enum PolyGateType<P: Poly> {
     Sub,
     ScalarMul(P),
     Mul,
+    Call { circuit_id: usize, num_input: usize, output_id: usize },
 }
 
 impl<P: Poly> PolyGateType<P> {
@@ -17,6 +18,7 @@ impl<P: Poly> PolyGateType<P> {
             PolyGateType::Sub => 2,
             PolyGateType::ScalarMul(_) => 1,
             PolyGateType::Mul => 2,
+            PolyGateType::Call { num_input, .. } => *num_input,
         }
     }
 }

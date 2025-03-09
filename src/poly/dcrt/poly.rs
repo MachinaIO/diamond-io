@@ -113,6 +113,10 @@ impl Poly for DCRTPoly {
         )
     }
 
+    fn const_power_of_two(params: &Self::Params, k: usize) -> Self {
+        Self::poly_gen_from_const(params, BigUint::from(2u32).pow(k as u32).to_string())
+    }
+
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}
     /// where b_{j, h} is the h-th bit of the j-th coefficient of the polynomial.
     /// Return a vector of polynomials, where the h-th polynomial is defined as
