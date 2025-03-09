@@ -59,7 +59,10 @@ pub fn build_bits_to_int_circuit<P: Poly, E: Evaluable<P>>(
 
 #[cfg(test)]
 mod tests {
+    use num_bigint::BigUint;
+
     use super::*;
+    use crate::poly::dcrt::FinRingElem;
     use crate::poly::dcrt::{
         params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
     };
@@ -207,7 +210,7 @@ mod tests {
         let result1 = circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &bits1);
 
         // Expected: 1*2^0 + 0*2^1 + 1*2^2 + 0*2^3 = 5
-        let expected1 = DCRTPoly::const_one(&params) + DCRTPoly::const_power_of_two(&params, 2);
+        let expected1 = DCRTPoly::from_const(&params, &FinRingElem::new(5, params.modulus()));
 
         assert_eq!(result1.len(), 1);
         assert_eq!(result1[0], expected1);
@@ -223,10 +226,7 @@ mod tests {
         let result2 = circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &bits2);
 
         // Expected: 1*2^0 + 1*2^1 + 1*2^2 + 1*2^3 = 15
-        let expected2 = DCRTPoly::const_one(&params)
-            + DCRTPoly::const_power_of_two(&params, 1)
-            + DCRTPoly::const_power_of_two(&params, 2)
-            + DCRTPoly::const_power_of_two(&params, 3);
+        let expected2 = DCRTPoly::from_const(&params, &FinRingElem::new(15, params.modulus()));
 
         assert_eq!(result2.len(), 1);
         assert_eq!(result2[0], expected2);
