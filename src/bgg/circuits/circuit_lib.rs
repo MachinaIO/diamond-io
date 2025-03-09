@@ -44,9 +44,9 @@ pub fn build_bits_to_int_circuit<P: Poly, E: Evaluable<P>>(
     let mut circuit = PolyCircuit::<P>::new();
     let inputs = circuit.input(num_bits);
     let mut output = None;
-    for idx in 0..num_bits {
+    for (idx, input) in inputs.iter().enumerate().take(num_bits) {
         let scalar_poly = P::const_power_of_two(params, idx);
-        let scalar_muled = circuit.scalar_mul_gate(inputs[idx], scalar_poly);
+        let scalar_muled = circuit.scalar_mul_gate(*input, scalar_poly);
         if let Some(prev_output) = output {
             output = Some(circuit.add_gate(prev_output, scalar_muled));
         } else {
@@ -59,8 +59,6 @@ pub fn build_bits_to_int_circuit<P: Poly, E: Evaluable<P>>(
 
 #[cfg(test)]
 mod tests {
-    use num_bigint::BigUint;
-
     use super::*;
     use crate::poly::dcrt::FinRingElem;
     use crate::poly::dcrt::{
@@ -170,9 +168,9 @@ mod tests {
         let mut expected_ip2 = DCRTPoly::const_zero(&params);
 
         for i in 0..num_priv_input {
-            expected_ip1 = expected_ip1 + (pub_circuit_outputs[i].clone() * priv_polys[i].clone());
-            expected_ip2 = expected_ip2
-                + (pub_circuit_outputs[i + num_priv_input].clone() * priv_polys[i].clone());
+            expected_ip1 += (pub_circuit_outputs[i].clone() * priv_polys[i].clone());
+            expected_ip2 +=
+                (pub_circuit_outputs[i + num_priv_input].clone() * priv_polys[i].clone());
         }
 
         // Evaluate the inner product circuit

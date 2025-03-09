@@ -154,11 +154,11 @@ impl<P: Poly> PolyCircuit<P> {
         outputs
     }
 
-    pub(crate) fn add_gate(&mut self, left_input: usize, right_input: usize) -> usize {
+    pub fn add_gate(&mut self, left_input: usize, right_input: usize) -> usize {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Add)
     }
 
-    pub(crate) fn sub_gate(&mut self, left_input: usize, right_input: usize) -> usize {
+    pub fn sub_gate(&mut self, left_input: usize, right_input: usize) -> usize {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Sub)
     }
 
@@ -166,7 +166,7 @@ impl<P: Poly> PolyCircuit<P> {
         self.new_gate_generic(vec![input], PolyGateType::ScalarMul(scalar))
     }
 
-    pub(crate) fn mul_gate(&mut self, left_input: usize, right_input: usize) -> usize {
+    pub fn mul_gate(&mut self, left_input: usize, right_input: usize) -> usize {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Mul)
     }
 
