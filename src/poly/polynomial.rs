@@ -33,6 +33,7 @@ pub trait Poly:
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
+    fn const_power_of_two(params: &Self::Params, k: usize) -> Self;
     fn extract_highest_bits(&self) -> Vec<bool> {
         let mut bits = Vec::with_capacity(self.coeffs().len());
         for elem in self.coeffs() {

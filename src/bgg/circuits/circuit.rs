@@ -28,6 +28,7 @@ impl<P: Poly> Evaluable<P> for P {
 #[derive(Debug, Clone)]
 pub struct PolyCircuit<P: Poly> {
     pub gates: BTreeMap<usize, PolyGate<P>>,
+    pub sub_circuits: BTreeMap<usize, Self>,
     pub output_ids: Vec<usize>,
     pub num_input: usize,
 }
@@ -40,7 +41,12 @@ impl<P: Poly> Default for PolyCircuit<P> {
 
 impl<P: Poly> PolyCircuit<P> {
     pub fn new() -> Self {
-        Self { gates: BTreeMap::new(), output_ids: vec![], num_input: 0 }
+        Self {
+            gates: BTreeMap::new(),
+            sub_circuits: BTreeMap::new(),
+            output_ids: vec![],
+            num_input: 0,
+        }
     }
 
     pub fn num_input(&self) -> usize {
@@ -127,6 +133,27 @@ impl<P: Poly> PolyCircuit<P> {
         self.not_gate(xor_result) // NOT XOR
     }
 
+    pub fn register_sub_circuit(&mut self, sub_circuit: Self) -> usize {
+        let circuit_id = self.sub_circuits.len();
+        self.sub_circuits.insert(circuit_id, sub_circuit);
+        circuit_id
+    }
+
+    pub fn call_sub_circuit(&mut self, circuit_id: usize, inputs: &[usize]) -> Vec<usize> {
+        let sub_circuit = &self.sub_circuits[&circuit_id];
+        #[cfg(debug_assertions)]
+        assert_eq!(inputs.len(), sub_circuit.num_input());
+        let mut outputs = vec![];
+        for idx in 0..sub_circuit.num_output() {
+            let gate_id = self.new_gate_generic(
+                inputs.to_vec(),
+                PolyGateType::Call { circuit_id, num_input: inputs.len(), output_id: idx },
+            );
+            outputs.push(gate_id);
+        }
+        outputs
+    }
+
     pub(crate) fn add_gate(&mut self, left_input: usize, right_input: usize) -> usize {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Add)
     }
@@ -143,23 +170,23 @@ impl<P: Poly> PolyCircuit<P> {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Mul)
     }
 
-    fn new_gate_generic(&mut self, input_gates: Vec<usize>, gate_type: PolyGateType<P>) -> usize {
+    fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType<P>) -> usize {
         #[cfg(debug_assertions)]
         {
             assert_ne!(self.num_input, 0);
             assert_eq!(self.output_ids.len(), 0);
-            assert_eq!(input_gates.len(), gate_type.num_input());
-            for gate_id in input_gates.iter() {
+            assert_eq!(inputs.len(), gate_type.num_input());
+            for gate_id in inputs.iter() {
                 assert!(self.gates.contains_key(gate_id));
             }
         }
         let gate_id = self.gates.len();
-        self.gates.insert(gate_id, PolyGate::new(gate_id, gate_type, input_gates));
+        self.gates.insert(gate_id, PolyGate::new(gate_id, gate_type, inputs));
         gate_id
     }
 
     pub fn eval_poly_circuit<E: Evaluable<P>>(
-        self,
+        &self,
         params: &E::Params,
         one: E,
         input: &[E],
@@ -169,14 +196,14 @@ impl<P: Poly> PolyCircuit<P> {
             assert_eq!(self.num_input(), input.len());
         }
 
-        let mut wires = BTreeMap::new();
-        wires.insert(0, one);
+        let mut wires: BTreeMap<usize, E> = BTreeMap::new();
+        wires.insert(0, one.clone());
         for (idx, input) in input.iter().enumerate() {
             wires.insert(idx + 1, input.clone());
         }
         let output_gates = &self.output_ids.iter().map(|id| self.gates[id].clone()).collect_vec();
         for gate in output_gates.iter() {
-            self.eval_poly_gate(params, &mut wires, gate);
+            self.eval_poly_gate(params, &one, &mut wires, gate);
         }
         let output = self.output_ids.iter().map(|id| wires.get(id).unwrap().clone()).collect_vec();
         output
@@ -185,6 +212,7 @@ impl<P: Poly> PolyCircuit<P> {
     fn eval_poly_gate<E: Evaluable<P>>(
         &self,
         params: &E::Params,
+        one: &E,
         wires: &mut BTreeMap<usize, E>,
         gate: &PolyGate<P>,
     ) {
@@ -192,7 +220,7 @@ impl<P: Poly> PolyCircuit<P> {
         for input_id in input_ids.iter() {
             if !wires.contains_key(input_id) {
                 let input_gate = &self.gates[input_id];
-                self.eval_poly_gate(params, wires, input_gate);
+                self.eval_poly_gate(params, one, wires, input_gate);
             }
         }
         match &gate.gate_type {
@@ -221,6 +249,16 @@ impl<P: Poly> PolyCircuit<P> {
                 let right = wires.get(&input_ids[1]).unwrap();
                 let output = left.clone() * right.clone();
                 wires.insert(gate.gate_id, output);
+            }
+            PolyGateType::Call { circuit_id, output_id, .. } => {
+                let sub_circuit = &self.sub_circuits[circuit_id];
+                let inputs =
+                    input_ids.iter().map(|id| wires.get(id).unwrap().clone()).collect_vec();
+                let outputs = sub_circuit.eval_poly_circuit(params, one.clone(), &inputs);
+                let first_output_wire = gate.gate_id - output_id;
+                for (idx, output_wire) in outputs.into_iter().enumerate() {
+                    wires.insert(first_output_wire + idx, output_wire);
+                }
             }
         }
     }
@@ -726,5 +764,127 @@ mod tests {
         // decrypt the result
         let plaintext = c1_eval + c0_eval * s;
         assert_eq!(plaintext, m * k);
+    }
+
+    #[test]
+    fn test_register_and_call_sub_circuit() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create input polynomials using UniformSampler
+        let poly1 = create_random_poly(&params);
+        let poly2 = create_random_poly(&params);
+
+        // Create a sub-circuit that performs addition and multiplication
+        let mut sub_circuit = PolyCircuit::<DCRTPoly>::new();
+        let sub_inputs = sub_circuit.input(2);
+
+        // Add operation: poly1 + poly2
+        let add_gate = sub_circuit.add_gate(sub_inputs[0], sub_inputs[1]);
+
+        // Mul operation: poly1 * poly2
+        let mul_gate = sub_circuit.mul_gate(sub_inputs[0], sub_inputs[1]);
+
+        // Set the outputs of the sub-circuit
+        sub_circuit.output(vec![add_gate, mul_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let main_inputs = main_circuit.input(2);
+
+        // Register the sub-circuit and get its ID
+        let sub_circuit_id = main_circuit.register_sub_circuit(sub_circuit);
+
+        // Call the sub-circuit with the main circuit's inputs
+        let sub_outputs =
+            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]]);
+
+        // Verify we got two outputs from the sub-circuit
+        assert_eq!(sub_outputs.len(), 2);
+
+        // Use the sub-circuit outputs for further operations
+        // For example, subtract the multiplication result from the addition result
+        let final_gate = main_circuit.sub_gate(sub_outputs[0], sub_outputs[1]);
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![final_gate]);
+
+        // Evaluate the main circuit
+        let result = main_circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
+
+        // Expected result: (poly1 + poly2) - (poly1 * poly2)
+        let expected = (poly1.clone() + poly2.clone()) - (poly1 * poly2);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_nested_sub_circuits() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create input polynomials
+        let poly1 = create_random_poly(&params);
+        let poly2 = create_random_poly(&params);
+        let poly3 = create_random_poly(&params);
+
+        // Create the innermost sub-circuit that performs multiplication
+        let mut inner_circuit = PolyCircuit::<DCRTPoly>::new();
+        let inner_inputs = inner_circuit.input(2);
+        let mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_inputs[1]);
+        inner_circuit.output(vec![mul_gate]);
+
+        // Create a middle sub-circuit that uses the inner sub-circuit
+        let mut middle_circuit = PolyCircuit::<DCRTPoly>::new();
+        let middle_inputs = middle_circuit.input(3);
+
+        // Register the inner circuit
+        let inner_circuit_id = middle_circuit.register_sub_circuit(inner_circuit);
+
+        // Call the inner circuit with the first two inputs
+        let inner_outputs = middle_circuit
+            .call_sub_circuit(inner_circuit_id, &[middle_inputs[0], middle_inputs[1]]);
+
+        // Add the result of the inner circuit with the third input
+        let add_gate = middle_circuit.add_gate(inner_outputs[0], middle_inputs[2]);
+        middle_circuit.output(vec![add_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let main_inputs = main_circuit.input(3);
+
+        // Register the middle circuit
+        let middle_circuit_id = main_circuit.register_sub_circuit(middle_circuit);
+
+        // Call the middle circuit with all inputs
+        let middle_outputs = main_circuit
+            .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
+
+        // Use the output for a scalar multiplication
+        let scalar = create_random_poly(&params);
+        let scalar_mul_gate = main_circuit.scalar_mul_gate(middle_outputs[0], scalar.clone());
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![scalar_mul_gate]);
+
+        // Evaluate the main circuit
+        let result = main_circuit.eval_poly_circuit(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone(), poly3.clone()],
+        );
+
+        // Expected result: ((poly1 * poly2) + poly3) * scalar
+        let expected = ((poly1 * poly2) + poly3) * scalar;
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
     }
 }

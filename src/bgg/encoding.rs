@@ -586,4 +586,178 @@ mod tests {
         let plaintext = c1_eval + c0_eval * s;
         assert_eq!(plaintext, m * k);
     }
+
+    #[test]
+    fn test_encoding_register_and_call_sub_circuit() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create samplers
+        let key: [u8; 32] = rand::random();
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create random public keys
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 3);
+
+        // Create secret and plaintexts
+        let secret = create_random_poly(&params);
+        let plaintexts = vec![
+            DCRTPoly::const_one(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+        ];
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
+
+        // Create a sub-circuit that performs addition and multiplication
+        let mut sub_circuit = PolyCircuit::<DCRTPoly>::new();
+        let sub_inputs = sub_circuit.input(2);
+
+        // Add operation: enc1 + enc2
+        let add_gate = sub_circuit.add_gate(sub_inputs[0], sub_inputs[1]);
+
+        // Mul operation: enc1 * enc2
+        let mul_gate = sub_circuit.mul_gate(sub_inputs[0], sub_inputs[1]);
+
+        // Set the outputs of the sub-circuit
+        sub_circuit.output(vec![add_gate, mul_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let main_inputs = main_circuit.input(2);
+
+        // Register the sub-circuit and get its ID
+        let sub_circuit_id = main_circuit.register_sub_circuit(sub_circuit);
+
+        // Call the sub-circuit with the main circuit's inputs
+        let sub_outputs =
+            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]]);
+
+        // Verify we got two outputs from the sub-circuit
+        assert_eq!(sub_outputs.len(), 2);
+
+        // Use the sub-circuit outputs for further computation
+        // For example, subtract the multiplication result from the addition result
+        let final_gate = main_circuit.sub_gate(sub_outputs[0], sub_outputs[1]);
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![final_gate]);
+
+        // Evaluate the main circuit
+        let result =
+            main_circuit.eval_poly_circuit(&params, enc_one, &[enc1.clone(), enc2.clone()]);
+
+        // Expected result: (enc1 + enc2) - (enc1 * enc2)
+        let expected = (enc1.clone() + enc2.clone()) - (enc1.clone() * enc2.clone());
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vector, expected.vector);
+        assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
+        assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
+
+    #[test]
+    fn test_encoding_nested_sub_circuits() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create samplers
+        let key: [u8; 32] = rand::random();
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create random public keys
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, 4);
+
+        // Create secret and plaintexts
+        let secret = create_random_poly(&params);
+        let plaintexts = vec![
+            DCRTPoly::const_one(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+        ];
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+        let enc2 = encodings[2].clone();
+        let enc3 = encodings[3].clone();
+
+        // Create a scalar
+        let scalar = create_random_poly(&params);
+
+        // Create the innermost sub-circuit that performs multiplication
+        let mut inner_circuit = PolyCircuit::<DCRTPoly>::new();
+        let inner_inputs = inner_circuit.input(2);
+        let mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_inputs[1]);
+        inner_circuit.output(vec![mul_gate]);
+
+        // Create a middle sub-circuit that uses the inner sub-circuit
+        let mut middle_circuit = PolyCircuit::<DCRTPoly>::new();
+        let middle_inputs = middle_circuit.input(3);
+
+        // Register the inner circuit
+        let inner_circuit_id = middle_circuit.register_sub_circuit(inner_circuit);
+
+        // Call the inner circuit with the first two inputs
+        let inner_outputs = middle_circuit
+            .call_sub_circuit(inner_circuit_id, &[middle_inputs[0], middle_inputs[1]]);
+
+        // Add the result of the inner circuit with the third input
+        let add_gate = middle_circuit.add_gate(inner_outputs[0], middle_inputs[2]);
+        middle_circuit.output(vec![add_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let main_inputs = main_circuit.input(3);
+
+        // Register the middle circuit
+        let middle_circuit_id = main_circuit.register_sub_circuit(middle_circuit);
+
+        // Call the middle circuit with all inputs
+        let middle_outputs = main_circuit
+            .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
+
+        // Use the output for a scalar multiplication
+        let scalar_mul_gate = main_circuit.scalar_mul_gate(middle_outputs[0], scalar.clone());
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![scalar_mul_gate]);
+
+        // Evaluate the main circuit
+        let result = main_circuit.eval_poly_circuit(
+            &params,
+            enc_one,
+            &[enc1.clone(), enc2.clone(), enc3.clone()],
+        );
+
+        // Expected result: ((enc1 * enc2) + enc3) * scalar
+        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()).scalar_mul(&params, &scalar);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vector, expected.vector);
+        assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
+        assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
 }
