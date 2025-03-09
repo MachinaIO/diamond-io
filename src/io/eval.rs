@@ -6,19 +6,19 @@ use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
 use itertools::Itertools;
 use std::sync::Arc;
 
-pub fn eval_obf<M, S>(
+pub fn eval_obf<M, SH>(
     obf_params: ObfuscationParams<M>,
-    mut sampler: S,
+    mut sampler_hash: SH,
     obfuscation: Obfuscation<M>,
     input: &[bool],
 ) -> Vec<bool>
 where
     M: PolyMatrix,
-    S: PolyHashSampler<[u8; 32], M = M>,
+    SH: PolyHashSampler<[u8; 32], M = M>,
 {
-    sampler.set_key(obfuscation.hash_key);
+    sampler_hash.set_key(obfuscation.hash_key);
     let params = Arc::new(obf_params.params.clone());
-    let sampler = Arc::new(sampler);
+    let sampler = Arc::new(sampler_hash);
     // let dim = params.as_ref().ring_dimension() as usize;
     debug_assert_eq!(input.len(), obf_params.input_size);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone());
@@ -98,6 +98,5 @@ where
     let final_v = ps.last().unwrap().clone() * &obfuscation.final_preimage;
     let z = output_encodings[0].concat_vector(&output_encodings[1..]) - final_v;
     debug_assert_eq!(z.size(), (1, packed_output_size));
-    let outputs = z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec();
-    outputs
+    z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
 }

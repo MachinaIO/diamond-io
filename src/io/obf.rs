@@ -6,46 +6,53 @@ use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
 use rand::{Rng, RngCore};
 use std::sync::Arc;
 
-pub fn obfuscate<M, S, R>(
+pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
-    mut sampler: S,
+    sampler_uniform: SU,
+    mut sampler_hash: SH,
+    sampler_trapdoor: ST,
     rng: &mut R,
 ) -> Obfuscation<M>
 where
     M: PolyMatrix,
-    S: PolyUniformSampler<M = M> + PolyHashSampler<[u8; 32], M = M> + PolyTrapdoorSampler<M = M>,
+    SU: PolyUniformSampler<M = M>,
+    SH: PolyHashSampler<[u8; 32], M = M>,
+    ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
 {
     let public_circuit = &obf_params.public_circuit;
-    debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
-    let hash_key = rng.random::<[u8; 32]>();
-    sampler.set_key(hash_key);
-    let sampler = Arc::new(sampler);
     let params = Arc::new(obf_params.params.clone());
-    let log_q = params.as_ref().modulus_bits();
     let dim = params.as_ref().ring_dimension() as usize;
+    let log_q = params.as_ref().modulus_bits();
+    debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
+    let hash_key = rng.random::<[u8; 32]>();
+    sampler_hash.set_key(hash_key);
+    let sampler_uniform = Arc::new(sampler_uniform);
+    let sampler_hash = Arc::new(sampler_hash);
+    let sampler_trapdoor = Arc::new(sampler_trapdoor);
     // let packed_input_size = obf_params.input_size.div_ceil(dim);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone());
+    let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler_hash.clone());
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
 
-    let s_bar = sampler.sample_uniform(&params, 1, 1, DistType::BitDist).entry(1, 1).clone();
+    let s_bar =
+        sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(1, 1).clone();
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bar,
-        sampler.clone(),
+        sampler_uniform.clone(),
         obf_params.error_gauss_sigma,
     );
     let s_init = &bgg_encode_sampler.secret_vec;
-    let t_bar = sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     let minus_one_poly =
         M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
     let t = t_bar.concat_columns(&[minus_one_poly]);
 
-    let hardcoded_key = sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     let enc_hardcoded_key = {
-        let e = sampler.sample_uniform(
+        let e = sampler_uniform.sample_uniform(
             &params,
             1,
             1,
@@ -72,9 +79,9 @@ where
     let mut bs = vec![];
     let mut b_trapdoors = vec![];
     for _ in 0..=obf_params.input_size {
-        let (b_0_trapdoor, b_0) = sampler.trapdoor(&params);
-        let (b_1_trapdoor, b_1) = sampler.trapdoor(&params);
-        let (b_star_trapdoor, b_star) = sampler.trapdoor(&params);
+        let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params);
+        let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params);
+        let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params);
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
     }
@@ -82,7 +89,7 @@ where
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init.clone()]);
         let s_b = s_connect * &bs[0].2;
-        let error = sampler.sample_uniform(
+        let error = sampler_uniform.sample_uniform(
             &params,
             1,
             m_b,
@@ -108,17 +115,17 @@ where
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
         let m_0 = {
             let ub = u_0.clone() * b_next_0;
-            sampler.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
+            sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
         };
         let m_1 = {
             let ub = u_1.clone() * b_next_1;
-            sampler.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
+            sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
         };
         m_preimages.push((m_0, m_1));
 
         let ub_star = u_star.clone() * b_next_star;
-        let n_0 = sampler.preimage(&params, b_next_0_trapdoor, b_next_0, &ub_star);
-        let n_1 = sampler.preimage(&params, b_next_1_trapdoor, b_next_1, &ub_star);
+        let n_0 = sampler_trapdoor.preimage(&params, b_next_0_trapdoor, b_next_0, &ub_star);
+        let n_1 = sampler_trapdoor.preimage(&params, b_next_1_trapdoor, b_next_1, &ub_star);
         n_preimages.push((n_0, n_1));
 
         let mut ks = vec![];
@@ -149,7 +156,7 @@ where
             let k_target = top.concat_rows(&[bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
-            let k = sampler.preimage(&params, trapdoor, b_matrix, &k_target);
+            let k = sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target);
             ks.push(k);
 
             // let (t_input, t_fhe_key) = if bit == 0 { &public_data.t_0 } else { &public_data.t_1 };
@@ -227,7 +234,7 @@ where
     let (_, _, b_final) = &bs[obf_params.input_size];
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
-        sampler.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
+        sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
 
     Obfuscation {
         hash_key,
