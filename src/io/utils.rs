@@ -1,6 +1,6 @@
 use super::ObfuscationParams;
-use crate::bgg::circuits::{build_circuit_ip_then_to_int, Evaluable, PolyCircuit};
-use crate::bgg::{sampler::*, BggPublicKey};
+use crate::bgg::circuit::{build_circuit_ip_then_to_int, PolyCircuit};
+use crate::bgg::{sampler::*, BggPublicKey, Evaluable};
 use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
 use itertools::Itertools;
 use std::marker::PhantomData;

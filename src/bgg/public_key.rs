@@ -1,8 +1,8 @@
+use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
 
-use super::circuits::Evaluable;
-use crate::poly::{Poly, PolyMatrix};
+use super::Evaluable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
@@ -68,8 +68,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 }
 
 impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
-    type Params = <M::P as Poly>::Params;
-    fn scalar_mul(&self, params: &Self::Params, scalar: &M::P) -> Self {
+    fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
         let gadget = M::gadget_matrix(params, 2);
         let scalared = gadget * scalar;
         let decomposed = scalared.decompose();
@@ -82,7 +81,7 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgg::circuits::PolyCircuit;
+    use crate::bgg::circuit::PolyCircuit;
     use crate::bgg::sampler::BGGPublicKeySampler;
     use crate::poly::dcrt::{
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
@@ -119,7 +118,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() + pk2.clone();
@@ -158,7 +157,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() - pk2.clone();
@@ -197,7 +196,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() * pk2.clone();
@@ -238,7 +237,7 @@ mod tests {
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone()]);
 
         // Expected result
         let expected = pk1.scalar_mul(&params, &scalar);
@@ -290,8 +289,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 + pk2) * scalar) - pk3
         let expected = ((pk1.clone() + pk2.clone()).scalar_mul(&params, &scalar)) - pk3.clone();
@@ -355,11 +353,8 @@ mod tests {
         circuit.output(vec![f]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(
-            &params,
-            pk_one,
-            &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()],
-        );
+        let result =
+            circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()]);
 
         // Expected result: (((pk1 + pk2) * (pk3 * pk4)) + (pk1 - pk3)) * scalar
         let sum1 = pk1.clone() + pk2.clone();
@@ -431,7 +426,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result: (pk1 + pk2) - (pk1 * pk2)
         let expected = (pk1.clone() + pk2.clone()) - (pk1.clone() * pk2.clone());
@@ -506,11 +501,7 @@ mod tests {
         main_circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval_poly_circuit(
-            &params,
-            pk_one,
-            &[pk1.clone(), pk2.clone(), pk3.clone()],
-        );
+        let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 * pk2) + pk3) * scalar
         let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()).scalar_mul(&params, &scalar);

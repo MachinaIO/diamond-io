@@ -1,5 +1,6 @@
-use super::{Evaluable, PolyCircuit};
-use crate::poly::*;
+use crate::{bgg::Evaluable, poly::Poly};
+
+use super::PolyCircuit;
 
 /// Build a circuit that takes as input a public circuit and a private input, and outputs inner products between the `num_priv_input`-sized output of the public circuit and the private input.
 pub fn build_circuit_ip_priv_and_pub_outputs<P: Poly, E: Evaluable<P>>(
@@ -16,21 +17,21 @@ pub fn build_circuit_ip_priv_and_pub_outputs<P: Poly, E: Evaluable<P>>(
     let priv_inputs = &inputs[num_pub_input..];
     let circuit_id = circuit.register_sub_circuit(public_circuit);
     let pub_outputs = circuit.call_sub_circuit(circuit_id, pub_inputs);
-    let mut ip_outputs = Vec::new();
+    let mut ip_outputs = Vec::with_capacity(num_ip_outputs);
     for out_idx in 0..num_ip_outputs {
-        let mut ip_output: Option<usize> = None;
+        let mut ip_output = 0;
         for (priv_input, pub_output) in priv_inputs
             .iter()
             .zip(pub_outputs[(num_priv_input * out_idx)..(num_priv_input * (out_idx + 1))].iter())
         {
             let mul = circuit.mul_gate(*pub_output, *priv_input);
-            if let Some(prev_ip) = ip_output {
-                ip_output = Some(circuit.add_gate(prev_ip, mul));
+            if ip_output == 0 {
+                ip_output = mul;
             } else {
-                ip_output = Some(mul);
+                ip_output = circuit.add_gate(ip_output, mul);
             }
         }
-        ip_outputs.push(ip_output.unwrap());
+        ip_outputs.push(ip_output);
     }
     circuit.output(ip_outputs);
     circuit
@@ -43,17 +44,17 @@ pub fn build_circuit_bits_to_int<P: Poly, E: Evaluable<P>>(
 ) -> PolyCircuit<P> {
     let mut circuit = PolyCircuit::<P>::new();
     let inputs = circuit.input(num_bits);
-    let mut output = None;
+    let mut output = 0;
     for (idx, input) in inputs.iter().enumerate().take(num_bits) {
         let scalar_poly = P::const_power_of_two(params, idx);
         let scalar_muled = circuit.scalar_mul_gate(*input, scalar_poly);
-        if let Some(prev_output) = output {
-            output = Some(circuit.add_gate(prev_output, scalar_muled));
+        if idx == 0 {
+            output = scalar_muled;
         } else {
-            output = Some(scalar_muled);
+            output = circuit.add_gate(output, scalar_muled);
         }
     }
-    circuit.output(vec![output.unwrap()]);
+    circuit.output(vec![output]);
     circuit
 }
 
@@ -78,8 +79,7 @@ pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
     let num_ints = num_ip_outputs / num_bits;
     let b2i_circuit = build_circuit_bits_to_int::<P, E>(params, num_bits);
     let b2i_circuit_id = circuit.register_sub_circuit(b2i_circuit);
-    let mut int_outputs = Vec::new();
-    println!("num_ints {}", num_ints);
+    let mut int_outputs = Vec::with_capacity(num_bits);
     for idx in 0..num_ints {
         let b2i_inputs = &ip_outputs[(idx * num_bits)..((idx + 1) * num_bits)];
         let int_output = circuit.call_sub_circuit(b2i_circuit_id, b2i_inputs);
@@ -94,6 +94,7 @@ mod tests {
     use super::*;
     use crate::poly::dcrt::FinRingElem;
     use crate::poly::dcrt::{params::DCRTPolyParams, poly::DCRTPoly};
+    use crate::poly::params::PolyParams;
     use crate::utils::{create_bit_poly, create_random_poly};
 
     #[test]
@@ -146,11 +147,8 @@ mod tests {
             .output(vec![out1_eval, out2_eval, out3_eval, out4_eval, out5_eval, out6_eval]);
 
         // Evaluate the public circuit to get its outputs
-        let pub_circuit_outputs = public_circuit_for_eval.eval_poly_circuit(
-            &params,
-            DCRTPoly::const_one(&params),
-            &pub_polys,
-        );
+        let pub_circuit_outputs =
+            public_circuit_for_eval.eval(&params, DCRTPoly::const_one(&params), &pub_polys);
 
         // Verify that the public circuit outputs are as expected
         let expected_out1 = pub_polys[0].clone() + pub_polys[1].clone(); // add_gate(pub_inputs[0], pub_inputs[1])
@@ -189,8 +187,7 @@ mod tests {
 
         // Evaluate the inner product circuit
         let all_inputs = [pub_polys, priv_polys].concat();
-        let result =
-            ip_circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &all_inputs);
+        let result = ip_circuit.eval(&params, DCRTPoly::const_one(&params), &all_inputs);
 
         // Verify the results
         assert_eq!(result.len(), 2);
@@ -219,7 +216,7 @@ mod tests {
             create_bit_poly(&params, false), // 0 (MSB)
         ];
 
-        let result1 = circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &bits1);
+        let result1 = circuit.eval(&params, DCRTPoly::const_one(&params), &bits1);
 
         // Expected: 1*2^0 + 0*2^1 + 1*2^2 + 0*2^3 = 5
         let expected1 = DCRTPoly::from_const(&params, &FinRingElem::new(5, params.modulus()));
@@ -235,7 +232,7 @@ mod tests {
             create_bit_poly(&params, true), // 1 (MSB)
         ];
 
-        let result2 = circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &bits2);
+        let result2 = circuit.eval(&params, DCRTPoly::const_one(&params), &bits2);
 
         // Expected: 1*2^0 + 1*2^1 + 1*2^2 + 1*2^3 = 15
         let expected2 = DCRTPoly::from_const(&params, &FinRingElem::new(15, params.modulus()));
@@ -251,7 +248,7 @@ mod tests {
             create_bit_poly(&params, false), // 0 (MSB)
         ];
 
-        let result3 = circuit.eval_poly_circuit(&params, DCRTPoly::const_one(&params), &bits3);
+        let result3 = circuit.eval(&params, DCRTPoly::const_one(&params), &bits3);
 
         // Expected: 0
         let expected3 = DCRTPoly::const_zero(&params);

@@ -2,7 +2,7 @@ pub mod eval;
 pub mod obf;
 pub mod utils;
 
-use crate::bgg::circuits::PolyCircuit;
+use crate::bgg::circuit::PolyCircuit;
 use crate::bgg::BggEncoding;
 use crate::poly::{matrix::*, polynomial::*};
 
@@ -29,7 +29,6 @@ pub struct ObfuscationParams<M: PolyMatrix> {
 #[cfg(test)]
 mod test {
     use keccak_asm::Keccak256;
-    use rand::rngs::ThreadRng;
 
     use crate::poly::{
         dcrt::{

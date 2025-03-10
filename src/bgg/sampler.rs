@@ -1,5 +1,8 @@
 use super::{BggEncoding, BggPublicKey};
-use crate::poly::{matrix::*, sampler::*, *};
+use crate::poly::polynomial::Poly;
+use crate::poly::sampler::{DistType, PolyUniformSampler};
+use crate::poly::PolyMatrix;
+use crate::poly::{params::PolyParams, sampler::PolyHashSampler};
 use itertools::Itertools;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::{marker::PhantomData, sync::Arc};
