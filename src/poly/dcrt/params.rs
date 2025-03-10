@@ -16,6 +16,9 @@ pub struct DCRTPolyParams {
     modulus: Arc<BigUint>,
 }
 
+unsafe impl Send for DCRTPolyParams {}
+unsafe impl Sync for DCRTPolyParams {}
+
 impl Debug for DCRTPolyParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DCRTPolyParams")

@@ -5,6 +5,7 @@ use openfhe::{
     cxx::UniquePtr,
     ffi::{self, DCRTPoly as DCRTPolyCxx},
 };
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -62,17 +63,13 @@ impl Poly for DCRTPoly {
 
     fn coeffs(&self) -> Vec<Self::Elem> {
         let coeffs = self.ptr_poly.GetCoefficients();
-        let mut result = Vec::with_capacity(coeffs.len());
-        for s in coeffs.iter() {
-            result.push(
-                FinRingElem::from_str(s, &self.ptr_poly.GetModulus()).expect("invalid string"),
-            );
-        }
-        result
+        coeffs
+            .par_iter()
+            .map(|s| FinRingElem::from_str(s, &self.ptr_poly.GetModulus()).expect("invalid string"))
+            .collect()
     }
 
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
-        let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
         let modulus = params.modulus();
         for coeff in coeffs {
             let coeff_modulus = coeff.modulus();
