@@ -1,10 +1,7 @@
 use num_bigint::BigInt;
 
 use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
-use crate::poly::{
-    matrix::{Loadable, PolyMatrixFSManager, Storable},
-    Poly, PolyMatrix, PolyParams,
-};
+use crate::poly::{matrix::PolyMatrixFSManager, Poly, PolyMatrix, PolyParams};
 use std::{
     fmt::Debug,
     fs,
@@ -306,6 +303,51 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
         Self { inner: new_inner, params: new_params.clone(), nrow: self.nrow, ncol: self.ncol }
     }
+    fn store(&self, path: &Path) {
+        let mut serializable_data = Vec::with_capacity(self.nrow);
+        for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(self.ncol);
+            for j in 0..self.ncol {
+                let coeffs = self.inner[i][j]
+                    .coeffs()
+                    .iter()
+                    .map(|c| c.value().to_string())
+                    .collect::<Vec<String>>();
+                row.push(coeffs);
+            }
+            serializable_data.push(row);
+        }
+
+        let params_data =
+            (self.params.ring_dimension(), self.params.crt_depth(), self.params.crt_bits());
+
+        let data = (serializable_data, params_data, self.nrow, self.ncol);
+
+        let file = std::fs::File::create(path).unwrap();
+        serde_json::to_writer(file, &data).unwrap();
+    }
+    fn load(path: &Path) -> Self {
+        let file = std::fs::File::open(path).unwrap();
+        let data: (Vec<Vec<Vec<String>>>, (u32, usize, usize), usize, usize) =
+            serde_json::from_reader(file).unwrap();
+
+        let (serialized_data, params_data, nrow, ncol) = data;
+        let (ring_dim, crt_depth, crt_bits) = params_data;
+
+        let params = DCRTPolyParams::new(ring_dim, crt_depth, crt_bits);
+
+        let mut inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = DCRTPoly::poly_gen_from_vec(&params, serialized_data[i][j].clone());
+                row.push(poly);
+            }
+            inner.push(row);
+        }
+
+        DCRTPolyMatrix { inner, params, nrow, ncol }
+    }
 }
 
 // ====== Arithmetic ======
@@ -458,57 +500,6 @@ impl<'a> Sub<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
     }
 }
 
-impl Storable for DCRTPolyMatrix {
-    fn store(&self, path: &Path) {
-        let mut serializable_data = Vec::with_capacity(self.nrow);
-        for i in 0..self.nrow {
-            let mut row = Vec::with_capacity(self.ncol);
-            for j in 0..self.ncol {
-                let coeffs = self.inner[i][j]
-                    .coeffs()
-                    .iter()
-                    .map(|c| c.value().to_string())
-                    .collect::<Vec<String>>();
-                row.push(coeffs);
-            }
-            serializable_data.push(row);
-        }
-
-        let params_data =
-            (self.params.ring_dimension(), self.params.crt_depth(), self.params.crt_bits());
-
-        let data = (serializable_data, params_data, self.nrow, self.ncol);
-
-        let file = std::fs::File::create(path).unwrap();
-        serde_json::to_writer(file, &data).unwrap();
-    }
-}
-
-impl Loadable for DCRTPolyMatrix {
-    fn load(path: &Path) -> Self {
-        let file = std::fs::File::open(path).unwrap();
-        let data: (Vec<Vec<Vec<String>>>, (u32, usize, usize), usize, usize) =
-            serde_json::from_reader(file).unwrap();
-
-        let (serialized_data, params_data, nrow, ncol) = data;
-        let (ring_dim, crt_depth, crt_bits) = params_data;
-
-        let params = DCRTPolyParams::new(ring_dim, crt_depth, crt_bits);
-
-        let mut inner = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                let poly = DCRTPoly::poly_gen_from_vec(&params, serialized_data[i][j].clone());
-                row.push(poly);
-            }
-            inner.push(row);
-        }
-
-        DCRTPolyMatrix { inner, params, nrow, ncol }
-    }
-}
-
 pub struct DCRTPolyMatrixFSManager {
     base_dir: PathBuf,
 }
@@ -537,11 +528,9 @@ impl PolyMatrixFSManager for DCRTPolyMatrixFSManager {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use super::*;
-    use crate::poly::matrix::{Loadable, Storable};
     use crate::{poly::dcrt::DCRTPolyParams, utils::create_random_poly};
+    use std::fs;
 
     #[test]
     fn test_gadget_matrix() {
