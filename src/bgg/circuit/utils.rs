@@ -77,7 +77,7 @@ pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
     let num_ints = num_ip_outputs / num_bits;
     let b2i_circuit = build_circuit_bits_to_int::<P, E>(params, num_bits);
     let b2i_circuit_id = circuit.register_sub_circuit(b2i_circuit);
-    let mut int_outputs = Vec::new();
+    let mut int_outputs = Vec::with_capacity(num_bits);
     for idx in 0..num_ints {
         let b2i_inputs = &ip_outputs[(idx * num_bits)..((idx + 1) * num_bits)];
         let int_output = circuit.call_sub_circuit(b2i_circuit_id, b2i_inputs);
