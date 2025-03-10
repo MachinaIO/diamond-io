@@ -202,8 +202,8 @@ where
     #[cfg(test)]
     {
         let mut last_s = obfuscation.s_init.clone();
-        for idx in 0..obf_params.input_size {
-            let r = if inputs[idx] { public_data.r_1.clone() } else { public_data.r_0.clone() };
+        for bit in inputs.iter() {
+            let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
             last_s = last_s * r;
         }
 
