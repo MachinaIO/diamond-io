@@ -90,7 +90,7 @@ where
     let final_circuit =
         build_final_step_circuit::<_, BggEncoding<M>>(&params, obf_params.public_circuit.clone());
     let last_input_encodings = encodings.last().unwrap();
-    let output_encodings = final_circuit.eval_poly_circuit::<BggEncoding<M>>(
+    let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         last_input_encodings[0].clone(),
         &last_input_encodings[1..],

@@ -204,7 +204,7 @@ where
     let final_preimage_target = {
         let one = public_data.pubkeys[obf_params.input_size][0].clone();
         let input = &public_data.pubkeys[obf_params.input_size][1..];
-        let eval_outputs = final_circuit.eval_poly_circuit(params.as_ref(), one, input);
+        let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
         let eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         (eval_outputs_matrix + &public_data.a_prf).concat_rows(&[M::zero(

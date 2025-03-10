@@ -62,6 +62,7 @@ pub fn create_bit_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
     sampler.sample_poly(params, &DistType::BitDist)
 }
 
+// Helper function to create a bit polynomial (0 or 1)
 pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
     if bit {
         DCRTPoly::const_one(params)
