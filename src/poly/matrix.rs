@@ -1,4 +1,5 @@
 use super::Poly;
+use std::path::Path;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
@@ -21,6 +22,8 @@ pub trait PolyMatrix:
     + for<'a> Mul<&'a Self::P, Output = Self>
     + Send
     + Sync
+    + Storable
+    + Loadable
 {
     type P: Poly;
 
@@ -87,4 +90,12 @@ pub trait PolyMatrix:
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
     fn decompose(&self) -> Self;
     fn modulus_switch(&self, new_params: &<Self::P as Poly>::Params) -> Self;
+}
+
+pub trait Storable {
+    fn store(&self, path: &Path);
+}
+
+pub trait Loadable: Sized {
+    fn load(path: &Path) -> Self;
 }
