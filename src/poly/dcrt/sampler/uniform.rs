@@ -70,8 +70,6 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
 mod tests {
     use std::sync::Arc;
 
-    use crate::poly::PolyParams;
-
     use super::*;
     use itertools::Itertools;
     use num_bigint::BigUint;
