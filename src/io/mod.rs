@@ -70,7 +70,7 @@ mod test {
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0, 4);
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0);
         let mut rng = rand::rng();
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),

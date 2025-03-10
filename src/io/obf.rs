@@ -80,9 +80,9 @@ where
     let mut bs = vec![];
     let mut b_trapdoors = vec![];
     for _ in 0..=obf_params.input_size {
-        let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params);
-        let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params);
-        let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params);
+        let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params, 4);
+        let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params, 4);
+        let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 4);
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
     }
