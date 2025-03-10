@@ -58,7 +58,11 @@ pub fn build_circuit_bits_to_int<P: Poly, E: Evaluable<P>>(
     circuit
 }
 
-pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
+/// This circuit
+/// 1) computes the outputs of the given public circuit,
+/// 2) computes the inner product between these outputs and the private inputs
+/// 3) compose the results of the inner products, which are bits, into an integer.
+pub fn build_circuit_ip_to_int<P: Poly, E: Evaluable<P>>(
     params: &P::Params,
     public_circuit: PolyCircuit<P>,
     num_priv_input: usize,
