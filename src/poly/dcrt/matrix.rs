@@ -1,7 +1,10 @@
-use num_bigint::BigInt;
-
 use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::poly::{Poly, PolyMatrix, PolyParams};
+use num_bigint::{BigInt, BigUint};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+    IntoParallelRefMutIterator, ParallelIterator,
+};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
@@ -277,14 +280,28 @@ impl PolyMatrix for DCRTPolyMatrix {
         let bit_length = self.params.modulus_bits();
         let new_nrow = self.nrow * bit_length;
 
-        for i in 0..self.nrow {
-            for j in 0..self.ncol {
-                let decomposed = self.inner[i][j].decompose(&self.params);
-                for bit in 0..bit_length {
-                    new_inner[i * bit_length + bit][j] = decomposed[bit].clone();
-                }
-            }
-        }
+        let new_inner: Vec<Vec<DCRTPoly>> = (0..new_nrow)
+            .into_par_iter()
+            .map(|new_i| {
+                let i = new_i / bit_length;
+                let bit = new_i % bit_length;
+                (0..self.ncol)
+                    .into_par_iter()
+                    .map(|j| {
+                        let coeffs = self.inner[i][j].coeffs();
+                        let bit_coeffs: Vec<_> = coeffs
+                            .par_iter()
+                            .map(|coeff_val| {
+                                let val = (coeff_val.value() >> bit) & BigUint::from(1u32);
+                                FinRingElem::new(val, self.params.modulus())
+                            })
+                            .collect();
+                        DCRTPoly::from_coeffs(&self.params, &bit_coeffs)
+                    })
+                    .collect()
+            })
+            .collect();
+
         Self { nrow: new_nrow, ncol: self.ncol, inner: new_inner, params: self.params.clone() }
     }
 
