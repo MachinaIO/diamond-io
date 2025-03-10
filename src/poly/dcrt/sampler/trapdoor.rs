@@ -84,45 +84,32 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         // Case 1: Target columns is greater than size
         if target_cols > size {
-            // Calculate how many full blocks of size columns we have
             let full_blocks = target_cols / size;
-            // Calculate the remaining columns (could be 0)
             let remaining_cols = target_cols % size;
-
-            // Total number of blocks (full blocks + 1 partial block if there are remaining columns)
             let total_blocks = if remaining_cols > 0 { full_blocks + 1 } else { full_blocks };
 
             let mut preimages = Vec::with_capacity(total_blocks);
 
-            // Process each block
             for block in 0..total_blocks {
                 let start_col = block * size;
 
-                // For the last block with remaining columns
-                if block == full_blocks && remaining_cols > 0 {
-                    let end_col = start_col + remaining_cols;
-                    let target_block = target.slice(0, size, start_col, end_col);
-                    let preimage_block =
-                        self.preimage(params, trapdoor, public_matrix, &target_block);
-                    preimages.push(preimage_block);
-                } else if block < full_blocks {
-                    // For full blocks
-                    let end_col = start_col + size;
-                    let target_block = target.slice(0, size, start_col, end_col);
-                    let preimage_block =
-                        self.preimage(params, trapdoor, public_matrix, &target_block);
-                    preimages.push(preimage_block);
-                }
+                // Calculate end_col based on whether this is the last block with remaining columns
+                let end_col = if block == full_blocks && remaining_cols > 0 {
+                    start_col + remaining_cols
+                } else {
+                    start_col + size
+                };
+
+                // Process the block
+                let target_block = target.slice(0, size, start_col, end_col);
+                let preimage_block = self.preimage(params, trapdoor, public_matrix, &target_block);
+                preimages.push(preimage_block);
             }
 
             // Concatenate all preimages horizontally
-            if preimages.len() == 1 {
-                return preimages[0].clone();
-            } else {
-                let first = preimages[0].clone();
-                let rest = &preimages[1..];
-                return first.concat_columns(rest);
-            }
+            let first = preimages[0].clone();
+            let rest = &preimages[1..];
+            return first.concat_columns(rest);
         }
 
         // Case 2: Target columns is equal or less than size
