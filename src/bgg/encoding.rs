@@ -114,16 +114,9 @@ mod tests {
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
         sampler::uniform::DCRTPolyUniformSampler,
     };
-    use crate::poly::sampler::DistType;
-    use crate::poly::PolyParams;
+    use crate::utils::{create_bit_random_poly, create_random_poly};
     use keccak_asm::Keccak256;
     use std::sync::Arc;
-
-    // Helper function to create a random polynomial using UniformSampler
-    fn create_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
-        let sampler = DCRTPolyUniformSampler::new();
-        sampler.sample_poly(params, &DistType::FinRingDist)
-    }
 
     #[test]
     fn test_encoding_add() {
@@ -145,7 +138,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
@@ -195,7 +188,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
@@ -245,7 +238,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
@@ -295,7 +288,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![create_random_poly(&params)];
 
         // Create encoding sampler and encodings
@@ -346,7 +339,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![
             create_random_poly(&params),
             create_random_poly(&params),
@@ -416,7 +409,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![
             create_random_poly(&params),
             create_random_poly(&params),
@@ -599,7 +592,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
@@ -677,7 +670,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_random_poly(&params);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![
             create_random_poly(&params),
             create_random_poly(&params),

@@ -28,8 +28,7 @@ where
     /// Sample a public key matrix
     /// # Arguments
     /// * `tag`: The tag to sample the public key matrix
-    /// * `packed_input_size`: The packed input size, i.e., the number of necessary polynomials when
-    ///   n bits are encoded into a single polynomial
+    /// * `reveal_plaintexts`: A vector of booleans indicating whether the plaintexts associated to the public keys should be revealed
     /// # Returns
     /// A vector of public key matrices
     pub fn sample(
@@ -41,7 +40,7 @@ where
     ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
         let log_q = params.modulus_bits();
         let columns = 2 * log_q;
-        let packed_input_size = 1 + reveal_plaintexts.len();
+        let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         let all_matrix = self.sampler.sample_hash(
             params,
             tag,
@@ -66,7 +65,8 @@ where
 ///
 /// # Fields
 /// * `secret`: The secret vector.
-/// * `error_sampler`: The sampler to generate LWE errors.
+/// * `error_sampler`: The sampler to generate RLWE errors.
+/// * `gauss_sigma`: The standard deviation of the Gaussian distribution.
 #[derive(Clone)]
 pub struct BGGEncodingSampler<S: PolyUniformSampler> {
     pub(crate) secret_vec: S::M,
@@ -83,7 +83,7 @@ where
     /// Create a new encoding sampler
     /// # Arguments
     /// * `secret`: The secret polynomial
-    /// * `error_sampler`: The sampler to generate LWE errors
+    /// * `error_sampler`: The sampler to generate RLWE errors
     /// * `gauss_sigma`: The standard deviation of the Gaussian distribution
     /// # Returns
     /// A new encoding sampler
@@ -107,7 +107,7 @@ where
     ) -> Vec<BggEncoding<S::M>> {
         let secret_vec = &self.secret_vec;
         let log_q = params.modulus_bits();
-        let packed_input_size = 1 + plaintexts.len();
+        let packed_input_size = 1 + plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         let plaintexts: Vec<<S::M as PolyMatrix>::P> =
             [&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
                 .concat();
@@ -154,8 +154,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::dcrt::{
-        DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
+    use crate::{
+        poly::dcrt::{
+            DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
+        },
+        utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
 
@@ -235,7 +238,7 @@ mod tests {
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = uniform_sampler.sample_poly(&params, &DistType::BitDist);
+        let secret = create_bit_random_poly(&params);
         let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
         let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
@@ -267,8 +270,9 @@ mod tests {
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-        let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
+        let secret = create_bit_random_poly(&params);
+        let plaintexts = vec![create_random_poly(&params); packed_input_size];
+        // TODO: set the standard deviation to a non-zero value
         let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 
@@ -303,8 +307,9 @@ mod tests {
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-        let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
+        let secret = create_bit_random_poly(&params);
+        let plaintexts = vec![create_random_poly(&params); packed_input_size];
+        // TODO: set the standard deviation to a non-zero value
         let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 

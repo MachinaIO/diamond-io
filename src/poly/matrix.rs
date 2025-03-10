@@ -25,7 +25,7 @@ pub trait PolyMatrix:
     type P: Poly;
 
     fn from_poly_vec(params: &<Self::P as Poly>::Params, vec: Vec<Vec<Self::P>>) -> Self;
-    /// Creates a row vector (1 x n matrix) from a vector of DCRTPoly elements.
+    /// Creates a row vector (1 x n matrix) from a vector of n DCRTPoly elements.
     fn from_poly_vec_row(params: &<Self::P as Poly>::Params, vec: Vec<Self::P>) -> Self {
         // Wrap the vector in another vector to create a single row
         let wrapped_vec = vec![vec];

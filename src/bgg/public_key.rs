@@ -86,17 +86,10 @@ mod tests {
     use crate::bgg::sampler::BGGPublicKeySampler;
     use crate::poly::dcrt::{
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
-        sampler::uniform::DCRTPolyUniformSampler,
     };
-    use crate::poly::sampler::DistType;
+    use crate::utils::create_random_poly;
     use keccak_asm::Keccak256;
     use std::sync::Arc;
-
-    // Helper function to create a random polynomial using UniformSampler
-    fn create_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
-        let sampler = DCRTPolyUniformSampler::new();
-        sampler.sample_poly(params, &DistType::FinRingDist)
-    }
 
     #[test]
     fn test_pubkey_add() {

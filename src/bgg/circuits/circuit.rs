@@ -64,13 +64,13 @@ impl<P: Poly> PolyCircuit<P> {
     pub fn input(&mut self, num_input: usize) -> Vec<usize> {
         #[cfg(debug_assertions)]
         assert_eq!(self.num_input, 0);
-        self.gates.insert(0, PolyGate::new(0, PolyGateType::Input, vec![]));
+        self.gates.insert(0, PolyGate::new(0, PolyGateType::Input, vec![])); // input gate at index 0 reserved for constant 1 polynomial
         let mut input_gates = Vec::with_capacity(num_input);
         for idx in 1..(num_input + 1) {
             self.gates.insert(idx, PolyGate::new(idx, PolyGateType::Input, vec![]));
             input_gates.push(idx);
         }
-        self.num_input += num_input;
+        self.num_input = num_input;
         input_gates
     }
 
@@ -207,6 +207,7 @@ impl<P: Poly> PolyCircuit<P> {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), input.len());
+            assert_ne!(self.num_output(), 0);
         }
 
         let mut wires: BTreeMap<usize, E> = BTreeMap::new();
@@ -291,17 +292,7 @@ mod tests {
         sampler::DistType,
         PolyParams,
     };
-
-    // Helper function to create a random polynomial using UniformSampler
-    fn create_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
-        let sampler = DCRTPolyUniformSampler::new();
-        sampler.sample_poly(params, &DistType::FinRingDist)
-    }
-
-    fn create_bit_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
-        let sampler = DCRTPolyUniformSampler::new();
-        sampler.sample_poly(params, &DistType::BitDist)
-    }
+    use crate::utils::{create_bit_random_poly, create_random_poly};
 
     #[test]
     fn test_eval_poly_circuit_add() {
