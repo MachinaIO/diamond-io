@@ -39,7 +39,7 @@ impl DCRTPoly {
             .iter()
             .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
             .collect::<Vec<FinRingElem>>();
-        DCRTPoly::from_coeffs(&params, &new_coeffs)
+        DCRTPoly::from_coeffs(params, &new_coeffs)
     }
 
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
