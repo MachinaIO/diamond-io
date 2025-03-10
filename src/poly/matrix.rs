@@ -1,5 +1,4 @@
 use super::Poly;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::{
@@ -102,93 +101,10 @@ pub trait Loadable: Sized {
     fn load(path: &Path) -> Self;
 }
 
-pub struct PolyMatrixFSManager {
-    base_dir: PathBuf,
-}
-
-impl PolyMatrixFSManager {
-    /// Create a new PolyMatrixFSManager with the specified base directory
-    /// The directory will be created if it doesn't exist
-    pub fn new(base_dir: &Path) -> Self {
-        fs::create_dir_all(base_dir).unwrap();
-        Self { base_dir: base_dir.to_path_buf() }
-    }
-
-    /// Generate a path for a file
-    pub fn gen_path(&self, name: &str) -> PathBuf {
-        self.base_dir.join(name)
-    }
-
-    /// Clean up the directory
-    pub fn cleanup(&self) -> std::io::Result<()> {
-        fs::remove_dir_all(&self.base_dir)
-    }
-
+pub trait PolyMatrixFSManager: Sized {
+    type M: PolyMatrix;
     /// Store a matrix with a given name and immediately drop it from memory
-    pub fn store_matrix<M: PolyMatrix>(&self, name: &str, matrix: M) -> PathBuf {
-        let path = self.gen_path(name);
-        matrix.store(&path);
-        path
-    }
-
+    fn store_matrix(&self, name: &str, matrix: Self::M) -> PathBuf;
     /// Load a matrix with a given name
-    pub fn load_matrix<M: PolyMatrix>(&self, name: &str) -> M {
-        let path = self.gen_path(name);
-        M::load(&path)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::poly::dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams};
-    use std::fs;
-
-    fn setup_test_dir() -> PathBuf {
-        let test_dir =
-            std::env::temp_dir().join(format!("diamond-io-test-{}", rand::random::<u32>()));
-        fs::create_dir_all(&test_dir).unwrap();
-        test_dir
-    }
-
-    #[test]
-    fn test_basic_store_load() {
-        let test_dir = setup_test_dir();
-        let fs_manager = PolyMatrixFSManager::new(&test_dir);
-
-        // Store matrices
-        let params = DCRTPolyParams::default();
-        let sizes = [(1, 1), (2, 2), (3, 3)];
-        for (idx, (nrow, ncol)) in sizes.iter().enumerate() {
-            let poly_vec = vec![vec![DCRTPoly::const_one(&params); *ncol]; *nrow];
-            let matrix = DCRTPolyMatrix::from_poly_vec(&params, poly_vec);
-            fs_manager.store_matrix(&format!("test_matrix_{}", idx), matrix);
-        }
-
-        // Load matrices
-        for i in 0..sizes.len() {
-            let loaded = fs_manager.load_matrix::<DCRTPolyMatrix>(&format!("test_matrix_{}", i));
-            let expected = DCRTPolyMatrix::from_poly_vec(
-                &params,
-                vec![vec![DCRTPoly::const_one(&params); sizes[i].1]; sizes[i].0],
-            );
-            assert_eq!(loaded, expected);
-        }
-
-        fs::remove_dir_all(test_dir.clone()).unwrap();
-
-        assert!(!test_dir.exists());
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_load_nonexistent() {
-        let test_dir = setup_test_dir();
-        let fs_manager = PolyMatrixFSManager::new(&test_dir);
-
-        // Should panic when loading non-existent matrix
-        let _matrix = fs_manager.load_matrix::<DCRTPolyMatrix>("nonexistent");
-
-        fs::remove_dir_all(test_dir).unwrap();
-    }
+    fn load_matrix(&self, name: &str) -> Self::M;
 }
