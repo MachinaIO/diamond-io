@@ -26,5 +26,6 @@ pub trait PolyElem:
     fn zero(modulus: &Self::Modulus) -> Self;
     fn one(modulus: &Self::Modulus) -> Self;
     fn minus_one(modulus: &Self::Modulus) -> Self;
+    fn half_q(modulus: &Self::Modulus) -> Self;
     fn extract_highest_bits(&self) -> bool;
 }

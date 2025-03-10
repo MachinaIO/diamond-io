@@ -45,6 +45,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
+        // let reveal_plaintexts_fhe_key = vec![true; 2];
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
@@ -81,7 +82,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             params,
             TAG_A_PRF,
             2,
-            packed_output_size * 2,
+            packed_output_size,
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);

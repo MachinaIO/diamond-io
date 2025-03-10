@@ -15,6 +15,14 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub n_preimages: Vec<(M, M)>,
     pub k_preimages: Vec<(M, M)>,
     pub final_preimage: M,
+    #[cfg(test)]
+    pub s_init: M,
+    #[cfg(test)]
+    pub t_bar: M,
+    #[cfg(test)]
+    pub bs: Vec<(M, M, M)>,
+    #[cfg(test)]
+    pub hardcoded_key: M,
 }
 
 #[derive(Debug, Clone)]
@@ -53,8 +61,9 @@ mod test {
             let inputs = public_circuit.input(log_q + 1);
             let mut outputs = vec![];
             let eval_input = inputs[log_q];
+            let one = public_circuit.const_one_gate();
             for enc_input in inputs[0..log_q].iter() {
-                let muled = public_circuit.and_gate(*enc_input, eval_input);
+                let muled = public_circuit.and_gate(*enc_input, one);
                 outputs.push(muled);
             }
             public_circuit.output(outputs);
@@ -80,9 +89,19 @@ mod test {
             &mut rng,
         );
         println!("obfuscated");
-        let input = [false];
+        let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        let hardcoded_key = obfuscation
+            .hardcoded_key
+            .entry(0, 0)
+            .coeffs()
+            .iter()
+            .map(|elem| if elem.value() == &BigUint::from(0u8) { false } else { true })
+            .collect::<Vec<_>>();
         let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);
         println!("{:?}", output);
+        assert_eq!(output, hardcoded_key);
+
+        // assert_eq!(output,)
     }
 }

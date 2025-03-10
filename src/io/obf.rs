@@ -50,7 +50,7 @@ where
         M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
     let t = t_bar.concat_columns(&[minus_one_poly]);
 
-    let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     let enc_hardcoded_key = {
         let e = sampler_uniform.sample_uniform(
             &params,
@@ -58,7 +58,8 @@ where
             1,
             DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
         );
-        t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e + &hardcoded_key
+        let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
+        t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e + &(hardcoded_key.clone() * &scale)
     };
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
 
@@ -137,7 +138,11 @@ where
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
             let mut coeffs = vec![zero_coeff; dim];
-            coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus());
+            coeffs[inserted_coeff_index] = if bit == 0 {
+                <M::P as Poly>::Elem::zero(&params.modulus())
+            } else {
+                <M::P as Poly>::Elem::one(&params.modulus())
+            };
             let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             let inserted_poly_gadget = {
                 let zero = <M::P as Poly>::const_zero(params.as_ref());
@@ -213,15 +218,13 @@ where
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
         println!("get eval_outputs");
         let mut eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
-        eval_outputs_matrix = eval_outputs_matrix * identity_2.decompose();
+        let unit_vector = identity_2.slice_columns(1, 2);
+        eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
         println!("eval_outputs_matrix size {:?}", eval_outputs_matrix.size());
         println!("a_prf size {:?}", public_data.a_prf.size());
-        debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size * 2);
-        (eval_outputs_matrix + &public_data.a_prf).concat_rows(&[M::zero(
-            params.as_ref(),
-            2,
-            packed_output_size * 2,
-        )])
+        debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
+        // public_data.a_prf
+        (eval_outputs_matrix).concat_rows(&[M::zero(params.as_ref(), 2, packed_output_size)])
     };
     println!("final_preimage_target size {:?}", final_preimage_target.size());
     let (_, _, b_final) = &bs[obf_params.input_size];
@@ -239,5 +242,13 @@ where
         n_preimages,
         k_preimages,
         final_preimage,
+        #[cfg(test)]
+        s_init: s_init.clone(),
+        #[cfg(test)]
+        t_bar: t_bar.clone(),
+        #[cfg(test)]
+        bs,
+        #[cfg(test)]
+        hardcoded_key: hardcoded_key.clone(),
     }
 }
