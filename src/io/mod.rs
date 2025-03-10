@@ -2,6 +2,8 @@ pub mod eval;
 pub mod obf;
 pub mod utils;
 
+use std::path::PathBuf;
+
 use crate::bgg::circuit::PolyCircuit;
 use crate::bgg::BggEncoding;
 use crate::poly::{matrix::*, polynomial::*, PolyParams};
@@ -10,11 +12,11 @@ use crate::poly::{matrix::*, polynomial::*, PolyParams};
 pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
     pub encodings_init: Vec<BggEncoding<M>>,
-    pub p_init: M,
-    pub m_preimages: Vec<(M, M)>,
-    pub n_preimages: Vec<(M, M)>,
-    pub k_preimages: Vec<(M, M)>,
-    pub final_preimage: M,
+    pub p_init_path: PathBuf,
+    pub m_preimages_paths: Vec<(PathBuf, PathBuf)>,
+    pub n_preimages_paths: Vec<(PathBuf, PathBuf)>,
+    pub k_preimages_paths: Vec<(PathBuf, PathBuf)>,
+    pub final_preimage_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -35,11 +37,12 @@ mod test {
 
     use crate::poly::{
         dcrt::{
-            DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler,
+            matrix::DCRTPolyMatrixFSManager, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
+            DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
         },
         PolyParams,
     };
+    use crate::utils::setup_test_dir;
 
     use super::{eval::eval_obf, obf::obfuscate, *};
 
@@ -72,17 +75,20 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0);
         let mut rng = rand::rng();
-        let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
+        let test_dir = setup_test_dir();
+        let fs_manager = DCRTPolyMatrixFSManager::new(&test_dir);
+        let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _, _>(
             obf_params.clone(),
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
+            &fs_manager,
             &mut rng,
         );
         println!("obfuscated");
         let input = [false];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);
+        let output = eval_obf(obf_params, sampler_hash, obfuscation, &fs_manager, &input);
         println!("{:?}", output);
     }
 }

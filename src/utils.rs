@@ -1,3 +1,5 @@
+use std::{fs, path::PathBuf};
+
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
@@ -69,4 +71,10 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
     } else {
         DCRTPoly::const_zero(params)
     }
+}
+
+pub fn setup_test_dir() -> PathBuf {
+    let test_dir = std::env::temp_dir().join(format!("diamond-io-test-{}", rand::random::<u32>()));
+    fs::create_dir_all(&test_dir).unwrap();
+    test_dir
 }

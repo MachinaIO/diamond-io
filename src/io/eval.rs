@@ -6,15 +6,17 @@ use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
 use itertools::Itertools;
 use std::sync::Arc;
 
-pub fn eval_obf<M, SH>(
+pub fn eval_obf<M, SH, FSM>(
     obf_params: ObfuscationParams<M>,
     mut sampler_hash: SH,
     obfuscation: Obfuscation<M>,
+    fs_manager: &FSM,
     input: &[bool],
 ) -> Vec<bool>
 where
     M: PolyMatrix,
     SH: PolyHashSampler<[u8; 32], M = M>,
+    FSM: PolyMatrixFSManager<M = M>,
 {
     sampler_hash.set_key(obfuscation.hash_key);
     let params = Arc::new(obf_params.params.clone());
@@ -26,7 +28,7 @@ where
     // let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
     let (mut ps, mut encodings) = (vec![], vec![]);
-    ps.push(obfuscation.p_init.clone());
+    ps.push(fs_manager.load_matrix("p_init"));
     encodings.push(obfuscation.encodings_init);
     // let encode_inputs =
     //     obfuscation.encode_input.iter().map(|pubkey| pubkey.vector.clone()).collect_vec();
@@ -36,14 +38,16 @@ where
     // cs_fhe_key.push(encode_fhe_key[0].concat_columns(&encode_fhe_key[1..]));
     let log_q = params.as_ref().modulus_bits();
     for (idx, input) in input.iter().enumerate() {
-        let m =
-            if *input { &obfuscation.m_preimages[idx].1 } else { &obfuscation.m_preimages[idx].0 };
-        let q = ps[idx].clone() * m;
-        let n =
-            if *input { &obfuscation.n_preimages[idx].1 } else { &obfuscation.n_preimages[idx].0 };
-        let p = q.clone() * n;
-        let k =
-            if *input { &obfuscation.k_preimages[idx].1 } else { &obfuscation.k_preimages[idx].0 };
+        let m_path = if *input { format!("m_1_{}", idx) } else { format!("m_0_{}", idx) };
+        let m = fs_manager.load_matrix(&m_path);
+        let q = ps[idx].clone() * &m;
+
+        let n_path = if *input { format!("n_1_{}", idx) } else { format!("n_0_{}", idx) };
+        let n = fs_manager.load_matrix(&n_path);
+        let p = q.clone() * &n;
+
+        let k_path = if *input { format!("k_1_{}", idx) } else { format!("k_0_{}", idx) };
+        let k = fs_manager.load_matrix(&k_path);
         let v = q * k;
         // let v_input = v.slice_columns(0, 2 * log_q * (packed_input_size + 1));
         // let v_fhe_key = v.slice_columns(
@@ -102,7 +106,8 @@ where
     let identity_2 = M::identity(&params, 2, None);
     let output_encodings_vec =
         output_encodings[0].concat_vector(&output_encodings[1..]) * identity_2.decompose();
-    let final_v = ps.last().unwrap().clone() * &obfuscation.final_preimage;
+    let final_preimage = fs_manager.load_matrix("final_preimage");
+    let final_v = ps.last().unwrap().clone() * &final_preimage;
     let z = output_encodings_vec - final_v;
     debug_assert_eq!(z.size(), (1, 2 * packed_output_size));
     z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()

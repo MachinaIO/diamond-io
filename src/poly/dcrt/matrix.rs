@@ -537,7 +537,10 @@ mod tests {
     use num_bigint::BigUint;
 
     use super::*;
-    use crate::{poly::dcrt::DCRTPolyParams, utils::create_random_poly};
+    use crate::{
+        poly::dcrt::DCRTPolyParams,
+        utils::{create_random_poly, setup_test_dir},
+    };
     use std::fs;
 
     #[test]
@@ -735,13 +738,6 @@ mod tests {
         assert_eq!(matrix, loaded);
 
         std::fs::remove_file(path).unwrap();
-    }
-
-    fn setup_test_dir() -> PathBuf {
-        let test_dir =
-            std::env::temp_dir().join(format!("diamond-io-test-{}", rand::random::<u32>()));
-        fs::create_dir_all(&test_dir).unwrap();
-        test_dir
     }
 
     #[test]

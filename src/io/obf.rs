@@ -6,11 +6,12 @@ use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
 use rand::{Rng, RngCore};
 use std::sync::Arc;
 
-pub fn obfuscate<M, SU, SH, ST, R>(
+pub fn obfuscate<M, SU, SH, ST, R, FSM>(
     obf_params: ObfuscationParams<M>,
     sampler_uniform: SU,
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
+    fs_manager: &FSM,
     rng: &mut R,
 ) -> Obfuscation<M>
 where
@@ -19,6 +20,7 @@ where
     SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
+    FSM: PolyMatrixFSManager<M = M>,
 {
     let public_circuit = &obf_params.public_circuit;
     let params = Arc::new(obf_params.params.clone());
@@ -98,6 +100,7 @@ where
         );
         s_b + error
     };
+    let p_init_path = fs_manager.store_matrix("p_init", p_init);
     let identity_2 = M::identity(params.as_ref(), 2, None);
     let u_0 = identity_2.concat_diag(&[public_data.r_0.clone()]);
     let u_1 = identity_2.concat_diag(&[public_data.r_1.clone()]);
@@ -108,7 +111,10 @@ where
     };
     let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (vec![], vec![], vec![]);
+    // Initialize empty vectors for paths
+    let mut m_preimages_paths = vec![];
+    let mut n_preimages_paths = vec![];
+    let mut k_preimages_paths = vec![];
     for idx in 0..obf_params.input_size {
         let (_, _, b_cur_star) = &bs[idx];
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
@@ -122,12 +128,19 @@ where
             let ub = u_1.clone() * b_next_1;
             sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
         };
-        m_preimages.push((m_0, m_1));
+        // Store matrices to disk immediately
+        let m_0_path = fs_manager.store_matrix(&format!("m_0_{}", idx), m_0);
+        let m_1_path = fs_manager.store_matrix(&format!("m_1_{}", idx), m_1);
+        m_preimages_paths.push((m_0_path, m_1_path));
 
         let ub_star = u_star.clone() * b_next_star;
         let n_0 = sampler_trapdoor.preimage(&params, b_next_0_trapdoor, b_next_0, &ub_star);
         let n_1 = sampler_trapdoor.preimage(&params, b_next_1_trapdoor, b_next_1, &ub_star);
-        n_preimages.push((n_0, n_1));
+
+        // Store matrices to disk immediately
+        let n_0_path = fs_manager.store_matrix(&format!("n_0_{}", idx), n_0);
+        let n_1_path = fs_manager.store_matrix(&format!("n_1_{}", idx), n_1);
+        n_preimages_paths.push((n_0_path, n_1_path));
 
         let mut ks = vec![];
         for bit in 0..2 {
@@ -197,7 +210,10 @@ where
             // let k = sampler.preimage(&params, trapdoor, b_matrix, &k_target);
             // ks.push(k);
         }
-        k_preimages.push((ks[0].clone(), ks[1].clone()));
+        // Store matrices to disk immediately
+        let k_0_path = fs_manager.store_matrix(&format!("k_0_{}", idx), ks[0].clone());
+        let k_1_path = fs_manager.store_matrix(&format!("k_1_{}", idx), ks[1].clone());
+        k_preimages_paths.push((k_0_path, k_1_path));
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
@@ -231,13 +247,14 @@ where
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
     println!("after preimage");
 
+    let final_preimage_path = fs_manager.store_matrix("final_preimage", final_preimage);
     Obfuscation {
         hash_key,
         encodings_init,
-        p_init,
-        m_preimages,
-        n_preimages,
-        k_preimages,
-        final_preimage,
+        p_init_path,
+        m_preimages_paths,
+        n_preimages_paths,
+        k_preimages_paths,
+        final_preimage_path,
     }
 }
