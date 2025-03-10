@@ -627,6 +627,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Addition requires matrices of same dimensions")]
+    #[cfg(debug_assertions)]
     fn test_matrix_addition_mismatch() {
         let params = DCRTPolyParams::default();
         let matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
@@ -636,6 +637,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Multiplication condition failed")]
+    #[cfg(debug_assertions)]
     fn test_matrix_multiplication_mismatch() {
         let params = DCRTPolyParams::default();
         let matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);

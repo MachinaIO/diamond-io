@@ -1,5 +1,5 @@
 use super::ObfuscationParams;
-use crate::bgg::circuit::{build_circuit_ip_then_to_int, PolyCircuit};
+use crate::bgg::circuit::{build_circuit_ip_to_int, PolyCircuit};
 use crate::bgg::{sampler::*, BggPublicKey, Evaluable};
 use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
 use itertools::Itertools;
@@ -129,7 +129,7 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         debug_assert_eq!(inputs.len(), packed_public_input_size + 1);
         let minus_one = circuit.const_minus_one_gate();
         inputs.push(minus_one);
-        let sub_circuit = build_circuit_ip_then_to_int::<P, E>(params, ct_output_circuit, 2, log_q);
+        let sub_circuit = build_circuit_ip_to_int::<P, E>(params, ct_output_circuit, 2, log_q);
         let circuit_id = circuit.register_sub_circuit(sub_circuit);
         // debug_assert_eq!(public_outputs.len(), log_q);
         // let mut ct_bits = vec![];
