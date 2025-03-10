@@ -59,7 +59,7 @@ mod test {
     fn test_io_just_mul_enc_and_bit() {
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
-        let switched_modulus = Arc::new(BigUint::from(2u32));
+        let switched_modulus = Arc::new(BigUint::from(1u32));
         let mut public_circuit = PolyCircuit::new();
         {
             let inputs = public_circuit.input(log_q + 1);
