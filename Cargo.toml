@@ -30,3 +30,9 @@ itertools = "0.14.0"
 [dev-dependencies]
 keccak-asm = { version = "0.1.4" }
 proptest = "1.0.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
