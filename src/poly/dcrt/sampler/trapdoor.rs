@@ -127,8 +127,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         for i in 0..size {
             for j in 0..target_cols {
-                if j < target.col_size() {
-                    let poly = target.entry(i, j).get_poly();
                 let poly = target.entry(i, j).get_poly();
                 SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
