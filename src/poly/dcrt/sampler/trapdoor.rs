@@ -82,18 +82,37 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             "Target matrix should have the same number of rows as the public matrix"
         );
 
-        // Case 1: Target columns is greater than size and it is a multiple of size (k*size)
-        if target_cols > size && target_cols % size == 0 {
-            let k = target_cols / size;
-            let mut preimages = Vec::with_capacity(k);
-            for block in 0..k {
+        // Case 1: Target columns is greater than size
+        if target_cols > size {
+            // Calculate how many full blocks of size columns we have
+            let full_blocks = target_cols / size;
+            // Calculate the remaining columns (could be 0)
+            let remaining_cols = target_cols % size;
+
+            // Total number of blocks (full blocks + 1 partial block if there are remaining columns)
+            let total_blocks = if remaining_cols > 0 { full_blocks + 1 } else { full_blocks };
+
+            let mut preimages = Vec::with_capacity(total_blocks);
+
+            // Process each block
+            for block in 0..total_blocks {
                 let start_col = block * size;
-                let end_col = start_col + size;
 
-                let target_block = target.slice(0, size, start_col, end_col);
-                let preimage_block = self.preimage(params, trapdoor, public_matrix, &target_block);
-
-                preimages.push(preimage_block);
+                // For the last block with remaining columns
+                if block == full_blocks && remaining_cols > 0 {
+                    let end_col = start_col + remaining_cols;
+                    let target_block = target.slice(0, size, start_col, end_col);
+                    let preimage_block =
+                        self.preimage(params, trapdoor, public_matrix, &target_block);
+                    preimages.push(preimage_block);
+                } else if block < full_blocks {
+                    // For full blocks
+                    let end_col = start_col + size;
+                    let target_block = target.slice(0, size, start_col, end_col);
+                    let preimage_block =
+                        self.preimage(params, trapdoor, public_matrix, &target_block);
+                    preimages.push(preimage_block);
+                }
             }
 
             // Concatenate all preimages horizontally
@@ -298,7 +317,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let base = 2;
         let sigma = 4.57825;
-        let size = 3;
+        let size = 4;
         let multiple = 2;
         let target_cols = size * multiple;
         let k = params.modulus_bits();
@@ -331,7 +350,48 @@ mod tests {
 
         // Verify that public_matrix * preimage = target
         let product = public_matrix * &preimage;
-        
+
+        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    }
+
+    #[test]
+    fn test_preimage_generation_non_square_target_gt_non_multiple() {
+        let params = DCRTPolyParams::default();
+        let base = 2;
+        let sigma = 4.57825;
+        let size = 4;
+        let target_cols = 6;
+        let k = params.modulus_bits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size but not a multiple of size
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target =
+            uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+
+        // Compute the preimage
+        let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+
+        // Verify dimensions of the preimage matrix
+        let expected_rows = size * (k + 2);
+        let expected_cols = target_cols;
+
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
+
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns (equal to target columns)"
+        );
+
+        // Verify that public_matrix * preimage = target
+        let product = public_matrix * &preimage;
+
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
     }
 }
