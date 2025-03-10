@@ -90,25 +90,8 @@ pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
 mod tests {
     use super::*;
     use crate::poly::dcrt::FinRingElem;
-    use crate::poly::dcrt::{
-        params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
-    };
-    use crate::poly::sampler::DistType;
-
-    // Helper function to create a random polynomial using UniformSampler
-    fn create_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
-        let sampler = DCRTPolyUniformSampler::new();
-        sampler.sample_poly(params, &DistType::FinRingDist)
-    }
-
-    // Helper function to create a bit polynomial (0 or 1)
-    fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
-        if bit {
-            DCRTPoly::const_one(params)
-        } else {
-            DCRTPoly::const_zero(params)
-        }
-    }
+    use crate::poly::dcrt::{params::DCRTPolyParams, poly::DCRTPoly};
+    use crate::utils::{create_bit_poly, create_random_poly};
 
     #[test]
     fn test_build_ip_priv_and_pub_circuit_outputs() {
