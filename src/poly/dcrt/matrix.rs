@@ -732,7 +732,7 @@ mod tests {
     }
 
     #[test]
-    fn test_matrix_storage() {
+    fn test_matrix_store_load() {
         let params = DCRTPolyParams::default();
         let mut matrix = DCRTPolyMatrix::zero(&params, 5, 5);
 
@@ -760,7 +760,7 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_store_load() {
+    fn test_matrix_fs_manager_store_load() {
         let test_dir = setup_test_dir();
         let fs_manager = DCRTPolyMatrixFSManager::new(&test_dir);
 
@@ -790,7 +790,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_load_nonexistent() {
+    fn test_matrix_fs_manager_load_nonexistent() {
         let test_dir = setup_test_dir();
         let fs_manager = DCRTPolyMatrixFSManager::new(&test_dir);
 
