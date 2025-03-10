@@ -45,7 +45,8 @@ mod test {
     fn test_io_just_mul_enc_and_bit() {
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
-        let modulus_switch_params = DCRTPolyParams::new(4, 2, 17);
+        let modulus_switch_params = DCRTPolyParams::new(4, 1, 17);
+        println!("modulus_switch_params {:?}", modulus_switch_params);
         let mut public_circuit = PolyCircuit::new();
         {
             let inputs = public_circuit.input(log_q + 1);
@@ -68,7 +69,7 @@ mod test {
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0, 2);
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0, 4);
         let mut rng = rand::rng();
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
@@ -77,6 +78,7 @@ mod test {
             sampler_trapdoor,
             &mut rng,
         );
+        println!("obfuscated");
         let input = [false];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);

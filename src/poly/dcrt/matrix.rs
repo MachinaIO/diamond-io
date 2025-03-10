@@ -592,7 +592,7 @@ mod tests {
                 ],
             ],
         );
-        let new_params = DCRTPolyParams::new(4, 15, 51);
+        let new_params = DCRTPolyParams::new(4, 1, 17);
         let new_modulus = new_params.modulus();
         let switched = matrix.modulus_switch(&new_params);
         assert_eq!(switched.params().modulus(), new_params.modulus());

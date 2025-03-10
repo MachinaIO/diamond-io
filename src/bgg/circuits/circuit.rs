@@ -96,6 +96,11 @@ impl<P: Poly> PolyCircuit<P> {
         self.sub_gate(zero, 0)
     }
 
+    pub fn const_scalar(&mut self, scalar: P) -> usize {
+        let one = self.const_one_gate();
+        self.scalar_mul_gate(one, scalar)
+    }
+
     pub fn and_gate(&mut self, left: usize, right: usize) -> usize {
         self.mul_gate(left, right)
     }

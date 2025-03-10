@@ -98,6 +98,10 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.size,
         );
 
+        // if target.col_size() > self.size {
+        //     panic!("Target matrix should have the same size as the public matrix");
+        // }
+
         for i in 0..self.size {
             for j in 0..self.size {
                 let poly = target.entry(i, j).get_poly();

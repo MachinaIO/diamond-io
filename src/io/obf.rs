@@ -37,7 +37,7 @@ where
     let packed_output_size = public_data.packed_output_size;
 
     let s_bar =
-        sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(1, 1).clone();
+        sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bar,
@@ -64,8 +64,9 @@ where
 
     let mut plaintexts = vec![];
     plaintexts.extend(enc_hardcoded_key_polys);
-    let zero_plaintexts: Vec<M::P> =
-        (0..packed_input_size).map(|_| M::P::const_zero(params.as_ref())).collect();
+    let zero_plaintexts: Vec<M::P> = (0..obf_params.input_size.div_ceil(dim))
+        .map(|_| M::P::const_zero(params.as_ref()))
+        .collect();
     plaintexts.extend(zero_plaintexts);
     plaintexts.push(t.entry(0, 0).clone());
     // let mut input_encoded_polys: Vec<<M as PolyMatrix>::P> =
@@ -85,7 +86,7 @@ where
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
     }
-    let m_b = 2 + log_q;
+    let m_b = 4 * (2 + log_q);
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init.clone()]);
         let s_b = s_connect * &bs[0].2;
@@ -129,7 +130,7 @@ where
         n_preimages.push((n_0, n_1));
 
         let mut ks = vec![];
-        for bit in 0..1 {
+        for bit in 0..2 {
             let t = &public_data.ts[bit];
             let top = public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]) * t;
             let inserted_poly_index = 1 + log_q + idx / dim;
@@ -148,7 +149,7 @@ where
                 for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
                     polys.push(zero.clone());
                 }
-                M::from_poly_vec_row(params.as_ref(), polys) * &gadget_2
+                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
                 .concat_matrix(&public_data.pubkeys[idx + 1][1..])
@@ -199,42 +200,33 @@ where
         k_preimages.push((ks[0].clone(), ks[1].clone()));
     }
 
-    let final_circuit =
-        build_final_step_circuit::<_, BggPublicKey<M>>(&params, public_circuit.clone());
+    let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
+    let final_circuit = build_final_step_circuit::<_, BggPublicKey<M>>(
+        &params,
+        &a_decomposed_polys,
+        public_circuit.clone(),
+    );
+    println!("final_circuit output: {:?}", final_circuit.num_output());
     let final_preimage_target = {
         let one = public_data.pubkeys[obf_params.input_size][0].clone();
         let input = &public_data.pubkeys[obf_params.input_size][1..];
         let eval_outputs = final_circuit.eval_poly_circuit(params.as_ref(), one, input);
-        let eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
-        debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        (eval_outputs_matrix + &public_data.a_prf).concat_rows(&[M::zero(
-            params.as_ref(),
-            2,
-            packed_output_size,
-        )])
+        println!("get eval_outputs");
+        let mut eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
+        eval_outputs_matrix = eval_outputs_matrix * identity_2.decompose();
+        println!("eval_outputs_matrix size {:?}", eval_outputs_matrix.size());
+        println!("a_prf size {:?}", public_data.a_prf.size());
+        debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size * 2);
+        // (eval_outputs_matrix + &public_data.a_prf).concat_rows(&[M::zero(
+        (eval_outputs_matrix).concat_rows(&[M::zero(params.as_ref(), 2, packed_output_size * 2)])
     };
-
-    // // here we support only inner product between the fhe secret key t and the input x
-    // let mut ip_pubkey = None;
-    // for idx in 0..packed_input_size {
-    //     let muled = public_data.pubkeys_input[obf_params.input_size][idx].clone()
-    //         * &public_data.pubkeys_fhe_key[obf_params.input_size][0];
-    //     match ip_pubkey {
-    //         None => {
-    //             ip_pubkey = Some(muled);
-    //         }
-    //         Some(ip) => {
-    //             ip_pubkey = Some(ip + muled);
-    //         }
-    //     }
-    // }
-    // let ip_pubkey = ip_pubkey.unwrap().matrix + &public_data.a_prf;
-    // let final_preimage_target =
-    //     ip_pubkey.concat_rows(&[M::zero(params.as_ref(), 2, ip_pubkey.col_size())]);
+    println!("final_preimage_target size {:?}", final_preimage_target.size());
     let (_, _, b_final) = &bs[obf_params.input_size];
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
+    println!("before preimage");
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
+    println!("after preimage");
 
     Obfuscation {
         hash_key,

@@ -42,7 +42,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
         let packed_input_size = log_q + obf_params.input_size.div_ceil(dim) + 1;
-        let packed_output_size = obf_params.public_circuit.num_output() / 2 / log_q;
+        let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
@@ -81,7 +81,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             params,
             TAG_A_PRF,
             2,
-            packed_output_size,
+            packed_output_size * 2,
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.modulus_switch_params);
@@ -101,19 +101,47 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 
 pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
     params: &P::Params,
+    a_decomposed_polys: &[P],
     public_circuit: PolyCircuit<P>,
 ) -> PolyCircuit<P> {
     let log_q = params.modulus_bits();
-    let mut circuit = PolyCircuit::<P>::new();
+    debug_assert_eq!(a_decomposed_polys.len(), log_q);
     let packed_public_input_size = public_circuit.num_input();
-    let mut inputs = circuit.input(packed_public_input_size + 1);
-    debug_assert_eq!(inputs.len(), packed_public_input_size + 1);
 
-    let minus_one = circuit.const_minus_one_gate();
-    inputs.push(minus_one);
-    let sub_circuit = build_circuit_ip_then_to_int::<P, E>(params, public_circuit, 2, log_q);
-    let circuit_id = circuit.register_sub_circuit(sub_circuit);
-    let outputs = circuit.call_sub_circuit(circuit_id, &inputs);
-    circuit.output(outputs);
+    let mut ct_output_circuit = PolyCircuit::<P>::new();
+    {
+        let circuit_id = ct_output_circuit.register_sub_circuit(public_circuit);
+        let inputs = ct_output_circuit.input(packed_public_input_size);
+        let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &inputs);
+        let mut outputs = vec![];
+        for (idx, b_bit) in pc_outputs.iter().enumerate() {
+            outputs.push(ct_output_circuit.const_scalar(a_decomposed_polys[idx].clone()));
+            outputs.push(*b_bit);
+            // let ct_bit = circuit.and_gate(*b_bit, inputs[packed_public_input_size]);
+            // ct_bits.push(ct_bit);
+        }
+        ct_output_circuit.output(outputs);
+    }
+    let mut circuit = PolyCircuit::<P>::new();
+    {
+        let mut inputs = circuit.input(packed_public_input_size + 1);
+        debug_assert_eq!(inputs.len(), packed_public_input_size + 1);
+        let minus_one = circuit.const_minus_one_gate();
+        inputs.push(minus_one);
+        let sub_circuit = build_circuit_ip_then_to_int::<P, E>(params, ct_output_circuit, 2, log_q);
+        let circuit_id = circuit.register_sub_circuit(sub_circuit);
+        // debug_assert_eq!(public_outputs.len(), log_q);
+        // let mut ct_bits = vec![];
+        // for (idx, b_bit) in public_outputs.iter().enumerate() {
+        //     ct_bits.push(circuit.const_scalar(a_decomposed_polys[idx].clone()));
+        //     ct_bits.push(*b_bit);
+        //     // let ct_bit = circuit.and_gate(*b_bit, inputs[packed_public_input_size]);
+        //     // ct_bits.push(ct_bit);
+        // }
+        // inputs.extend(ct_bits);
+        let outputs = circuit.call_sub_circuit(circuit_id, &inputs);
+        println!("outputs len {:?}", outputs.len());
+        circuit.output(outputs);
+    }
     circuit
 }

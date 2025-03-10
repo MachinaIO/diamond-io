@@ -87,8 +87,12 @@ where
         // cs_input.push(c_input);
         // cs_fhe_key.push(c_fhe_key);
     }
-    let final_circuit =
-        build_final_step_circuit::<_, BggEncoding<M>>(&params, obf_params.public_circuit.clone());
+    let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
+    let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
+        &params,
+        &a_decomposed_polys,
+        obf_params.public_circuit.clone(),
+    );
     let last_input_encodings = encodings.last().unwrap();
     let output_encodings = final_circuit.eval_poly_circuit::<BggEncoding<M>>(
         &params,

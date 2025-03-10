@@ -64,6 +64,8 @@ pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
     num_bits: usize,
 ) -> PolyCircuit<P> {
     let num_pub_input = public_circuit.num_input();
+    println!("public_circuit.num_output() = {}", public_circuit.num_output());
+    println!("num_priv_input = {}", num_priv_input);
     debug_assert_eq!(public_circuit.num_output() % num_priv_input, 0);
     let num_ip_outputs = public_circuit.num_output() / num_priv_input;
     debug_assert_eq!(num_ip_outputs % num_bits, 0);
@@ -77,6 +79,7 @@ pub fn build_circuit_ip_then_to_int<P: Poly, E: Evaluable<P>>(
     let b2i_circuit = build_circuit_bits_to_int::<P, E>(params, num_bits);
     let b2i_circuit_id = circuit.register_sub_circuit(b2i_circuit);
     let mut int_outputs = Vec::new();
+    println!("num_ints {}", num_ints);
     for idx in 0..num_ints {
         let b2i_inputs = &ip_outputs[(idx * num_bits)..((idx + 1) * num_bits)];
         let int_output = circuit.call_sub_circuit(b2i_circuit_id, b2i_inputs);
