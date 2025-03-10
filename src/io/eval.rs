@@ -137,6 +137,7 @@ where
                     for j in 0..log_q {
                         polys.push(a_rlwe_decomposed[j].clone());
                     }
+                    println!("polys len {}", polys.len());
                     let mut coeffs = vec![];
                     for j in 0..=idx {
                         if inputs[j] {

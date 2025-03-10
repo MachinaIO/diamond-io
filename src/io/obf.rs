@@ -133,7 +133,8 @@ where
         let mut ks = vec![];
         for bit in 0..2 {
             let t = &public_data.ts[bit];
-            let top = public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]) * t;
+            let top =
+                -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]) * t;
             let inserted_poly_index = 1 + log_q + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
@@ -150,6 +151,8 @@ where
                 for _ in 0..(inserted_poly_index) {
                     polys.push(zero.clone());
                 }
+                println!("1+log_q {}, inserted_poly_index: {:?}", 1 + log_q, inserted_poly_index);
+                println!("inserted_poly: {:?}", inserted_poly);
                 polys.push(inserted_poly);
                 for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
                     polys.push(zero.clone());
