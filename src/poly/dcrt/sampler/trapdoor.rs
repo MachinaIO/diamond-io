@@ -17,13 +17,11 @@ use openfhe::{
 pub struct DCRTPolyTrapdoorSampler {
     base: usize,
     sigma: f64,
-    /// size of the target square matrix (size X size)
-    size: usize,
 }
 
 impl DCRTPolyTrapdoorSampler {
-    pub fn new(base: usize, sigma: f64, size: usize) -> Self {
-        Self { base, sigma, size }
+    pub fn new(base: usize, sigma: f64) -> Self {
+        Self { base, sigma }
     }
 }
 
@@ -34,19 +32,20 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     fn trapdoor(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        size: usize,
     ) -> (Self::Trapdoor, Self::M) {
         let trapdoor_output = DCRTSquareMatTrapdoorGen(
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
-            self.size,
+            size,
             self.sigma,
             self.base as i64,
             false,
         );
         let trapdoor = trapdoor_output.GetTrapdoorPair();
-        let nrow = self.size;
-        let ncol = (&params.modulus_bits() + 2) * self.size;
+        let nrow = size;
+        let ncol = (&params.modulus_bits() + 2) * size;
 
         // Construct the public matrix from its elements
         let mut matrix_inner = Vec::with_capacity(nrow);
@@ -74,36 +73,32 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     ) -> Self::M {
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
+        let size = public_matrix.row_size();
 
         let mut public_matrix_ptr = MatrixGen(
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
-            self.size,
-            (k + 2) * self.size,
+            size,
+            (k + 2) * size,
         );
 
-        for i in 0..self.size {
-            for j in 0..(k + 2) * self.size {
+        for i in 0..size {
+            for j in 0..(k + 2) * size {
                 let poly = public_matrix.entry(i, j).get_poly();
                 SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
         }
 
-        let mut target_matrix_ptr = MatrixGen(
-            params.ring_dimension(),
-            params.crt_depth(),
-            params.crt_bits(),
-            self.size,
-            self.size,
-        );
+        let mut target_matrix_ptr =
+            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
 
-        // if target.col_size() > self.size {
+        // if target.col_size() > size {
         //     panic!("Target matrix should have the same size as the public matrix");
         // }
 
-        for i in 0..self.size {
-            for j in 0..self.size {
+        for i in 0..size {
+            for j in 0..size {
                 let poly = target.entry(i, j).get_poly();
                 SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
@@ -119,8 +114,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.sigma,
         );
 
-        let nrow = self.size * (k + 2);
-        let ncol = self.size;
+        let nrow = size * (k + 2);
+        let ncol = size;
 
         let mut matrix_inner = Vec::with_capacity(nrow);
         for i in 0..nrow {
@@ -150,10 +145,10 @@ mod tests {
         let base = 2;
         let sigma = 4.57825;
         let size: usize = 3;
-        let sampler = DCRTPolyTrapdoorSampler::new(base, sigma, size);
+        let sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
         let params = DCRTPolyParams::default();
 
-        let (_, public_matrix) = sampler.trapdoor(&params);
+        let (_, public_matrix) = sampler.trapdoor(&params, size);
 
         let expected_rows = size;
         let expected_cols = (&params.modulus_bits() + 2) * size;
@@ -185,8 +180,8 @@ mod tests {
         let sigma = 4.57825;
         let size = 3;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma, size);
-        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let target = uniform_sampler.sample_uniform(&params, size, size, DistType::FinRingDist);
