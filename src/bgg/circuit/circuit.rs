@@ -180,7 +180,7 @@ impl<P: Poly> PolyCircuit<P> {
 
     pub fn eval_poly_circuit<E: Evaluable<P>>(
         &self,
-        params: &E::Params,
+        params: &P::Params,
         one: E,
         input: &[E],
     ) -> Vec<E> {
@@ -205,7 +205,7 @@ impl<P: Poly> PolyCircuit<P> {
 
     fn eval_poly_gate<E: Evaluable<P>>(
         &self,
-        params: &E::Params,
+        params: &P::Params,
         one: &E,
         wires: &mut BTreeMap<usize, E>,
         gate: &PolyGate<P>,
