@@ -69,8 +69,6 @@ pub fn build_circuit_ip_to_int<P: Poly, E: Evaluable<P>>(
     num_bits: usize,
 ) -> PolyCircuit<P> {
     let num_pub_input = public_circuit.num_input();
-    // println!("public_circuit.num_output() = {}", public_circuit.num_output());
-    println!("num_priv_input = {}", num_priv_input);
     debug_assert_eq!(public_circuit.num_output() % num_priv_input, 0);
     let num_ip_outputs = public_circuit.num_output() / num_priv_input;
     debug_assert_eq!(num_ip_outputs % num_bits, 0);

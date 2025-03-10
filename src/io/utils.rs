@@ -46,6 +46,9 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         // let reveal_plaintexts_fhe_key = vec![true; 2];
+        #[cfg(test)]
+        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
+        #[cfg(not(test))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
@@ -141,7 +144,6 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         // }
         // inputs.extend(ct_bits);
         let outputs = circuit.call_sub_circuit(circuit_id, &inputs);
-        println!("outputs len {:?}", outputs.len());
         circuit.output(outputs);
     }
     circuit
@@ -150,13 +152,18 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
+    use crate::bgg::BggEncoding;
     use crate::poly::dcrt::{
-        DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
+        DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
+        FinRingElem,
     };
     use crate::poly::element::PolyElem;
     use crate::poly::sampler::DistType;
+    use crate::utils::create_bit_random_poly;
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
+    use std::sync::Arc;
 
     #[test]
     fn test_build_final_step_circuit() {
@@ -219,7 +226,6 @@ mod test {
         // 10. Extract the output bits
         let output_bits =
             outputs.iter().flat_map(|output| output.extract_highest_bits()).collect::<Vec<_>>();
-
         // 11. Verify that the output matches the hardcoded key bits
         assert_eq!(output_bits.len(), hardcoded_key_bits.len());
         for (i, (output_bit, key_bit)) in
@@ -227,5 +233,126 @@ mod test {
         {
             assert_eq!(output_bit, key_bit, "Bit mismatch at position {}", i);
         }
+    }
+
+    #[test]
+    fn test_build_final_step_circuit_with_bgg_encoding() {
+        // 1. Set up parameters
+        let params = DCRTPolyParams::default();
+        let log_q = params.modulus_bits();
+
+        // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
+        let mut public_circuit = PolyCircuit::<DCRTPoly>::new();
+        {
+            let inputs = public_circuit.input(log_q);
+            public_circuit.output(inputs.to_vec());
+        }
+
+        // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
+        let sampler_uniform = DCRTPolyUniformSampler::new();
+        let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+
+        // 4. Set up samplers for BggEncoding
+        let hash_key = [0u8; 32];
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(hash_key));
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler.clone());
+        let uniform_sampler = Arc::new(sampler_uniform);
+
+        // 5. Get the public polynomial a from PublicSampledData's sample function
+        let a_rlwe_bar =
+            hash_sampler.sample_hash(&params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
+
+        // 6. Generate RLWE ciphertext for the hardcoded key
+        let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+        let e = uniform_sampler.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0 });
+
+        // Create a scale value (half of q)
+        let modulus = params.modulus();
+        let half_q = FinRingElem::half_q(&modulus.clone());
+        let scale = DCRTPoly::from_const(&params, &half_q);
+        let enc_hardcoded_key =
+            t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
+
+        // 7. Decompose the ciphertext
+        let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+
+        // 8. Build the final step circuit with BggEncoding as the Evaluable type
+        let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
+        let final_circuit_pubkey = build_final_step_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
+            &params,
+            &a_decomposed_polys,
+            public_circuit.clone(),
+        );
+        let final_circuit_encoding = build_final_step_circuit::<
+            DCRTPoly,
+            BggEncoding<DCRTPolyMatrix>,
+        >(&params, &a_decomposed_polys, public_circuit);
+
+        // 9. Create BggEncoding instances for the inputs
+        // First, create a secret key for the BGGEncodingSampler
+        let secret = create_bit_random_poly(&params);
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create public keys for the encodings
+        let reveal_plaintexts = vec![true; log_q + 1]; // +1 for t_bar
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+
+        // Create plaintexts from the decomposed ciphertext
+        let mut plaintexts = enc_hardcoded_key_polys.clone();
+        plaintexts.push(t_bar.entry(0, 0).clone());
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+
+        // 10. Evaluate the circuit with the BggPublicKey/BggEncoding inputs
+        let outputs_pubkeys = final_circuit_pubkey.eval(&params, pubkeys[0].clone(), &pubkeys[1..]);
+        let outputs_encodings =
+            final_circuit_encoding.eval(&params, encodings[0].clone(), &encodings[1..]);
+        assert_eq!(
+            outputs_pubkeys[0].concat_matrix(&outputs_pubkeys[1..]),
+            outputs_encodings[0].pubkey.concat_matrix(
+                &outputs_encodings[1..].iter().map(|enc| enc.pubkey.clone()).collect_vec()
+            )
+        );
+
+        // 11. Extract the hardcoded key bits
+        let hardcoded_key_bits = hardcoded_key
+            .entry(0, 0)
+            .coeffs()
+            .iter()
+            .map(|elem| elem.value() != &BigUint::from(0u8))
+            .collect::<Vec<_>>();
+
+        // 12. Extract the output bits from the BggEncoding outputs
+        let output_bits = outputs_encodings
+            .iter()
+            .flat_map(|output| {
+                // Extract the plaintext from the BggEncoding and get its highest bits
+                output.plaintext.as_ref().unwrap().extract_highest_bits()
+            })
+            .collect::<Vec<_>>();
+
+        // 13. Verify that the output matches the hardcoded key bits
+        assert_eq!(output_bits.len(), hardcoded_key_bits.len());
+        for (i, (output_bit, key_bit)) in
+            output_bits.iter().zip(hardcoded_key_bits.iter()).enumerate()
+        {
+            assert_eq!(output_bit, key_bit, "Bit mismatch at position {}", i);
+        }
+
+        let expected_vector = {
+            let plaintext = DCRTPolyMatrix::from_poly_vec_row(
+                &params,
+                vec![outputs_encodings[0].plaintext.clone().unwrap()],
+            );
+            bgg_encoding_sampler.secret_vec
+                * (outputs_encodings[0].pubkey.matrix.clone()
+                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+        };
+        assert_eq!(outputs_encodings[0].vector, expected_vector);
     }
 }

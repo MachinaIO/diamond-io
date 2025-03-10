@@ -59,15 +59,14 @@ mod test {
     fn test_io_just_mul_enc_and_bit() {
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
-        let switched_modulus = Arc::new(BigUint::from(3u32));
+        let switched_modulus = Arc::new(BigUint::from(2u32));
         let mut public_circuit = PolyCircuit::new();
         {
             let inputs = public_circuit.input(log_q + 1);
             let mut outputs = vec![];
             let eval_input = inputs[log_q];
-            let one = public_circuit.const_one_gate();
             for enc_input in inputs[0..log_q].iter() {
-                let muled = public_circuit.and_gate(*enc_input, one);
+                let muled = public_circuit.and_gate(*enc_input, eval_input);
                 outputs.push(muled);
             }
             public_circuit.output(outputs);
@@ -105,7 +104,5 @@ mod test {
         let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);
         println!("{:?}", output);
         assert_eq!(output, hardcoded_key);
-
-        // assert_eq!(output,)
     }
 }

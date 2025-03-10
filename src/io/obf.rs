@@ -59,7 +59,6 @@ where
             DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        // println!("scaled_hardcode key {:?}", hardcoded_key.clone() * &scale);
         t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e - &(hardcoded_key.clone() * &scale)
     };
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
@@ -152,8 +151,6 @@ where
                 for _ in 0..(inserted_poly_index) {
                     polys.push(zero.clone());
                 }
-                println!("1+log_q {}, inserted_poly_index: {:?}", 1 + log_q, inserted_poly_index);
-                println!("inserted_poly: {:?}", inserted_poly);
                 polys.push(inserted_poly);
                 for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
                     polys.push(zero.clone());
@@ -215,28 +212,24 @@ where
         &a_decomposed_polys,
         public_circuit.clone(),
     );
-    println!("final_circuit output: {:?}", final_circuit.num_output());
     let final_preimage_target = {
         let one = public_data.pubkeys[obf_params.input_size][0].clone();
         let input = &public_data.pubkeys[obf_params.input_size][1..];
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
-        println!("get eval_outputs");
         let mut eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
         let unit_vector = identity_2.slice_columns(1, 2);
         eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
-        println!("eval_outputs_matrix size {:?}", eval_outputs_matrix.size());
-        println!("a_prf size {:?}", public_data.a_prf.size());
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        // public_data.a_prf
-        (eval_outputs_matrix).concat_rows(&[M::zero(params.as_ref(), 2, packed_output_size)])
+        (eval_outputs_matrix + public_data.a_prf).concat_rows(&[M::zero(
+            params.as_ref(),
+            2,
+            packed_output_size,
+        )])
     };
-    println!("final_preimage_target size {:?}", final_preimage_target.size());
     let (_, _, b_final) = &bs[obf_params.input_size];
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
-    println!("before preimage");
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
-    println!("after preimage");
 
     Obfuscation {
         hash_key,

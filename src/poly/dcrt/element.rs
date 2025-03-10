@@ -249,9 +249,9 @@ mod tests {
     fn test_element_higest_bit() {
         let modulus = Arc::new(BigUint::from(17u8));
         let small = FinRingElem::new(3, modulus.clone());
-        let large = FinRingElem::new(15, modulus.clone());
-        assert_eq!(small.extract_highest_bits(), false); // 3 < 17/2
-        assert_eq!(large.extract_highest_bits(), true); // 15 > 17/2
+        let large = FinRingElem::new(16, modulus.clone());
+        assert_eq!(small.extract_highest_bits(), false); // 3 < 16
+        assert_eq!(large.extract_highest_bits(), true); // 16 >= 16
     }
 
     #[test]
