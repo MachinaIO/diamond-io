@@ -25,6 +25,8 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub hardcoded_key: M,
     #[cfg(test)]
     pub enc_hardcoded_key: M,
+    #[cfg(test)]
+    pub final_preimage_target: M,
 }
 
 #[derive(Debug, Clone)]

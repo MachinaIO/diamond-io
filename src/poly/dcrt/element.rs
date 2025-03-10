@@ -68,7 +68,9 @@ impl PolyElem for FinRingElem {
     }
 
     fn extract_highest_bits(&self) -> bool {
-        self.value >= self.modulus() / 2u8
+        let bits = self.modulus.bits();
+        let half_q_value = BigUint::from(1u8) << (bits - 1);
+        self.value >= half_q_value
     }
 }
 

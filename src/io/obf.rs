@@ -46,9 +46,9 @@ where
     );
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-    let minus_one_poly =
-        M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
-    let t = t_bar.concat_columns(&[minus_one_poly]);
+    // let minus_one_poly =
+    //     M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
+    // let t = t_bar.concat_columns(&[minus_one_poly]);
 
     let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     let enc_hardcoded_key = {
@@ -59,7 +59,8 @@ where
             DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e + &(hardcoded_key.clone() * &scale)
+        // println!("scaled_hardcode key {:?}", hardcoded_key.clone() * &scale);
+        t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e - &(hardcoded_key.clone() * &scale)
     };
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
 
@@ -69,7 +70,7 @@ where
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect();
     plaintexts.extend(zero_plaintexts);
-    plaintexts.push(t.entry(0, 0).clone());
+    plaintexts.push(t_bar.entry(0, 0).clone());
     // let mut input_encoded_polys: Vec<<M as PolyMatrix>::P> =
     //     vec![<M::P as Poly>::const_one(params.as_ref())];
     // input_encoded_polys.extend(enc_hardcoded_key_polys);
@@ -255,5 +256,7 @@ where
         hardcoded_key: hardcoded_key.clone(),
         #[cfg(test)]
         enc_hardcoded_key: enc_hardcoded_key.clone(),
+        #[cfg(test)]
+        final_preimage_target,
     }
 }

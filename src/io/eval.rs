@@ -230,6 +230,16 @@ where
     let output_encodings_vec =
         output_encodings[0].concat_vector(&output_encodings[1..]) * unit_vector.decompose();
     let final_v = ps.last().unwrap().clone() * &obfuscation.final_preimage;
+    #[cfg(test)]
+    {
+        let mut last_s = obfuscation.s_init.clone();
+        for idx in 0..obf_params.input_size {
+            let r = if inputs[idx] { public_data.r_1.clone() } else { public_data.r_0.clone() };
+            last_s = last_s * r;
+        }
+        let expected_final_v = last_s.clone() * obfuscation.final_preimage_target.slice_rows(0, 2);
+        debug_assert_eq!(final_v, expected_final_v);
+    }
     let z = output_encodings_vec - final_v;
     debug_assert_eq!(z.size(), (1, packed_output_size));
     z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
