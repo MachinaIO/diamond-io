@@ -99,7 +99,7 @@ mod test {
             .entry(0, 0)
             .coeffs()
             .iter()
-            .map(|elem| if elem.value() == &BigUint::from(0u8) { false } else { true })
+            .map(|elem| elem.value() != &BigUint::from(0u8))
             .collect::<Vec<_>>();
         let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);
         println!("{:?}", output);

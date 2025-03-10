@@ -38,12 +38,11 @@ where
         let zero = <M::P as Poly>::const_zero(&params);
         let one = <M::P as Poly>::const_one(&params);
         let enc_hardcoded_key_decomposed = obfuscation.enc_hardcoded_key.decompose().get_column(0);
-        let log_q = params.as_ref().modulus_bits();
         let inserted_poly_gadget = {
             let mut polys = vec![];
             polys.push(one.clone());
-            for j in 0..log_q {
-                polys.push(enc_hardcoded_key_decomposed[j].clone());
+            for poly in enc_hardcoded_key_decomposed.iter() {
+                polys.push(poly.clone());
             }
             for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
                 polys.push(zero.clone());
@@ -123,8 +122,8 @@ where
         #[cfg(test)]
         {
             let mut cur_s = obfuscation.s_init.clone();
-            for j in 0..idx {
-                let r = if inputs[j] { public_data.r_1.clone() } else { public_data.r_0.clone() };
+            for bit in inputs[0..idx].iter() {
+                let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
                 cur_s = cur_s * r;
             }
             let new_s = if *input {
@@ -150,12 +149,12 @@ where
                 let inserted_poly_gadget = {
                     let mut polys = vec![];
                     polys.push(one.clone());
-                    for j in 0..log_q {
-                        polys.push(enc_hardcoded_key_decomposed[j].clone());
+                    for poly in enc_hardcoded_key_decomposed.iter() {
+                        polys.push(poly.clone());
                     }
                     let mut coeffs = vec![];
-                    for j in 0..=idx {
-                        if inputs[j] {
+                    for bit in inputs[0..=idx].iter() {
+                        if *bit {
                             coeffs.push(<M::P as Poly>::Elem::one(&params.modulus()));
                         } else {
                             coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));

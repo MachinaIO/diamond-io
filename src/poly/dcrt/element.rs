@@ -250,8 +250,8 @@ mod tests {
         let modulus = Arc::new(BigUint::from(17u8));
         let small = FinRingElem::new(3, modulus.clone());
         let large = FinRingElem::new(16, modulus.clone());
-        assert_eq!(small.extract_highest_bits(), false); // 3 < 16
-        assert_eq!(large.extract_highest_bits(), true); // 16 >= 16
+        assert!(!small.extract_highest_bits()); // 3 < 16
+        assert!(large.extract_highest_bits()); // 16 >= 16
     }
 
     #[test]
