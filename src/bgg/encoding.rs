@@ -152,8 +152,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() + enc2.clone();
@@ -202,8 +201,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() - enc2.clone();
@@ -252,8 +250,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
@@ -304,7 +301,7 @@ mod tests {
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, enc_one.clone(), &[enc.clone()]);
+        let result = circuit.eval(&params, enc_one.clone(), &[enc.clone()]);
 
         // Expected result
         let expected = enc.scalar_mul(&params, &scalar);
@@ -370,11 +367,8 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(
-            &params,
-            enc_one.clone(),
-            &[enc1.clone(), enc2.clone(), enc3.clone()],
-        );
+        let result =
+            circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 + enc2) * scalar) - enc3
         let expected = ((enc1.clone() + enc2.clone()).scalar_mul(&params, &scalar)) - enc3.clone();
@@ -453,7 +447,7 @@ mod tests {
         circuit.output(vec![f]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(
+        let result = circuit.eval(
             &params,
             enc_one.clone(),
             &[enc1.clone(), enc2.clone(), enc3.clone(), enc4.clone()],
@@ -542,7 +536,7 @@ mod tests {
     //     circuit.output(output_ids);
 
     //     // Evaluate the circuit
-    //     let result = circuit.eval_poly_circuit(&params, enc_one.clone(), &encodings[1..]);
+    //     let result = circuit.eval(&params, enc_one.clone(), &encodings[1..]);
 
     //     // Expected result: c0_bits_eval * k, c1_bits_eval * k
     //     let c0_bits_eval_bgg = result[..params.modulus_bits()].to_vec();
@@ -634,8 +628,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result =
-            main_circuit.eval_poly_circuit(&params, enc_one, &[enc1.clone(), enc2.clone()]);
+        let result = main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone()]);
 
         // Expected result: (enc1 + enc2) - (enc1 * enc2)
         let expected = (enc1.clone() + enc2.clone()) - (enc1.clone() * enc2.clone());
@@ -724,11 +717,8 @@ mod tests {
         main_circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval_poly_circuit(
-            &params,
-            enc_one,
-            &[enc1.clone(), enc2.clone(), enc3.clone()],
-        );
+        let result =
+            main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 * enc2) + enc3) * scalar
         let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()).scalar_mul(&params, &scalar);
