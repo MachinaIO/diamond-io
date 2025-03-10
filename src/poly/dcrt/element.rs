@@ -43,7 +43,7 @@ impl FinRingElem {
     pub fn modulus_switch(&self, new_modulus: Arc<BigUint>) -> Self {
         let value =
             ((&self.value * new_modulus.as_ref()) / self.modulus.as_ref()) % new_modulus.as_ref();
-        Self { value, modulus: new_modulus }
+        Self { value, modulus: self.modulus.clone() }
     }
 }
 

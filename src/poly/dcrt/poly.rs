@@ -28,13 +28,18 @@ impl DCRTPoly {
         &self.ptr_poly
     }
 
-    pub fn modulus_switch(&self, new_params: DCRTPolyParams) -> Self {
+    pub fn modulus_switch(
+        &self,
+        params: &DCRTPolyParams,
+        new_modulus: <DCRTPolyParams as PolyParams>::Modulus,
+    ) -> Self {
+        debug_assert!(new_modulus < params.modulus());
         let coeffs = self.coeffs();
         let new_coeffs = coeffs
             .iter()
-            .map(|coeff| coeff.modulus_switch(new_params.modulus()))
+            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
             .collect::<Vec<FinRingElem>>();
-        DCRTPoly::from_coeffs(&new_params, &new_coeffs)
+        DCRTPoly::from_coeffs(&params, &new_coeffs)
     }
 
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {

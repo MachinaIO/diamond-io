@@ -84,7 +84,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             packed_output_size * 2,
             DistType::FinRingDist,
         );
-        let a_prf = a_prf_raw.modulus_switch(&obf_params.modulus_switch_params);
+        let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
         Self {
             r_0,
             r_1,

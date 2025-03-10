@@ -168,6 +168,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::poly::dcrt::DCRTPolyParams;
     use itertools::Itertools;
@@ -261,22 +263,20 @@ mod tests {
             let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
             let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::FinRingDist);
 
-            let new_params = DCRTPolyParams::new(4, 15, 51);
-            let new_modulus = new_params.modulus();
-            let switched = matrix.modulus_switch(&new_params);
-            assert_eq!(switched.params().modulus(), new_params.modulus());
+            let new_modulus = Arc::new(BigUint::from(2u32));
+            let switched = matrix.modulus_switch(&new_modulus);
             let mut expected_matrix_vec = vec![];
             for i in 0..rows {
                 let mut row = vec![];
                 for j in 0..columns {
                     let poly = matrix.entry(i, j);
                     let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
-                    let new_poly = DCRTPoly::from_coeffs(&new_params, &coeffs);
+                    let new_poly = DCRTPoly::from_coeffs(&params, &coeffs);
                     row.push(new_poly);
                 }
                 expected_matrix_vec.push(row);
             }
-            let expected = DCRTPolyMatrix::from_poly_vec(&new_params, expected_matrix_vec);
+            let expected = DCRTPolyMatrix::from_poly_vec(&params, expected_matrix_vec);
             assert_eq!(switched, expected);
         }
 
@@ -293,22 +293,20 @@ mod tests {
             let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
             let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::BitDist);
 
-            let new_params = DCRTPolyParams::new(4, 15, 51);
-            let new_modulus = new_params.modulus();
-            let switched = matrix.modulus_switch(&new_params);
-            assert_eq!(switched.params().modulus(), new_params.modulus());
+            let new_modulus = Arc::new(BigUint::from(2u32));
+            let switched = matrix.modulus_switch(&new_modulus);
             let mut expected_matrix_vec = vec![];
             for i in 0..rows {
                 let mut row = vec![];
                 for j in 0..columns {
                     let poly = matrix.entry(i, j);
                     let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
-                    let new_poly = DCRTPoly::from_coeffs(&new_params, &coeffs);
+                    let new_poly = DCRTPoly::from_coeffs(&params, &coeffs);
                     row.push(new_poly);
                 }
                 expected_matrix_vec.push(row);
             }
-            let expected = DCRTPolyMatrix::from_poly_vec(&new_params, expected_matrix_vec);
+            let expected = DCRTPolyMatrix::from_poly_vec(&params, expected_matrix_vec);
             assert_eq!(switched, expected);
         }
     }

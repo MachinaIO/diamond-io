@@ -210,15 +210,18 @@ where
     let final_preimage_target = {
         let one = public_data.pubkeys[obf_params.input_size][0].clone();
         let input = &public_data.pubkeys[obf_params.input_size][1..];
-        let eval_outputs = final_circuit.eval_poly_circuit(params.as_ref(), one, input);
+        let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
         println!("get eval_outputs");
         let mut eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
         eval_outputs_matrix = eval_outputs_matrix * identity_2.decompose();
         println!("eval_outputs_matrix size {:?}", eval_outputs_matrix.size());
         println!("a_prf size {:?}", public_data.a_prf.size());
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size * 2);
-        // (eval_outputs_matrix + &public_data.a_prf).concat_rows(&[M::zero(
-        (eval_outputs_matrix).concat_rows(&[M::zero(params.as_ref(), 2, packed_output_size * 2)])
+        (eval_outputs_matrix + &public_data.a_prf).concat_rows(&[M::zero(
+            params.as_ref(),
+            2,
+            packed_output_size * 2,
+        )])
     };
     println!("final_preimage_target size {:?}", final_preimage_target.size());
     let (_, _, b_final) = &bs[obf_params.input_size];
