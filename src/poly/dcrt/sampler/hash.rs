@@ -57,7 +57,7 @@ where
         let mut matrix_inner = Vec::with_capacity(nrow);
         let mut poly_iter = all_polys.into_iter();
         for _ in 0..nrow {
-            let row_polys: Vec<DCRTPoly> = poly_iter.by_ref().take(ncol).collect();
+            let row_polys = poly_iter.by_ref().take(ncol).collect();
             matrix_inner.push(row_polys);
         }
 
