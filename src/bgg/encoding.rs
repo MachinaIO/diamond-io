@@ -1,5 +1,4 @@
-use super::circuits::Evaluable;
-use super::BggPublicKey;
+use super::{BggPublicKey, Evaluable};
 use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
@@ -108,7 +107,7 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgg::circuits::PolyCircuit;
+    use crate::bgg::circuit::PolyCircuit;
     use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
     use crate::poly::dcrt::{
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,

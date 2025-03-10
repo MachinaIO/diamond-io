@@ -1,8 +1,8 @@
+use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
 
-use super::circuits::Evaluable;
-use crate::poly::{Poly, PolyMatrix};
+use super::Evaluable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
@@ -82,7 +82,7 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgg::circuits::PolyCircuit;
+    use crate::bgg::circuit::PolyCircuit;
     use crate::bgg::sampler::BGGPublicKeySampler;
     use crate::poly::dcrt::{
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
