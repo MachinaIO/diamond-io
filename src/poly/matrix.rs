@@ -103,8 +103,17 @@ pub trait Loadable: Sized {
 
 pub trait PolyMatrixFSManager: Sized {
     type M: PolyMatrix;
+    /// Generate a path for a file with a given name
+    fn gen_path(&self, name: &str) -> PathBuf;
     /// Store a matrix with a given name and immediately drop it from memory
-    fn store_matrix(&self, name: &str, matrix: Self::M) -> PathBuf;
+    fn store_matrix(&self, name: &str, matrix: Self::M) -> PathBuf {
+        let path = self.gen_path(name);
+        matrix.store(&path);
+        path
+    }
     /// Load a matrix with a given name
-    fn load_matrix(&self, name: &str) -> Self::M;
+    fn load_matrix(&self, name: &str) -> Self::M {
+        let path = self.gen_path(name);
+        Self::M::load(&path)
+    }
 }

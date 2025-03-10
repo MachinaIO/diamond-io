@@ -29,7 +29,6 @@ pub struct ObfuscationParams<M: PolyMatrix> {
 #[cfg(test)]
 mod test {
     use keccak_asm::Keccak256;
-    use rand::rngs::ThreadRng;
 
     use crate::poly::{
         dcrt::{

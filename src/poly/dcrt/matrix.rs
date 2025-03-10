@@ -521,11 +521,6 @@ impl DCRTPolyMatrixFSManager {
         Self { base_dir: base_dir.to_path_buf() }
     }
 
-    /// Generate a path for a file
-    fn gen_path(&self, name: &str) -> PathBuf {
-        self.base_dir.join(name)
-    }
-
     /// Clean up the directory
     pub fn cleanup(&self) -> std::io::Result<()> {
         fs::remove_dir_all(&self.base_dir)
@@ -535,15 +530,8 @@ impl DCRTPolyMatrixFSManager {
 impl PolyMatrixFSManager for DCRTPolyMatrixFSManager {
     type M = DCRTPolyMatrix;
 
-    fn store_matrix(&self, name: &str, matrix: DCRTPolyMatrix) -> PathBuf {
-        let path = self.gen_path(name);
-        matrix.store(&path);
-        path
-    }
-
-    fn load_matrix(&self, name: &str) -> DCRTPolyMatrix {
-        let path = self.gen_path(name);
-        DCRTPolyMatrix::load(&path)
+    fn gen_path(&self, name: &str) -> PathBuf {
+        self.base_dir.join(name)
     }
 }
 
