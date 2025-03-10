@@ -87,16 +87,23 @@ where
         // cs_input.push(c_input);
         // cs_fhe_key.push(c_fhe_key);
     }
-    let final_circuit =
-        build_final_step_circuit::<_, BggEncoding<M>>(&params, obf_params.public_circuit.clone());
+    let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
+    let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
+        &params,
+        &a_decomposed_polys,
+        obf_params.public_circuit.clone(),
+    );
     let last_input_encodings = encodings.last().unwrap();
-    let output_encodings = final_circuit.eval_poly_circuit::<BggEncoding<M>>(
+    let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         last_input_encodings[0].clone(),
         &last_input_encodings[1..],
     );
+    let identity_2 = M::identity(&params, 2, None);
+    let output_encodings_vec =
+        output_encodings[0].concat_vector(&output_encodings[1..]) * identity_2.decompose();
     let final_v = ps.last().unwrap().clone() * &obfuscation.final_preimage;
-    let z = output_encodings[0].concat_vector(&output_encodings[1..]) - final_v;
-    debug_assert_eq!(z.size(), (1, packed_output_size));
+    let z = output_encodings_vec - final_v;
+    debug_assert_eq!(z.size(), (1, 2 * packed_output_size));
     z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
 }

@@ -1,4 +1,4 @@
-use super::Poly;
+use super::{Poly, PolyParams};
 use std::path::Path;
 use std::path::PathBuf;
 use std::{
@@ -88,7 +88,10 @@ pub trait PolyMatrix:
     /// under the ring modulus.
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
     fn decompose(&self) -> Self;
-    fn modulus_switch(&self, new_params: &<Self::P as Poly>::Params) -> Self;
+    fn modulus_switch(
+        &self,
+        new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
+    ) -> Self;
     fn load(path: &Path) -> Self;
     fn store(&self, path: &Path);
 }
