@@ -253,5 +253,7 @@ where
         bs,
         #[cfg(test)]
         hardcoded_key: hardcoded_key.clone(),
+        #[cfg(test)]
+        enc_hardcoded_key: enc_hardcoded_key.clone(),
     }
 }

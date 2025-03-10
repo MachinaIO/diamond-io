@@ -23,6 +23,8 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub bs: Vec<(M, M, M)>,
     #[cfg(test)]
     pub hardcoded_key: M,
+    #[cfg(test)]
+    pub enc_hardcoded_key: M,
 }
 
 #[derive(Debug, Clone)]

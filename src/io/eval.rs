@@ -36,6 +36,35 @@ where
             s_connect * &obfuscation.bs[0].2
         };
         debug_assert_eq!(obfuscation.p_init, expected_p_init);
+
+        let zero = <M::P as Poly>::const_zero(&params);
+        let one = <M::P as Poly>::const_one(&params);
+        let enc_hardcoded_key_decomposed = obfuscation.enc_hardcoded_key.decompose().get_column(0);
+        let log_q = params.as_ref().modulus_bits();
+        let inserted_poly_gadget = {
+            let mut polys = vec![];
+            polys.push(one.clone());
+            for j in 0..log_q {
+                polys.push(enc_hardcoded_key_decomposed[j].clone());
+            }
+            for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
+                polys.push(zero.clone());
+            }
+            polys.push(obfuscation.t_bar.entry(0, 0).clone());
+            // for _ in 0..(inserted_poly_index) {
+            //     polys.push(zero.clone());
+            // }
+            // polys.push(inserted_poly);
+            // for _ in (inserted_poly_index + 1)..(public_data.packed_input_size + 1) {
+            //     polys.push(zero.clone());
+            // }
+            let gadget_2 = M::gadget_matrix(&params, 2);
+            M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
+        };
+        let expected_encoding_init = obfuscation.s_init.clone()
+            * (public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
+                - inserted_poly_gadget);
+        debug_assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
     }
     // let encode_inputs =
     //     obfuscation.encode_input.iter().map(|pubkey| pubkey.vector.clone()).collect_vec();
@@ -130,12 +159,13 @@ where
                 let one = <M::P as Poly>::const_one(&params);
                 // let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
                 let gadget_2 = M::gadget_matrix(&params, 2);
-                let a_rlwe_decomposed = public_data.a_rlwe_bar.decompose().get_column(0);
+                let enc_hardcoded_key_decomposed =
+                    obfuscation.enc_hardcoded_key.decompose().get_column(0);
                 let inserted_poly_gadget = {
                     let mut polys = vec![];
                     polys.push(one.clone());
                     for j in 0..log_q {
-                        polys.push(a_rlwe_decomposed[j].clone());
+                        polys.push(enc_hardcoded_key_decomposed[j].clone());
                     }
                     println!("polys len {}", polys.len());
                     let mut coeffs = vec![];
@@ -181,14 +211,14 @@ where
         obf_params.public_circuit.clone(),
     );
     let last_input_encodings = encodings.last().unwrap();
-    {
-        let public_circuit_output = obf_params.public_circuit.clone().eval(
-            &params,
-            last_input_encodings[0].clone(),
-            &last_input_encodings[1..last_input_encodings.len() - 1],
-        );
-        println!("public_circuit_output {:?}", public_circuit_output);
-    }
+    // {
+    //     let public_circuit_output = obf_params.public_circuit.clone().eval(
+    //         &params,
+    //         last_input_encodings[0].clone(),
+    //         &last_input_encodings[1..last_input_encodings.len() - 1],
+    //     );
+    //     println!("public_circuit_output {:?}", public_circuit_output);
+    // }
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         last_input_encodings[0].clone(),
