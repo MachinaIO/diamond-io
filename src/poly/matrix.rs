@@ -1,4 +1,4 @@
-use super::Poly;
+use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
@@ -25,7 +25,7 @@ pub trait PolyMatrix:
     type P: Poly;
 
     fn from_poly_vec(params: &<Self::P as Poly>::Params, vec: Vec<Vec<Self::P>>) -> Self;
-    /// Creates a row vector (1 x n matrix) from a vector of DCRTPoly elements.
+    /// Creates a row vector (1 x n matrix) from a vector of n DCRTPoly elements.
     fn from_poly_vec_row(params: &<Self::P as Poly>::Params, vec: Vec<Self::P>) -> Self {
         // Wrap the vector in another vector to create a single row
         let wrapped_vec = vec![vec];
@@ -86,5 +86,8 @@ pub trait PolyMatrix:
     /// under the ring modulus.
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
     fn decompose(&self) -> Self;
-    fn modulus_switch(&self, new_params: &<Self::P as Poly>::Params) -> Self;
+    fn modulus_switch(
+        &self,
+        new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
+    ) -> Self;
 }

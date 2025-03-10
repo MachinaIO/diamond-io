@@ -43,7 +43,7 @@ impl FinRingElem {
     pub fn modulus_switch(&self, new_modulus: Arc<BigUint>) -> Self {
         let value =
             ((&self.value * new_modulus.as_ref()) / self.modulus.as_ref()) % new_modulus.as_ref();
-        Self { value, modulus: new_modulus }
+        Self { value, modulus: self.modulus.clone() }
     }
 }
 
@@ -61,8 +61,16 @@ impl PolyElem for FinRingElem {
         Self::new(modulus.as_ref() - &BigUint::from(1u8), modulus.clone())
     }
 
+    fn half_q(modulus: &Self::Modulus) -> Self {
+        let bits = modulus.bits();
+        let value = BigUint::from(1u8) << (bits - 1);
+        Self::new(value, modulus.clone())
+    }
+
     fn extract_highest_bits(&self) -> bool {
-        self.value < self.modulus() / 2u8
+        let bits = self.modulus.bits();
+        let half_q_value = BigUint::from(1u8) << (bits - 1);
+        self.value >= half_q_value
     }
 }
 
@@ -241,15 +249,9 @@ mod tests {
     fn test_element_higest_bit() {
         let modulus = Arc::new(BigUint::from(17u8));
         let small = FinRingElem::new(3, modulus.clone());
-        let large = FinRingElem::new(15, modulus.clone());
-        assert!(small.extract_highest_bits()); // 3 < 17/2
-        assert!(!large.extract_highest_bits()); // 15 > 17/2
-
-        let modulus = Arc::new(BigUint::from(10000usize));
-        let small = FinRingElem::new(3, modulus.clone());
-        let large = FinRingElem::new(15 + 10000, modulus.clone());
-        assert!(small.extract_highest_bits()); // 3 < 10000/2
-        assert!(large.extract_highest_bits()); // 15 + 10000 > 10000/2
+        let large = FinRingElem::new(16, modulus.clone());
+        assert!(!small.extract_highest_bits()); // 3 < 16
+        assert!(large.extract_highest_bits()); // 16 >= 16
     }
 
     #[test]

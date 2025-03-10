@@ -1,6 +1,12 @@
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
+use crate::poly::{
+    dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
+    sampler::DistType,
+    Poly,
+};
+
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
 
@@ -42,5 +48,25 @@ pub fn print_vector_ring(label: &str, vec: &[Vec<u64>]) {
     for (i, inner_vec) in vec.iter().enumerate() {
         print!("{}[{}]: ", label, i);
         print_ring_element("", inner_vec);
+    }
+}
+
+// Helper function to create a random polynomial using UniformSampler
+pub fn create_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
+    let sampler = DCRTPolyUniformSampler::new();
+    sampler.sample_poly(params, &DistType::FinRingDist)
+}
+
+pub fn create_bit_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
+    let sampler = DCRTPolyUniformSampler::new();
+    sampler.sample_poly(params, &DistType::BitDist)
+}
+
+// Helper function to create a bit polynomial (0 or 1)
+pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
+    if bit {
+        DCRTPoly::const_one(params)
+    } else {
+        DCRTPoly::const_zero(params)
     }
 }

@@ -22,9 +22,10 @@ pub trait PolyElem:
     + for<'a> Sub<&'a Self, Output = Self>
     + for<'a> Mul<&'a Self, Output = Self>
 {
-    type Modulus: Clone;
+    type Modulus: Debug + Clone;
     fn zero(modulus: &Self::Modulus) -> Self;
     fn one(modulus: &Self::Modulus) -> Self;
     fn minus_one(modulus: &Self::Modulus) -> Self;
+    fn half_q(modulus: &Self::Modulus) -> Self;
     fn extract_highest_bits(&self) -> bool;
 }

@@ -53,6 +53,7 @@ pub trait PolyTrapdoorSampler {
     fn trapdoor(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        size: usize,
     ) -> (Self::Trapdoor, Self::M);
     fn preimage(
         &self,

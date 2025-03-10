@@ -28,13 +28,18 @@ impl DCRTPoly {
         &self.ptr_poly
     }
 
-    pub fn modulus_switch(&self, new_params: DCRTPolyParams) -> Self {
+    pub fn modulus_switch(
+        &self,
+        params: &DCRTPolyParams,
+        new_modulus: <DCRTPolyParams as PolyParams>::Modulus,
+    ) -> Self {
+        debug_assert!(new_modulus < params.modulus());
         let coeffs = self.coeffs();
         let new_coeffs = coeffs
             .iter()
-            .map(|coeff| coeff.modulus_switch(new_params.modulus()))
+            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
             .collect::<Vec<FinRingElem>>();
-        DCRTPoly::from_coeffs(&new_params, &new_coeffs)
+        DCRTPoly::from_coeffs(params, &new_coeffs)
     }
 
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
@@ -111,6 +116,10 @@ impl Poly for DCRTPoly {
             params,
             (params.modulus().as_ref() - BigUint::from(1u32)).to_string(),
         )
+    }
+
+    fn const_power_of_two(params: &Self::Params, k: usize) -> Self {
+        Self::poly_gen_from_const(params, BigUint::from(2u32).pow(k as u32).to_string())
     }
 
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}

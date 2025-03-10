@@ -1,17 +1,18 @@
+use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
 
-use super::circuits::Evaluable;
-use crate::poly::{Poly, PolyMatrix};
+use super::Evaluable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
     pub matrix: M,
+    pub reveal_plaintext: bool,
 }
 
 impl<M: PolyMatrix> BggPublicKey<M> {
-    pub fn new(matrix: M) -> Self {
-        Self { matrix }
+    pub fn new(matrix: M, reveal_plaintext: bool) -> Self {
+        Self { matrix, reveal_plaintext }
     }
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
@@ -29,7 +30,8 @@ impl<M: PolyMatrix> Add for BggPublicKey<M> {
 impl<M: PolyMatrix> Add<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn add(self, other: &Self) -> Self {
-        Self { matrix: self.matrix + &other.matrix }
+        let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        Self { matrix: self.matrix + &other.matrix, reveal_plaintext }
     }
 }
 
@@ -43,7 +45,8 @@ impl<M: PolyMatrix> Sub for BggPublicKey<M> {
 impl<M: PolyMatrix> Sub<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn sub(self, other: &Self) -> Self {
-        Self { matrix: self.matrix - &other.matrix }
+        let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        Self { matrix: self.matrix - &other.matrix, reveal_plaintext }
     }
 }
 
@@ -59,39 +62,33 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     fn mul(self, other: &Self) -> Self {
         let decomposed = other.matrix.decompose();
         let matrix = self.matrix.clone() * decomposed;
-        Self { matrix }
+        let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        Self { matrix, reveal_plaintext }
     }
 }
 
 impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
-    type Params = <M::P as Poly>::Params;
-    fn scalar_mul(&self, params: &Self::Params, scalar: &M::P) -> Self {
+    fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
         let gadget = M::gadget_matrix(params, 2);
         let scalared = gadget * scalar;
         let decomposed = scalared.decompose();
         let matrix = self.matrix.clone() * decomposed;
-        Self { matrix }
+        let reveal_plaintext = self.reveal_plaintext;
+        Self { matrix, reveal_plaintext }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgg::circuits::PolyCircuit;
+    use crate::bgg::circuit::PolyCircuit;
     use crate::bgg::sampler::BGGPublicKeySampler;
     use crate::poly::dcrt::{
         params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
-        sampler::uniform::DCRTPolyUniformSampler,
     };
-    use crate::poly::sampler::DistType;
+    use crate::utils::create_random_poly;
     use keccak_asm::Keccak256;
     use std::sync::Arc;
-
-    // Helper function to create a random polynomial using UniformSampler
-    fn create_random_poly(params: &DCRTPolyParams) -> DCRTPoly {
-        let sampler = DCRTPolyUniformSampler::new();
-        sampler.sample_poly(params, &DistType::FinRingDist)
-    }
 
     #[test]
     fn test_pubkey_add() {
@@ -108,7 +105,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -120,7 +118,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() + pk2.clone();
@@ -128,6 +126,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -145,7 +144,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -157,7 +157,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() - pk2.clone();
@@ -165,6 +165,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -182,7 +183,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 3);
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -194,7 +196,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() * pk2.clone();
@@ -202,6 +204,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -219,7 +222,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public key
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 2);
+        let reveal_plaintexts = [true; 1];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
 
@@ -233,7 +237,7 @@ mod tests {
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone()]);
 
         // Expected result
         let expected = pk1.scalar_mul(&params, &scalar);
@@ -241,6 +245,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -258,7 +263,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 4);
+        let reveal_plaintexts = [true; 3];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -283,8 +289,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval_poly_circuit(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 + pk2) * scalar) - pk3
         let expected = ((pk1.clone() + pk2.clone()).scalar_mul(&params, &scalar)) - pk3.clone();
@@ -292,6 +297,7 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
     #[test]
@@ -309,7 +315,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, 5);
+        let reveal_plaintexts = [true; 4];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         let pk2 = pubkeys[2].clone();
@@ -346,11 +353,8 @@ mod tests {
         circuit.output(vec![f]);
 
         // Evaluate the circuit
-        let result = circuit.eval_poly_circuit(
-            &params,
-            pk_one,
-            &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()],
-        );
+        let result =
+            circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()]);
 
         // Expected result: (((pk1 + pk2) * (pk3 * pk4)) + (pk1 - pk3)) * scalar
         let sum1 = pk1.clone() + pk2.clone();
@@ -363,5 +367,148 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
+    }
+
+    #[test]
+    fn test_pubkey_register_and_call_sub_circuit() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a hash sampler and BGGPublicKeySampler to be reused
+        let key: [u8; 32] = rand::random();
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create random public keys
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
+
+        // Create a sub-circuit that performs addition and multiplication
+        let mut sub_circuit = PolyCircuit::<DCRTPoly>::new();
+        let sub_inputs = sub_circuit.input(2);
+
+        // Add operation: pk1 + pk2
+        let add_gate = sub_circuit.add_gate(sub_inputs[0], sub_inputs[1]);
+
+        // Mul operation: pk1 * pk2
+        let mul_gate = sub_circuit.mul_gate(sub_inputs[0], sub_inputs[1]);
+
+        // Set the outputs of the sub-circuit
+        sub_circuit.output(vec![add_gate, mul_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let main_inputs = main_circuit.input(2);
+
+        // Register the sub-circuit and get its ID
+        let sub_circuit_id = main_circuit.register_sub_circuit(sub_circuit);
+
+        // Call the sub-circuit with the main circuit's inputs
+        let sub_outputs =
+            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]]);
+
+        // Verify we got two outputs from the sub-circuit
+        assert_eq!(sub_outputs.len(), 2);
+
+        // Use the sub-circuit outputs for further computation
+        // For example, subtract the multiplication result from the addition result
+        let final_gate = main_circuit.sub_gate(sub_outputs[0], sub_outputs[1]);
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![final_gate]);
+
+        // Evaluate the main circuit
+        let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+
+        // Expected result: (pk1 + pk2) - (pk1 * pk2)
+        let expected = (pk1.clone() + pk2.clone()) - (pk1.clone() * pk2.clone());
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
+    }
+
+    #[test]
+    fn test_pubkey_nested_sub_circuits() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a hash sampler and BGGPublicKeySampler to be reused
+        let key: [u8; 32] = rand::random();
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create random public keys
+        let reveal_plaintexts = [true; 3];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        let pk2 = pubkeys[2].clone();
+        let pk3 = pubkeys[3].clone();
+
+        // Create a scalar
+        let scalar = create_random_poly(&params);
+
+        // Create the innermost sub-circuit that performs multiplication
+        let mut inner_circuit = PolyCircuit::<DCRTPoly>::new();
+        let inner_inputs = inner_circuit.input(2);
+        let mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_inputs[1]);
+        inner_circuit.output(vec![mul_gate]);
+
+        // Create a middle sub-circuit that uses the inner sub-circuit
+        let mut middle_circuit = PolyCircuit::<DCRTPoly>::new();
+        let middle_inputs = middle_circuit.input(3);
+
+        // Register the inner circuit
+        let inner_circuit_id = middle_circuit.register_sub_circuit(inner_circuit);
+
+        // Call the inner circuit with the first two inputs
+        let inner_outputs = middle_circuit
+            .call_sub_circuit(inner_circuit_id, &[middle_inputs[0], middle_inputs[1]]);
+
+        // Add the result of the inner circuit with the third input
+        let add_gate = middle_circuit.add_gate(inner_outputs[0], middle_inputs[2]);
+        middle_circuit.output(vec![add_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let main_inputs = main_circuit.input(3);
+
+        // Register the middle circuit
+        let middle_circuit_id = main_circuit.register_sub_circuit(middle_circuit);
+
+        // Call the middle circuit with all inputs
+        let middle_outputs = main_circuit
+            .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
+
+        // Use the output for a scalar multiplication
+        let scalar_mul_gate = main_circuit.scalar_mul_gate(middle_outputs[0], scalar.clone());
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![scalar_mul_gate]);
+
+        // Evaluate the main circuit
+        let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+
+        // Expected result: ((pk1 * pk2) + pk3) * scalar
+        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()).scalar_mul(&params, &scalar);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].matrix, expected.matrix);
+        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 }
