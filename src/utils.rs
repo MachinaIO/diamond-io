@@ -83,11 +83,26 @@ pub fn print_memory_usage(label: &str) {
 macro_rules! parallel_iter {
     ($i: expr) => {{
         #[cfg(not(feature = "parallel"))]
-        let iter = $i.into_iter();
-
+        {
+            IntoIterator::into_iter($i)
+        }
         #[cfg(feature = "parallel")]
-        let iter = $i.into_par_iter();
+        {
+            rayon::iter::IntoParallelIterator::into_par_iter($i)
+        }
+    }};
+}
 
-        iter
+#[macro_export]
+macro_rules! join {
+    ($a:expr, $b:expr $(,)?) => {{
+        #[cfg(not(feature = "parallel"))]
+        {
+            ($a(), $b())
+        }
+        #[cfg(feature = "parallel")]
+        {
+            rayon::join($a, $b)
+        }
     }};
 }
