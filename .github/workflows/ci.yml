@@ -12,16 +12,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake libgmp-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
 
       - name: Cache Rust dependencies
         uses: actions/cache@v3
@@ -31,40 +33,48 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Cache OpenFHE build
+      - name: Cache OpenFHE source
         uses: actions/cache@v3
         with:
-          path: openfhe/build
-          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/CMakeLists.txt') }}
+          path: openfhe
+          key: ${{ runner.os }}-openfhe-source-${{ hashFiles('openfhe/CMakeLists.txt') }}
           restore-keys: |
-            ${{ runner.os }}-openfhe-
+            ${{ runner.os }}-openfhe-source-
 
-      - name: Checkout OpenFHE
-        uses: actions/checkout@v2
+      - name: Checkout OpenFHE if not cached
+        if: steps.cache-openfhe-source.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
         with:
           repository: openfheorg/openfhe-development
           path: openfhe
 
-      - name: Build OpenFHE
+      - name: Cache OpenFHE build
+        id: cache-openfhe-build
+        uses: actions/cache@v3
+        with:
+          path: |
+            /usr/local/include/openfhe
+            /usr/local/lib/libOPENFHE*
+          key: ${{ runner.os }}-openfhe-build-${{ hashFiles('openfhe/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-openfhe-build-
+
+      - name: Build and install OpenFHE
+        if: steps.cache-openfhe-build.outputs.cache-hit != 'true'
         run: |
           cd openfhe
           mkdir -p build && cd build
-          cmake ..
+          cmake .. -DCMAKE_BUILD_TYPE=Release
           make -j"$(nproc)"
           sudo make install
-
-      - name: Update dynamic linker cache
-        run: |
-          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
           sudo ldconfig
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: taiki-e/install-action@nextest
-      - name: Install clippy and rustfmt
-        run: |
-          rustup component add clippy
-          rustup component add rustfmt
-      - uses: taiki-e/install-action@just
-      - name: Run ci
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,nextest,just
+
+      - name: Run CI tasks
         run: just ci
