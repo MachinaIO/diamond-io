@@ -1,10 +1,15 @@
-use openfhe::ffi;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
-use crate::poly::{
-    dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
-    sampler::{DistType, PolyUniformSampler},
-    Poly, PolyMatrix, PolyParams,
+use crate::{
+    parallel_iter,
+    poly::{
+        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
+        sampler::{DistType, PolyUniformSampler},
+        Poly, PolyMatrix, PolyParams,
+    },
 };
+use openfhe::ffi;
 
 pub struct DCRTPolyUniformSampler {}
 
@@ -52,19 +57,19 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
         columns: usize,
         dist: DistType,
     ) -> Self::M {
-        let mut c: Vec<Vec<DCRTPoly>> = Vec::with_capacity(rows);
-        for _ in 0..rows {
-            let mut row_vec = Vec::with_capacity(columns);
-            for _ in 0..columns {
-                let sampled_poly = self.sample_poly(params, &dist);
-                if sampled_poly.get_poly().is_null() {
-                    panic!("Attempted to dereference a null pointer");
-                }
-                row_vec.push(sampled_poly);
-            }
-
-            c.push(row_vec);
-        }
+        let c: Vec<Vec<DCRTPoly>> = parallel_iter!(0..rows)
+            .map(|_| {
+                parallel_iter!(0..columns)
+                    .map(|_| {
+                        let sampled_poly = self.sample_poly(params, &dist);
+                        if sampled_poly.get_poly().is_null() {
+                            panic!("Attempted to dereference a null pointer");
+                        }
+                        sampled_poly
+                    })
+                    .collect()
+            })
+            .collect();
 
         DCRTPolyMatrix::from_poly_vec(params, c)
     }

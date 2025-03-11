@@ -30,12 +30,10 @@ where
     let sampler_uniform = Arc::new(sampler_uniform);
     let sampler_hash = Arc::new(sampler_hash);
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
-    // let packed_input_size = obf_params.input_size.div_ceil(dim);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler_hash.clone());
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-
     let s_bar =
         sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
     let bgg_encode_sampler = BGGEncodingSampler::new(
