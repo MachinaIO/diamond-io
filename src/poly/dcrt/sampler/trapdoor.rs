@@ -142,9 +142,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 .collect();
 
             // Concatenate all preimages horizontally
-            let first = preimages[0].clone();
-            let rest = &preimages[1..];
-            return first.concat_columns(rest);
+            return preimages[0].concat_columns(&preimages[1..]);
         }
 
         // Case 2: Target columns is equal or less than size
@@ -346,7 +344,8 @@ mod tests {
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
-        // Create a non-square target matrix (size x target_cols) such that target_cols > size and target_cols is a multiple of size
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size and
+        // target_cols is a multiple of size
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let target =
             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
@@ -387,7 +386,8 @@ mod tests {
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
-        // Create a non-square target matrix (size x target_cols) such that target_cols > size but not a multiple of size
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size but
+        // not a multiple of size
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let target =
             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
