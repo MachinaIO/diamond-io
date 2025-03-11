@@ -327,6 +327,18 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
         Self { inner: new_inner, params: self.params.clone(), nrow: self.nrow, ncol: self.ncol }
     }
+
+    fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self {
+        assert_eq!(self.ncol, other.nrow * identity_size);
+        let slice_width = other.nrow;
+        let mut slice_results = Vec::with_capacity(identity_size);
+        for i in 0..identity_size {
+            let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+            let slice_result = &slice * other;
+            slice_results.push(slice_result);
+        }
+        slice_results[0].clone().concat_columns(&slice_results[1..])
+    }
 }
 
 // ====== Arithmetic ======
@@ -500,7 +512,10 @@ mod tests {
     use num_bigint::BigUint;
 
     use super::*;
-    use crate::poly::dcrt::DCRTPolyParams;
+    use crate::poly::{
+        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+        sampler::PolyUniformSampler,
+    };
 
     #[test]
     fn test_gadget_matrix() {
@@ -678,5 +693,34 @@ mod tests {
         let matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
         let matrix2 = DCRTPolyMatrix::zero(&params, 3, 2);
         let _prod = matrix1 * matrix2;
+    }
+
+    #[test]
+    fn test_mul_tensor_identity() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix S (2x12)
+        let s = sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
+
+        // Create 'other' matrix (3x3)
+        let other =
+            sampler.sample_uniform(&params, 3, 3, crate::poly::sampler::DistType::FinRingDist);
+
+        // Perform S * (other ⊗ I_4)
+        let result = s.mul_tensor_identity(&other, 4);
+
+        // Check dimensions
+        assert_eq!(result.row_size(), 2);
+        assert_eq!(result.col_size(), 12);
+
+        let identity = DCRTPolyMatrix::identity(&params, 4, None);
+
+        // Check result
+        let expected_result = s * (identity.tensor(&other));
+
+        assert_eq!(expected_result.row_size(), 2);
+        assert_eq!(expected_result.col_size(), 12);
+        assert_eq!(result, expected_result)
     }
 }

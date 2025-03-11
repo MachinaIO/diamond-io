@@ -3,6 +3,7 @@ use crate::poly::{
     sampler::DistType,
     Poly,
 };
+use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
@@ -67,6 +68,14 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
         DCRTPoly::const_one(params)
     } else {
         DCRTPoly::const_zero(params)
+    }
+}
+
+pub fn print_memory_usage(label: &str) {
+    if let Some(usage) = memory_stats() {
+        println!("{}: {} bytes", label, usage.physical_mem);
+    } else {
+        println!("Couldn't get memory stats!");
     }
 }
 
