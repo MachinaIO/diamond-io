@@ -1,11 +1,5 @@
-#[cfg(feature = "parallel")]
-use rayon::prelude::*;
-
 use super::{element::FinRingElem, params::DCRTPolyParams};
-use crate::{
-    parallel_iter,
-    poly::{Poly, PolyParams},
-};
+use crate::poly::{Poly, PolyParams};
 use num_bigint::BigUint;
 use openfhe::{
     cxx::UniquePtr,
@@ -87,9 +81,11 @@ impl Poly for DCRTPoly {
         let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
         let modulus = params.modulus();
         for coeff in coeffs {
-            let coeff_modulus = coeff.modulus();
             #[cfg(debug_assertions)]
-            assert_eq!(coeff_modulus, modulus.as_ref());
+            {
+                let coeff_modulus = coeff.modulus();
+                assert_eq!(coeff_modulus, modulus.as_ref());
+            }
             coeffs_cxx.push(coeff.value().to_string());
         }
         Self::poly_gen_from_vec(params, coeffs_cxx)
@@ -100,22 +96,14 @@ impl Poly for DCRTPoly {
     }
 
     fn from_decomposed(params: &DCRTPolyParams, decomposed: &[Self]) -> Self {
-        let products: Vec<Self> = parallel_iter!(decomposed)
-            .enumerate()
-            .map(|(i, bit_poly)| {
-                let power_of_two = BigUint::from(2u32).pow(i as u32);
-                let const_poly_power_of_two =
-                    Self::from_const(params, &FinRingElem::new(power_of_two, params.modulus()));
-                bit_poly.clone() * const_poly_power_of_two
-            })
-            .collect();
-
-        let mut result = Self::const_zero(params);
-        for product in products {
-            result += product;
+        let mut reconstructed = Self::const_zero(params);
+        for (i, bit_poly) in decomposed.iter().enumerate() {
+            let power_of_two = BigUint::from(2u32).pow(i as u32);
+            let const_poly_power_of_two =
+                Self::from_const(params, &FinRingElem::new(power_of_two, params.modulus()));
+            reconstructed += bit_poly.clone() * const_poly_power_of_two;
         }
-
-        result
+        reconstructed
     }
 
     fn const_zero(params: &Self::Params) -> Self {
@@ -144,10 +132,10 @@ impl Poly for DCRTPoly {
     fn decompose(&self, params: &Self::Params) -> Vec<Self> {
         let coeffs = self.coeffs();
         let bit_length = params.modulus_bits();
-
-        parallel_iter!(0..bit_length)
+        (0..bit_length)
             .map(|h| {
-                let bit_coeffs: Vec<_> = parallel_iter!(&coeffs)
+                let bit_coeffs: Vec<_> = coeffs
+                    .iter()
                     .map(|j| {
                         let val = (j.value() >> h) & BigUint::from(1u32);
                         FinRingElem::new(val, params.modulus())

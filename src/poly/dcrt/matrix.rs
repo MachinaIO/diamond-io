@@ -52,13 +52,15 @@ impl PolyMatrix for DCRTPolyMatrix {
     type P = DCRTPoly;
 
     fn from_poly_vec(params: &DCRTPolyParams, vec: Vec<Vec<DCRTPoly>>) -> Self {
-        let mut c = vec![vec![DCRTPoly::const_zero(params); vec[0].len()]; vec.len()];
-        for (i, row) in vec.iter().enumerate() {
-            for (j, element) in row.iter().enumerate() {
-                c[i][j] = element.clone();
+        let nrow = vec.len();
+        let ncol = vec[0].len();
+        let mut c: Vec<Vec<DCRTPoly>> = vec![vec![]; nrow];
+        for (i, row) in vec.into_iter().enumerate() {
+            for element in row.into_iter() {
+                c[i].push(element);
             }
         }
-        DCRTPolyMatrix { inner: c, params: params.clone(), nrow: vec.len(), ncol: vec[0].len() }
+        DCRTPolyMatrix { inner: c, params: params.clone(), nrow, ncol }
     }
 
     fn entry(&self, i: usize, j: usize) -> &Self::P {
@@ -96,29 +98,30 @@ impl PolyMatrix for DCRTPolyMatrix {
         column_start: usize,
         column_end: usize,
     ) -> Self {
-        let mut c = vec![
-            vec![DCRTPoly::const_zero(&self.params); column_end - column_start];
-            row_end - row_start
-        ];
+        let nrow = row_end - row_start;
+        let ncol = column_end - column_start;
+
+        let mut c = Vec::with_capacity(nrow);
         for i in row_start..row_end {
+            let mut row = Vec::with_capacity(ncol);
             for j in column_start..column_end {
-                c[i - row_start][j - column_start] = self.inner[i][j].clone();
+                row.push(self.inner[i][j].clone());
             }
+            c.push(row);
         }
-        DCRTPolyMatrix {
-            inner: c,
-            params: self.params.clone(),
-            nrow: row_end - row_start,
-            ncol: column_end - column_start,
-        }
+
+        DCRTPolyMatrix { inner: c, params: self.params.clone(), nrow, ncol }
     }
 
     fn zero(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
-        let mut c = vec![vec![DCRTPoly::const_zero(params); ncol]; nrow];
-        for i in 0..nrow {
-            for j in 0..ncol {
-                c[i][j] = DCRTPoly::const_zero(params).clone();
+        let mut c = Vec::with_capacity(nrow);
+        let zero_elem = DCRTPoly::const_zero(params);
+        for _ in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for _ in 0..ncol {
+                row.push(zero_elem.clone());
             }
+            c.push(row);
         }
         DCRTPolyMatrix { inner: c, params: params.clone(), nrow, ncol }
     }
@@ -126,27 +129,39 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn identity(params: &<Self::P as Poly>::Params, size: usize, scalar: Option<Self::P>) -> Self {
         let nrow = size;
         let ncol = size;
-        let mut result = vec![vec![DCRTPoly::const_zero(params); ncol]; nrow];
         let scalar = scalar.unwrap_or_else(|| DCRTPoly::const_one(params));
-        for i in 0..size {
-            result[i][i] = scalar.clone();
+        let zero_elem = DCRTPoly::const_zero(params);
+        let mut result = Vec::with_capacity(nrow);
+
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                if i == j {
+                    row.push(scalar.clone());
+                } else {
+                    row.push(zero_elem.clone());
+                }
+            }
+            result.push(row);
         }
+
         DCRTPolyMatrix { inner: result, params: params.clone(), nrow, ncol }
     }
 
     fn transpose(&self) -> Self {
         let nrow = self.ncol;
         let ncol = self.nrow;
-        let mut result: Vec<Vec<DCRTPoly>> =
-            vec![vec![DCRTPoly::const_zero(&self.params); ncol]; nrow];
+        let mut result = Vec::with_capacity(nrow);
         for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
             for j in 0..ncol {
-                result[i][j] = self.inner[j][i].clone();
+                row.push(self.inner[j][i].clone());
             }
+            result.push(row);
         }
+
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
     }
-
     // (m * n1), (m * n2) -> (m * (n1 + n2))
     fn concat_columns(&self, others: &[Self]) -> Self {
         #[cfg(debug_assertions)]
@@ -156,25 +171,18 @@ impl PolyMatrix for DCRTPolyMatrix {
             }
         }
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let mut result: Vec<Vec<DCRTPoly>> =
-            vec![vec![DCRTPoly::const_zero(&self.params); ncol]; self.nrow];
-
-        // Copy elements from self
+        let mut result = Vec::with_capacity(self.nrow);
         for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(ncol);
             for j in 0..self.ncol {
-                result[i][j] = self.inner[i][j].clone();
+                row.push(self.inner[i][j].clone());
             }
-        }
-
-        // Copy elements from others
-        let mut offset = self.ncol;
-        for other in others {
-            for i in 0..self.nrow {
+            for other in others {
                 for j in 0..other.ncol {
-                    result[i][offset + j] = other.inner[i][j].clone();
+                    row.push(other.inner[i][j].clone());
                 }
             }
-            offset += other.ncol;
+            result.push(row);
         }
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
@@ -189,25 +197,22 @@ impl PolyMatrix for DCRTPolyMatrix {
             }
         }
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
-        let mut result: Vec<Vec<DCRTPoly>> =
-            vec![vec![DCRTPoly::const_zero(&self.params); self.ncol]; nrow];
-
-        // Copy elements from self
+        let mut result = Vec::with_capacity(nrow);
         for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(self.ncol);
             for j in 0..self.ncol {
-                result[i][j] = self.inner[i][j].clone();
+                row.push(self.inner[i][j].clone());
             }
+            result.push(row);
         }
-
-        // Copy elements from others
-        let mut offset = self.nrow;
         for other in others {
             for i in 0..other.nrow {
+                let mut row = Vec::with_capacity(self.ncol);
                 for j in 0..other.ncol {
-                    result[offset + i][j] = other.inner[i][j].clone();
+                    row.push(other.inner[i][j].clone());
                 }
+                result.push(row);
             }
-            offset += other.nrow;
         }
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol: self.ncol }
@@ -217,26 +222,35 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn concat_diag(&self, others: &[Self]) -> Self {
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let mut result: Vec<Vec<DCRTPoly>> =
-            vec![vec![DCRTPoly::const_zero(&self.params); ncol]; nrow];
-
-        // Copy elements from self
+        let mut result = Vec::with_capacity(nrow);
+        let zero_elem = DCRTPoly::const_zero(&self.params);
         for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(ncol);
             for j in 0..self.ncol {
-                result[i][j] = self.inner[i][j].clone();
+                row.push(self.inner[i][j].clone());
             }
+            for _ in self.ncol..ncol {
+                row.push(zero_elem.clone());
+            }
+
+            result.push(row);
         }
 
-        // Copy elements from others
-        let mut row_offset = self.nrow;
         let mut col_offset = self.ncol;
         for other in others {
             for i in 0..other.nrow {
-                for j in 0..other.ncol {
-                    result[row_offset + i][col_offset + j] = other.inner[i][j].clone();
+                let mut row = Vec::with_capacity(ncol);
+                for _ in 0..col_offset {
+                    row.push(zero_elem.clone());
                 }
+                for j in 0..other.ncol {
+                    row.push(other.inner[i][j].clone());
+                }
+                for _ in (col_offset + other.ncol)..ncol {
+                    row.push(zero_elem.clone());
+                }
+                result.push(row);
             }
-            row_offset += other.nrow;
             col_offset += other.ncol;
         }
 
@@ -246,18 +260,16 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn tensor(&self, other: &Self) -> Self {
         let nrow = self.nrow * other.nrow;
         let ncol = self.ncol * other.ncol;
-        let mut result: Vec<Vec<DCRTPoly>> =
-            vec![vec![DCRTPoly::const_zero(&self.params); ncol]; nrow];
-
+        let mut result: Vec<Vec<DCRTPoly>> = Vec::with_capacity(nrow);
         for i1 in 0..self.nrow {
-            for j1 in 0..self.ncol {
-                for i2 in 0..other.nrow {
+            for i2 in 0..other.nrow {
+                let mut row = Vec::with_capacity(ncol);
+                for j1 in 0..self.ncol {
                     for j2 in 0..other.ncol {
-                        let i = i1 * other.nrow + i2;
-                        let j = j1 * other.ncol + j2;
-                        result[i][j] = self.inner[i1][j1].clone() * other.inner[i2][j2].clone();
+                        row.push(self.inner[i1][j1].clone() * other.inner[i2][j2].clone());
                     }
                 }
+                result.push(row);
             }
         }
 
@@ -279,16 +291,21 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn decompose(&self) -> Self {
         let bit_length = self.params.modulus_bits();
         let new_nrow = self.nrow * bit_length;
-        let mut new_inner = vec![vec![DCRTPoly::const_zero(&self.params); self.ncol]; new_nrow];
-
+        let mut new_inner = Vec::with_capacity(new_nrow);
         for i in 0..self.nrow {
+            let mut decomposed_rows =
+                (0..bit_length).map(|_| Vec::with_capacity(self.ncol)).collect::<Vec<_>>();
             for j in 0..self.ncol {
                 let decomposed = self.inner[i][j].decompose(&self.params);
                 for bit in 0..bit_length {
-                    new_inner[i * bit_length + bit][j] = decomposed[bit].clone();
+                    decomposed_rows[bit].push(decomposed[bit].clone());
                 }
             }
+            for row in decomposed_rows {
+                new_inner.push(row);
+            }
         }
+
         Self { nrow: new_nrow, ncol: self.ncol, inner: new_inner, params: self.params.clone() }
     }
 
@@ -347,13 +364,15 @@ impl Neg for DCRTPolyMatrix {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        let mut c: Vec<Vec<DCRTPoly>> =
-            vec![vec![DCRTPoly::const_zero(&self.params); self.ncol]; self.nrow];
+        let mut c = Vec::with_capacity(self.nrow);
         for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(self.ncol);
             for j in 0..self.ncol {
-                c[i][j] = -self.inner[i][j].clone();
+                row.push(-self.inner[i][j].clone());
             }
+            c.push(row);
         }
+
         DCRTPolyMatrix { inner: c, params: self.params, nrow: self.nrow, ncol: self.ncol }
     }
 }
@@ -381,14 +400,19 @@ impl<'a> Mul<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
             );
         }
         let common = self.ncol;
-        let mut c: Vec<Vec<DCRTPoly>> = vec![vec![DCRTPoly::const_zero(&self.params); ncol]; nrow];
+        let mut c = Vec::with_capacity(nrow);
         for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
             for j in 0..ncol {
-                for k in 0..common {
-                    c[i][j] += self.inner[i][k].clone() * rhs.inner[k][j].clone();
+                let mut sum = self.inner[i][0].clone() * rhs.inner[0][j].clone();
+                for k in 1..common {
+                    sum += self.inner[i][k].clone() * rhs.inner[k][j].clone();
                 }
+                row.push(sum);
             }
+            c.push(row);
         }
+
         DCRTPolyMatrix { inner: c, params: self.params, nrow, ncol }
     }
 }

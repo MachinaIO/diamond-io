@@ -52,16 +52,20 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
         columns: usize,
         dist: DistType,
     ) -> Self::M {
-        let mut c: Vec<Vec<DCRTPoly>> = vec![vec![DCRTPoly::const_zero(params); columns]; rows];
-        for row in 0..rows {
-            for col in 0..columns {
+        let mut c: Vec<Vec<DCRTPoly>> = Vec::with_capacity(rows);
+        for _ in 0..rows {
+            let mut row_vec = Vec::with_capacity(columns);
+            for _ in 0..columns {
                 let sampled_poly = self.sample_poly(params, &dist);
                 if sampled_poly.get_poly().is_null() {
                     panic!("Attempted to dereference a null pointer");
                 }
-                c[row][col] = sampled_poly;
+                row_vec.push(sampled_poly);
             }
+
+            c.push(row_vec);
         }
+
         DCRTPolyMatrix::from_poly_vec(params, c)
     }
 }

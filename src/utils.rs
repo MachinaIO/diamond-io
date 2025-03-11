@@ -1,11 +1,10 @@
-use num_bigint::BigUint;
-use num_traits::{One, Zero};
-
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
     sampler::DistType,
     Poly,
 };
+use num_bigint::BigUint;
+use num_traits::{One, Zero};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
