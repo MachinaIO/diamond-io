@@ -1,5 +1,11 @@
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
 use super::{element::FinRingElem, params::DCRTPolyParams};
-use crate::poly::{Poly, PolyParams};
+use crate::{
+    parallel_iter,
+    poly::{Poly, PolyParams},
+};
 use num_bigint::BigUint;
 use openfhe::{
     cxx::UniquePtr,
@@ -68,13 +74,10 @@ impl Poly for DCRTPoly {
 
     fn coeffs(&self) -> Vec<Self::Elem> {
         let coeffs = self.ptr_poly.GetCoefficients();
-        let mut result = Vec::with_capacity(coeffs.len());
-        for s in coeffs.iter() {
-            result.push(
-                FinRingElem::from_str(s, &self.ptr_poly.GetModulus()).expect("invalid string"),
-            );
-        }
-        result
+        let modulus = self.ptr_poly.GetModulus();
+        parallel_iter!(coeffs)
+            .map(|s| FinRingElem::from_str(&s, &modulus).expect("invalid string"))
+            .collect()
     }
 
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {

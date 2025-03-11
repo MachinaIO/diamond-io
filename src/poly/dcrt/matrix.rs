@@ -1,7 +1,11 @@
-use num_bigint::BigInt;
-
 use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
-use crate::poly::{Poly, PolyMatrix, PolyParams};
+use crate::{
+    parallel_iter,
+    poly::{Poly, PolyMatrix, PolyParams},
+};
+use num_bigint::BigInt;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
@@ -291,20 +295,18 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn decompose(&self) -> Self {
         let bit_length = self.params.modulus_bits();
         let new_nrow = self.nrow * bit_length;
-        let mut new_inner = Vec::with_capacity(new_nrow);
-        for i in 0..self.nrow {
-            let mut decomposed_rows =
-                (0..bit_length).map(|_| Vec::with_capacity(self.ncol)).collect::<Vec<_>>();
-            for j in 0..self.ncol {
-                let decomposed = self.inner[i][j].decompose(&self.params);
-                for bit in 0..bit_length {
-                    decomposed_rows[bit].push(decomposed[bit].clone());
+        let new_inner: Vec<Vec<_>> = parallel_iter!(0..self.nrow)
+            .flat_map(|i| {
+                let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
+                for j in 0..self.ncol {
+                    let decomposed = self.inner[i][j].decompose(&self.params);
+                    for bit in 0..bit_length {
+                        decomposed_rows[bit].push(decomposed[bit].clone());
+                    }
                 }
-            }
-            for row in decomposed_rows {
-                new_inner.push(row);
-            }
-        }
+                decomposed_rows
+            })
+            .collect();
 
         Self { nrow: new_nrow, ncol: self.ncol, inner: new_inner, params: self.params.clone() }
     }
