@@ -78,9 +78,13 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(feature = "parallel"))]
     use itertools::Itertools;
+    #[cfg(not(feature = "parallel"))]
     use num_bigint::BigUint;
+    #[cfg(not(feature = "parallel"))]
     use proptest::prelude::*;
+    #[cfg(not(feature = "parallel"))]
     use std::sync::Arc;
 
     #[test]
@@ -164,6 +168,7 @@ mod tests {
         assert_eq!(mult_matrix.col_size(), 12);
     }
 
+    #[cfg(not(feature = "parallel"))]
     proptest::proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
 

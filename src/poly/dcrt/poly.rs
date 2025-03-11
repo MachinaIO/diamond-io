@@ -135,7 +135,7 @@ impl Poly for DCRTPoly {
     fn decompose(&self, params: &Self::Params) -> Vec<Self> {
         let coeffs = self.coeffs();
         let bit_length = params.modulus_bits();
-        (0..bit_length)
+        parallel_iter!(0..bit_length)
             .map(|h| {
                 let bit_coeffs: Vec<_> = coeffs
                     .iter()
