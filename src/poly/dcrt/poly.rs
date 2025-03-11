@@ -82,13 +82,9 @@ impl Poly for DCRTPoly {
 
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
         let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
-        let modulus = params.modulus();
         for coeff in coeffs {
             #[cfg(debug_assertions)]
-            {
-                let coeff_modulus = coeff.modulus();
-                assert_eq!(coeff_modulus, modulus.as_ref());
-            }
+            assert_eq!(coeff.modulus(), params.modulus().as_ref());
             coeffs_cxx.push(coeff.value().to_string());
         }
         Self::poly_gen_from_vec(params, coeffs_cxx)
