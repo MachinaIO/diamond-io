@@ -158,8 +158,7 @@ where
                 for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
                     polys.push(zero.clone());
                 }
-                let mat = M::from_poly_vec_row(params.as_ref(), polys);
-                mat.tensor(&gadget_2)
+                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
 
             let bottom = public_data.pubkeys[idx + 1][0]

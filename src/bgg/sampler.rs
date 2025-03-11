@@ -130,14 +130,7 @@ where
 
         let gadget = S::M::gadget_matrix(params, 2);
         let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
-        let rhs = secret_vec.clone() * gadget;
-        println!(
-            "Tensor product input sizes: encoded_polys_vec={:?}, rhs={:?}",
-            encoded_polys_vec.size(),
-            rhs.size()
-        );
-
-        let second_term = encoded_polys_vec.tensor(&rhs);
+        let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
 
         let all_vector = first_term - second_term + error;
         parallel_iter!(plaintexts)

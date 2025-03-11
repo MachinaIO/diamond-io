@@ -68,7 +68,6 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         //         )
         //     })
         //     .collect_vec();
-        let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
         let mut rgs_decomposed = vec![];
@@ -76,11 +75,6 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             let r = if bit == 0 { r_0.clone() } else { r_1.clone() };
             let rg = r * &gadget_2;
             let rg_decomposed = rg.decompose();
-            println!(
-                "Tensor product input sizes: identity_input={:?}, rg_decomposed={:?}",
-                identity_input.size(),
-                rg_decomposed.size()
-            );
             // let t = identity_input.clone().tensor(&rg_decomposed);
             // let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
             rgs_decomposed.push(rg_decomposed);

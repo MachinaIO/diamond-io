@@ -51,8 +51,7 @@ where
                 }
                 polys.push(self.t_bar.entry(0, 0).clone());
                 let gadget_2 = M::gadget_matrix(&params, 2);
-                let mat = M::from_poly_vec_row(params.as_ref(), polys);
-                mat.tensor(&gadget_2)
+                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
             let expected_encoding_init = self.s_init.clone()
                 * (public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
@@ -174,13 +173,7 @@ where
                             .collect_vec();
                         polys.extend(input_polys);
                         polys.push(self.t_bar.entry(0, 0).clone());
-                        let mat = M::from_poly_vec_row(params.as_ref(), polys);
-                        println!(
-                            "Tensor product input sizes: mat={:?}, gadget_2={:?}",
-                            mat.size(),
-                            gadget_2.size()
-                        );
-                        mat.tensor(&gadget_2)
+                        M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
                     };
                     let pubkey = public_data.pubkeys[idx + 1][0]
                         .concat_matrix(&public_data.pubkeys[idx + 1][1..]);
