@@ -58,7 +58,7 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn from_poly_vec(params: &DCRTPolyParams, vec: Vec<Vec<DCRTPoly>>) -> Self {
         let nrow = vec.len();
         let ncol = vec[0].len();
-        let mut c: Vec<Vec<DCRTPoly>> = vec![vec![]; nrow];
+        let mut c: Vec<Vec<DCRTPoly>> = vec![Vec::with_capacity(ncol); nrow];
         for (i, row) in vec.into_iter().enumerate() {
             for element in row.into_iter() {
                 c[i].push(element);
@@ -297,11 +297,14 @@ impl PolyMatrix for DCRTPolyMatrix {
         let new_nrow = self.nrow * bit_length;
         let new_inner: Vec<Vec<_>> = parallel_iter!(0..self.nrow)
             .flat_map(|i| {
+                let decomposed_cols: Vec<_> = parallel_iter!(0..self.ncol)
+                    .map(|j| self.inner[i][j].decompose(&self.params))
+                    .collect();
+
                 let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
-                for j in 0..self.ncol {
-                    let decomposed = self.inner[i][j].decompose(&self.params);
+                for col_decomp in decomposed_cols {
                     for bit in 0..bit_length {
-                        decomposed_rows[bit].push(decomposed[bit].clone());
+                        decomposed_rows[bit].push(col_decomp[bit].clone());
                     }
                 }
                 decomposed_rows
