@@ -26,9 +26,9 @@ impl FinRingElem {
         Self { value: reduced_value, modulus }
     }
 
-    pub fn from_str<S: Into<String>>(value: S, modulus: S) -> Result<Self, ParseBigIntError> {
-        let value = BigInt::from_str(&value.into())?;
-        let modulus = BigUint::from_str(&modulus.into())?.into();
+    pub fn from_str(value: &str, modulus: &str) -> Result<Self, ParseBigIntError> {
+        let value = BigInt::from_str(value)?;
+        let modulus = BigUint::from_str(modulus)?.into();
         Ok(Self::new(value, modulus))
     }
 

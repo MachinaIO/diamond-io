@@ -23,6 +23,7 @@ pub struct DCRTPoly {
     ptr_poly: Arc<UniquePtr<DCRTPolyCxx>>,
 }
 
+// SAFETY: DCRTPoly is plain old data and is shared across threads in C++ OpenFHE as well.
 unsafe impl Send for DCRTPoly {}
 unsafe impl Sync for DCRTPoly {}
 
@@ -83,8 +84,7 @@ impl Poly for DCRTPoly {
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
         let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
         for coeff in coeffs {
-            #[cfg(debug_assertions)]
-            assert_eq!(coeff.modulus(), params.modulus().as_ref());
+            debug_assert_eq!(coeff.modulus(), params.modulus().as_ref());
             coeffs_cxx.push(coeff.value().to_string());
         }
         Self::poly_gen_from_vec(params, coeffs_cxx)
@@ -147,71 +147,6 @@ impl Poly for DCRTPoly {
     }
 }
 
-impl Add for DCRTPoly {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        self + &rhs
-    }
-}
-
-impl<'a> Add<&'a DCRTPoly> for DCRTPoly {
-    type Output = Self;
-
-    fn add(self, rhs: &'a Self) -> Self::Output {
-        DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))
-    }
-}
-
-impl Mul for DCRTPoly {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        self * &rhs
-    }
-}
-
-impl<'a> Mul<&'a DCRTPoly> for DCRTPoly {
-    type Output = Self;
-
-    fn mul(self, rhs: &'a Self) -> Self::Output {
-        &self * rhs
-    }
-}
-
-impl<'a> Mul<&'a DCRTPoly> for &'a DCRTPoly {
-    type Output = DCRTPoly;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        DCRTPoly::new(ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly))
-    }
-}
-
-impl Sub for DCRTPoly {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        self - &rhs
-    }
-}
-
-#[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a> Sub<&'a DCRTPoly> for DCRTPoly {
-    type Output = Self;
-
-    fn sub(self, rhs: &'a Self) -> Self::Output {
-        self + rhs.clone().neg()
-    }
-}
-
-impl Neg for DCRTPoly {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        DCRTPoly::new(self.ptr_poly.Negate())
-    }
-}
-
 impl PartialEq for DCRTPoly {
     fn eq(&self, other: &Self) -> bool {
         if self.ptr_poly.is_null() || other.ptr_poly.is_null() {
@@ -223,41 +158,108 @@ impl PartialEq for DCRTPoly {
 
 impl Eq for DCRTPoly {}
 
-impl AddAssign for DCRTPoly {
-    fn add_assign(&mut self, rhs: Self) {
-        self.ptr_poly = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly).into();
+/// Implements $tr for all combinations of T and &T by delegating to the &T/&T implementation.
+macro_rules! impl_binop_with_refs {
+    ($T:ty => $tr:ident::$f:ident $($t:tt)*) => {
+        impl $tr<$T> for $T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: $T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(&self, &rhs)
+            }
+        }
+
+        impl $tr<&$T> for $T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: &$T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(&self, rhs)
+            }
+        }
+
+        impl $tr<$T> for &$T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: $T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(self, &rhs)
+            }
+        }
+
+        impl $tr<&$T> for &$T {
+            type Output = $T;
+
+            #[inline]
+            fn $f $($t)*
+        }
+    };
+}
+
+impl_binop_with_refs!(DCRTPoly => Add::add(self, rhs: &DCRTPoly) -> DCRTPoly {
+    DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))
+});
+
+impl_binop_with_refs!(DCRTPoly => Mul::mul(self, rhs: &DCRTPoly) -> DCRTPoly {
+    DCRTPoly::new(ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly))
+});
+
+impl_binop_with_refs!(DCRTPoly => Sub::sub(self, rhs: &DCRTPoly) -> DCRTPoly {
+    self + -rhs
+});
+
+impl Neg for DCRTPoly {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        -&self
     }
 }
 
-impl<'a> AddAssign<&'a DCRTPoly> for DCRTPoly {
-    fn add_assign(&mut self, rhs: &'a Self) {
-        self.ptr_poly = ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly).into();
+impl Neg for &DCRTPoly {
+    type Output = DCRTPoly;
+
+    fn neg(self) -> Self::Output {
+        DCRTPoly::new(self.ptr_poly.Negate())
+    }
+}
+
+impl AddAssign for DCRTPoly {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+impl AddAssign<&DCRTPoly> for DCRTPoly {
+    fn add_assign(&mut self, rhs: &Self) {
+        // TODO: Expose `operator+=` in ffi.
+        *self = &*self + rhs;
     }
 }
 
 impl MulAssign for DCRTPoly {
     fn mul_assign(&mut self, rhs: Self) {
-        self.ptr_poly = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly).into();
+        *self *= &rhs;
     }
 }
 
-impl<'a> MulAssign<&'a DCRTPoly> for DCRTPoly {
-    fn mul_assign(&mut self, rhs: &'a Self) {
-        self.ptr_poly = ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly).into();
+impl MulAssign<&DCRTPoly> for DCRTPoly {
+    fn mul_assign(&mut self, rhs: &Self) {
+        // TODO: Expose `operator*=` in ffi.
+        *self = &*self * rhs;
     }
 }
 
 impl SubAssign for DCRTPoly {
     fn sub_assign(&mut self, rhs: Self) {
-        let neg_rhs = rhs.neg();
-        self.ptr_poly = ffi::DCRTPolyAdd(&neg_rhs.ptr_poly, &self.ptr_poly).into();
+        *self -= &rhs;
     }
 }
 
-impl<'a> SubAssign<&'a DCRTPoly> for DCRTPoly {
-    fn sub_assign(&mut self, rhs: &'a Self) {
-        let neg_rhs = rhs.clone().neg();
-        self.ptr_poly = ffi::DCRTPolyAdd(&neg_rhs.ptr_poly, &self.ptr_poly).into();
+impl SubAssign<&DCRTPoly> for DCRTPoly {
+    fn sub_assign(&mut self, rhs: &Self) {
+        *self += -rhs;
     }
 }
 
@@ -270,8 +272,10 @@ mod tests {
     #[test]
     fn test_dcrtpoly_coeffs() {
         let mut rng = rand::rng();
-        // todo: if x=0, n=1: libc++abi: terminating due to uncaught exception of type lbcrypto::OpenFHEException: /Users/piapark/Documents/GitHub/openfhe-development/src/core/include/math/nbtheory.h:l.156:ReverseBits(): msbb value not handled:0
-        // todo: if x=1, n=2: value mismatch from_coeffs & coeffs
+        /*
+        todo: if x=0, n=1: libc++abi: terminating due to uncaught exception of type lbcrypto::OpenFHEException: /Users/piapark/Documents/GitHub/openfhe-development/src/core/include/math/nbtheory.h:l.156:ReverseBits(): msbb value not handled:0
+        todo: if x=1, n=2: value mismatch from_coeffs & coeffs
+        */
         let x = rng.random_range(12..20);
         let size = rng.random_range(1..20);
         let n = 2_i32.pow(x) as u32;

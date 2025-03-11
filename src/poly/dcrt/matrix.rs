@@ -19,9 +19,6 @@ pub struct DCRTPolyMatrix {
     ncol: usize,
 }
 
-unsafe impl Send for DCRTPolyMatrix {}
-unsafe impl Sync for DCRTPolyMatrix {}
-
 impl Debug for DCRTPolyMatrix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DCRTPolyMatrix")
@@ -339,10 +336,10 @@ impl Add for DCRTPolyMatrix {
 }
 
 // Implement addition of a matrix by a matrix reference
-impl<'a> Add<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
+impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
 
-    fn add(self, rhs: &'a DCRTPolyMatrix) -> Self::Output {
+    fn add(self, rhs: &DCRTPolyMatrix) -> Self::Output {
         #[cfg(debug_assertions)]
         if self.nrow != rhs.nrow || self.ncol != rhs.ncol {
             panic!(
@@ -390,18 +387,18 @@ impl Mul for DCRTPolyMatrix {
     }
 }
 
-impl<'a> Mul<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
+impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
 
-    fn mul(self, rhs: &'a Self) -> Self::Output {
+    fn mul(self, rhs: &Self) -> Self::Output {
         &self * rhs
     }
 }
 
-impl<'a> Mul<&'a DCRTPolyMatrix> for &'a DCRTPolyMatrix {
+impl Mul<&DCRTPolyMatrix> for &DCRTPolyMatrix {
     type Output = DCRTPolyMatrix;
 
-    fn mul(self, rhs: Self) -> Self::Output {
+    fn mul(self, rhs: &DCRTPolyMatrix) -> Self::Output {
         let nrow = self.nrow;
         let ncol = rhs.ncol;
         #[cfg(debug_assertions)]
@@ -467,10 +464,10 @@ impl Sub for DCRTPolyMatrix {
 }
 
 // Implement subtraction of a matrix by a matrix reference
-impl<'a> Sub<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
+impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
 
-    fn sub(self, rhs: &'a DCRTPolyMatrix) -> Self::Output {
+    fn sub(self, rhs: &DCRTPolyMatrix) -> Self::Output {
         #[cfg(debug_assertions)]
         if self.nrow != rhs.nrow || self.ncol != rhs.ncol {
             panic!(
