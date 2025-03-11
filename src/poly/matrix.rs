@@ -91,6 +91,6 @@ pub trait PolyMatrix:
         new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
     ) -> Self;
 
-    /// Performs the operation S * (other ⊗ identity)
+    /// Performs the operation S * (identity ⊗ other)
     fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self;
 }

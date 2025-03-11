@@ -707,7 +707,7 @@ mod tests {
         let other =
             sampler.sample_uniform(&params, 3, 3, crate::poly::sampler::DistType::FinRingDist);
 
-        // Perform S * (other ⊗ I_4)
+        // Perform S * (I_4 ⊗ other)
         let result = s.mul_tensor_identity(&other, 4);
 
         // Check dimensions

@@ -20,7 +20,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub a_rlwe_bar: S::M,
     pub pubkeys: Vec<Vec<BggPublicKey<S::M>>>,
     // pub pubkeys_fhe_key: Vec<Vec<BggPublicKey<S::M>>>,
-    pub ts: [S::M; 2],
+    pub rgs_decomposed: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
     pub packed_output_size: usize,
@@ -73,7 +73,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
-        let mut ts = vec![];
+        let mut rgs_decomposed = vec![];
         for bit in 0..2 {
             let r = if bit == 0 { r_0.clone() } else { r_1.clone() };
             let rg = r * &gadget_2;
@@ -83,13 +83,13 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
                 identity_input.size(),
                 rg_decomposed.size()
             );
-            print_memory_usage("Before tensor product");
-            let t = identity_input.clone().tensor(&rg_decomposed);
-            print_memory_usage("After tensor product");
+            // print_memory_usage("Before tensor product");
+            // let t = identity_input.clone().tensor(&rg_decomposed);
+            print_memory_usage("Removed tensor product");
             // let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
-            ts.push(t);
+            rgs_decomposed.push(rg_decomposed);
         }
-        let ts = ts.try_into().unwrap();
+        let rgs_decomposed = rgs_decomposed.try_into().unwrap();
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -103,7 +103,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             r_1,
             a_rlwe_bar,
             pubkeys,
-            ts,
+            rgs_decomposed,
             a_prf,
             packed_input_size,
             packed_output_size,

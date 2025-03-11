@@ -141,11 +141,11 @@ where
 
         let mut ks = vec![];
         for bit in 0..2 {
-            let t = &public_data.ts[bit];
-            println!("t size: {:?}", t.size());
+            let rg_decomposed = &public_data.rgs_decomposed[bit];
+            // println!("t size: {:?}", t.size());
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
             println!("lhs size: {:?}", lhs.size());
-            let top = lhs * t;
+            let top = lhs.mul_tensor_identity(rg_decomposed, 1 + packed_input_size);
             println!("top size: {:?}", top.size());
             let inserted_poly_index = 1 + log_q + idx / dim;
             let inserted_coeff_index = idx % dim;
