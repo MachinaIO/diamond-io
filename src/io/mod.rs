@@ -2,6 +2,8 @@ pub mod eval;
 pub mod obf;
 pub mod utils;
 
+use std::path::PathBuf;
+
 use crate::bgg::circuit::PolyCircuit;
 use crate::bgg::BggEncoding;
 use crate::poly::{matrix::*, polynomial::*, PolyParams};
@@ -10,11 +12,11 @@ use crate::poly::{matrix::*, polynomial::*, PolyParams};
 pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
     pub encodings_init: Vec<BggEncoding<M>>,
-    pub p_init: M,
+    pub p_init_path: PathBuf,
     pub m_preimages: Vec<(M, M)>,
     pub n_preimages: Vec<(M, M)>,
     pub k_preimages: Vec<(M, M)>,
-    pub final_preimage: M,
+    pub final_preimage_path: PathBuf,
     #[cfg(test)]
     pub s_init: M,
     #[cfg(test)]
@@ -84,12 +86,14 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0);
         let mut rng = rand::rng();
+        let fs_dir_path = PathBuf::from("src/io/test_data");
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
             &mut rng,
+            &fs_dir_path,
         );
         println!("obfuscated");
         let input = [true];
@@ -104,5 +108,6 @@ mod test {
         let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);
         println!("{:?}", output);
         assert_eq!(output, hardcoded_key);
+        std::fs::remove_dir_all(fs_dir_path).unwrap();
     }
 }

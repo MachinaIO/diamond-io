@@ -4,6 +4,7 @@ use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
 use crate::bgg::BggPublicKey;
 use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
 use rand::{Rng, RngCore};
+use std::path::Path;
 use std::sync::Arc;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
@@ -12,6 +13,7 @@ pub fn obfuscate<M, SU, SH, ST, R>(
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
     rng: &mut R,
+    fs_dir_path: &Path,
 ) -> Obfuscation<M>
 where
     M: PolyMatrix,
@@ -99,6 +101,9 @@ where
         );
         s_b + error
     };
+    let p_init_path = fs_dir_path.join("p_init");
+    p_init.store(&p_init_path);
+    drop(p_init);
     let identity_2 = M::identity(params.as_ref(), 2, None);
     let u_0 = identity_2.concat_diag(&[public_data.r_0.clone()]);
     let u_1 = identity_2.concat_diag(&[public_data.r_1.clone()]);
@@ -230,15 +235,18 @@ where
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
+    let final_preimage_path = fs_dir_path.join("final_preimage");
+    final_preimage.store(&final_preimage_path);
+    drop(final_preimage);
 
     Obfuscation {
         hash_key,
         encodings_init,
-        p_init,
+        p_init_path,
         m_preimages,
         n_preimages,
         k_preimages,
-        final_preimage,
+        final_preimage_path,
         #[cfg(test)]
         s_init: s_init.clone(),
         #[cfg(test)]

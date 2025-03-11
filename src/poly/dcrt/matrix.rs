@@ -4,7 +4,9 @@ use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::poly::{Poly, PolyMatrix, PolyParams};
 use std::{
     fmt::Debug,
+    fs,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
 #[derive(Clone)]
@@ -305,6 +307,56 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
         Self { inner: new_inner, params: self.params.clone(), nrow: self.nrow, ncol: self.ncol }
     }
+    fn store(&self, path: &Path) {
+        let mut serializable_data = Vec::with_capacity(self.nrow);
+        for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(self.ncol);
+            for j in 0..self.ncol {
+                let coeffs = self.inner[i][j]
+                    .coeffs()
+                    .iter()
+                    .map(|c| c.value().to_string())
+                    .collect::<Vec<String>>();
+                row.push(coeffs);
+            }
+            serializable_data.push(row);
+        }
+
+        let params_data =
+            (self.params.ring_dimension(), self.params.crt_depth(), self.params.crt_bits());
+
+        let data = (serializable_data, params_data, self.nrow, self.ncol);
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        let file = std::fs::File::create(path).unwrap();
+        serde_json::to_writer(file, &data).unwrap();
+    }
+    fn load(path: &Path) -> Self {
+        let file = std::fs::File::open(path).unwrap();
+        let data: (Vec<Vec<Vec<String>>>, (u32, usize, usize), usize, usize) =
+            serde_json::from_reader(file).unwrap();
+
+        let (serialized_data, params_data, nrow, ncol) = data;
+        let (ring_dim, crt_depth, crt_bits) = params_data;
+
+        let params = DCRTPolyParams::new(ring_dim, crt_depth, crt_bits);
+
+        let mut inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = DCRTPoly::poly_gen_from_vec(&params, serialized_data[i][j].clone());
+                row.push(poly);
+            }
+            inner.push(row);
+        }
+
+        DCRTPolyMatrix { inner, params, nrow, ncol }
+    }
 }
 
 // ====== Arithmetic ======
@@ -464,7 +516,7 @@ mod tests {
     use num_bigint::BigUint;
 
     use super::*;
-    use crate::poly::dcrt::DCRTPolyParams;
+    use crate::{poly::dcrt::DCRTPolyParams, utils::create_random_poly};
 
     #[test]
     fn test_gadget_matrix() {
@@ -643,5 +695,25 @@ mod tests {
         let matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
         let matrix2 = DCRTPolyMatrix::zero(&params, 3, 2);
         let _prod = matrix1 * matrix2;
+    }
+    #[test]
+    fn test_matrix_store_load() {
+        let params = DCRTPolyParams::default();
+        let mut matrix = DCRTPolyMatrix::zero(&params, 5, 5);
+
+        for i in 0..5 {
+            for j in 0..5 {
+                matrix.inner[i][j] = create_random_poly(&params);
+            }
+        }
+
+        let path = std::env::current_dir().unwrap().join("test_data").join("test_matrix.json");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+
+        matrix.store(&path);
+        let loaded = DCRTPolyMatrix::load(&path);
+        assert_eq!(matrix, loaded);
+
+        std::fs::remove_file(path).unwrap();
     }
 }

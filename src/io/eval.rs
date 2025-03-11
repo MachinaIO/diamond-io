@@ -24,7 +24,8 @@ where
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     let packed_output_size = public_data.packed_output_size;
     let (mut ps, mut encodings) = (vec![], vec![]);
-    ps.push(obfuscation.p_init.clone());
+    let p_init = M::load(&obfuscation.p_init_path);
+    ps.push(p_init.clone());
     encodings.push(obfuscation.encodings_init);
     #[cfg(test)]
     {
@@ -33,7 +34,7 @@ where
                 obfuscation.s_init.clone().concat_columns(&[obfuscation.s_init.clone()]);
             s_connect * &obfuscation.bs[0].2
         };
-        debug_assert_eq!(obfuscation.p_init, expected_p_init);
+        debug_assert_eq!(p_init, expected_p_init);
 
         let zero = <M::P as Poly>::const_zero(&params);
         let one = <M::P as Poly>::const_one(&params);
@@ -196,7 +197,8 @@ where
     let unit_vector = identity_2.slice_columns(1, 2);
     let output_encodings_vec =
         output_encodings[0].concat_vector(&output_encodings[1..]) * unit_vector.decompose();
-    let final_v = ps.last().unwrap().clone() * &obfuscation.final_preimage;
+    let final_preimage = M::load(&obfuscation.final_preimage_path);
+    let final_v = ps.last().unwrap().clone() * &final_preimage;
     let z = output_encodings_vec.clone() - final_v.clone();
     debug_assert_eq!(z.size(), (1, packed_output_size));
     #[cfg(test)]

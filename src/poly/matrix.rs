@@ -2,6 +2,7 @@ use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
 pub trait PolyMatrix:
@@ -90,4 +91,6 @@ pub trait PolyMatrix:
         &self,
         new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
     ) -> Self;
+    fn load(path: &Path) -> Self;
+    fn store(&self, path: &Path);
 }
