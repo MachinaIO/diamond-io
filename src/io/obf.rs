@@ -114,7 +114,8 @@ where
     };
     let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (vec![], vec![], vec![]);
+    let (mut m_preimages_paths, mut n_preimages_paths, mut k_preimages_paths) =
+        (vec![], vec![], vec![]);
     for idx in 0..obf_params.input_size {
         let (_, _, b_cur_star) = &bs[idx];
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
@@ -128,12 +129,24 @@ where
             let ub = u_1.clone() * b_next_1;
             sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
         };
-        m_preimages.push((m_0, m_1));
+        let m_0_path = fs_dir_path.join(format!("m_preimage_0_{}", idx));
+        let m_1_path = fs_dir_path.join(format!("m_preimage_1_{}", idx));
+        m_0.store(&m_0_path);
+        m_1.store(&m_1_path);
+        drop(m_0);
+        drop(m_1);
+        m_preimages_paths.push((m_0_path, m_1_path));
 
         let ub_star = u_star.clone() * b_next_star;
         let n_0 = sampler_trapdoor.preimage(&params, b_next_0_trapdoor, b_next_0, &ub_star);
         let n_1 = sampler_trapdoor.preimage(&params, b_next_1_trapdoor, b_next_1, &ub_star);
-        n_preimages.push((n_0, n_1));
+        let n_0_path = fs_dir_path.join(format!("n_preimage_0_{}", idx));
+        let n_1_path = fs_dir_path.join(format!("n_preimage_1_{}", idx));
+        n_0.store(&n_0_path);
+        n_1.store(&n_1_path);
+        drop(n_0);
+        drop(n_1);
+        n_preimages_paths.push((n_0_path, n_1_path));
 
         let mut ks = vec![];
         for bit in 0..2 {
@@ -208,7 +221,12 @@ where
             // let k = sampler.preimage(&params, trapdoor, b_matrix, &k_target);
             // ks.push(k);
         }
-        k_preimages.push((ks[0].clone(), ks[1].clone()));
+        let k_0_path = fs_dir_path.join(format!("k_preimage_0_{}", idx));
+        let k_1_path = fs_dir_path.join(format!("k_preimage_1_{}", idx));
+        ks[0].store(&k_0_path);
+        ks[1].store(&k_1_path);
+        drop(ks);
+        k_preimages_paths.push((k_0_path, k_1_path));
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
@@ -243,9 +261,9 @@ where
         hash_key,
         encodings_init,
         p_init_path,
-        m_preimages,
-        n_preimages,
-        k_preimages,
+        m_preimages_paths,
+        n_preimages_paths,
+        k_preimages_paths,
         final_preimage_path,
         #[cfg(test)]
         s_init: s_init.clone(),

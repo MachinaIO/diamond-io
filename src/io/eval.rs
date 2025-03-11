@@ -66,14 +66,28 @@ where
     let log_q = params.as_ref().modulus_bits();
     let dim = params.as_ref().ring_dimension() as usize;
     for (idx, input) in inputs.iter().enumerate() {
-        let m =
-            if *input { &obfuscation.m_preimages[idx].1 } else { &obfuscation.m_preimages[idx].0 };
-        let q = ps[idx].clone() * m;
-        let n =
-            if *input { &obfuscation.n_preimages[idx].1 } else { &obfuscation.n_preimages[idx].0 };
-        let p = q.clone() * n;
-        let k =
-            if *input { &obfuscation.k_preimages[idx].1 } else { &obfuscation.k_preimages[idx].0 };
+        let m_path = if *input {
+            &obfuscation.m_preimages_paths[idx].1
+        } else {
+            &obfuscation.m_preimages_paths[idx].0
+        };
+        let m = M::load(m_path);
+        let q = ps[idx].clone() * &m;
+
+        let n_path = if *input {
+            &obfuscation.n_preimages_paths[idx].1
+        } else {
+            &obfuscation.n_preimages_paths[idx].0
+        };
+        let n = M::load(n_path);
+        let p = q.clone() * &n;
+
+        let k_path = if *input {
+            &obfuscation.k_preimages_paths[idx].1
+        } else {
+            &obfuscation.k_preimages_paths[idx].0
+        };
+        let k = M::load(k_path);
         let v = q.clone() * k;
         // let v_input = v.slice_columns(0, 2 * log_q * (packed_input_size + 1));
         // let v_fhe_key = v.slice_columns(
