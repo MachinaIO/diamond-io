@@ -68,14 +68,11 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use crate::poly::PolyParams;
-
     use super::*;
     use itertools::Itertools;
     use num_bigint::BigUint;
     use proptest::prelude::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_ring_dist() {

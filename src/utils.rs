@@ -70,3 +70,16 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
         DCRTPoly::const_zero(params)
     }
 }
+
+#[macro_export]
+macro_rules! parallel_iter {
+    ($i: expr) => {{
+        #[cfg(not(feature = "parallel"))]
+        let iter = $i.into_iter();
+
+        #[cfg(feature = "parallel")]
+        let iter = $i.into_par_iter();
+
+        iter
+    }};
+}

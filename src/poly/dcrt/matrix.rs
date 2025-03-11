@@ -582,7 +582,6 @@ mod tests {
     #[test]
     fn test_modulus_switch() {
         let params = DCRTPolyParams::default();
-        let modulus = params.modulus();
 
         let value00 = FinRingElem::new(1023782870921908217643761278891282178u128, params.modulus());
         let value01 = FinRingElem::new(8179012198875468938912873783289218738u128, params.modulus());

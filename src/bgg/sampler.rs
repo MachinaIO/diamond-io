@@ -1,10 +1,12 @@
 use super::{BggEncoding, BggPublicKey};
+use crate::parallel_iter;
 use crate::poly::polynomial::Poly;
 use crate::poly::sampler::{DistType, PolyUniformSampler};
 use crate::poly::PolyMatrix;
 use crate::poly::{params::PolyParams, sampler::PolyHashSampler};
 use itertools::Itertools;
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
@@ -39,7 +41,6 @@ where
         params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
         tag: &[u8],
         reveal_plaintexts: &[bool],
-        // packed_input_size: usize,
     ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
         let log_q = params.modulus_bits();
         let columns = 2 * log_q;
@@ -51,8 +52,8 @@ where
             columns * packed_input_size,
             DistType::FinRingDist,
         );
-        (0..packed_input_size)
-            .into_par_iter()
+
+        parallel_iter!(0..packed_input_size)
             .map(|idx| {
                 let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
                 BggPublicKey::new(
@@ -121,21 +122,19 @@ where
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
-        // first term sA
-        // [TODO] Avoid memory cloning here.
+
         let all_public_key_matrix: S::M = public_keys[0]
             .matrix
             .concat_columns(&public_keys[1..].iter().map(|pk| pk.matrix.clone()).collect_vec());
         let first_term = secret_vec.clone() * all_public_key_matrix;
-        // second term x \tensor sG
+
         let gadget = S::M::gadget_matrix(params, 2);
         let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
         let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
-        // all_vector = sA + x \tensor sG + e
+
         let all_vector = first_term - second_term + error;
-        let encoding: Vec<BggEncoding<S::M>> = plaintexts
-            .to_vec()
-            .into_par_iter()
+
+        parallel_iter!(plaintexts)
             .enumerate()
             .map(|(idx, plaintext)| {
                 let vector = all_vector.slice_columns(2 * log_q * idx, 2 * log_q * (idx + 1));
@@ -149,8 +148,7 @@ where
                     },
                 }
             })
-            .collect();
-        encoding
+            .collect()
     }
 }
 
