@@ -1,9 +1,14 @@
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 use std::sync::Arc;
 
-use crate::poly::{
-    dcrt::{DCRTPoly, DCRTPolyMatrix},
-    sampler::PolyTrapdoorSampler,
-    Poly, PolyMatrix, PolyParams,
+use crate::{
+    parallel_iter,
+    poly::{
+        dcrt::{DCRTPoly, DCRTPolyMatrix},
+        sampler::PolyTrapdoorSampler,
+        Poly, PolyMatrix, PolyParams,
+    },
 };
 
 use openfhe::{
@@ -13,6 +18,14 @@ use openfhe::{
         RLWETrapdoorPair, SetMatrixElement,
     },
 };
+
+pub struct RLWETrapdoor {
+    ptr_trapdoor: Arc<UniquePtr<RLWETrapdoorPair>>,
+}
+
+// SAFETY:
+unsafe impl Send for RLWETrapdoor {}
+unsafe impl Sync for RLWETrapdoor {}
 
 pub struct DCRTPolyTrapdoorSampler {
     base: usize,
@@ -27,7 +40,7 @@ impl DCRTPolyTrapdoorSampler {
 
 impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     type M = DCRTPolyMatrix;
-    type Trapdoor = Arc<UniquePtr<RLWETrapdoorPair>>;
+    type Trapdoor = RLWETrapdoor;
 
     fn trapdoor(
         &self,
@@ -43,7 +56,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.base as i64,
             false,
         );
-        let trapdoor = trapdoor_output.GetTrapdoorPair();
+        let trapdoor = RLWETrapdoor { ptr_trapdoor: trapdoor_output.GetTrapdoorPair().into() };
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
 
@@ -61,7 +74,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let public_matrix = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
 
-        (trapdoor.into(), public_matrix)
+        (trapdoor, public_matrix)
     }
 
     fn preimage(
@@ -88,23 +101,22 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             let remaining_cols = target_cols % size;
             let total_blocks = if remaining_cols > 0 { full_blocks + 1 } else { full_blocks };
 
-            let mut preimages = Vec::with_capacity(total_blocks);
+            let preimages: Vec<_> = parallel_iter!(0..total_blocks)
+                .map(|block| {
+                    let start_col = block * size;
 
-            for block in 0..total_blocks {
-                let start_col = block * size;
+                    // Calculate end_col based on whether this is the last block with remaining columns
+                    let end_col = if block == full_blocks && remaining_cols > 0 {
+                        start_col + remaining_cols
+                    } else {
+                        start_col + size
+                    };
 
-                // Calculate end_col based on whether this is the last block with remaining columns
-                let end_col = if block == full_blocks && remaining_cols > 0 {
-                    start_col + remaining_cols
-                } else {
-                    start_col + size
-                };
-
-                // Process the block
-                let target_block = target.slice(0, size, start_col, end_col);
-                let preimage_block = self.preimage(params, trapdoor, public_matrix, &target_block);
-                preimages.push(preimage_block);
-            }
+                    // Process the block
+                    let target_block = target.slice(0, size, start_col, end_col);
+                    self.preimage(params, trapdoor, public_matrix, &target_block)
+                })
+                .collect();
 
             // Concatenate all preimages horizontally
             let first = preimages[0].clone();
@@ -151,7 +163,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             n as u32,
             k as u32,
             &public_matrix_ptr,
-            trapdoor,
+            &trapdoor.ptr_trapdoor,
             &target_matrix_ptr,
             self.base as i64,
             self.sigma,
