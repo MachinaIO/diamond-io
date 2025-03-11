@@ -3,7 +3,6 @@ use super::{Obfuscation, ObfuscationParams};
 use crate::bgg::sampler::BGGPublicKeySampler;
 use crate::bgg::BggEncoding;
 use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
-use crate::utils::print_memory_usage;
 use itertools::Itertools;
 use std::sync::Arc;
 
@@ -53,16 +52,8 @@ where
                 polys.push(self.t_bar.entry(0, 0).clone());
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 let mat = M::from_poly_vec_row(params.as_ref(), polys);
-                println!(
-                    "Tensor product input sizes: mat={:?}, gadget_2={:?}",
-                    mat.size(),
-                    gadget_2.size()
-                );
-                print_memory_usage("Before tensor product");
-
                 mat.tensor(&gadget_2)
             };
-            print_memory_usage("After tensor product");
             let expected_encoding_init = self.s_init.clone()
                 * (public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
                     - inserted_poly_gadget);
@@ -189,11 +180,8 @@ where
                             mat.size(),
                             gadget_2.size()
                         );
-                        print_memory_usage("Before tensor product");
-
                         mat.tensor(&gadget_2)
                     };
-                    print_memory_usage("After tensor product");
                     let pubkey = public_data.pubkeys[idx + 1][0]
                         .concat_matrix(&public_data.pubkeys[idx + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)

@@ -1,10 +1,5 @@
 use super::utils::*;
-use super::{utils::*, Obfuscation, ObfuscationParams};
 use super::{Obfuscation, ObfuscationParams};
-use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
-use crate::bgg::BggPublicKey;
-use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
-use crate::utils::print_memory_usage;
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -30,7 +25,6 @@ where
     ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     R: RngCore,
 {
-    print_memory_usage("Obfuscation start");
     let public_circuit = &obf_params.public_circuit;
     let params = Arc::new(obf_params.params.clone());
     let dim = params.as_ref().ring_dimension() as usize;
@@ -42,9 +36,7 @@ where
     let sampler_hash = Arc::new(sampler_hash);
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler_hash.clone());
-    print_memory_usage("Before PublicSampledData::sample");
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
-    print_memory_usage("After PublicSampledData::sample");
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
     let s_bar =
@@ -61,10 +53,7 @@ where
     //     M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
     // let t = t_bar.concat_columns(&[minus_one_poly]);
 
-    print_memory_usage("Before hardcoded_key generation");
     let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
-    print_memory_usage("After hardcoded_key generation");
-    print_memory_usage("Before enc_hardcoded_key generation");
     let enc_hardcoded_key = {
         let e = sampler_uniform.sample_uniform(
             &params,
@@ -75,9 +64,7 @@ where
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
         t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e - &(hardcoded_key.clone() * &scale)
     };
-    print_memory_usage("After enc_hardcoded_key generation");
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
-    print_memory_usage("After enc_hardcoded_key_polys decomposition");
 
     let mut plaintexts = vec![];
     plaintexts.extend(enc_hardcoded_key_polys);
@@ -90,9 +77,7 @@ where
     //     vec![<M::P as Poly>::const_one(params.as_ref())];
     // input_encoded_polys.extend(enc_hardcoded_key_polys);
     // input_encoded_polys.extend(zero_plaintexts);
-    print_memory_usage("Before encodings_init generation");
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
-    print_memory_usage("After encodings_init generation");
     // let encode_fhe_key =
     //     bgg_encode_sampler.sample(&params, &public_data.pubkeys_fhe_key[0], &t.get_row(0),
     // false);
@@ -174,16 +159,8 @@ where
                     polys.push(zero.clone());
                 }
                 let mat = M::from_poly_vec_row(params.as_ref(), polys);
-                println!(
-                    "Tensor product input sizes: mat={:?}, gadget_2={:?}",
-                    mat.size(),
-                    gadget_2.size()
-                );
-                print_memory_usage("Before tensor product");
-
                 mat.tensor(&gadget_2)
             };
-            print_memory_usage("After tensor product");
 
             let bottom = public_data.pubkeys[idx + 1][0]
                 .concat_matrix(&public_data.pubkeys[idx + 1][1..])

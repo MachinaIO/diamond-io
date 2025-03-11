@@ -2,7 +2,6 @@ use super::ObfuscationParams;
 use crate::bgg::circuit::{build_circuit_ip_to_int, PolyCircuit};
 use crate::bgg::{sampler::*, BggPublicKey, Evaluable};
 use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
-use crate::utils::print_memory_usage;
 use itertools::Itertools;
 use std::marker::PhantomData;
 
@@ -32,7 +31,6 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         obf_params: &ObfuscationParams<S::M>,
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
     ) -> Self {
-        print_memory_usage("PublicSampledData::sample start");
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
@@ -83,9 +81,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
                 identity_input.size(),
                 rg_decomposed.size()
             );
-            // print_memory_usage("Before tensor product");
             // let t = identity_input.clone().tensor(&rg_decomposed);
-            print_memory_usage("Removed tensor product");
             // let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
             rgs_decomposed.push(rg_decomposed);
         }

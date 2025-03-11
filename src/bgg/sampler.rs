@@ -4,7 +4,6 @@ use crate::poly::polynomial::Poly;
 use crate::poly::sampler::{DistType, PolyUniformSampler};
 use crate::poly::PolyMatrix;
 use crate::poly::{params::PolyParams, sampler::PolyHashSampler};
-use crate::utils::print_memory_usage;
 use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -139,10 +138,8 @@ where
         );
 
         let second_term = encoded_polys_vec.tensor(&rhs);
-        print_memory_usage("Before tensor product");
 
         let all_vector = first_term - second_term + error;
-        print_memory_usage("After tensor product");
         parallel_iter!(plaintexts)
             .enumerate()
             .map(|(idx, plaintext)| {
