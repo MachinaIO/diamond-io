@@ -270,7 +270,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                 let mut row = Vec::with_capacity(ncol);
                 for j1 in 0..self.ncol {
                     for j2 in 0..other.ncol {
-                        row.push(self.inner[i1][j1].clone() * other.inner[i2][j2].clone());
+                        row.push(&self.inner[i1][j1] * &other.inner[i2][j2]);
                     }
                 }
                 result.push(row);
@@ -390,11 +390,18 @@ impl Mul for DCRTPolyMatrix {
     }
 }
 
-// Implement multiplication of a matrix by a matrix reference
 impl<'a> Mul<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
 
-    fn mul(self, rhs: &'a DCRTPolyMatrix) -> Self::Output {
+    fn mul(self, rhs: &'a Self) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl<'a> Mul<&'a DCRTPolyMatrix> for &'a DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn mul(self, rhs: Self) -> Self::Output {
         let nrow = self.nrow;
         let ncol = rhs.ncol;
         #[cfg(debug_assertions)]
@@ -409,16 +416,16 @@ impl<'a> Mul<&'a DCRTPolyMatrix> for DCRTPolyMatrix {
         for i in 0..nrow {
             let mut row = Vec::with_capacity(ncol);
             for j in 0..ncol {
-                let mut sum = self.inner[i][0].clone() * rhs.inner[0][j].clone();
+                let mut sum = &self.inner[i][0] * &rhs.inner[0][j];
                 for k in 1..common {
-                    sum += self.inner[i][k].clone() * rhs.inner[k][j].clone();
+                    sum += &self.inner[i][k] * &rhs.inner[k][j];
                 }
                 row.push(sum);
             }
             c.push(row);
         }
 
-        DCRTPolyMatrix { inner: c, params: self.params, nrow, ncol }
+        DCRTPolyMatrix { inner: c, params: self.params.clone(), nrow, ncol }
     }
 }
 
@@ -557,7 +564,7 @@ mod tests {
         assert_eq!(diff, zero);
 
         // Test multiplication
-        let prod = matrix1.clone() * &identity;
+        let prod = &matrix1 * &identity;
         assert_eq!(prod, matrix1);
     }
 

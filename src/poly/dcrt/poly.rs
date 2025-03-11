@@ -104,7 +104,7 @@ impl Poly for DCRTPoly {
             let power_of_two = BigUint::from(2u32).pow(i as u32);
             let const_poly_power_of_two =
                 Self::from_const(params, &FinRingElem::new(power_of_two, params.modulus()));
-            reconstructed += bit_poly.clone() * const_poly_power_of_two;
+            reconstructed += bit_poly * &const_poly_power_of_two;
         }
         reconstructed
     }
@@ -179,6 +179,14 @@ impl<'a> Mul<&'a DCRTPoly> for DCRTPoly {
     type Output = Self;
 
     fn mul(self, rhs: &'a Self) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl<'a> Mul<&'a DCRTPoly> for &'a DCRTPoly {
+    type Output = DCRTPoly;
+
+    fn mul(self, rhs: Self) -> Self::Output {
         DCRTPoly::new(ffi::DCRTPolyMul(&rhs.ptr_poly, &self.ptr_poly))
     }
 }
@@ -310,7 +318,7 @@ mod tests {
         let sum = poly1.clone() + poly2.clone();
 
         // 5. Test multiplication.
-        let product = poly1.clone() * poly2.clone();
+        let product = &poly1 * &poly2;
 
         // 6. Test negation / subtraction.
         let neg_poly2 = poly2.clone().neg();

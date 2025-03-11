@@ -156,9 +156,9 @@ mod tests {
         let expected_out1 = pub_polys[0].clone() + pub_polys[1].clone(); // add_gate(pub_inputs[0], pub_inputs[1])
         let expected_out2 = pub_polys[1].clone() + pub_polys[2].clone(); // add_gate(pub_inputs[1], pub_inputs[2])
         let expected_out3 = pub_polys[0].clone() + pub_polys[2].clone(); // add_gate(pub_inputs[0], pub_inputs[2])
-        let expected_out4 = pub_polys[0].clone() * pub_polys[1].clone(); // mul_gate(pub_inputs[0], pub_inputs[1])
-        let expected_out5 = pub_polys[1].clone() * pub_polys[2].clone(); // mul_gate(pub_inputs[1], pub_inputs[2])
-        let expected_out6 = pub_polys[0].clone() * pub_polys[2].clone(); // mul_gate(pub_inputs[0], pub_inputs[2])
+        let expected_out4 = &pub_polys[0] * &pub_polys[1]; // mul_gate(pub_inputs[0], pub_inputs[1])
+        let expected_out5 = &pub_polys[1] * &pub_polys[2]; // mul_gate(pub_inputs[1], pub_inputs[2])
+        let expected_out6 = &pub_polys[0] * &pub_polys[2]; // mul_gate(pub_inputs[0], pub_inputs[2])
 
         assert_eq!(pub_circuit_outputs.len(), 6);
         assert_eq!(pub_circuit_outputs[0], expected_out1);
@@ -183,8 +183,8 @@ mod tests {
         let mut expected_ip2 = DCRTPoly::const_zero(&params);
 
         for i in 0..num_priv_input {
-            expected_ip1 += pub_circuit_outputs[i].clone() * priv_polys[i].clone();
-            expected_ip2 += pub_circuit_outputs[i + num_priv_input].clone() * priv_polys[i].clone();
+            expected_ip1 += &pub_circuit_outputs[i] * &priv_polys[i];
+            expected_ip2 += &pub_circuit_outputs[i + num_priv_input] * &priv_polys[i];
         }
 
         // Evaluate the inner product circuit
