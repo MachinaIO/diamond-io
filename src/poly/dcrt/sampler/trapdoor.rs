@@ -23,6 +23,37 @@ pub struct RLWETrapdoor {
     ptr_trapdoor: Arc<UniquePtr<RLWETrapdoorPair>>,
 }
 
+pub struct DCRTTrapdoor {
+    ptr_dcrt_trapdoor: Arc<UniquePtr<openfhe::ffi::DCRTTrapdoor>>,
+}
+
+impl DCRTTrapdoor {
+    fn new(
+        n: u32,
+        size: usize,
+        k_res: usize,
+        d: usize,
+        sigma: f64,
+        base: i64,
+        balanced: bool,
+    ) -> Self {
+        let ptr_dcrt_trapdoor = DCRTSquareMatTrapdoorGen(n, size, k_res, d, sigma, base, balanced);
+        Self { ptr_dcrt_trapdoor: ptr_dcrt_trapdoor.into() }
+    }
+
+    fn get_trapdoor_pair(&self) -> RLWETrapdoor {
+        RLWETrapdoor { ptr_trapdoor: self.ptr_dcrt_trapdoor.GetTrapdoorPair().into() }
+    }
+
+    fn get_public_matrix(&self, row: usize, col: usize) -> DCRTPoly {
+        DCRTPoly::new(self.ptr_dcrt_trapdoor.GetPublicMatrixElement(row, col))
+    }
+}
+
+// SAFETY:
+unsafe impl Send for DCRTTrapdoor {}
+unsafe impl Sync for DCRTTrapdoor {}
+
 // SAFETY:
 unsafe impl Send for RLWETrapdoor {}
 unsafe impl Sync for RLWETrapdoor {}
@@ -47,7 +78,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M) {
-        let trapdoor_output = DCRTSquareMatTrapdoorGen(
+        let dcrt_trapdoor = DCRTTrapdoor::new(
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
@@ -56,25 +87,17 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             self.base as i64,
             false,
         );
-        let trapdoor = RLWETrapdoor { ptr_trapdoor: trapdoor_output.GetTrapdoorPair().into() };
+        let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
 
-        // Construct the public matrix from its elements
-        let mut matrix_inner = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                let poly = trapdoor_output.GetPublicMatrixElement(i, j);
-                let dcrt_poly = DCRTPoly::new(poly);
-                row.push(dcrt_poly);
-            }
-            matrix_inner.push(row);
-        }
-
+        let matrix_inner: Vec<Vec<_>> = parallel_iter!(0..nrow)
+            .map(|i| {
+                parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
+            })
+            .collect();
         let public_matrix = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
-
-        (trapdoor, public_matrix)
+        (rlwe_trapdoor, public_matrix)
     }
 
     fn preimage(
