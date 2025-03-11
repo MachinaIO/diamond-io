@@ -409,18 +409,19 @@ impl Mul<&DCRTPolyMatrix> for &DCRTPolyMatrix {
             );
         }
         let common = self.ncol;
-        let mut c = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                let mut sum = &self.inner[i][0] * &rhs.inner[0][j];
-                for k in 1..common {
-                    sum += &self.inner[i][k] * &rhs.inner[k][j];
-                }
-                row.push(sum);
-            }
-            c.push(row);
-        }
+        let c: Vec<Vec<_>> = parallel_iter!(0..nrow)
+            .map(|i| {
+                parallel_iter!(0..ncol)
+                    .map(|j| {
+                        let mut sum = &self.inner[i][0] * &rhs.inner[0][j];
+                        for k in 1..common {
+                            sum += &self.inner[i][k] * &rhs.inner[k][j];
+                        }
+                        sum
+                    })
+                    .collect()
+            })
+            .collect();
 
         DCRTPolyMatrix { inner: c, params: self.params.clone(), nrow, ncol }
     }
