@@ -61,6 +61,10 @@ impl PolyElem for FinRingElem {
         Self::new(modulus.as_ref() - &BigUint::from(1u8), modulus.clone())
     }
 
+    fn constant(modulus: &Self::Modulus, value: u64) -> Self {
+        Self::new(value, modulus.clone())
+    }
+
     fn half_q(modulus: &Self::Modulus) -> Self {
         let bits = modulus.bits();
         let value = BigUint::from(1u8) << (bits - 1);
@@ -71,6 +75,14 @@ impl PolyElem for FinRingElem {
         let bits = self.modulus.bits();
         let half_q_value = BigUint::from(1u8) << (bits - 1);
         self.value >= half_q_value
+    }
+
+    fn modulus(&self) -> &Self::Modulus {
+        &self.modulus
+    }
+
+    fn to_biguint(&self) -> &num_bigint::BigUint {
+        &self.value
     }
 }
 
