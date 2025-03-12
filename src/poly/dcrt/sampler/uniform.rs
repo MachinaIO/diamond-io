@@ -1,10 +1,15 @@
-use openfhe::ffi;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
-use crate::poly::{
-    dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
-    sampler::{DistType, PolyUniformSampler},
-    Poly, PolyMatrix, PolyParams,
+use crate::{
+    parallel_iter,
+    poly::{
+        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
+        sampler::{DistType, PolyUniformSampler},
+        Poly, PolyMatrix, PolyParams,
+    },
 };
+use openfhe::ffi;
 
 pub struct DCRTPolyUniformSampler {}
 
@@ -52,30 +57,35 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
         columns: usize,
         dist: DistType,
     ) -> Self::M {
-        let mut c: Vec<Vec<DCRTPoly>> = vec![vec![DCRTPoly::const_zero(params); columns]; rows];
-        for row in 0..rows {
-            for col in 0..columns {
-                let sampled_poly = self.sample_poly(params, &dist);
-                if sampled_poly.get_poly().is_null() {
-                    panic!("Attempted to dereference a null pointer");
-                }
-                c[row][col] = sampled_poly;
-            }
-        }
+        let c: Vec<Vec<DCRTPoly>> = parallel_iter!(0..rows)
+            .map(|_| {
+                parallel_iter!(0..columns)
+                    .map(|_| {
+                        let sampled_poly = self.sample_poly(params, &dist);
+                        if sampled_poly.get_poly().is_null() {
+                            panic!("Attempted to dereference a null pointer");
+                        }
+                        sampled_poly
+                    })
+                    .collect()
+            })
+            .collect();
+
         DCRTPolyMatrix::from_poly_vec(params, c)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use crate::poly::PolyParams;
-
     use super::*;
+    #[cfg(not(feature = "parallel"))]
     use itertools::Itertools;
+    #[cfg(not(feature = "parallel"))]
     use num_bigint::BigUint;
+    #[cfg(not(feature = "parallel"))]
     use proptest::prelude::*;
+    #[cfg(not(feature = "parallel"))]
+    use std::sync::Arc;
 
     #[test]
     fn test_ring_dist() {
@@ -158,6 +168,7 @@ mod tests {
         assert_eq!(mult_matrix.col_size(), 12);
     }
 
+    #[cfg(not(feature = "parallel"))]
     proptest::proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
 

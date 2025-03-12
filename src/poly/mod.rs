@@ -1,4 +1,5 @@
 #![allow(clippy::needless_range_loop)]
+#![allow(clippy::suspicious_arithmetic_impl)]
 
 pub mod dcrt;
 pub mod element;

@@ -731,8 +731,8 @@ mod tests {
         let c0_eval = DCRTPoly::from_decomposed(&params, &c0_bits_eval);
         let c1_eval = DCRTPoly::from_decomposed(&params, &c1_bits_eval);
 
-        assert_eq!(c0_eval, c0.clone() * k.clone());
-        assert_eq!(c1_eval, c1.clone() * k.clone());
+        assert_eq!(c0_eval, &c0 * &k);
+        assert_eq!(c1_eval, &c1 * &k);
 
         // decrypt the result
         let plaintext = c1_eval + c0_eval * s;

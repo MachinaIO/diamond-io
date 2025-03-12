@@ -1,7 +1,7 @@
 use crate::poly::params::PolyParams;
 use num_bigint::BigUint;
 use num_traits::Num;
-use openfhe::ffi::{self};
+use openfhe::ffi;
 use std::{fmt::Debug, sync::Arc};
 
 #[derive(Clone)]
@@ -53,7 +53,7 @@ impl Default for DCRTPolyParams {
 impl DCRTPolyParams {
     pub fn new(ring_dimension: u32, crt_depth: usize, crt_bits: usize) -> Self {
         // assert that ring_dimension is a power of 2
-        assert!(ring_dimension.is_power_of_two(), "n must be a power of 2");
+        assert!(ring_dimension.is_power_of_two(), "ring_dimension must be a power of 2");
         let modulus = ffi::GenModulus(ring_dimension, crt_depth, crt_bits);
         Self {
             ring_dimension,

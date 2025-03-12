@@ -168,13 +168,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
     use crate::poly::dcrt::DCRTPolyParams;
+    #[cfg(not(feature = "parallel"))]
     use itertools::Itertools;
     use keccak_asm::Keccak256;
+    #[cfg(not(feature = "parallel"))]
     use proptest::prelude::*;
+    #[cfg(not(feature = "parallel"))]
+    use std::sync::Arc;
 
     #[test]
     fn test_poly_hash_sampler() {
@@ -213,6 +215,7 @@ mod tests {
         assert_eq!(matrix.col_size(), ncol, "Matrix column count mismatch");
     }
 
+    #[cfg(not(feature = "parallel"))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
 

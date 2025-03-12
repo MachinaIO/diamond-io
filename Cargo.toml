@@ -1,25 +1,50 @@
 [package]
-name = "diamond_io"
+name = "diamond-io"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.83"
 license = "MIT OR Apache-2.0"
+
+[features]
+parallel = ["rayon"]
 
 [dependencies]
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "refactor2" }
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
 num-traits = "0.2"
-rayon = "1.5"
+rayon = { version = "1.5", optional = true }
 rand = { version = "0.9.0", features = ["std_rng"] }
 itertools = "0.14.0"
 
 [dev-dependencies]
 keccak-asm = { version = "0.1.4" }
 proptest = "1.0.0"
+criterion = "0.5.0"
+
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
 
 [profile.release]
 opt-level = 3
 lto = "thin"
-codegen-units = 1
+debug = "none"
+strip = "symbols"
 panic = "abort"
+codegen-units = 16
+
+# Use the `--profile profiling` flag to show symbols in release mode.
+# e.g. `cargo build --profile profiling`
+[profile.profiling]
+inherits = "release"
+debug = "full"
+strip = "none"
+
+[[bench]]
+name = "dcrtpoly"
+harness = false
+
+[[bench]]
+name = "dcrtmatrix"
+harness = false

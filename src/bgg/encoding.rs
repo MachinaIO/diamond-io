@@ -78,14 +78,18 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
             panic!("Unknown plaintext for the left-hand input of multiplication");
         }
         let decomposed_b = other.pubkey.matrix.decompose();
-        let first_term = self.vector.clone() * decomposed_b;
+        let first_term = self.vector.clone() * decomposed_b.clone();
         let second_term = other.vector.clone() * self.plaintext.as_ref().unwrap();
         let new_vector = first_term + second_term;
         let new_plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
             (Some(a), Some(b)) => Some(a.clone() * b),
             _ => None,
         };
-        let new_pubkey = self.pubkey.clone() * &other.pubkey;
+
+        let new_pubkey = BggPublicKey {
+            matrix: self.pubkey.matrix.clone() * decomposed_b,
+            reveal_plaintext: self.pubkey.reveal_plaintext & other.pubkey.reveal_plaintext,
+        };
         Self { vector: new_vector, pubkey: new_pubkey, plaintext: new_plaintext }
     }
 }

@@ -1,11 +1,10 @@
-use num_bigint::BigUint;
-use num_traits::{One, Zero};
-
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
     sampler::DistType,
     Poly,
 };
+use num_bigint::BigUint;
+use num_traits::{One, Zero};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
@@ -69,4 +68,32 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
     } else {
         DCRTPoly::const_zero(params)
     }
+}
+
+#[macro_export]
+macro_rules! parallel_iter {
+    ($i: expr) => {{
+        #[cfg(not(feature = "parallel"))]
+        {
+            IntoIterator::into_iter($i)
+        }
+        #[cfg(feature = "parallel")]
+        {
+            rayon::iter::IntoParallelIterator::into_par_iter($i)
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! join {
+    ($a:expr, $b:expr $(,)?) => {{
+        #[cfg(not(feature = "parallel"))]
+        {
+            ($a(), $b())
+        }
+        #[cfg(feature = "parallel")]
+        {
+            rayon::join($a, $b)
+        }
+    }};
 }

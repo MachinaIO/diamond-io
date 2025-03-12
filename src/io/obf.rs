@@ -1,8 +1,12 @@
-use super::utils::*;
-use super::{Obfuscation, ObfuscationParams};
-use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
-use crate::bgg::BggPublicKey;
-use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
+use super::{utils::*, Obfuscation, ObfuscationParams};
+use crate::{
+    bgg::{
+        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+        BggPublicKey,
+    },
+    join,
+    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+};
 use rand::{Rng, RngCore};
 use std::sync::Arc;
 
@@ -30,12 +34,10 @@ where
     let sampler_uniform = Arc::new(sampler_uniform);
     let sampler_hash = Arc::new(sampler_hash);
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
-    // let packed_input_size = obf_params.input_size.div_ceil(dim);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler_hash.clone());
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-
     let s_bar =
         sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
     let bgg_encode_sampler = BGGEncodingSampler::new(
@@ -76,7 +78,8 @@ where
     // input_encoded_polys.extend(zero_plaintexts);
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
     // let encode_fhe_key =
-    //     bgg_encode_sampler.sample(&params, &public_data.pubkeys_fhe_key[0], &t.get_row(0), false);
+    //     bgg_encode_sampler.sample(&params, &public_data.pubkeys_fhe_key[0], &t.get_row(0),
+    // false);
 
     let mut bs = vec![];
     let mut b_trapdoors = vec![];
@@ -115,26 +118,25 @@ where
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
-        let m_0 = {
-            let ub = u_0.clone() * b_next_0;
-            sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
-        };
-        let m_1 = {
-            let ub = u_1.clone() * b_next_1;
-            sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &ub)
-        };
-        m_preimages.push((m_0, m_1));
+
+        let m_preimage =
+            |a| sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
+        let mp =
+            || join!(|| m_preimage(u_0.clone() * b_next_0), || m_preimage(u_1.clone() * b_next_1));
 
         let ub_star = u_star.clone() * b_next_star;
-        let n_0 = sampler_trapdoor.preimage(&params, b_next_0_trapdoor, b_next_0, &ub_star);
-        let n_1 = sampler_trapdoor.preimage(&params, b_next_1_trapdoor, b_next_1, &ub_star);
-        n_preimages.push((n_0, n_1));
+        let n_preimage = |t, n| sampler_trapdoor.preimage(&params, t, n, &ub_star);
+        let np = || {
+            join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
+                b_next_1_trapdoor,
+                b_next_1
+            ))
+        };
 
-        let mut ks = vec![];
-        for bit in 0..2 {
-            let t = &public_data.ts[bit];
-            let top =
-                -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]) * t;
+        let k_preimage = |bit: usize| {
+            let rg_decomposed = &public_data.rgs_decomposed[bit];
+            let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
+            let top = lhs.mul_tensor_identity(rg_decomposed, 1 + packed_input_size);
             let inserted_poly_index = 1 + log_q + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
@@ -163,47 +165,15 @@ where
             let k_target = top.concat_rows(&[bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
-            let k = sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target);
-            ks.push(k);
+            sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
+        };
+        let kp = || join!(|| k_preimage(0), || k_preimage(1));
 
-            // let (t_input, t_fhe_key) = if bit == 0 { &public_data.t_0 } else { &public_data.t_1 };
-            // let at_input = public_data.pubkeys_input[idx][0]
-            //     .concat_matrix(&public_data.pubkeys_input[idx][1..])
-            //     * t_input;
-            // let at_fhe_key = public_data.pubkeys_fhe_key[idx][0]
-            //     .concat_matrix(&public_data.pubkeys_fhe_key[idx][1..])
-            //     * t_fhe_key;
-            // let former = at_input.concat_columns(&[at_fhe_key]);
-            // let inserted_poly_index = 1 + log_q + idx / dim;
-            // let inserted_coeff_index = idx % dim;
-            // let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
-            // let mut coeffs = vec![zero_coeff; dim];
-            // coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus());
-            // let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
-            // let inserted_poly_gadget = {
-            //     let zero = <M::P as Poly>::const_zero(params.as_ref());
-            //     let mut polys = vec![];
-            //     for _ in 0..(inserted_poly_index) {
-            //         polys.push(zero.clone());
-            //     }
-            //     polys.push(inserted_poly);
-            //     for _ in inserted_poly_index + 1..packed_input_size {
-            //         polys.push(zero.clone());
-            //     }
-            //     M::from_poly_vec_row(params.as_ref(), polys) * &gadget_2
-            // };
-            // let a_input_next = public_data.pubkeys_input[idx + 1][0]
-            //     .concat_matrix(&public_data.pubkeys_input[idx + 1][1..])
-            //     - &inserted_poly_gadget;
-            // let latter = a_input_next.concat_columns(&[public_data.pubkeys_fhe_key[idx + 1][0]
-            //     .concat_matrix(&public_data.pubkeys_fhe_key[idx + 1][1..])]);
-            // let k_target = former.concat_rows(&[latter]);
-            // let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
-            // let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
-            // let k = sampler.preimage(&params, trapdoor, b_matrix, &k_target);
-            // ks.push(k);
-        }
-        k_preimages.push((ks[0].clone(), ks[1].clone()));
+        let (mp, (np, kp)) = join!(mp, || join!(np, kp));
+
+        m_preimages.push(mp);
+        n_preimages.push(np);
+        k_preimages.push(kp);
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);

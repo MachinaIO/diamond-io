@@ -9,7 +9,7 @@ const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
 const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
-const TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
+const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub a_rlwe_bar: S::M,
     pub pubkeys: Vec<Vec<BggPublicKey<S::M>>>,
     // pub pubkeys_fhe_key: Vec<Vec<BggPublicKey<S::M>>>,
-    pub ts: [S::M; 2],
+    pub rgs_decomposed: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
     pub packed_output_size: usize,
@@ -68,19 +68,18 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         //         )
         //     })
         //     .collect_vec();
-        let identity_input = S::M::identity(params, 1 + packed_input_size, None);
+        // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
-        let mut ts = vec![];
+        let mut rgs_decomposed = vec![];
         for bit in 0..2 {
             let r = if bit == 0 { r_0.clone() } else { r_1.clone() };
             let rg = r * &gadget_2;
             let rg_decomposed = rg.decompose();
-            let t = identity_input.clone().tensor(&rg_decomposed);
             // let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
-            ts.push(t);
+            rgs_decomposed.push(rg_decomposed);
         }
-        let ts = ts.try_into().unwrap();
+        let rgs_decomposed = rgs_decomposed.try_into().unwrap();
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -94,7 +93,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             r_1,
             a_rlwe_bar,
             pubkeys,
-            ts,
+            rgs_decomposed,
             a_prf,
             packed_input_size,
             packed_output_size,
