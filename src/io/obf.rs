@@ -166,45 +166,6 @@ where
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
-
-            /*
-            let (t_input, t_fhe_key) = if bit == 0 { &public_data.t_0 } else { &public_data.t_1 };
-            let at_input = public_data.pubkeys_input[idx][0]
-                .concat_matrix(&public_data.pubkeys_input[idx][1..])
-                * t_input;
-            let at_fhe_key = public_data.pubkeys_fhe_key[idx][0]
-                .concat_matrix(&public_data.pubkeys_fhe_key[idx][1..])
-                * t_fhe_key;
-            let former = at_input.concat_columns(&[at_fhe_key]);
-            let inserted_poly_index = 1 + log_q + idx / dim;
-            let inserted_coeff_index = idx % dim;
-            let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
-            let mut coeffs = vec![zero_coeff; dim];
-            coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus());
-            let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
-            let inserted_poly_gadget = {
-                let zero = <M::P as Poly>::const_zero(params.as_ref());
-                let mut polys = vec![];
-                for _ in 0..(inserted_poly_index) {
-                    polys.push(zero.clone());
-                }
-                polys.push(inserted_poly);
-                for _ in inserted_poly_index + 1..packed_input_size {
-                    polys.push(zero.clone());
-                }
-                M::from_poly_vec_row(params.as_ref(), polys) * &gadget_2
-            };
-            let a_input_next = public_data.pubkeys_input[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys_input[idx + 1][1..])
-                - &inserted_poly_gadget;
-            let latter = a_input_next.concat_columns(&[public_data.pubkeys_fhe_key[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys_fhe_key[idx + 1][1..])]);
-            let k_target = former.concat_rows(&[latter]);
-            let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
-            let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
-            let k = sampler.preimage(&params, trapdoor, b_matrix, &k_target);
-            ks.push(k);
-            */
         };
         let kp = || join!(|| k_preimage(0), || k_preimage(1));
 

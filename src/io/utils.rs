@@ -68,7 +68,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         //         )
         //     })
         //     .collect_vec();
-        let identity_input = S::M::identity(params, 1 + packed_input_size, None);
+        // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
         let mut rgs_decomposed = vec![];
