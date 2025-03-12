@@ -21,7 +21,7 @@ where
     M: PolyMatrix,
     SU: PolyUniformSampler<M = M>,
     SH: PolyHashSampler<[u8; 32], M = M>,
-    ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+    ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
 {
     let public_circuit = &obf_params.public_circuit;
