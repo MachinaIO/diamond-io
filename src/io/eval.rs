@@ -82,9 +82,14 @@ where
             //     2 * log_q * (packed_input_size + 3),
             // );
             let new_encode_vec = {
-                let t = if *input { &public_data.ts[1] } else { &public_data.ts[0] };
+                let t = if *input {
+                    &public_data.rgs_decomposed[1]
+                } else {
+                    &public_data.rgs_decomposed[0]
+                };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
-                encode_vec * t + v
+                let packed_input_size = log_q + obf_params.input_size.div_ceil(dim) + 1;
+                encode_vec.mul_tensor_identity(t, packed_input_size + 1) + v
             };
             let mut new_encodings = vec![];
             // let zero_poly = <M::P as Poly>::const_zero(&params);
