@@ -3,7 +3,6 @@ use crate::poly::{
     sampler::DistType,
     Poly,
 };
-use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
@@ -97,12 +96,4 @@ macro_rules! join {
             rayon::join($a, $b)
         }
     }};
-}
-
-pub fn print_memory_usage(label: &str) {
-    if let Some(usage) = memory_stats() {
-        println!("{}: {} bytes", label, usage.physical_mem);
-    } else {
-        println!("Couldn't get memory stats!");
-    }
 }
