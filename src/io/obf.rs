@@ -132,9 +132,9 @@ where
 
         let mut ks = vec![];
         for bit in 0..2 {
-            let t = &public_data.ts[bit];
-            let top =
-                -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]) * t;
+            let rg_decomposed = &public_data.rgs_decomposed[bit];
+            let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
+            let top = lhs.mul_tensor_identity(rg_decomposed, 1 + packed_input_size);
             let inserted_poly_index = 1 + log_q + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());

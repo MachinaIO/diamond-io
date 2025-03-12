@@ -57,6 +57,7 @@ mod test {
 
     #[test]
     fn test_io_just_mul_enc_and_bit() {
+        let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
         let switched_modulus = Arc::new(BigUint::from(1u32));
@@ -91,7 +92,8 @@ mod test {
             sampler_trapdoor,
             &mut rng,
         );
-        println!("obfuscated");
+        let obfuscation_time = start_time.elapsed();
+        println!("Time to obfuscate: {:?}", obfuscation_time);
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let hardcoded_key = obfuscation
@@ -102,7 +104,10 @@ mod test {
             .map(|elem| elem.value() != &BigUint::from(0u8))
             .collect::<Vec<_>>();
         let output = eval_obf(obf_params, sampler_hash, obfuscation, &input);
+        let total_time = start_time.elapsed();
         println!("{:?}", output);
+        println!("Time for evaluation: {:?}", total_time - obfuscation_time);
+        println!("Total time: {:?}", total_time);
         assert_eq!(output, hardcoded_key);
     }
 }
