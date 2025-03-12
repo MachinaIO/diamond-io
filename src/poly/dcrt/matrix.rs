@@ -312,8 +312,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let mut slice_results = Vec::with_capacity(identity_size);
         for i in 0..identity_size {
             let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-            let slice_result = slice * other;
-            slice_results.push(slice_result);
+            slice_results.push(slice * other);
         }
         slice_results[0].clone().concat_columns(&slice_results[1..])
     }
