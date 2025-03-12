@@ -10,7 +10,80 @@ from decimal import Decimal, getcontext
 getcontext().prec = 100
 
 
-def output_secpar(n: int, q: int, s_dist: NoiseDistribution, stddev: int):
+def find_params(
+    secpar: int,
+    n: int,
+    d: int,
+    alpha: float,
+    input_size: int,
+):
+
+    min_q = 2 ** (secpar + 2)
+    max_q = 2 ** (2048)
+    p = None
+    while min_q < max_q:
+        q = math.floor((min_q + max_q) // 2)
+        stddev_e = math.ceil(alpha * q)
+        estimated_secpar = estimate_secpar(d * n, q, Binary, stddev_e)
+        if secpar < estimated_secpar:
+            max_q = q
+            continue
+        try:
+            p = find_p(secpar, n, q, d, stddev_e, input_size)
+            max_q = q
+        except ValueError:
+            min_q = q
+    if p is None:
+        raise ValueError("p is not found")
+    return (min_q, stddev_e, p)
+
+
+def find_p(
+    secpar: int,
+    n: int,
+    q: int,
+    d: int,
+    stddev_e: int,
+    input_size: int,
+):
+    log_q = math.ceil(math.log2(q))
+    if log_q - 2 < secpar:
+        raise ValueError(
+            f"log2(q) - 2 should be larger than secpar (given log2(q): {log_q}, secpar: {secpar})"
+        )
+    stddev_b = compute_stddev_b(n, log_q, d)
+    final_err = bound_final_error(secpar, n, log_q, d, stddev_e, stddev_b, input_size)
+    log_final_err = math.ceil(math.log2(final_err))
+    if log_q - 2 <= log_final_err:
+        raise ValueError(
+            # f"final error should be less than q/4 (given final error: {log_final_err}, log_q: {log_q})"
+            f"log2(final error) should be less than log2(q) - 2 (given log2(final error): {log_final_err}, log2(q): {log_q})"
+        )
+    p = math.ceil(q / 4) - final_err
+    if math.ceil(math.log2(p)) - log_final_err < secpar:
+        raise ValueError(
+            f"p - error should be larger than 2^secpar (given p: {p}, secpar: {secpar})"
+        )
+    return p
+
+
+def compute_stddev_b(
+    n: int,
+    log_q: int,
+    d: int,
+):
+    c_0 = 1.3
+    c_1 = 4.7
+    sigma = 4.578
+    return (
+        c_0
+        * sigma
+        * (3 * sigma)
+        * (sqrt_ceil((d + 1) * n * log_q) + sqrt_ceil(2 * n) + c_1)
+    )
+
+
+def estimate_secpar(n: int, q: int, s_dist: NoiseDistribution, stddev: int):
     params = LWEParameters(n, q, s_dist, DiscreteGaussian(stddev))
     estim = LWE.estimate.rough(params)
     # print(estim)
@@ -19,220 +92,247 @@ def output_secpar(n: int, q: int, s_dist: NoiseDistribution, stddev: int):
     return min_secpar
 
 
-def bound_from_stddev(stddev: int, secpar: int):
-    return math.ceil(stddev * math.ceil(math.sqrt(secpar)))
-
-
-def derive_auto_params(
-    n: int, n_t: int, q: int, sigma_e: int, t: int = 2, target_secpar: int = 80
+def bound_final_error(
+    secpar: int,
+    n: int,
+    log_q: int,
+    d: int,
+    stddev_e: int,
+    stddev_b: int,
+    input_size: int,
 ):
-    log_q = math.ceil(math.log2(q))
-    print("log_q:", log_q)
-    m = 2 * log_q
-    m_t = (n_t + 1) * log_q
-    m_b = 2 + math.ceil(log_q / math.log2(t))
-    # log_p = math.ceil(math.log2(p))
-    # m_b = n_b * log_p
-    # sigma_b = math.ceil(2 * math.sqrt(n * log_p))
-    secpar_s = math.ceil(output_secpar(n, q, Binary, sigma_e))
-    print("secpar_n:", secpar_s)
-    secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
-    print("secpar_t", secpar_t)
-    secpar = min(target_secpar, secpar_s, secpar_t)
-    print("secpar:", secpar)
-    sigma_b = math.ceil(math.sqrt(math.log(2 * n * 2 ** (80)) / 3.14))
-    print("sigma_b:", sigma_b)
-    print("sigma_b**2", sigma_b**2)
-    print("n * math.ceil(log_q / math.log2(t)))", n * math.ceil(log_q / math.log2(t)))
-    print("math.sqrt(2 * n)", math.sqrt(2 * n))
-    sigma_b = math.ceil(
-        1.3
-        * (t + 1)
-        * sigma_b**2
-        * (math.sqrt(n * math.ceil(log_q / math.log2(t))) + math.sqrt(2 * n) + 4.7)
-    )
-    print("sigma_b:", sigma_b)
-    # secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
-    # print("secpar_t", secpar_t)
-
-    # secpar_n_s = math.ceil(output_secpar(n_s, m_s, q, sigma_e))
-    # print("secpar_n_s:", secpar_n_s)
-    # secpar_b = math.ceil(output_secpar(n_b, q, UniformMod(q), sigma_b))
-    # print("secpar_b:", secpar_b)
-    bound_e = bound_from_stddev(sigma_e, secpar)
-    print("bound_e:", bound_e)
-    if bound_e <= 1:
-        raise ValueError("bound_e should be larger than 1")
-    bound_b = bound_from_stddev(sigma_b, secpar)
-    print("bound_b:", bound_b)
-    if bound_b <= 1:
-        raise ValueError("bound_b should be larger than 1")
-    b_c_frac = math.ceil(
-        (
-            Decimal(sigma_e)
-            * math.ceil((math.sqrt(n * m_b) * sigma_b) ** 2)
-            * math.ceil(secpar**2)
-            * math.ceil(math.sqrt(secpar))
-        )
-        / Decimal(math.ceil((math.sqrt(n * m_b) * sigma_b) ** 2) * secpar - n * m)
-    )
-    # b_c_frac = sigma_e * math.ceil(math.sqrt(secpar))
-    return {
-        "q": q,
-        "log_q": log_q,
-        "n": n,
-        "m": m,
-        "n_t": n_t,
-        "m_t": m_t,
-        "m_b": m_b,
-        "secpar": secpar,
-        "sigma_e": sigma_e,
-        "sigma_b": sigma_b,
-        "bound_e": bound_e,
-        "bound_b": bound_b,
-        "b_c_frac": b_c_frac,
-        # "p": p,
-    }
+    m = (d + 1) * log_q
+    m_b = (d + 1) * (log_q + 2)
+    sqrt_secpar = sqrt_ceil(secpar)
+    scale_coeff = (n * m_b * stddev_b) ** 2 * sqrt_secpar
+    bound_p = stddev_e * sqrt_secpar
+    bound_c = stddev_e * sqrt_secpar
+    for _ in range(input_size):
+        bound_v = ((scale_coeff) ** 2) * bound_p
+        bound_c = n * m * bound_c + bound_v
+        bound_p = bound_v
+    bound_v_final = bound_p * scale_coeff
+    return bound_v_final
 
 
-def estimate_noise_norm(params, input: int, output: int, depth: int, scale: int = 0):
-    q = params["q"]
-    log_q = params["log_q"]
-    n = params["n"]
-    m = params["m"]
-    n_t = params["n_t"]
-    m_t = params["m_t"]
-    m_b = params["m_b"]
-    secpar = params["secpar"]
-    sigma_e = params["sigma_e"]
-    sigma_b = params["sigma_b"]
-    bound_e = params["bound_e"]
-    bound_b = params["bound_b"]
-    b_c_frac = params["b_c_frac"]
-    print("log b_c_frac", math.log2(b_c_frac))
-    print("log m", math.log2(m))
-    print(
-        "log (sigma_b * sigma_b * secpar)",
-        math.log2((n * m_b * sigma_b * sigma_b * secpar)),
-    )
-    print(
-        "log (sigma_b * sigma_b * secpar) ** input",
-        math.ceil(math.log2((n * m_b * sigma_b * sigma_b * secpar) ** input)),
-    )
-    b_c = (bound_e - b_c_frac) * (m**input) + b_c_frac * math.ceil(
-        (n * m_b * sigma_b * sigma_b * secpar) ** input
-    )
-    # print("b_c", b_c)
-    print("log b_c", math.log2(b_c) if b_c > 0 else 0)
-    input_ext = 1 + input + 256
-    # 1 + input + m * (256 + 2 * secpar) * (n + 1) * log_q
-    # b_f_exp1 = math.ceil(
-    #     depth * math.ceil(math.log2(m_s)) * math.ceil(math.log2(log_q))
-    #     + (math.ceil(math.log2(log_q)) ** 2)
-    #     + 2
-    # )
-    b_f_exp1 = depth
-    print("b_f_exp1", b_f_exp1)
-    # print("log (input_ext + n + 2)", math.log2((input_ext + n + 2)))
-    # print("log ((n + 1) * log_q)", math.log2((n + 1) * log_q))
-    # print(
-    #     "log math.ceil((m_s + 2) ** b_f_exp1)",
-    #     math.log2(math.ceil((m_s + 2) ** b_f_exp1)),
-    # )
-    b_f_term1 = (
-        b_c
-        * math.sqrt(input_ext + 2)
-        * ((n_t + 1) * log_q)
-        * math.ceil((n * m + 2) ** b_f_exp1)
-    )
-    print("log b_f_term1", math.log2(b_f_term1))
-    b_f_term2 = bound_e * log_q * ((m_t + 2) ** (depth + 1))
-    print("log b_f_term2", math.log2(b_f_term2))
-    b_f = b_f_term1 + b_f_term2
-    print("log b_f", math.log2(b_f))
-    print(
-        "log (n * m_b * sigma_b) ** (2 * input + 1)",
-        math.log2((n * m_b * sigma_b) ** (2 * input + 1)),
-    )
-    print("log secpar ** (input + 1)", math.log2(secpar ** (input + 1)))
-    b_z = b_f + sigma_e * ((math.sqrt(n * m_b) * sigma_b) ** (2 * input + 1)) * (
-        secpar ** (input + 1)
-    )
-    print("log b_z", math.log2(b_z))
-    # print("b_z", b_z)
-    # print("log2_b_z", math.log2(b_z))
-    # print("b_z + 2^**(2*secpar)", b_z * (2 ** (2 * secpar)))
-    return b_z
-    # b_f =
-    # b_c = (params.bound_b - )
+def sqrt_ceil(x):
+    return math.ceil(math.sqrt(x))
 
 
-def estimate_obf_size(params, input: int, output: int, depth: int):
-    q = params["q"]
-    log_q = params["log_q"]
-    n = params["n"]
-    m = params["m"]
-    n_t = params["n_t"]
-    m_t = params["m_t"]
-    m_b = params["m_b"]
-    secpar = params["secpar"]
-    sigma_e = params["sigma_e"]
-    sigma_b = params["sigma_b"]
-    bound_e = params["bound_e"]
-    bound_b = params["bound_b"]
+# def bound_from_stddev(stddev: int, secpar: int):
+#     return math.ceil(stddev * math.ceil(math.sqrt(secpar)))
 
-    # bits
-    size = 0
-    # h (R and A matrixes are generated by a random oracle)
-    size += 256
-    # FHE encryption
-    # size += m * (256 + 2 * secpar) * (n + 1) * log_q
-    # print("FHE size", (m * (256 + 2 * secpar) * (n + 1) * log_q) / 8 / 10**9)
 
-    # input_ext = 1 + input + m * (256) * (n + 1) * log_q
-    input_ext = 1 + input + 256
-    # 2252 + 6000
-    # c_att
-    print("poly size", log_q * n / 8 / 10**6)
-    c_att_size = log_q * n * input_ext * m
-    size += c_att_size
-    print("c_att", c_att_size / 8 / 10**9)
-    # c_t
-    c_t_size = log_q * n * (1) * m
-    size += c_t_size
-    print("c_t", c_t_size / 8 / 10**9)
+# def derive_auto_params(
+#     n: int, n_t: int, q: int, sigma_e: int, t: int = 2, target_secpar: int = 80
+# ):
+#     log_q = math.ceil(math.log2(q))
+#     print("log_q:", log_q)
+#     m = 2 * log_q
+#     m_t = (n_t + 1) * log_q
+#     m_b = 2 + math.ceil(log_q / math.log2(t))
+#     # log_p = math.ceil(math.log2(p))
+#     # m_b = n_b * log_p
+#     # sigma_b = math.ceil(2 * math.sqrt(n * log_p))
+#     secpar_s = math.ceil(output_secpar(n, q, Binary, sigma_e))
+#     print("secpar_n:", secpar_s)
+#     secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
+#     print("secpar_t", secpar_t)
+#     secpar = min(target_secpar, secpar_s, secpar_t)
+#     print("secpar:", secpar)
+#     sigma_b = math.ceil(math.sqrt(math.log(2 * n * 2 ** (80)) / 3.14))
+#     print("sigma_b:", sigma_b)
+#     print("sigma_b**2", sigma_b**2)
+#     print("n * math.ceil(log_q / math.log2(t)))", n * math.ceil(log_q / math.log2(t)))
+#     print("math.sqrt(2 * n)", math.sqrt(2 * n))
+#     sigma_b = math.ceil(
+#         1.3
+#         * (t + 1)
+#         * sigma_b**2
+#         * (math.sqrt(n * math.ceil(log_q / math.log2(t))) + math.sqrt(2 * n) + 4.7)
+#     )
+#     print("sigma_b:", sigma_b)
+#     # secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
+#     # print("secpar_t", secpar_t)
 
-    # p
-    p_size = log_q * n * m_b
-    size += p_size
-    print("p", p_size / 8 / 10**9)
-    # M/N size
-    m_n_size = math.log(bound_b) * n * m_b * m_b
-    print("m_n_size", m_n_size / 8 / 10**9)
-    print("m_n_size total", m_n_size * 4 / 8 / 10**9)
-    size += 2 * 2 * m_n_size
-    # K size
-    # k_size = math.log(bound_b) * m_b * (input_ext + n + 1) * m_s
-    # print("log_q", log_q)
-    # print("(2 + log_q)", m_b)
-    # print("(input_ext + n + 1)", (input_ext + n + 1))
-    # print("n_s", n_s)
-    print("log bound_b", math.log(bound_b))
-    print("n", n)
-    print("m_b", m_b)
-    print("input_ext", input_ext)
-    # print("(2 * input_ext + log_q)", (2 * input_ext + log_q))
-    k_size = math.log(bound_b) * n * m_b * (input_ext + 1) * m
-    # (input_ext + 1) * m
-    # log_q * (2 + log_q) * 2 * (input_ext + n + 1) * log_q * n_s
-    print("k_size", k_size / 8 / 10**9)
-    print("k_size total", k_size * 2 * input / 8 / 10**9)
-    size += input * 2 * k_size
-    # K_f
-    k_f_size = math.log(bound_b) * n * m_b * output
-    size += k_f_size
-    print("K_f", k_f_size / 8 / 10**9)
-    return size / 8 / (10**9)
+#     # secpar_n_s = math.ceil(output_secpar(n_s, m_s, q, sigma_e))
+#     # print("secpar_n_s:", secpar_n_s)
+#     # secpar_b = math.ceil(output_secpar(n_b, q, UniformMod(q), sigma_b))
+#     # print("secpar_b:", secpar_b)
+#     bound_e = bound_from_stddev(sigma_e, secpar)
+#     print("bound_e:", bound_e)
+#     if bound_e <= 1:
+#         raise ValueError("bound_e should be larger than 1")
+#     bound_b = bound_from_stddev(sigma_b, secpar)
+#     print("bound_b:", bound_b)
+#     if bound_b <= 1:
+#         raise ValueError("bound_b should be larger than 1")
+#     b_c_frac = math.ceil(
+#         (
+#             Decimal(sigma_e)
+#             * math.ceil((math.sqrt(n * m_b) * sigma_b) ** 2)
+#             * math.ceil(secpar**2)
+#             * math.ceil(math.sqrt(secpar))
+#         )
+#         / Decimal(math.ceil((math.sqrt(n * m_b) * sigma_b) ** 2) * secpar - n * m)
+#     )
+#     # b_c_frac = sigma_e * math.ceil(math.sqrt(secpar))
+#     return {
+#         "q": q,
+#         "log_q": log_q,
+#         "n": n,
+#         "m": m,
+#         "n_t": n_t,
+#         "m_t": m_t,
+#         "m_b": m_b,
+#         "secpar": secpar,
+#         "sigma_e": sigma_e,
+#         "sigma_b": sigma_b,
+#         "bound_e": bound_e,
+#         "bound_b": bound_b,
+#         "b_c_frac": b_c_frac,
+#         # "p": p,
+#     }
+
+
+# def estimate_noise_norm(params, input: int, output: int, depth: int, scale: int = 0):
+#     q = params["q"]
+#     log_q = params["log_q"]
+#     n = params["n"]
+#     m = params["m"]
+#     n_t = params["n_t"]
+#     m_t = params["m_t"]
+#     m_b = params["m_b"]
+#     secpar = params["secpar"]
+#     sigma_e = params["sigma_e"]
+#     sigma_b = params["sigma_b"]
+#     bound_e = params["bound_e"]
+#     bound_b = params["bound_b"]
+#     b_c_frac = params["b_c_frac"]
+#     print("log b_c_frac", math.log2(b_c_frac))
+#     print("log m", math.log2(m))
+#     print(
+#         "log (sigma_b * sigma_b * secpar)",
+#         math.log2((n * m_b * sigma_b * sigma_b * secpar)),
+#     )
+#     print(
+#         "log (sigma_b * sigma_b * secpar) ** input",
+#         math.ceil(math.log2((n * m_b * sigma_b * sigma_b * secpar) ** input)),
+#     )
+#     b_c = (bound_e - b_c_frac) * (m**input) + b_c_frac * math.ceil(
+#         (n * m_b * sigma_b * sigma_b * secpar) ** input
+#     )
+#     # print("b_c", b_c)
+#     print("log b_c", math.log2(b_c) if b_c > 0 else 0)
+#     input_ext = 1 + input + 256
+#     # 1 + input + m * (256 + 2 * secpar) * (n + 1) * log_q
+#     # b_f_exp1 = math.ceil(
+#     #     depth * math.ceil(math.log2(m_s)) * math.ceil(math.log2(log_q))
+#     #     + (math.ceil(math.log2(log_q)) ** 2)
+#     #     + 2
+#     # )
+#     b_f_exp1 = depth
+#     print("b_f_exp1", b_f_exp1)
+#     # print("log (input_ext + n + 2)", math.log2((input_ext + n + 2)))
+#     # print("log ((n + 1) * log_q)", math.log2((n + 1) * log_q))
+#     # print(
+#     #     "log math.ceil((m_s + 2) ** b_f_exp1)",
+#     #     math.log2(math.ceil((m_s + 2) ** b_f_exp1)),
+#     # )
+#     b_f_term1 = (
+#         b_c
+#         * math.sqrt(input_ext + 2)
+#         * ((n_t + 1) * log_q)
+#         * math.ceil((n * m + 2) ** b_f_exp1)
+#     )
+#     print("log b_f_term1", math.log2(b_f_term1))
+#     b_f_term2 = bound_e * log_q * ((m_t + 2) ** (depth + 1))
+#     print("log b_f_term2", math.log2(b_f_term2))
+#     b_f = b_f_term1 + b_f_term2
+#     print("log b_f", math.log2(b_f))
+#     print(
+#         "log (n * m_b * sigma_b) ** (2 * input + 1)",
+#         math.log2((n * m_b * sigma_b) ** (2 * input + 1)),
+#     )
+#     print("log secpar ** (input + 1)", math.log2(secpar ** (input + 1)))
+#     b_z = b_f + sigma_e * ((math.sqrt(n * m_b) * sigma_b) ** (2 * input + 1)) * (
+#         secpar ** (input + 1)
+#     )
+#     print("log b_z", math.log2(b_z))
+#     # print("b_z", b_z)
+#     # print("log2_b_z", math.log2(b_z))
+#     # print("b_z + 2^**(2*secpar)", b_z * (2 ** (2 * secpar)))
+#     return b_z
+#     # b_f =
+#     # b_c = (params.bound_b - )
+
+
+# def estimate_obf_size(params, input: int, output: int, depth: int):
+#     q = params["q"]
+#     log_q = params["log_q"]
+#     n = params["n"]
+#     m = params["m"]
+#     n_t = params["n_t"]
+#     m_t = params["m_t"]
+#     m_b = params["m_b"]
+#     secpar = params["secpar"]
+#     sigma_e = params["sigma_e"]
+#     sigma_b = params["sigma_b"]
+#     bound_e = params["bound_e"]
+#     bound_b = params["bound_b"]
+
+#     # bits
+#     size = 0
+#     # h (R and A matrixes are generated by a random oracle)
+#     size += 256
+#     # FHE encryption
+#     # size += m * (256 + 2 * secpar) * (n + 1) * log_q
+#     # print("FHE size", (m * (256 + 2 * secpar) * (n + 1) * log_q) / 8 / 10**9)
+
+#     # input_ext = 1 + input + m * (256) * (n + 1) * log_q
+#     input_ext = 1 + input + 256
+#     # 2252 + 6000
+#     # c_att
+#     print("poly size", log_q * n / 8 / 10**6)
+#     c_att_size = log_q * n * input_ext * m
+#     size += c_att_size
+#     print("c_att", c_att_size / 8 / 10**9)
+#     # c_t
+#     c_t_size = log_q * n * (1) * m
+#     size += c_t_size
+#     print("c_t", c_t_size / 8 / 10**9)
+
+#     # p
+#     p_size = log_q * n * m_b
+#     size += p_size
+#     print("p", p_size / 8 / 10**9)
+#     # M/N size
+#     m_n_size = math.log(bound_b) * n * m_b * m_b
+#     print("m_n_size", m_n_size / 8 / 10**9)
+#     print("m_n_size total", m_n_size * 4 / 8 / 10**9)
+#     size += 2 * 2 * m_n_size
+#     # K size
+#     # k_size = math.log(bound_b) * m_b * (input_ext + n + 1) * m_s
+#     # print("log_q", log_q)
+#     # print("(2 + log_q)", m_b)
+#     # print("(input_ext + n + 1)", (input_ext + n + 1))
+#     # print("n_s", n_s)
+#     print("log bound_b", math.log(bound_b))
+#     print("n", n)
+#     print("m_b", m_b)
+#     print("input_ext", input_ext)
+#     # print("(2 * input_ext + log_q)", (2 * input_ext + log_q))
+#     k_size = math.log(bound_b) * n * m_b * (input_ext + 1) * m
+#     # (input_ext + 1) * m
+#     # log_q * (2 + log_q) * 2 * (input_ext + n + 1) * log_q * n_s
+#     print("k_size", k_size / 8 / 10**9)
+#     print("k_size total", k_size * 2 * input / 8 / 10**9)
+#     size += input * 2 * k_size
+#     # K_f
+#     k_f_size = math.log(bound_b) * n * m_b * output
+#     size += k_f_size
+#     print("K_f", k_f_size / 8 / 10**9)
+#     return size / 8 / (10**9)
 
 
 if __name__ == "__main__":
@@ -247,21 +347,21 @@ if __name__ == "__main__":
     q = 2**360
     alpha = 2 ** (-350)
     # target_secpar = 80
-    params = derive_auto_params(n, n_t, q, math.ceil(alpha * q))
-    print(params)
-    error_bound = estimate_noise_norm(params, input, output, depth)
-    # print(error_bound)
-    print(math.log2(error_bound))
-    print(params["log_q"] - 2 - params["secpar"])
-    print("is less than q:", error_bound < params["q"])
-    print(
-        "is less than (q/4)/(2^secpar):",
-        math.log2(error_bound) < params["log_q"] - 2 - params["secpar"],
-    )
-    # print("is sigma_e < p", params["sigma_e"] < params["p"])
-    print("secpar", params["secpar"])
-    obf_size_gb = estimate_obf_size(params, input, output, depth)
-    print("obf_size_mb", obf_size_gb, "[GB]")
+    # params = derive_auto_params(n, n_t, q, math.ceil(alpha * q))
+    # print(params)
+    # error_bound = estimate_noise_norm(params, input, output, depth)
+    # # print(error_bound)
+    # print(math.log2(error_bound))
+    # print(params["log_q"] - 2 - params["secpar"])
+    # print("is less than q:", error_bound < params["q"])
+    # print(
+    #     "is less than (q/4)/(2^secpar):",
+    #     math.log2(error_bound) < params["log_q"] - 2 - params["secpar"],
+    # )
+    # # print("is sigma_e < p", params["sigma_e"] < params["p"])
+    # print("secpar", params["secpar"])
+    # obf_size_gb = estimate_obf_size(params, input, output, depth)
+    # print("obf_size_mb", obf_size_gb, "[GB]")
 
 
 # input=1, output=1, depth=2, q = 2**1024, alpha = 2**(-200), n = 2**13, secpar = 105, log_e = 986
