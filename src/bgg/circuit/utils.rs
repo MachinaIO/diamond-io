@@ -150,7 +150,7 @@ mod tests {
 
         // Evaluate the public circuit to get its outputs
         let pub_circuit_outputs =
-            public_circuit_for_eval.eval(&params, DCRTPoly::const_one(&params), &pub_polys);
+            public_circuit_for_eval.eval(&(), DCRTPoly::const_one(&params), &pub_polys);
 
         // Verify that the public circuit outputs are as expected
         let expected_out1 = pub_polys[0].clone() + pub_polys[1].clone(); // add_gate(pub_inputs[0], pub_inputs[1])
@@ -189,7 +189,7 @@ mod tests {
 
         // Evaluate the inner product circuit
         let all_inputs = [pub_polys, priv_polys].concat();
-        let result = ip_circuit.eval(&params, DCRTPoly::const_one(&params), &all_inputs);
+        let result = ip_circuit.eval(&(), DCRTPoly::const_one(&params), &all_inputs);
 
         // Verify the results
         assert_eq!(result.len(), 2);
@@ -218,7 +218,7 @@ mod tests {
             create_bit_poly(&params, false), // 0 (MSB)
         ];
 
-        let result1 = circuit.eval(&params, DCRTPoly::const_one(&params), &bits1);
+        let result1 = circuit.eval(&(), DCRTPoly::const_one(&params), &bits1);
 
         // Expected: 1*2^0 + 0*2^1 + 1*2^2 + 0*2^3 = 5
         let expected1 = DCRTPoly::from_const(&params, &FinRingElem::new(5, params.modulus()));
@@ -234,7 +234,7 @@ mod tests {
             create_bit_poly(&params, true), // 1 (MSB)
         ];
 
-        let result2 = circuit.eval(&params, DCRTPoly::const_one(&params), &bits2);
+        let result2 = circuit.eval(&(), DCRTPoly::const_one(&params), &bits2);
 
         // Expected: 1*2^0 + 1*2^1 + 1*2^2 + 1*2^3 = 15
         let expected2 = DCRTPoly::from_const(&params, &FinRingElem::new(15, params.modulus()));
@@ -250,7 +250,7 @@ mod tests {
             create_bit_poly(&params, false), // 0 (MSB)
         ];
 
-        let result3 = circuit.eval(&params, DCRTPoly::const_one(&params), &bits3);
+        let result3 = circuit.eval(&(), DCRTPoly::const_one(&params), &bits3);
 
         // Expected: 0
         let expected3 = DCRTPoly::const_zero(&params);

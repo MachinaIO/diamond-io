@@ -212,7 +212,7 @@ mod test {
         let one = DCRTPoly::const_one(&params);
         let mut inputs = enc_hardcoded_key_polys;
         inputs.push(t_bar.entry(0, 0).clone());
-        let outputs = final_circuit.eval(&params, one, &inputs);
+        let outputs = final_circuit.eval(&(), one, &inputs);
 
         // 9. Extract the hardcoded key bits
         let hardcoded_key_bits = hardcoded_key

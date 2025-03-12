@@ -95,6 +95,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
 }
 
 impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
+    type Params = <M::P as Poly>::Params;
     fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
         let gadget = M::gadget_matrix(params, 2);
         let scalared = gadget * scalar;
