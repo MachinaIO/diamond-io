@@ -5,37 +5,134 @@ from estimator.estimator import *
 from estimator.estimator.lwe_parameters import *
 from estimator.estimator.nd import *
 import math
+import datetime
+import os
 from decimal import Decimal, getcontext
 
 getcontext().prec = 100
 
 
-def find_params(
+def log_params_to_file(
     secpar: int,
     n: int,
     d: int,
-    alpha: float,
+    alpha: int,
     input_size: int,
+    m_polys: list[list[int]],
+    q: int,
+    stddev_e: int,
+    p: int,
+    estimated_secpar: float,
+):
+    """
+    Log parameters to params.log file
+    """
+    # Calculate log_q and log_p
+    log_q = math.log2(q)
+    log_p = math.log2(p)
+
+    # Get current date and time
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Format m_polys as a string
+    m_polys_str = str(m_polys).replace(" ", "")
+
+    # Create log entry with key information
+    log_entry = (
+        f"{current_date}, "
+        f"secpar={secpar}, "
+        f"n={n}, "
+        f"d={d}, "
+        f"alpha={alpha}, "
+        f"input_size={input_size}, "
+        f"m_polys={m_polys_str}, "
+        f"q={q}, "
+        f"log_q={log_q}, "
+        f"stddev_e={stddev_e}, "
+        f"p={p}, "
+        f"log_p={log_p}, "
+        f"estimated_secpar={estimated_secpar}\n"
+    )
+
+    # Append to params.log file
+    with open("params.log", "a") as f:
+        f.write(log_entry)
+
+    print(f"Parameters logged to params.log")
+
+
+def find_params(
+    target_secpar: int,
+    n: int,
+    d: int,
+    input_size: int,
+    m_polys: list[list[int]],
 ):
 
-    min_q = 2 ** (secpar + 2)
-    max_q = 2 ** (2048)
-    p = None
-    while min_q < max_q:
-        q = math.floor((min_q + max_q) // 2)
-        stddev_e = math.ceil(alpha * q)
+    min_alpha_k = -500
+    max_alpha_k = -1
+    min_q_k = target_secpar + 2
+    max_q_k = 800
+    middle_q_k = math.floor((min_q_k + max_q_k) // 2)
+
+    found_alphas = []
+    # Binary search for alpha
+    while min_alpha_k + 1 < max_alpha_k:
+        alpha_k = (min_alpha_k + max_alpha_k) / 2
+        print(f"min_alpha_k: {min_alpha_k}")
+        print(f"max_alpha_k: {max_alpha_k}")
+        print(f"alpha_k: {alpha_k}")
+        q = 2 ** (middle_q_k)
+        stddev_e = 2 ** (middle_q_k + alpha_k)
         estimated_secpar = estimate_secpar(d * n, q, Binary, stddev_e)
-        if secpar < estimated_secpar:
-            max_q = q
+        print("target_secpar:", target_secpar)
+        print("estimated_secpar:", estimated_secpar)
+        if target_secpar > estimated_secpar:
+            print(
+                f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
+            )
+            min_alpha_k = alpha_k
+        else:
+            found_alphas.append(alpha_k)
+            print(f"found alpha_k: {alpha_k}")
+            max_alpha_k = alpha_k
+    if found_alphas == []:
+        raise ValueError("alpha is not found after binary search")
+    alpha = 2 ** min(found_alphas)
+    print(f"found alpha: {alpha}")
+
+    found_params = []
+    iters = 0
+    while min_q_k + 1 < max_q_k and iters < 100:
+        iters += 1
+        q_k = math.floor((min_q_k + max_q_k) // 2)
+        print(f"min_q_k: {min_q_k}")
+        print(f"max_q_k: {max_q_k}")
+        print(f"q_k: {q_k}")
+        q = 2**q_k
+        print(f"q: {q}")
+        stddev_e = alpha * q
+        estimated_secpar = estimate_secpar(d * n, q, Binary, stddev_e)
+        print("target_secpar:", target_secpar)
+        print("estimated_secpar:", estimated_secpar)
+        if target_secpar > estimated_secpar:
+            print(
+                f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
+            )
+            max_q_k = q_k
             continue
         try:
-            p = find_p(secpar, n, q, d, stddev_e, input_size)
-            max_q = q
-        except ValueError:
-            min_q = q
-    if p is None:
-        raise ValueError("p is not found")
-    return (min_q, stddev_e, p)
+            p = find_p(target_secpar, n, q, d, stddev_e, input_size, m_polys)
+            print(f"found p: {p}")
+            max_q_k = q_k
+            found_params.append((q, stddev_e, p, estimated_secpar))
+        except ValueError as e:
+            print(f"ValueError: {e}")
+            min_q_k = q_k
+    if found_params == []:
+        raise ValueError("p is not found after binary search")
+    # minimum q in found_params
+    return min(found_params, key=lambda x: x[1]) + (alpha,)
 
 
 def find_p(
@@ -45,6 +142,7 @@ def find_p(
     d: int,
     stddev_e: int,
     input_size: int,
+    m_polys: list[list[int]],
 ):
     log_q = math.ceil(math.log2(q))
     if log_q - 2 < secpar:
@@ -52,18 +150,63 @@ def find_p(
             f"log2(q) - 2 should be larger than secpar (given log2(q): {log_q}, secpar: {secpar})"
         )
     stddev_b = compute_stddev_b(n, log_q, d)
-    final_err = bound_final_error(secpar, n, log_q, d, stddev_e, stddev_b, input_size)
-    log_final_err = math.ceil(math.log2(final_err))
+
+    final_err = bound_final_error(
+        secpar, n, log_q, d, stddev_e, stddev_b, input_size, m_polys
+    )
+
+    # Convert final_err to Decimal for high precision
+    final_err_decimal = Decimal(str(final_err))
+
+    # Calculate log2 using Decimal
+    # Handle infinity or very large numbers
+    if math.isinf(final_err):
+        # If final_err is infinity, set log_final_err to a very large value
+        log_final_err = 10000  # A very large value that will likely fail the next check
+        print(
+            f"Warning: final_err is infinity, setting log_final_err to {log_final_err}"
+        )
+    elif final_err_decimal > 0:
+        try:
+            # Try to calculate log2 using Decimal
+            log_final_err = math.ceil(
+                float(final_err_decimal.ln() / Decimal("0.693147180559945"))
+            )  # ln(2)
+        except (OverflowError, ValueError):
+            # If there's an overflow, set log_final_err to a very large value
+            log_final_err = (
+                10000  # A very large value that will likely fail the next check
+            )
+            print(
+                f"Warning: final_err is too large for ln(), setting log_final_err to {log_final_err}"
+            )
+    else:
+        raise ValueError(f"Cannot calculate log2 of non-positive value: {final_err}")
+
     if log_q - 2 <= log_final_err:
         raise ValueError(
-            # f"final error should be less than q/4 (given final error: {log_final_err}, log_q: {log_q})"
             f"log2(final error) should be less than log2(q) - 2 (given log2(final error): {log_final_err}, log2(q): {log_q})"
         )
-    p = math.ceil(q / 4) - final_err
-    if math.ceil(math.log2(p)) - log_final_err < secpar:
+
+    # Use Decimal for high precision arithmetic
+    # Convert to Decimal for high precision calculations
+    q_decimal = Decimal(q)
+    p_decimal = (q_decimal / Decimal("4")).to_integral_exact(
+        rounding="ROUND_CEILING"
+    ) - final_err_decimal
+    p = int(p_decimal)
+
+    # Calculate log2(p) using Decimal
+    if p_decimal > 0:
+        log_p = math.ceil(float(p_decimal.ln() / Decimal("0.693147180559945")))  # ln(2)
+    else:
+        raise ValueError(f"Cannot calculate log2 of non-positive value: {p}")
+
+    if log_p - log_final_err < secpar:
         raise ValueError(
             f"p - error should be larger than 2^secpar (given p: {p}, secpar: {secpar})"
         )
+
     return p
 
 
@@ -87,7 +230,7 @@ def estimate_secpar(n: int, q: int, s_dist: NoiseDistribution, stddev: int):
     params = LWEParameters(n, q, s_dist, DiscreteGaussian(stddev))
     estim = LWE.estimate.rough(params)
     # print(estim)
-    min_secpar = math.log2(min(val["rop"] for val in estim.values()))
+    min_secpar = math.ceil(math.log2(min(val["rop"] for val in estim.values())))
     # print(min_secpar)
     return min_secpar
 
@@ -100,19 +243,51 @@ def bound_final_error(
     stddev_e: int,
     stddev_b: int,
     input_size: int,
+    m_polys: list[list[int]],
 ):
-    m = (d + 1) * log_q
-    m_b = (d + 1) * (log_q + 2)
-    sqrt_secpar = sqrt_ceil(secpar)
-    scale_coeff = (n * m_b * stddev_b) ** 2 * sqrt_secpar
-    bound_p = stddev_e * sqrt_secpar
-    bound_c = stddev_e * sqrt_secpar
+    # Convert all inputs to Decimal for high precision
+    secpar_d = Decimal(secpar)
+    n_d = Decimal(n)
+    log_q_d = Decimal(log_q)
+    d_d = Decimal(d)
+    stddev_e_d = Decimal(stddev_e)
+    stddev_b_d = Decimal(stddev_b)
+
+    # Calculate intermediate values with Decimal
+    m_d = (d_d + Decimal(1)) * log_q_d
+    m_b_d = (d_d + Decimal(1)) * (log_q_d + Decimal(2))
+    sqrt_secpar_d = Decimal(sqrt_ceil(secpar))
+
+    # Use Decimal for all calculations to maintain precision
+    scale_coeff_d = (n_d * m_b_d * stddev_b_d) ** Decimal(2) * sqrt_secpar_d
+    bound_p_d = stddev_e_d * sqrt_secpar_d
+    bound_c_d = stddev_e_d * sqrt_secpar_d
+
     for _ in range(input_size):
-        bound_v = ((scale_coeff) ** 2) * bound_p
-        bound_c = n * m * bound_c + bound_v
-        bound_p = bound_v
-    bound_v_final = bound_p * scale_coeff
-    return bound_v_final
+        bound_v_d = (scale_coeff_d ** Decimal(2)) * bound_p_d
+        bound_c_d = n_d * m_d * bound_c_d + bound_v_d
+        bound_p_d = bound_v_d
+
+    # Evaluate each polynomial in m_polys at the value of m using Decimal
+    evaluated_polys_d = []
+    for poly in m_polys:
+        # Evaluate polynomial: sum(coeff * m^i for i, coeff in enumerate(poly))
+        result_d = Decimal(0)
+        for i, coeff in enumerate(poly):
+            result_d += Decimal(coeff) * (m_d ** Decimal(i))
+        evaluated_polys_d.append(result_d)
+
+    # Find max value using Decimal
+    if evaluated_polys_d:
+        max_evaluated_poly_d = max(evaluated_polys_d)
+    else:
+        max_evaluated_poly_d = Decimal(1)  # Default if no polynomials
+
+    bound_c_final_d = bound_c_d * max_evaluated_poly_d + stddev_b_d * sqrt_secpar_d
+    bound_v_final_d = bound_p_d * scale_coeff_d
+
+    # Return the final result as a Decimal
+    return bound_c_final_d + bound_v_final_d
 
 
 def sqrt_ceil(x):
@@ -336,16 +511,34 @@ def sqrt_ceil(x):
 
 
 if __name__ == "__main__":
+    secpar = 100
+    n = 2**10
+    d = 14
+    # alpha = 2 ** (-320)
+    input_size = 1
+    m_polys = [[0, 2720, 2176, 17408]]
+    q, stddev_e, p, estimated_secpar, alpha = find_params(
+        secpar, n, d, input_size, m_polys
+    )
+    print(f"q: {q}, log_2 q: {math.log2(q)}")
+    print(f"stddev_e: {stddev_e}")
+    print(f"p: {p}, log_2 p: {math.log2(p)}")
+    print(f"estimated_secpar: {estimated_secpar}")
+
+    # Log parameters to params.log file
+    log_params_to_file(
+        secpar, n, d, alpha, input_size, m_polys, q, stddev_e, p, estimated_secpar
+    )
     # output_secpar(586, 2**32, 2 ** (-24.8) * 2**32)
     # q = 2**1024
     # alpha_log = 2 ** (-30)
-    input = 4
-    output = 1
-    depth = 1
-    n = 2**14
-    n_t = 2**14
-    q = 2**360
-    alpha = 2 ** (-350)
+    # input = 4
+    # output = 1
+    # depth = 1
+    # n = 2**14
+    # n_t = 2**14
+    # q = 2**360
+    # alpha = 2 ** (-350)
     # target_secpar = 80
     # params = derive_auto_params(n, n_t, q, math.ceil(alpha * q))
     # print(params)
@@ -409,13 +602,3 @@ if __name__ == "__main__":
 # input=4, output=1, depth=1, n=2**12, q=2**163, p=2**23, sigma_e=2 ** (163 - 141), sigma_b=0.15, secpar=80, size = 103.28398017749898 GB
 
 # Feb 5, 2025
-# ring version
-# input=1, output=1, depth=1, n=2**13, q=2**256, sigma_e= 2 ** (256 - 240), secpar=81, size = 30744.265165099765 GB
-# t compression
-# input=1, output=1, depth=1, n=2**13, q=2**256, sigma_e= 2 ** (256 - 242), secpar=80, size = 14.969743545336268 GB
-
-# Feb 6, 2025
-# use entral Limit Theorem in the same manner as https://eprint.iacr.org/2017/844.pdf#page=2.10
-# input=2, output=1, depth=1, n=2**14, q=2**266, sigma_e= 2 ** (266 - 280), secpar=80, size = 86.15488343974047 GB
-# input=4, output=1, depth=1, n=2**14, q=2**415, sigma_e= 2 ** (415 - 400), secpar=80, size = 588.9914980146344 GB
-# input=4, output=1, depth=1, n=2**14, q=2**360, sigma_e= 2 ** (360 - 350), secpar=45, size = 47.30886415590917 GB
