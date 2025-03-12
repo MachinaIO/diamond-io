@@ -29,5 +29,9 @@ codegen-units = 1
 panic = "abort"
 
 [[bench]]
-name = "decompose_benchmark"
+name = "dcrtpoly"
+harness = false
+
+[[bench]]
+name = "dcrtmatrix"
 harness = false

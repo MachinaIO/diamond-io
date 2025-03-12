@@ -24,7 +24,6 @@ impl Debug for DCRTPolyMatrix {
         f.debug_struct("DCRTPolyMatrix")
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
-            .field("inner", &self.inner)
             .field("params", &self.params)
             .field("inner", &self.inner)
             .finish()
@@ -72,12 +71,8 @@ impl PolyMatrix for DCRTPolyMatrix {
         self.inner[i].clone()
     }
 
-    fn get_column(&self, j: usize) -> Vec<Self::P> {
-        let mut column = Vec::with_capacity(self.nrow);
-        for i in 0..self.nrow {
-            column.push(self.inner[i][j].clone());
-        }
-        column
+    fn get_column(&self, j: usize) -> Vec<DCRTPoly> {
+        self.inner.iter().map(|row| row[j].clone()).collect()
     }
 
     fn size(&self) -> (usize, usize) {
