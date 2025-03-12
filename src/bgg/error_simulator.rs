@@ -10,27 +10,27 @@ impl<P: Poly> PolyCircuit<P> {
         let one = ErrorSimulator::default_from_params(params.clone());
         let inputs = vec![ErrorSimulator::default_from_params(params.clone()); self.num_input()];
         let outputs = self.eval(params, one, &inputs);
-        outputs.into_iter().map(|output| output.h_inf).collect_vec()
+        outputs.into_iter().map(|output| output.h_norm).collect_vec()
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ErrorSimulator<P: Poly> {
-    pub h_inf: MPolyCoeffs,
-    pub plaintext_inf: BigUint,
+    pub h_norm: MPolyCoeffs,
+    pub plaintext_norm: BigUint,
     pub params: P::Params,
 }
 
 impl<P: Poly> ErrorSimulator<P> {
-    pub fn new(h_inf: MPolyCoeffs, plaintext_inf: BigUint, params: P::Params) -> Self {
-        Self { h_inf, plaintext_inf, params }
+    pub fn new(h_norm: MPolyCoeffs, plaintext_norm: BigUint, params: P::Params) -> Self {
+        Self { h_norm, plaintext_norm, params }
     }
 
     pub fn default_from_params(params: P::Params) -> Self {
         let dim = BigUint::from(params.ring_dimension());
-        let h_inf = MPolyCoeffs::new(vec![dim]);
-        let plaintext_inf = BigUint::one();
-        Self { h_inf, plaintext_inf, params }
+        let h_norm = MPolyCoeffs::new(vec![dim]);
+        let plaintext_norm = BigUint::one();
+        Self { h_norm, plaintext_norm, params }
     }
 }
 
@@ -47,8 +47,8 @@ impl<'a, P: Poly> Add<&'a Self> for ErrorSimulator<P> {
 
     fn add(self, rhs: &Self) -> Self {
         Self {
-            h_inf: self.h_inf + &rhs.h_inf,
-            plaintext_inf: self.plaintext_inf + &rhs.plaintext_inf,
+            h_norm: self.h_norm + &rhs.h_norm,
+            plaintext_norm: self.plaintext_norm + &rhs.plaintext_norm,
             params: self.params,
         }
     }
@@ -67,8 +67,8 @@ impl<'a, P: Poly> Sub<&'a Self> for ErrorSimulator<P> {
 
     fn sub(self, rhs: &Self) -> Self {
         Self {
-            h_inf: self.h_inf + &rhs.h_inf,
-            plaintext_inf: self.plaintext_inf + &rhs.plaintext_inf,
+            h_norm: self.h_norm + &rhs.h_norm,
+            plaintext_norm: self.plaintext_norm + &rhs.plaintext_norm,
             params: self.params,
         }
     }
@@ -88,8 +88,8 @@ impl<'a, P: Poly> Mul<&'a Self> for ErrorSimulator<P> {
     fn mul(self, rhs: &Self) -> Self {
         let dim = self.params.ring_dimension();
         Self {
-            h_inf: self.h_inf.right_rotate(dim) + rhs.h_inf.clone() * &self.plaintext_inf,
-            plaintext_inf: self.plaintext_inf * &rhs.plaintext_inf,
+            h_norm: self.h_norm.right_rotate(dim) + rhs.h_norm.clone() * &self.plaintext_norm,
+            plaintext_norm: self.plaintext_norm * &rhs.plaintext_norm,
             params: self.params.clone(),
         }
     }
@@ -98,11 +98,11 @@ impl<'a, P: Poly> Mul<&'a Self> for ErrorSimulator<P> {
 impl<P: Poly> Evaluable<P> for ErrorSimulator<P> {
     fn scalar_mul(&self, _: &<P as Poly>::Params, scalar: &P) -> Self {
         let dim = self.params.ring_dimension();
-        let scalar_inf =
+        let scalar_norm =
             scalar.coeffs().iter().fold(BigUint::zero(), |acc, x| acc + x.to_biguint());
         Self {
-            h_inf: self.h_inf.right_rotate(dim),
-            plaintext_inf: self.plaintext_inf.clone() * scalar_inf,
+            h_norm: self.h_norm.right_rotate(dim),
+            plaintext_norm: self.plaintext_norm.clone() * scalar_norm,
             params: self.params.clone(),
         }
     }
@@ -238,13 +238,13 @@ mod tests {
 
     fn create_test_error_simulator(
         ring_dim: u32,
-        h_inf_values: Vec<u32>,
-        plaintext_inf: u32,
+        h_norm_values: Vec<u32>,
+        plaintext_norm: u32,
     ) -> ErrorSimulator<DCRTPoly> {
         let params = DCRTPolyParams::new(ring_dim, 2, 17);
-        let h_inf = MPolyCoeffs::new(h_inf_values.into_iter().map(BigUint::from).collect());
-        let plaintext_inf = BigUint::from(plaintext_inf);
-        ErrorSimulator::new(h_inf, plaintext_inf, params)
+        let h_norm = MPolyCoeffs::new(h_norm_values.into_iter().map(BigUint::from).collect());
+        let plaintext_norm = BigUint::from(plaintext_norm);
+        ErrorSimulator::new(h_norm, plaintext_norm, params)
     }
 
     #[test]
@@ -257,8 +257,8 @@ mod tests {
         let result = sim1.clone() + sim2.clone();
 
         // Verify the result
-        assert_eq!(result.h_inf.0[0], BigUint::from(30u32)); // 10 + 20
-        assert_eq!(result.plaintext_inf, BigUint::from(12u32)); // 5 + 7
+        assert_eq!(result.h_norm.0[0], BigUint::from(30u32)); // 10 + 20
+        assert_eq!(result.plaintext_norm, BigUint::from(12u32)); // 5 + 7
         assert_eq!(result.params.ring_dimension(), 8);
     }
 
@@ -272,8 +272,8 @@ mod tests {
         let result = sim1.clone() - sim2.clone();
 
         // Verify the result (should be the same as addition)
-        assert_eq!(result.h_inf.0[0], BigUint::from(30u32)); // 10 + 20
-        assert_eq!(result.plaintext_inf, BigUint::from(12u32)); // 5 + 7
+        assert_eq!(result.h_norm.0[0], BigUint::from(30u32)); // 10 + 20
+        assert_eq!(result.plaintext_norm, BigUint::from(12u32)); // 5 + 7
         assert_eq!(result.params.ring_dimension(), 8);
     }
 
@@ -287,18 +287,18 @@ mod tests {
         let result = sim1.clone() * sim2.clone();
 
         // Verify the result
-        // h_inf should be sim1.h_inf.right_rotate(8) + sim2.h_inf * sim1.plaintext_inf
+        // h_norm should be sim1.h_norm.right_rotate(8) + sim2.h_norm * sim1.plaintext_norm
 
-        // Check the length of the h_inf vector
-        assert_eq!(result.h_inf.0.len(), 2);
+        // Check the length of the h_norm vector
+        assert_eq!(result.h_norm.0.len(), 2);
 
-        // First element should be 20 * 5 (from sim2.h_inf * sim1.plaintext_inf)
-        assert_eq!(result.h_inf.0[0], BigUint::from(100u32)); // 20 * 5
+        // First element should be 20 * 5 (from sim2.h_norm * sim1.plaintext_norm)
+        assert_eq!(result.h_norm.0[0], BigUint::from(100u32)); // 20 * 5
 
         // Second element should be 10 * 8 (from right_rotate)
-        assert_eq!(result.h_inf.0[1], BigUint::from(80u32));
+        assert_eq!(result.h_norm.0[1], BigUint::from(80u32));
 
-        assert_eq!(result.plaintext_inf, BigUint::from(35u32)); // 5 * 7
+        assert_eq!(result.plaintext_norm, BigUint::from(35u32)); // 5 * 7
         assert_eq!(result.params.ring_dimension(), 8);
     }
 
@@ -313,19 +313,19 @@ mod tests {
         let scalar = sampler.sample_poly(&params, &DistType::FinRingDist);
 
         // Get the sum of scalar coefficients for verification
-        let scalar_inf =
+        let scalar_norm =
             scalar.coeffs().iter().fold(BigUint::zero(), |acc, x| acc + x.to_biguint());
 
         // Test scalar multiplication
         let result = sim.scalar_mul(&sim.params, &scalar);
 
         // Verify the result
-        // h_inf should be sim.h_inf.right_rotate(8)
-        assert_eq!(result.h_inf.0[0], BigUint::from(0u32));
-        assert_eq!(result.h_inf.0[1], BigUint::from(80u32)); // 10 * 8
+        // h_norm should be sim.h_norm.right_rotate(8)
+        assert_eq!(result.h_norm.0[0], BigUint::from(0u32));
+        assert_eq!(result.h_norm.0[1], BigUint::from(80u32)); // 10 * 8
 
-        // plaintext_inf should be sim.plaintext_inf * sum of scalar coeffs
-        assert_eq!(result.plaintext_inf, sim.plaintext_inf * scalar_inf);
+        // plaintext_norm should be sim.plaintext_norm * sum of scalar coeffs
+        assert_eq!(result.plaintext_norm, sim.plaintext_norm * scalar_norm);
         assert_eq!(result.params.ring_dimension(), 8);
     }
 
@@ -356,7 +356,7 @@ mod tests {
 
         // Verify the result
         assert_eq!(error_result.len(), 1);
-        assert_eq!(error_result[0], mul_result.h_inf);
+        assert_eq!(error_result[0], mul_result.h_norm);
     }
 
     #[test]
