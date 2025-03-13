@@ -29,6 +29,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+        fail-fast: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -74,7 +76,7 @@ jobs:
 
       - name: Verify OpenFHE libraries
         run: |
-          if [ -z "$(ls -A /usr/local/lib | grep openfhe)" ]; then
+          if [ -z "$(ls -A /usr/local/lib | grep OpenFHE)" ]; then
             echo "OpenFHE libraries missing! Reinstalling..."
             cd openfhe/build
             sudo make install
@@ -88,7 +90,7 @@ jobs:
           sudo ldconfig
 
       - name: Verify OpenFHE installation
-        run: ls -lah /usr/local/lib | grep openfhe
+        run: ls -lah /usr/local/lib | grep OpenFHE
           
       - name: Run clippy
         run: cargo +nightly clippy --workspace --all-targets --all-features
