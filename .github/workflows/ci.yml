@@ -44,8 +44,15 @@ jobs:
         id: openfhe-cache
         uses: actions/cache@v4
         with:
-          path: openfhe
-          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/**/CMakeLists.txt') }}
+          path: openfhe/build
+          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/CMakeLists.txt') }}
+
+      - name: Cache OpenFHE installation
+        id: openfhe-install-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib
+          key: ${{ runner.os }}-openfhe-install-${{ hashFiles('openfhe/CMakeLists.txt') }}
 
       - name: Checkout OpenFHE
         if: steps.openfhe-cache.outputs.cache-hit != 'true'
@@ -67,6 +74,9 @@ jobs:
         run: |
           echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
           sudo ldconfig
+
+      - name: Verify OpenFHE installation
+        run: ls -lah /usr/local/lib | grep openfhe
           
       - name: Run clippy
         run: cargo +nightly clippy --workspace --all-targets --all-features
