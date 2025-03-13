@@ -40,6 +40,7 @@ where
     let packed_output_size = public_data.packed_output_size;
     let s_bar =
         sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
+    println!("s_bar computed");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bar,
@@ -48,6 +49,7 @@ where
     );
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    println!("t_bar computed");
     // let minus_one_poly =
     //     M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
     // let t = t_bar.concat_columns(&[minus_one_poly]);
@@ -64,6 +66,7 @@ where
         t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e - &(hardcoded_key.clone() * &scale)
     };
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+    println!("enc_hardcoded_key computed");
 
     let mut plaintexts = vec![];
     plaintexts.extend(enc_hardcoded_key_polys);
@@ -77,6 +80,7 @@ where
     // input_encoded_polys.extend(enc_hardcoded_key_polys);
     // input_encoded_polys.extend(zero_plaintexts);
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
+    println!("encodings_init computed");
     // let encode_fhe_key =
     //     bgg_encode_sampler.sample(&params, &public_data.pubkeys_fhe_key[0], &t.get_row(0),
     // false);
@@ -89,6 +93,7 @@ where
         let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 4);
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
+        println!("bs computed");
     }
     let m_b = 4 * (2 + log_q);
     let p_init = {
@@ -102,6 +107,7 @@ where
         );
         s_b + error
     };
+    println!("p_init computed");
     let identity_2 = M::identity(params.as_ref(), 2, None);
     let u_0 = identity_2.concat_diag(&[public_data.r_0.clone()]);
     let u_1 = identity_2.concat_diag(&[public_data.r_1.clone()]);
@@ -174,6 +180,7 @@ where
         m_preimages.push(mp);
         n_preimages.push(np);
         k_preimages.push(kp);
+        println!("m_preimages, n_preimages, k_preimages computed");
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
@@ -200,7 +207,7 @@ where
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
-
+    println!("final_preimage computed");
     Obfuscation {
         hash_key,
         encodings_init,

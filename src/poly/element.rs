@@ -28,6 +28,7 @@ pub trait PolyElem:
     fn minus_one(modulus: &Self::Modulus) -> Self;
     fn constant(modulus: &Self::Modulus, value: u64) -> Self;
     fn half_q(modulus: &Self::Modulus) -> Self;
+    fn max_q(modulus: &Self::Modulus) -> Self;
     fn extract_highest_bits(&self) -> bool;
     fn modulus(&self) -> &Self::Modulus;
     fn to_biguint(&self) -> &num_bigint::BigUint;

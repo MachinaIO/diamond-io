@@ -42,12 +42,12 @@ pub struct ObfuscationParams<M: PolyMatrix> {
 mod test {
     use super::*;
     use crate::{
-        bgg::circuit::PolyCircuit,
-        io::{obf::obfuscate, ObfuscationParams},
+        bgg::{circuit::PolyCircuit, ErrorSimulator},
+        io::{obf::obfuscate, utils::build_final_step_circuit, ObfuscationParams},
         poly::{
             dcrt::{
-                DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-                DCRTPolyUniformSampler,
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
+                DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
             },
             PolyParams,
         },
@@ -74,12 +74,95 @@ mod test {
             public_circuit.output(outputs);
         }
 
+        // let all_a_vec =
+        let a_decomposed_polys =
+            DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
+                .decompose();
+        let final_circuit = build_final_step_circuit::<_, ErrorSimulator>(
+            &params,
+            &a_decomposed_polys.get_column(0),
+            public_circuit.clone(),
+        );
+        let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
+        println!("error_m_polys {:?}", error_m_polys);
+
         let obf_params = ObfuscationParams {
             params: params.clone(),
             switched_modulus,
             input_size: 1,
             public_circuit,
             error_gauss_sigma: 0.0,
+        };
+
+        let sampler_uniform = DCRTPolyUniformSampler::new();
+        let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0);
+        let mut rng = rand::rng();
+        let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
+            obf_params.clone(),
+            sampler_uniform,
+            sampler_hash,
+            sampler_trapdoor,
+            &mut rng,
+        );
+        let obfuscation_time = start_time.elapsed();
+        println!("Time to obfuscate: {:?}", obfuscation_time);
+        let input = [true];
+        let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        let hardcoded_key = obfuscation
+            .hardcoded_key
+            .entry(0, 0)
+            .coeffs()
+            .iter()
+            .map(|elem| elem.value() != &BigUint::from(0u8))
+            .collect::<Vec<_>>();
+        let output = obfuscation.eval(obf_params, sampler_hash, &input);
+        let total_time = start_time.elapsed();
+        println!("{:?}", output);
+        println!("Time for evaluation: {:?}", total_time - obfuscation_time);
+        println!("Total time: {:?}", total_time);
+        assert_eq!(output, hardcoded_key);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_io_just_mul_enc_and_bit_real_params() {
+        let start_time = std::time::Instant::now();
+        println!("start_time {:?}", start_time);
+        let params = DCRTPolyParams::new(1024, 9, 51);
+        println!("{:?}", params);
+        let log_q = params.modulus_bits();
+        let switched_modulus = Arc::new(BigUint::from(2u32).pow(449u32));
+        let mut public_circuit = PolyCircuit::new();
+        {
+            let inputs = public_circuit.input(log_q + 1);
+            let mut outputs = vec![];
+            let eval_input = inputs[log_q];
+            for enc_input in inputs[0..log_q].iter() {
+                let muled = public_circuit.and_gate(*enc_input, eval_input);
+                outputs.push(muled);
+            }
+            public_circuit.output(outputs);
+        }
+
+        // let all_a_vec =
+        let a_decomposed_polys =
+            DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
+                .decompose();
+        let final_circuit = build_final_step_circuit::<_, ErrorSimulator>(
+            &params,
+            &a_decomposed_polys.get_column(0),
+            public_circuit.clone(),
+        );
+        let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
+        println!("error_m_polys {:?}", error_m_polys);
+
+        let obf_params = ObfuscationParams {
+            params: params.clone(),
+            switched_modulus,
+            input_size: 1,
+            public_circuit,
+            error_gauss_sigma: 2251799813685248.0,
         };
 
         let sampler_uniform = DCRTPolyUniformSampler::new();

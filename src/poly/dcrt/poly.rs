@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
     parallel_iter,
-    poly::{Poly, PolyParams},
+    poly::{Poly, PolyElem, PolyParams},
 };
 use num_bigint::BigUint;
 use openfhe::{
@@ -122,6 +122,11 @@ impl Poly for DCRTPoly {
 
     fn const_power_of_two(params: &Self::Params, k: usize) -> Self {
         Self::poly_gen_from_const(params, BigUint::from(2u32).pow(k as u32).to_string())
+    }
+
+    fn const_max(params: &Self::Params) -> Self {
+        let coeffs = vec![FinRingElem::max_q(&params.modulus()); params.ring_dimension() as usize];
+        Self::from_coeffs(params, &coeffs)
     }
 
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}

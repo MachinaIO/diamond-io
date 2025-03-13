@@ -246,7 +246,7 @@ def bound_final_error(
     m_polys: list[list[int]],
 ):
     # Convert all inputs to Decimal for high precision
-    secpar_d = Decimal(secpar)
+    # secpar_d = Decimal(secpar)
     n_d = Decimal(n)
     log_q_d = Decimal(log_q)
     d_d = Decimal(d)

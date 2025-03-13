@@ -1,5 +1,5 @@
 use super::{circuit::PolyCircuit, Evaluable};
-use crate::poly::{Poly, PolyElem, PolyParams};
+use crate::poly::{Poly, PolyElem};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};

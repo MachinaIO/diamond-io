@@ -71,6 +71,10 @@ impl PolyElem for FinRingElem {
         Self::new(value, modulus.clone())
     }
 
+    fn max_q(modulus: &Self::Modulus) -> Self {
+        Self::new(modulus.as_ref() - &BigUint::from(1u8), modulus.clone())
+    }
+
     fn extract_highest_bits(&self) -> bool {
         let bits = self.modulus.bits();
         let half_q_value = BigUint::from(1u8) << (bits - 1);
