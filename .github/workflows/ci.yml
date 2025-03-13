@@ -26,7 +26,7 @@ jobs:
           components: rustfmt
       - run: cargo +nightly fmt --all --check
           
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
         fail-fast: false
@@ -35,6 +35,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
         run: |
@@ -63,36 +66,10 @@ jobs:
       - name: Verify OpenFHE installation
         run: ls -lah /usr/local/lib | grep OpenFHE
 
-  clippy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs:
-      - build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: clippy
-
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-
       - name: Run clippy
         run: cargo +nightly clippy --workspace --all-targets --all-features
         env:
           RUSTFLAGS: -A unused
-
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs:
-      - build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
 
       - name: Run test
         run: cargo test --features="parallel"
@@ -102,7 +79,6 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - clippy
       - test
       - fmt
     steps:
