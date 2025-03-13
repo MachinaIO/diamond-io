@@ -62,7 +62,7 @@ jobs:
         id: openfhe-install-cache
         uses: actions/cache@v4
         with:
-          path: /usr/local/lib
+          path: /usr/local/lib/OpenFHE
           key: ${{ runner.os }}-openfhe-install-${{ hashFiles('openfhe/CMakeLists.txt') }}
 
       - name: Build OpenFHE
