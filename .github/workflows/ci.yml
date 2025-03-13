@@ -25,28 +25,6 @@ jobs:
         with:
           components: rustfmt
       - run: cargo +nightly fmt --all --check
-
-  clippy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs:
-      - build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Update dynamic linker cache
-        run: |
-          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
-          sudo ldconfig
-      - run: cargo +nightly clippy --workspace --all-targets --all-features
-        env:
-          RUSTFLAGS: -A unused
           
   build:
     runs-on: ubuntu-latest
@@ -87,43 +65,21 @@ jobs:
         run: |
           echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
           sudo ldconfig
-
-  test:
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - name: Update dynamic linker cache
-        run: |
-          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
-          sudo ldconfig
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Run clippy
+      - run: cargo +nightly clippy --workspace --all-targets --all-features
+        env:
+          RUSTFLAGS: -A unused
 
       - name: Run test
         run: cargo test --features="parallel"
-        env:
-          CXXFLAGS: "-I/usr/local/include -I/usr/local/include/openfhe -I/usr/local/include/openfhe/core"
-          LDFLAGS: "-L/usr/local/lib"
-          RUSTFLAGS: "-C link-args=-L/usr/local/lib"
   
   ci-success:
     name: ci success
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - test
-      - clippy
+      - build
       - fmt
     steps:
       - name: Decide whether the needed jobs succeeded or failed
