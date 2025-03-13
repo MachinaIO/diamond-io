@@ -64,6 +64,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache OpenFHE build
+        id: openfhe-cache
         uses: actions/cache@v4
         with:
           path: openfhe/build
@@ -78,6 +79,7 @@ jobs:
           path: openfhe
 
       - name: Build OpenFHE
+        if: steps.openfhe-cache.outputs.cache-hit != 'true'
         run: |
           cd openfhe
           mkdir -p build && cd build
