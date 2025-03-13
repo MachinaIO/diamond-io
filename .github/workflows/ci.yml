@@ -35,6 +35,9 @@ jobs:
         with:
           components: clippy
 
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -60,8 +63,6 @@ jobs:
           path: /usr/local/lib
           key: ${{ runner.os }}-openfhe-install-${{ hashFiles('openfhe/CMakeLists.txt') }}
 
-
-
       - name: Build OpenFHE
         if: steps.openfhe-cache.outputs.cache-hit != 'true'
         run: |
@@ -70,6 +71,16 @@ jobs:
           cmake ..
           make -j"$(nproc)"
           sudo make install
+
+      - name: Verify OpenFHE libraries
+        run: |
+          if [ -z "$(ls -A /usr/local/lib | grep openfhe)" ]; then
+            echo "OpenFHE libraries missing! Reinstalling..."
+            cd openfhe/build
+            sudo make install
+          else
+            echo "OpenFHE libraries found, skipping install."
+          fi
 
       - name: Update dynamic linker cache
         run: |
