@@ -36,9 +36,6 @@ jobs:
         with:
           components: clippy
 
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -50,38 +47,13 @@ jobs:
           repository: openfheorg/openfhe-development
           path: openfhe
 
-      - name: Cache OpenFHE build
-        id: openfhe-cache
-        uses: actions/cache@v4
-        with:
-          path: openfhe/build
-          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/CMakeLists.txt') }}
-
-      - name: Cache OpenFHE installation
-        id: openfhe-install-cache
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/lib/OpenFHE
-          key: ${{ runner.os }}-openfhe-install-${{ hashFiles('openfhe/CMakeLists.txt') }}
-
       - name: Build OpenFHE
-        if: steps.openfhe-cache.outputs.cache-hit != 'true'
         run: |
           cd openfhe
           mkdir -p build && cd build
           cmake ..
           make -j"$(nproc)"
           sudo make install
-
-      - name: Verify OpenFHE libraries
-        run: |
-          if [ -z "$(ls -A /usr/local/lib | grep OpenFHE)" ]; then
-            echo "OpenFHE libraries missing! Reinstalling..."
-            cd openfhe/build
-            sudo make install
-          else
-            echo "OpenFHE libraries found, skipping install."
-          fi
 
       - name: Update dynamic linker cache
         run: |
@@ -90,11 +62,37 @@ jobs:
 
       - name: Verify OpenFHE installation
         run: ls -lah /usr/local/lib | grep OpenFHE
-          
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
       - name: Run clippy
         run: cargo +nightly clippy --workspace --all-targets --all-features
         env:
           RUSTFLAGS: -A unused
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
 
       - name: Run test
         run: cargo test --features="parallel"
@@ -104,7 +102,8 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - build
+      - clippy
+      - test
       - fmt
     steps:
       - name: Decide whether the needed jobs succeeded or failed
