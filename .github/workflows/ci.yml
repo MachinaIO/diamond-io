@@ -8,15 +8,44 @@ on:
     branches:
       - main
 
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo clippy --workspace --all-targets --all-features
+        env:
+          RUSTFLAGS: -A unused
+
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
 
       - name: Install dependencies
         run: |
@@ -59,12 +88,19 @@ jobs:
           echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
           sudo ldconfig
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: taiki-e/install-action@nextest
-      - name: Install clippy and rustfmt
-        run: |
-          rustup component add clippy
-          rustup component add rustfmt
-      - uses: taiki-e/install-action@just
-      - name: Run ci
-        run: just ci
+      - name: Run test
+        run: cargo test --features="parallel"
+  
+  ci-success:
+    name: ci success
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - test
+      - clippy
+      - fmt
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
