@@ -39,6 +39,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Update dynamic linker cache
+        run: |
+          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
+          sudo ldconfig
       - run: cargo +nightly clippy --workspace --all-targets --all-features
         env:
           RUSTFLAGS: -A unused
@@ -90,6 +95,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Update dynamic linker cache
+        run: |
+          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
+          sudo ldconfig
 
       - name: Cache Rust dependencies
         uses: actions/cache@v4
