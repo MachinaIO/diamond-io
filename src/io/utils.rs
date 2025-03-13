@@ -1,7 +1,12 @@
 use super::ObfuscationParams;
-use crate::bgg::circuit::{build_circuit_ip_to_int, PolyCircuit};
-use crate::bgg::{sampler::*, BggPublicKey, Evaluable};
-use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
+use crate::{
+    bgg::{
+        circuit::{build_circuit_ip_to_int, PolyCircuit},
+        sampler::*,
+        BggPublicKey, Evaluable,
+    },
+    poly::{matrix::*, sampler::*, Poly, PolyParams},
+};
 use itertools::Itertools;
 use std::marker::PhantomData;
 
@@ -151,15 +156,21 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
-    use crate::bgg::BggEncoding;
-    use crate::poly::dcrt::{
-        DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
-        FinRingElem,
+    use crate::{
+        bgg::{
+            sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+            BggEncoding,
+        },
+        poly::{
+            dcrt::{
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
+                DCRTPolyUniformSampler, FinRingElem,
+            },
+            element::PolyElem,
+            sampler::DistType,
+        },
+        utils::create_bit_random_poly,
     };
-    use crate::poly::element::PolyElem;
-    use crate::poly::sampler::DistType;
-    use crate::utils::create_bit_random_poly;
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
@@ -348,9 +359,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec
-                * (outputs_encodings[0].pubkey.matrix.clone()
-                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+            bgg_encoding_sampler.secret_vec *
+                (outputs_encodings[0].pubkey.matrix.clone() -
+                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }

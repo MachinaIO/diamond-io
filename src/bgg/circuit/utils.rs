@@ -2,7 +2,8 @@ use crate::{bgg::Evaluable, poly::Poly};
 
 use super::PolyCircuit;
 
-/// Build a circuit that takes as input a public circuit and a private input, and outputs inner products between the `num_priv_input`-sized output of the public circuit and the private input.
+/// Build a circuit that takes as input a public circuit and a private input, and outputs inner
+/// products between the `num_priv_input`-sized output of the public circuit and the private input.
 pub fn build_circuit_ip_priv_and_pub_outputs<P: Poly, E: Evaluable<P>>(
     public_circuit: PolyCircuit<P>,
     num_priv_input: usize,
@@ -37,7 +38,8 @@ pub fn build_circuit_ip_priv_and_pub_outputs<P: Poly, E: Evaluable<P>>(
     circuit
 }
 
-/// Build a circuit that takes as input `num_bits` bits and outputs the integer represented by the bits.
+/// Build a circuit that takes as input `num_bits` bits and outputs the integer represented by the
+/// bits.
 pub fn build_circuit_bits_to_int<P: Poly, E: Evaluable<P>>(
     params: &P::Params,
     num_bits: usize,
@@ -94,10 +96,13 @@ pub fn build_circuit_ip_to_int<P: Poly, E: Evaluable<P>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::dcrt::FinRingElem;
-    use crate::poly::dcrt::{params::DCRTPolyParams, poly::DCRTPoly};
-    use crate::poly::params::PolyParams;
-    use crate::utils::{create_bit_poly, create_random_poly};
+    use crate::{
+        poly::{
+            dcrt::{params::DCRTPolyParams, poly::DCRTPoly, FinRingElem},
+            params::PolyParams,
+        },
+        utils::{create_bit_poly, create_random_poly},
+    };
 
     #[test]
     fn test_build_ip_priv_and_pub_circuit_outputs() {

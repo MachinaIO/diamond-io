@@ -1,11 +1,9 @@
 pub mod gate;
 pub mod utils;
-use crate::bgg::Evaluable;
-use crate::poly::Poly;
+use crate::{bgg::Evaluable, poly::Poly};
 pub use gate::{PolyGate, PolyGateType};
 use itertools::Itertools;
-use std::collections::BTreeMap;
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 pub use utils::*;
 
 #[derive(Debug, Clone)]
@@ -283,15 +281,17 @@ impl<P: Poly> PolyCircuit<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::{
-        dcrt::{
-            params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
-            FinRingElem,
+    use crate::{
+        poly::{
+            dcrt::{
+                params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
+                FinRingElem,
+            },
+            sampler::DistType,
+            PolyParams,
         },
-        sampler::DistType,
-        PolyParams,
+        utils::{create_bit_random_poly, create_random_poly},
     };
-    use crate::utils::{create_bit_random_poly, create_random_poly};
 
     #[test]
     fn test_eval_add() {
@@ -631,10 +631,10 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = (poly1.clone() + poly2.clone())
-            - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
-                * poly1
-                * poly2);
+        let expected = (poly1.clone() + poly2.clone()) -
+            (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
+                poly1 *
+                poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -650,11 +650,11 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_one(&params)
-            - ((poly1.clone() + poly2.clone())
-                - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
-                    * poly1
-                    * poly2));
+        let expected = DCRTPoly::const_one(&params) -
+            ((poly1.clone() + poly2.clone()) -
+                (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
+                    poly1 *
+                    poly2));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -708,8 +708,9 @@ mod tests {
         let inputs = circuit.input(c0_bits.len() + c1_bits.len() + 1);
         assert_eq!(inputs.len(), params.modulus_bits() * 2 + 1);
 
-        // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ..., c1_bits[modulus_bits - 1], k
-        // Output: c0_bits[0] * k, ..., c0_bits[modulus_bits - 1] * k, c1_bits[0] * k, ..., c1_bits[modulus_bits - 1] * k
+        // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ..., c1_bits[modulus_bits
+        // - 1], k Output: c0_bits[0] * k, ..., c0_bits[modulus_bits - 1] * k, c1_bits[0] *
+        // k, ..., c1_bits[modulus_bits - 1] * k
         let k_id = inputs[inputs.len() - 1];
         let output_ids = inputs
             .iter()

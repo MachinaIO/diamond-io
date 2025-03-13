@@ -3,7 +3,7 @@ export CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE := "true"
 
 # Run rustfmt to check the code formatting without making changes
 format:
-    cargo fmt -- --check
+    cargo +nightly fmt -- --check
 
 # Clean up the project by removing the target directory
 clean:

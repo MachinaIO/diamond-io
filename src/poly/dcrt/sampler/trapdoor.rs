@@ -128,7 +128,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 .map(|block| {
                     let start_col = block * size;
 
-                    // Calculate end_col based on whether this is the last block with remaining columns
+                    // Calculate end_col based on whether this is the last block with remaining
+                    // columns
                     let end_col = if block == full_blocks && remaining_cols > 0 {
                         start_col + remaining_cols
                     } else {
