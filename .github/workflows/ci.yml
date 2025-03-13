@@ -113,7 +113,7 @@ jobs:
       - name: Run test
         run: cargo test --features="parallel"
         env:
-          CXXFLAGS: "-I/usr/local/include"
+          CXXFLAGS: "-I/usr/local/include -I/usr/local/include/openfhe -I/usr/local/include/openfhe/core"
           LDFLAGS: "-L/usr/local/lib"
           RUSTFLAGS: "-C link-args=-L/usr/local/lib"
   
