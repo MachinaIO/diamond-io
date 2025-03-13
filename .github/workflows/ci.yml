@@ -29,6 +29,8 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs:
+      - test
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -53,7 +55,7 @@ jobs:
           sudo apt-get install -y build-essential cmake libgmp-dev
 
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -62,7 +64,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache OpenFHE build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: openfhe/build
           key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/CMakeLists.txt') }}
@@ -70,7 +72,7 @@ jobs:
             ${{ runner.os }}-openfhe-
 
       - name: Checkout OpenFHE
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: openfheorg/openfhe-development
           path: openfhe
