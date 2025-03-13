@@ -112,6 +112,10 @@ jobs:
 
       - name: Run test
         run: cargo test --features="parallel"
+        env:
+          CXXFLAGS: "-I/usr/local/include"
+          LDFLAGS: "-L/usr/local/lib"
+          RUSTFLAGS: "-C link-args=-L/usr/local/lib"
   
   ci-success:
     name: ci success
