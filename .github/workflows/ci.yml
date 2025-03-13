@@ -45,9 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openfhe/build
-          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-openfhe-
+          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/**/CMakeLists.txt') }}
 
       - name: Checkout OpenFHE
         uses: actions/checkout@v4
