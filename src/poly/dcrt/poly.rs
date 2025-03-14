@@ -1,3 +1,4 @@
+use bytes::Bytes;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -149,6 +150,39 @@ impl Poly for DCRTPoly {
                 DCRTPoly::from_coeffs(params, &bit_coeffs)
             })
             .collect()
+    }
+
+    fn to_compact_bytes(&self, byte_size: usize) -> Bytes {
+        let modulus = self.ptr_poly.GetModulus();
+        let modulus_bytes = modulus.as_bytes();
+
+        assert!(
+            byte_size <= modulus_bytes.len(),
+            "byte_size must not be greater than modulus_bytes: {} > {}",
+            byte_size,
+            modulus_bytes.len()
+        );
+
+        let coeffs = self.coeffs();
+        let mut bytes_data = Vec::new();
+        for coeff in coeffs {
+            let value = coeff.value();
+            let value_bytes = value.to_bytes_le();
+            assert!(
+                value_bytes.len() <= byte_size,
+                "value_bytes exceeds the specified byte_size: {} > {}",
+                value_bytes.len(),
+                byte_size
+            );
+
+            if value_bytes.len() == byte_size {
+                bytes_data.extend_from_slice(&value_bytes[0..byte_size]);
+            } else {
+                bytes_data.extend_from_slice(&value_bytes);
+                bytes_data.extend(vec![0; byte_size - value_bytes.len()]);
+            }
+        }
+        Bytes::from(bytes_data)
     }
 }
 

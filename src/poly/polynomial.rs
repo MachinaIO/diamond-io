@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 use super::PolyElem;
 use crate::poly::params::PolyParams;
 use std::{
@@ -43,4 +45,5 @@ pub trait Poly:
         bits
     }
     fn decompose(&self, params: &Self::Params) -> Vec<Self>;
+    fn to_compact_bytes(&self, byte_size: usize) -> Bytes;
 }
