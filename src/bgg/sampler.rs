@@ -130,7 +130,7 @@ where
 
         let all_public_key_matrix: S::M = public_keys[0]
             .matrix
-            .concat_columns(&public_keys[1..].iter().map(|pk| pk.matrix.clone()).collect_vec());
+            .concat_columns(&public_keys[1..].iter().map(|pk| &pk.matrix).collect_vec());
         let first_term = secret_vec.clone() * all_public_key_matrix;
 
         let gadget = S::M::gadget_matrix(params, 2);

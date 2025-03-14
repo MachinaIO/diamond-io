@@ -16,7 +16,7 @@ impl<M: PolyMatrix> BggPublicKey<M> {
     }
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
-        self.matrix.concat_columns(&others.iter().map(|x| x.matrix.clone()).collect_vec()[..])
+        self.matrix.concat_columns(&others.iter().map(|x| &x.matrix).collect_vec()[..])
     }
 }
 
