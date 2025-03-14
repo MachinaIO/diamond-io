@@ -145,7 +145,6 @@ mod test {
             public_circuit.output(outputs);
         }
 
-        // let all_a_vec =
         let a_decomposed_polys =
             DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
                 .decompose();
@@ -158,7 +157,7 @@ mod test {
         println!("error_m_polys {:?}", error_m_polys);
 
         let obf_params = ObfuscationParams {
-            params: params.clone(),
+            params,
             switched_modulus,
             input_size: 1,
             public_circuit,
@@ -180,6 +179,8 @@ mod test {
         println!("Time to obfuscate: {:?}", obfuscation_time);
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        // todo: we can wrap into method prob (even store hardcoded_key as Vec<bool> which is way
+        // compact)
         let hardcoded_key = obfuscation
             .hardcoded_key
             .coeffs()
