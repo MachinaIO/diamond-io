@@ -3,6 +3,7 @@ use crate::{
     parallel_iter,
     poly::{Poly, PolyMatrix, PolyParams},
 };
+use bytes::Bytes;
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -351,13 +352,13 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn from_compact_bytes(
         params: &<Self::P as Poly>::Params,
         bit_size: usize,
-        bytes: &[u8],
+        bytes: Vec<Bytes>,
     ) -> Self {
         Self::zero(params, 2, 2)
     }
 
-    fn to_compact_bytes(&self, bit_size: usize) -> Vec<u8> {
-        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    fn to_compact_bytes(&self, bit_size: usize) -> Vec<Bytes> {
+        vec![Bytes::from("1")]
     }
 }
 

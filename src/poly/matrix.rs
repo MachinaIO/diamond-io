@@ -1,4 +1,5 @@
 use super::{Poly, PolyParams};
+use bytes::Bytes;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
@@ -40,9 +41,9 @@ pub trait PolyMatrix:
     fn from_compact_bytes(
         params: &<Self::P as Poly>::Params,
         bit_size: usize,
-        bytes: &[u8],
+        bytes: Vec<Bytes>,
     ) -> Self;
-    fn to_compact_bytes(&self, bit_size: usize) -> Vec<u8>;
+    fn to_compact_bytes(&self, bit_size: usize) -> Vec<Bytes>;
     fn entry(&self, i: usize, j: usize) -> &Self::P;
     fn get_row(&self, i: usize) -> Vec<Self::P>;
     fn get_column(&self, j: usize) -> Vec<Self::P>;
