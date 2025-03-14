@@ -114,6 +114,7 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
     debug_assert_eq!(a_decomposed_polys.len(), log_q);
     let packed_public_input_size = public_circuit.num_input();
 
+    /// circuit outputs the ciper text
     let mut ct_output_circuit = PolyCircuit::<P>::new();
     {
         let circuit_id = ct_output_circuit.register_sub_circuit(public_circuit);
@@ -128,6 +129,8 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         }
         ct_output_circuit.output(outputs);
     }
+
+    /// actual
     let mut circuit = PolyCircuit::<P>::new();
     {
         let mut inputs = circuit.input(packed_public_input_size + 1);

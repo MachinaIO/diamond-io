@@ -1,7 +1,7 @@
 pub mod eval;
 pub mod obf;
+pub mod serde;
 pub mod utils;
-
 use crate::{
     bgg::{circuit::PolyCircuit, BggEncoding},
     poly::{Poly, PolyMatrix, PolyParams},
