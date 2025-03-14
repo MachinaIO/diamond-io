@@ -351,14 +351,51 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     fn from_compact_bytes(
         params: &<Self::P as Poly>::Params,
-        bit_size: usize,
+        byte_size: usize,
         bytes: Vec<Bytes>,
     ) -> Self {
         Self::zero(params, 2, 2)
     }
 
-    fn to_compact_bytes(&self, bit_size: usize) -> Vec<Bytes> {
-        vec![Bytes::from("1")]
+    fn to_compact_bytes(&self, byte_size: usize) -> Vec<Bytes> {
+        let modulus_bytes = self.params.modulus().to_bytes_le();
+
+        assert!(
+            byte_size <= modulus_bytes.len(),
+            "byte_size must not be greater than modulus_bytes: {} > {}",
+            byte_size,
+            modulus_bytes.len()
+        );
+
+        let mut result = Vec::new();
+
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                let poly = &self.inner[i][j];
+                let coeffs = poly.coeffs();
+
+                let mut bytes_data = Vec::new();
+                for coeff in coeffs {
+                    let value = coeff.value();
+                    let value_bytes = value.to_bytes_le();
+                    assert!(
+                        value_bytes.len() <= byte_size,
+                        "value_bytes exceeds the specified byte_size: {} > {}",
+                        value_bytes.len(),
+                        byte_size
+                    );
+
+                    if value_bytes.len() == byte_size {
+                        bytes_data.extend_from_slice(&value_bytes[0..byte_size]);
+                    } else {
+                        bytes_data.extend_from_slice(&value_bytes);
+                        bytes_data.extend(vec![0; byte_size - value_bytes.len()]);
+                    }
+                }
+                result.push(Bytes::from(bytes_data));
+            }
+        }
+        result
     }
 }
 
@@ -748,5 +785,35 @@ mod tests {
         assert_eq!(expected_result.row_size(), 2);
         assert_eq!(expected_result.col_size(), 12);
         assert_eq!(result, expected_result)
+    }
+
+    #[test]
+    #[should_panic(expected = "value_bytes exceeds the specified byte_size:")]
+    fn test_to_compact_bytes_failure_1() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix (2x12)
+        let mat =
+            sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
+
+        // Choose a byte size that is less than the bytes necessary to represent the coefficients
+        let byte_size = 1;
+        mat.to_compact_bytes(byte_size);
+    }
+
+    #[test]
+    #[should_panic(expected = "byte_size must not be greater than modulus_bytes")]
+    fn test_to_compact_bytes_failure_2() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix (2x12)
+        let mat =
+            sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
+
+        // Choose a bit size that is greater than the modulus bit size
+        let byte_size = params.modulus().to_bytes_le().len() + 1;
+        mat.to_compact_bytes(byte_size);
     }
 }
