@@ -56,9 +56,15 @@ mod test {
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
+    use tracing::info;
+
+    fn init_tracing() {
+        tracing_subscriber::fmt::init();
+    }
 
     #[test]
     fn test_io_just_mul_enc_and_bit() {
+        init_tracing();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
@@ -85,7 +91,7 @@ mod test {
             public_circuit.clone(),
         );
         let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
-        println!("error_m_polys {:?}", error_m_polys);
+        info!("error_m_polys {:?}", error_m_polys);
 
         let obf_params = ObfuscationParams {
             params: params.clone(),
@@ -125,8 +131,8 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_io_just_mul_enc_and_bit_real_params() {
+        init_tracing();
         let start_time = std::time::Instant::now();
         println!("start_time {:?}", start_time);
         let params = DCRTPolyParams::new(1024, 9, 51);
@@ -154,7 +160,7 @@ mod test {
             public_circuit.clone(),
         );
         let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
-        println!("error_m_polys {:?}", error_m_polys);
+        info!("error_m_polys {:?}", error_m_polys);
 
         let obf_params = ObfuscationParams {
             params,
