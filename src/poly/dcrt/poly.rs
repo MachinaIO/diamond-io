@@ -106,6 +106,28 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
+    fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes) -> Self {
+        let ring_dimension = params.ring_dimension() as usize;
+        let modulus = params.modulus();
+        let byte_size = bytes.len() / ring_dimension;
+
+        let mut coeffs = Vec::with_capacity(ring_dimension);
+
+        for i in 0..ring_dimension {
+            let start = i * byte_size;
+            let end = start + byte_size;
+            let value_bytes = &bytes[start..end];
+
+            let value = BigUint::from_bytes_le(value_bytes);
+
+            let coeff = FinRingElem::new(value, modulus.clone());
+
+            coeffs.push(coeff);
+        }
+
+        Self::from_coeffs(params, &coeffs)
+    }
+
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }

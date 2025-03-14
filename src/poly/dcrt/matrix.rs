@@ -350,50 +350,46 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self {
-        // let metadata = &bytes[0];
+        let metadata = &bytes[0];
 
-        // let ring_dimension =
-        //     u32::from_le_bytes([metadata[0], metadata[1], metadata[2], metadata[3]]);
-        // let nrow =
-        //     u32::from_le_bytes([metadata[4], metadata[5], metadata[6], metadata[7]]) as usize;
-        // let ncol =
-        //     u32::from_le_bytes([metadata[8], metadata[9], metadata[10], metadata[11]]) as usize;
-        // let byte_size =
-        //     u32::from_le_bytes([metadata[12], metadata[13], metadata[14], metadata[15]]) as usize;
+        let ring_dimension =
+            u32::from_le_bytes([metadata[0], metadata[1], metadata[2], metadata[3]]);
+        let nrow =
+            u32::from_le_bytes([metadata[4], metadata[5], metadata[6], metadata[7]]) as usize;
+        let ncol =
+            u32::from_le_bytes([metadata[8], metadata[9], metadata[10], metadata[11]]) as usize;
+        let byte_size =
+            u32::from_le_bytes([metadata[12], metadata[13], metadata[14], metadata[15]]) as usize;
 
-        // assert_eq!(
-        //     ring_dimension,
-        //     params.ring_dimension(),
-        //     "Ring dimension mismatch: {} != {}",
-        //     ring_dimension,
-        //     params.ring_dimension()
-        // );
+        assert_eq!(
+            ring_dimension,
+            params.ring_dimension(),
+            "Ring dimension mismatch: {} != {}",
+            ring_dimension,
+            params.ring_dimension()
+        );
 
-        // let modulus_bytes = params.modulus().to_bytes_le();
-        // assert!(
-        //     byte_size <= modulus_bytes.len(),
-        //     "byte_size must not be greater than modulus_bytes: {} > {}",
-        //     byte_size,
-        //     modulus_bytes.len()
-        // );
+        let modulus_bytes = params.modulus().to_bytes_le();
+        assert!(
+            byte_size <= modulus_bytes.len(),
+            "byte_size must not be greater than modulus_bytes: {} > {}",
+            byte_size,
+            modulus_bytes.len()
+        );
 
-        // let mut result = Self::zero(params, nrow, ncol);
+        let mut result = Self::zero(params, nrow, ncol);
 
-        // let mut idx = 1; // Start from 1 because 0 is metadata
+        let mut idx = 1; // Start from 1 because 0 is metadata
 
-        // for i in 0..nrow {
-        //     for j in 0..ncol {
-        //         let poly_bytes = &bytes[idx];
-        //         idx += 1;
-
-        //         let poly = DCRTPoly::from_bytes(params, poly_bytes);
-
-        //         result.inner[i][j] = poly;
-        //     }
-        // }
-
-        // result
-        todo!()
+        for i in 0..nrow {
+            for j in 0..ncol {
+                let poly_bytes = &bytes[idx];
+                idx += 1;
+                let poly = DCRTPoly::from_compact_bytes(params, poly_bytes);
+                result.inner[i][j] = poly;
+            }
+        }
+        result
     }
 
     fn to_compact_bytes(&self, byte_size: usize) -> Vec<Bytes> {
@@ -869,5 +865,38 @@ mod tests {
         // the total byte size should be 4 * 4 (metadata) + nrow * ncol * ring_dimension * byte_size (coefficients)
         let total_byte_size: usize = bytes.iter().map(|b| b.len()).sum();
         assert_eq!(total_byte_size, (4 * 4) + (nrow * ncol * ring_dimension as usize * byte_size));
+    }
+
+    #[test]
+    fn test_from_compact_bytes() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        let nrow = 2;
+        let ncol = 12;
+
+        let mat = sampler.sample_uniform(
+            &params,
+            nrow,
+            ncol,
+            crate::poly::sampler::DistType::FinRingDist,
+        );
+
+        let byte_size = params.modulus().to_bytes_le().len();
+
+        let bytes = mat.to_compact_bytes(byte_size);
+        let new_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+
+        assert_eq!(mat, new_mat);
+
+        let bin_mat =
+            sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
+
+        let byte_size = 1;
+
+        let bytes = bin_mat.to_compact_bytes(byte_size);
+        let new_bin_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+
+        assert_eq!(bin_mat, new_bin_mat);
     }
 }
