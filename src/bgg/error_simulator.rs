@@ -163,68 +163,6 @@ impl Mul<&BigUint> for MPolyCoeffs {
     }
 }
 
-// #[derive(Debug, Clone)]
-// struct MNPoly<E: PolyElem> {
-//     coeff_of_degs: BTreeMap<(usize, usize), E>,
-// }
-
-// impl<E: PolyElem> MNPoly<E> {
-//     pub fn new(monos: Vec<MNMono<E>>) -> Self {
-//         Self { monos }
-//     }
-// }
-
-// impl<'a, E: PolyElem> Add<&'a Self> for MNPoly<E> {
-//     type Output = Self;
-//     fn add(self, rhs: &Self) -> Self::Output {
-//         let mut monos = self.monos.clone();
-//         monos.extend(rhs.monos.clone());
-//         Self { monos }
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// struct MNMono<E: PolyElem> {
-//     coeff: E,
-//     m_degree: usize,
-//     n_degree: usize,
-// }
-
-// impl<E: PolyElem> MNMono<E> {
-//     pub fn new(coeff: E, m_degree: usize, n_degree: usize) -> Self {
-//         Self { coeff, m_degree, n_degree }
-//     }
-// }
-
-// impl<E: PolyElem> Add<Self> for MNMono<E> {
-//     type Output = Self;
-//     fn add(self, rhs: Self) -> Self::Output {
-//         self + &rhs
-//     }
-// }
-
-// impl<'a, E: PolyElem> Add<&'a Self> for MNMono<E> {
-//     type Output = Self;
-//     fn add(self, rhs: &Self) -> Self::Output {
-//         Self {
-//             coeff: self.coeff + &rhs.coeff,
-//             m_degree: self.m_degree.max(rhs.m_degree),
-//             n_degree: self.n_degree.max(rhs.n_degree),
-//         }
-//     }
-// }
-
-// impl<'a, E: PolyElem> Mul<&'a Self> for MNMono<E> {
-//     type Output = Self;
-//     fn mul(self, rhs: &Self) -> Self::Output {
-//         Self {
-//             coeff: self.coeff * &rhs.coeff,
-//             m_degree: self.m_degree + rhs.m_degree,
-//             n_degree: self.n_degree + rhs.n_degree,
-//         }
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;

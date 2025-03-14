@@ -72,7 +72,6 @@ where
     let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
 
     let mut plaintexts = vec![];
-    plaintexts.extend(enc_hardcoded_key_polys);
     let zero_plaintexts: Vec<M::P> = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect();
@@ -146,7 +145,7 @@ where
             let rg_decomposed = &public_data.rgs_decomposed[bit];
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
             let top = lhs.mul_tensor_identity(rg_decomposed, 1 + packed_input_size);
-            let inserted_poly_index = 1 + log_q + idx / dim;
+            let inserted_poly_index = 1 + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
             let mut coeffs = vec![zero_coeff; dim];
@@ -190,6 +189,7 @@ where
     let final_circuit = build_final_step_circuit::<_, BggPublicKey<M>>(
         &params,
         &a_decomposed_polys,
+        &enc_hardcoded_key_polys,
         public_circuit.clone(),
     );
     let final_preimage_target = {
@@ -213,6 +213,7 @@ where
     info!("final_preimage computed");
     Obfuscation {
         hash_key,
+        enc_hardcoded_key,
         encodings_init,
         p_init,
         m_preimages,
@@ -227,8 +228,6 @@ where
         bs,
         #[cfg(test)]
         hardcoded_key: hardcoded_key.clone(),
-        #[cfg(test)]
-        enc_hardcoded_key: enc_hardcoded_key.clone(),
         #[cfg(test)]
         final_preimage_target,
     }
