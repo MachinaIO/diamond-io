@@ -49,7 +49,7 @@ where
                 for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
                     polys.push(zero.clone());
                 }
-                polys.push(self.t_bar.entry(0, 0).clone());
+                polys.push(self.t_bar.clone());
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
@@ -172,7 +172,7 @@ where
                             .map(|coeffs| M::P::from_coeffs(&params, coeffs))
                             .collect_vec();
                         polys.extend(input_polys);
-                        polys.push(self.t_bar.entry(0, 0).clone());
+                        polys.push(self.t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
                     };
                     let pubkey = public_data.pubkeys[idx + 1][0]
@@ -215,7 +215,6 @@ where
                 output_encodings[0].plaintext.as_ref().unwrap().extract_highest_bits();
             let hardcoded_key_bits = self
                 .hardcoded_key
-                .entry(0, 0)
                 .coeffs()
                 .iter()
                 .map(|elem| elem != &<M::P as Poly>::Elem::zero(&params.modulus()))

@@ -19,11 +19,11 @@ pub struct Obfuscation<M: PolyMatrix> {
     #[cfg(test)]
     pub s_init: M,
     #[cfg(test)]
-    pub t_bar: M,
+    pub t_bar: <M as PolyMatrix>::P,
     #[cfg(test)]
     pub bs: Vec<(M, M, M)>,
     #[cfg(test)]
-    pub hardcoded_key: M,
+    pub hardcoded_key: <M as PolyMatrix>::P,
     #[cfg(test)]
     pub enc_hardcoded_key: M,
     #[cfg(test)]
@@ -112,7 +112,6 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let hardcoded_key = obfuscation
             .hardcoded_key
-            .entry(0, 0)
             .coeffs()
             .iter()
             .map(|elem| elem.value() != &BigUint::from(0u8))
@@ -183,7 +182,6 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let hardcoded_key = obfuscation
             .hardcoded_key
-            .entry(0, 0)
             .coeffs()
             .iter()
             .map(|elem| elem.value() != &BigUint::from(0u8))

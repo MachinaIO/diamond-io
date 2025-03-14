@@ -442,22 +442,26 @@ impl Mul<DCRTPoly> for DCRTPolyMatrix {
     }
 }
 
-// Implement multiplication of a matrix by a polynomial reference
 impl Mul<&DCRTPoly> for DCRTPolyMatrix {
     type Output = Self;
 
     fn mul(self, rhs: &DCRTPoly) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl Mul<&DCRTPoly> for &DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn mul(self, rhs: &DCRTPoly) -> Self::Output {
         let nrow = self.nrow;
         let ncol = self.ncol;
-        let mut result: Vec<Vec<DCRTPoly>> = self.inner;
 
-        for i in 0..nrow {
-            for j in 0..ncol {
-                result[i][j] *= rhs.clone();
-            }
-        }
+        let result: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
+            .map(|i| parallel_iter!(0..ncol).map(|j| &self.inner[i][j] * rhs).collect())
+            .collect();
 
-        DCRTPolyMatrix { inner: result, params: self.params, nrow, ncol }
+        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
     }
 }
 

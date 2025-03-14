@@ -8,7 +8,7 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use rand::{Rng, RngCore};
-use std::sync::Arc;
+use std::{ops::Mul, sync::Arc};
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -23,6 +23,8 @@ where
     SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
+    for<'a> &'a M: Mul<&'a <M as PolyMatrix>::P, Output = M>,
+    for<'a> &'a M: Mul<&'a M, Output = M>,
 {
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
@@ -37,7 +39,6 @@ where
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-    // todo: instead sample (1,1) and .entry(0, 0).clone(), just sample polynomial as method
     let s_bar =
         sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
     println!("s_bar computed");
@@ -48,13 +49,9 @@ where
         obf_params.error_gauss_sigma,
     );
     let s_init = &bgg_encode_sampler.secret_vec;
-    let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     println!("t_bar computed");
-    // let minus_one_poly =
-    //     M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
-    // let t = t_bar.concat_columns(&[minus_one_poly]);
-
-    let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+    let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     let enc_hardcoded_key = {
         let e = sampler_uniform.sample_uniform(
             &params,
@@ -63,10 +60,14 @@ where
             DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e - &(hardcoded_key.clone() * &scale)
+        &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale)
     };
+
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
     println!("enc_hardcoded_key computed");
+    let t_bar = t_bar_matrix.entry(0, 0).clone();
+    #[cfg(test)]
+    let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
 
     let mut plaintexts = vec![];
     plaintexts.extend(enc_hardcoded_key_polys);
@@ -74,7 +75,7 @@ where
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect();
     plaintexts.extend(zero_plaintexts);
-    plaintexts.push(t_bar.entry(0, 0).clone());
+    plaintexts.push(t_bar.clone());
     // let mut input_encoded_polys: Vec<<M as PolyMatrix>::P> =
     //     vec![<M::P as Poly>::const_one(params.as_ref())];
     // input_encoded_polys.extend(enc_hardcoded_key_polys);
