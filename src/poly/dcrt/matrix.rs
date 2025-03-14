@@ -347,6 +347,18 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
+
+    fn from_compact_bytes(
+        params: &<Self::P as Poly>::Params,
+        bit_size: usize,
+        bytes: &[u8],
+    ) -> Self {
+        Self::zero(params, 2, 2)
+    }
+
+    fn to_compact_bytes(&self, bit_size: usize) -> Vec<u8> {
+        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    }
 }
 
 // ====== Arithmetic ======
