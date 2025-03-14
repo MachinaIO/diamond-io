@@ -8,16 +8,19 @@ use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{
+    collections::HashMap,
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
+use tracing::info;
 
 #[derive(Clone)]
 pub struct DCRTPolyMatrix {
-    inner: Vec<Vec<DCRTPoly>>,
+    entries: HashMap<(usize, usize), DCRTPoly>,
     params: DCRTPolyParams,
     nrow: usize,
     ncol: usize,
+    zero_elem: DCRTPoly,
 }
 
 impl Debug for DCRTPolyMatrix {
@@ -26,14 +29,26 @@ impl Debug for DCRTPolyMatrix {
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
             .field("params", &self.params)
-            .field("inner", &self.inner)
+            .field("entries", &self.entries.len())
             .finish()
     }
 }
 
 impl PartialEq for DCRTPolyMatrix {
     fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner && self.nrow == other.nrow && self.ncol == other.ncol
+        if self.nrow != other.nrow || self.ncol != other.ncol {
+            return false;
+        }
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                let self_val = self.entry(i, j);
+                let other_val = other.entry(i, j);
+                if self_val != other_val {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 
@@ -41,11 +56,56 @@ impl Eq for DCRTPolyMatrix {}
 
 // Add getter methods for inner and params
 impl DCRTPolyMatrix {
-    pub fn inner(&self) -> &Vec<Vec<DCRTPoly>> {
-        &self.inner
+    pub fn entries(&self) -> &HashMap<(usize, usize), DCRTPoly> {
+        &self.entries
     }
+
     pub fn params(&self) -> &DCRTPolyParams {
         &self.params
+    }
+
+    pub fn from_dense(
+        params: &DCRTPolyParams,
+        inner: Vec<Vec<DCRTPoly>>,
+        nrow: usize,
+        ncol: usize,
+    ) -> Self {
+        let zero_elem = DCRTPoly::const_zero(params);
+        let mut entries = HashMap::new();
+
+        for i in 0..nrow {
+            for j in 0..ncol {
+                if inner[i][j] != zero_elem {
+                    entries.insert((i, j), inner[i][j].clone());
+                }
+            }
+        }
+
+        Self { entries, params: params.clone(), nrow, ncol, zero_elem }
+    }
+
+    pub fn to_dense(&self) -> Vec<Vec<DCRTPoly>> {
+        let mut result = Vec::with_capacity(self.nrow);
+        for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(self.ncol);
+            for j in 0..self.ncol {
+                if let Some(val) = self.entries.get(&(i, j)) {
+                    row.push(val.clone());
+                } else {
+                    row.push(self.zero_elem.clone());
+                }
+            }
+            result.push(row);
+        }
+        result
+    }
+
+    pub fn set_entry(&mut self, i: usize, j: usize, value: DCRTPoly) {
+        if value == self.zero_elem {
+            self.entries.remove(&(i, j));
+        } else {
+            self.entries.insert((i, j), value);
+        }
     }
 }
 
@@ -55,19 +115,27 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn from_poly_vec(params: &DCRTPolyParams, vec: Vec<Vec<DCRTPoly>>) -> Self {
         let nrow = vec.len();
         let ncol = vec[0].len();
-        DCRTPolyMatrix { inner: vec, params: params.clone(), nrow, ncol }
+        DCRTPolyMatrix::from_dense(params, vec, nrow, ncol)
     }
 
     fn entry(&self, i: usize, j: usize) -> &Self::P {
-        &self.inner[i][j]
+        self.entries.get(&(i, j)).unwrap_or(&self.zero_elem)
     }
 
     fn get_row(&self, i: usize) -> Vec<Self::P> {
-        self.inner[i].clone()
+        let mut row = Vec::with_capacity(self.ncol);
+        for j in 0..self.ncol {
+            row.push(self.entry(i, j).clone());
+        }
+        row
     }
 
     fn get_column(&self, j: usize) -> Vec<DCRTPoly> {
-        self.inner.iter().map(|row| row[j].clone()).collect()
+        let mut col = Vec::with_capacity(self.nrow);
+        for i in 0..self.nrow {
+            col.push(self.entry(i, j).clone());
+        }
+        col
     }
 
     fn size(&self) -> (usize, usize) {
@@ -91,67 +159,53 @@ impl PolyMatrix for DCRTPolyMatrix {
     ) -> Self {
         let nrow = row_end - row_start;
         let ncol = column_end - column_start;
-
-        let mut c = Vec::with_capacity(nrow);
+        let mut entries = HashMap::new();
         for i in row_start..row_end {
-            let mut row = Vec::with_capacity(ncol);
             for j in column_start..column_end {
-                row.push(self.inner[i][j].clone());
+                if let Some(val) = self.entries.get(&(i, j)) {
+                    entries.insert((i - row_start, j - column_start), val.clone());
+                }
             }
-            c.push(row);
         }
-
-        DCRTPolyMatrix { inner: c, params: self.params.clone(), nrow, ncol }
+        Self { entries, params: self.params.clone(), nrow, ncol, zero_elem: self.zero_elem.clone() }
     }
 
     fn zero(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
-        let mut c = Vec::with_capacity(nrow);
-        let zero_elem = DCRTPoly::const_zero(params);
-        for _ in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for _ in 0..ncol {
-                row.push(zero_elem.clone());
-            }
-            c.push(row);
+        Self {
+            entries: HashMap::new(),
+            params: params.clone(),
+            nrow,
+            ncol,
+            zero_elem: DCRTPoly::const_zero(params),
         }
-        DCRTPolyMatrix { inner: c, params: params.clone(), nrow, ncol }
     }
 
     fn identity(params: &<Self::P as Poly>::Params, size: usize, scalar: Option<Self::P>) -> Self {
-        let nrow = size;
-        let ncol = size;
         let scalar = scalar.unwrap_or_else(|| DCRTPoly::const_one(params));
         let zero_elem = DCRTPoly::const_zero(params);
-        let mut result = Vec::with_capacity(nrow);
-
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                if i == j {
-                    row.push(scalar.clone());
-                } else {
-                    row.push(zero_elem.clone());
-                }
+        let mut entries = HashMap::new();
+        if scalar != zero_elem {
+            for i in 0..size {
+                entries.insert((i, i), scalar.clone());
             }
-            result.push(row);
         }
 
-        DCRTPolyMatrix { inner: result, params: params.clone(), nrow, ncol }
+        Self { entries, params: params.clone(), nrow: size, ncol: size, zero_elem }
     }
 
     fn transpose(&self) -> Self {
-        let nrow = self.ncol;
-        let ncol = self.nrow;
-        let mut result = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                row.push(self.inner[j][i].clone());
-            }
-            result.push(row);
+        let mut entries = HashMap::new();
+        for ((i, j), val) in &self.entries {
+            entries.insert((*j, *i), val.clone());
         }
 
-        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
+        Self {
+            entries,
+            params: self.params.clone(),
+            nrow: self.ncol,
+            ncol: self.nrow,
+            zero_elem: self.zero_elem.clone(),
+        }
     }
 
     // (m * n1), (m * n2) -> (m * (n1 + n2))
@@ -165,19 +219,37 @@ impl PolyMatrix for DCRTPolyMatrix {
                 );
             }
         }
-        let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let result: Vec<Vec<DCRTPoly>> = parallel_iter!(0..self.nrow)
-            .map(|i| {
-                let mut row: Vec<&DCRTPoly> = Vec::with_capacity(ncol);
-                row.extend(self.inner[i].iter());
-                for other in others {
-                    row.extend(other.inner[i].iter());
-                }
-                row.into_iter().cloned().collect()
-            })
-            .collect();
 
-        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
+        let mut column_offsets = vec![0usize];
+        let mut total_cols = self.ncol;
+
+        for other in others {
+            column_offsets.push(total_cols);
+            total_cols += other.ncol;
+        }
+
+        let mut entries = HashMap::new();
+
+        // Add entries from self
+        for ((i, j), val) in &self.entries {
+            entries.insert((*i, *j), val.clone());
+        }
+
+        // Add entries from others with column offset
+        for (idx, other) in others.iter().enumerate() {
+            let col_offset = column_offsets[idx + 1];
+            for ((i, j), val) in &other.entries {
+                entries.insert((*i, j + col_offset), val.clone());
+            }
+        }
+
+        Self {
+            entries,
+            params: self.params.clone(),
+            nrow: self.nrow,
+            ncol: total_cols,
+            zero_elem: self.zero_elem.clone(),
+        }
     }
 
     // (m1 * n), (m2 * n) -> ((m1 + m2) * n)
@@ -192,131 +264,137 @@ impl PolyMatrix for DCRTPolyMatrix {
             }
         }
 
-        let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
-        let mut result = Vec::with_capacity(nrow);
-        for i in 0..self.nrow {
-            let mut row = Vec::with_capacity(self.ncol);
-            for j in 0..self.ncol {
-                row.push(self.inner[i][j].clone());
-            }
-            result.push(row);
-        }
+        let mut row_offsets = vec![0usize];
+        let mut total_rows = self.nrow;
+
         for other in others {
-            for i in 0..other.nrow {
-                let mut row = Vec::with_capacity(self.ncol);
-                for j in 0..other.ncol {
-                    row.push(other.inner[i][j].clone());
-                }
-                result.push(row);
+            row_offsets.push(total_rows);
+            total_rows += other.nrow;
+        }
+
+        let mut entries = HashMap::new();
+
+        // Add entries from self
+        for ((i, j), val) in &self.entries {
+            entries.insert((*i, *j), val.clone());
+        }
+
+        // Add entries from others with row offset
+        for (idx, other) in others.iter().enumerate() {
+            let row_offset = row_offsets[idx + 1];
+            for ((i, j), val) in &other.entries {
+                entries.insert((i + row_offset, *j), val.clone());
             }
         }
 
-        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol: self.ncol }
+        Self {
+            entries,
+            params: self.params.clone(),
+            nrow: total_rows,
+            ncol: self.ncol,
+            zero_elem: self.zero_elem.clone(),
+        }
     }
 
     // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
     fn concat_diag(&self, others: &[&Self]) -> Self {
-        #[cfg(debug_assertions)]
+        let mut row_offsets = vec![0usize];
+        let mut col_offsets = vec![0usize];
+        let mut total_rows = self.nrow;
+        let mut total_cols = self.ncol;
+
+        for other in others {
+            row_offsets.push(total_rows);
+            col_offsets.push(total_cols);
+            total_rows += other.nrow;
+            total_cols += other.ncol;
+        }
+
+        let mut entries = HashMap::new();
+
+        // Add entries from self
+        for ((i, j), val) in &self.entries {
+            entries.insert((*i, *j), val.clone());
+        }
+
+        // Add entries from others with offsets
         for (idx, other) in others.iter().enumerate() {
-            if self.nrow != other.nrow {
-                panic!(
-                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
-                    self.nrow, self.ncol, idx, other.nrow, other.ncol
-                );
+            let row_offset = row_offsets[idx + 1];
+            let col_offset = col_offsets[idx + 1];
+            for ((i, j), val) in &other.entries {
+                entries.insert((i + row_offset, j + col_offset), val.clone());
             }
         }
 
-        let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
-        let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-
-        let zero_elem = DCRTPoly::const_zero(&self.params);
-
-        let mut result: Vec<Vec<DCRTPoly>> = Vec::with_capacity(nrow);
-
-        // First part of the matrix (self)
-        for i in 0..self.nrow {
-            let mut row = Vec::with_capacity(ncol);
-            row.extend(self.inner[i].iter().cloned());
-            row.extend(std::iter::repeat_n(zero_elem.clone(), ncol - self.ncol));
-            result.push(row);
+        Self {
+            entries,
+            params: self.params.clone(),
+            nrow: total_rows,
+            ncol: total_cols,
+            zero_elem: self.zero_elem.clone(),
         }
-
-        let mut col_offset = self.ncol;
-        // Concatenating with others in parallel
-        for other in others.iter() {
-            result.extend(
-                parallel_iter!(0..other.nrow)
-                    .map(|i| {
-                        let mut row = Vec::with_capacity(ncol);
-                        row.extend(std::iter::repeat_n(zero_elem.clone(), col_offset));
-                        row.extend(other.inner[i].iter().cloned());
-                        row.extend(std::iter::repeat_n(
-                            zero_elem.clone(),
-                            ncol - col_offset - other.ncol,
-                        ));
-                        row
-                    })
-                    .collect::<Vec<Vec<DCRTPoly>>>()
-                    .into_iter(),
-            );
-            col_offset += other.ncol;
-        }
-
-        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
     }
 
     fn tensor(&self, other: &Self) -> Self {
         let nrow = self.nrow * other.nrow;
         let ncol = self.ncol * other.ncol;
-        let mut result: Vec<Vec<DCRTPoly>> = Vec::with_capacity(nrow);
-        for i1 in 0..self.nrow {
-            for i2 in 0..other.nrow {
-                let mut row = Vec::with_capacity(ncol);
-                for j1 in 0..self.ncol {
-                    for j2 in 0..other.ncol {
-                        row.push(&self.inner[i1][j1] * &other.inner[i2][j2]);
-                    }
-                }
-                result.push(row);
+        let mut entries = HashMap::new();
+
+        // For each entry in self
+        for ((i1, j1), val1) in &self.entries {
+            // For each entry in other
+            for ((i2, j2), val2) in &other.entries {
+                let new_i = i1 * other.nrow + i2;
+                let new_j = j1 * other.ncol + j2;
+                entries.insert((new_i, new_j), val1.clone() * val2.clone());
             }
         }
 
-        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
+        Self { entries, params: self.params.clone(), nrow, ncol, zero_elem: self.zero_elem.clone() }
     }
 
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self {
         let bit_length = params.modulus_bits();
+
+        // Create gadget vector [1, 2, 2^2, ..., 2^(bit_length-1)]
         let mut poly_vec = Vec::with_capacity(bit_length);
         for i in 0u32..(bit_length as u32) {
             let value = BigInt::from(2).pow(i);
             poly_vec.push(DCRTPoly::from_const(params, &FinRingElem::new(value, params.modulus())));
         }
         let gadget_vector = Self::from_poly_vec(params, vec![poly_vec]);
-        let identity = DCRTPolyMatrix::identity(params, size, None);
+        let identity = Self::identity(params, size, None);
+
+        // Tensor product of identity and gadget vector
         identity.tensor(&gadget_vector)
     }
 
     fn decompose(&self) -> Self {
         let bit_length = self.params.modulus_bits();
 
+        let mut decomposed_entries = HashMap::new();
+        let decomposed_nrow = self.nrow * bit_length;
+
+        info!("decompose decomposed_nrow{}", decomposed_nrow);
+
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                let entry = self.entries.get(&(i, j)).unwrap_or(&self.zero_elem);
+                let decomposition = entry.decompose(&self.params);
+
+                for bit in 0..bit_length {
+                    decomposed_entries
+                        .insert((i * bit_length + bit, j), decomposition[bit].clone());
+                }
+            }
+        }
+
         Self {
-            nrow: self.nrow * bit_length,
-            ncol: self.ncol,
-            inner: parallel_iter!(0..self.nrow)
-                .flat_map(|i| {
-                    let decompositions: Vec<_> = parallel_iter!(0..self.ncol)
-                        .map(|j| self.inner[i][j].decompose(&self.params))
-                        .collect();
-                    let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
-                    for col_decomp in decompositions {
-                        for bit in 0..bit_length {
-                            decomposed_rows[bit].push(col_decomp[bit].clone());
-                        }
-                    }
-                    decomposed_rows
-                })
-                .collect(),
+            entries: decomposed_entries,
             params: self.params.clone(),
+            nrow: decomposed_nrow,
+            ncol: self.ncol,
+            zero_elem: self.zero_elem.clone(),
         }
     }
 
@@ -324,14 +402,18 @@ impl PolyMatrix for DCRTPolyMatrix {
         &self,
         new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
     ) -> Self {
-        let mut new_inner = self.clone().inner;
-        for i in 0..self.nrow {
-            for j in 0..self.ncol {
-                new_inner[i][j] =
-                    self.inner[i][j].modulus_switch(&self.params, new_modulus.clone());
-            }
+        let mut new_entries = HashMap::new();
+        for (&(i, j), entry) in &self.entries {
+            new_entries.insert((i, j), entry.modulus_switch(&self.params, new_modulus.clone()));
         }
-        Self { inner: new_inner, params: self.params.clone(), nrow: self.nrow, ncol: self.ncol }
+
+        Self {
+            entries: new_entries,
+            params: self.params.clone(),
+            nrow: self.nrow,
+            ncol: self.ncol,
+            zero_elem: self.zero_elem.clone(),
+        }
     }
 
     fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self {
@@ -345,6 +427,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
+    // todo: if sparse this no need
     fn from_compact_bytes(
         params: &<Self::P as Poly>::Params,
         bytes: Vec<Bytes>,
@@ -381,17 +464,18 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         let mut idx = 1; // Start from 1 because 0 is metadata
 
-        for i in 0..nrow {
-            for j in 0..ncol {
-                let poly_bytes = &bytes[idx];
-                idx += 1;
-                let poly = DCRTPoly::from_compact_bytes(params, poly_bytes, offset);
-                result.inner[i][j] = poly;
-            }
-        }
+        // for i in 0..nrow {
+        //     for j in 0..ncol {
+        //         let poly_bytes = &bytes[idx];
+        //         idx += 1;
+        //         let poly = DCRTPoly::from_compact_bytes(params, poly_bytes, offset);
+        //         result.inner[i][j] = poly;
+        //     }
+        // }
         result
     }
 
+    // todo: if sparse this no need
     fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Vec<Bytes> {
         let modulus_bytes = self.params.modulus().to_bytes_le();
 
@@ -416,12 +500,12 @@ impl PolyMatrix for DCRTPolyMatrix {
         metadata.extend_from_slice(&(offset as u32).to_le_bytes());
         result.push(Bytes::from(metadata));
 
-        for i in 0..self.nrow {
-            for j in 0..self.ncol {
-                let poly = &self.inner[i][j];
-                result.push(poly.to_compact_bytes(byte_size, offset));
-            }
-        }
+        // for i in 0..self.nrow {
+        //     for j in 0..self.ncol {
+        //         let poly = &self.inner[i][j];
+        //         result.push(poly.to_compact_bytes(byte_size, offset));
+        //     }
+        // }
         result
     }
 }
@@ -439,7 +523,7 @@ impl Add for DCRTPolyMatrix {
 impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
 
-    fn add(self, rhs: &DCRTPolyMatrix) -> Self::Output {
+    fn add(mut self, rhs: &DCRTPolyMatrix) -> Self::Output {
         #[cfg(debug_assertions)]
         if self.nrow != rhs.nrow || self.ncol != rhs.ncol {
             panic!(
@@ -448,17 +532,15 @@ impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
             );
         }
 
-        let nrow = self.row_size();
-        let ncol = self.col_size();
-        let mut result = self.inner;
-
-        for i in 0..nrow {
-            for j in 0..ncol {
-                result[i][j] += rhs.inner[i][j].clone();
+        for (&(i, j), rhs_value) in &rhs.entries {
+            if let Some(self_value) = self.entries.get_mut(&(i, j)) {
+                *self_value += rhs_value.clone();
+            } else {
+                self.entries.insert((i, j), rhs_value.clone());
             }
         }
 
-        Self { inner: result, params: self.params, ncol, nrow }
+        self
     }
 }
 
@@ -466,16 +548,18 @@ impl Neg for DCRTPolyMatrix {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        let mut c = Vec::with_capacity(self.nrow);
-        for i in 0..self.nrow {
-            let mut row = Vec::with_capacity(self.ncol);
-            for j in 0..self.ncol {
-                row.push(-self.inner[i][j].clone());
-            }
-            c.push(row);
+        let mut negated_entries = HashMap::new();
+        for ((i, j), value) in self.entries {
+            negated_entries.insert((i, j), -value);
         }
 
-        DCRTPolyMatrix { inner: c, params: self.params, nrow: self.nrow, ncol: self.ncol }
+        DCRTPolyMatrix {
+            entries: negated_entries,
+            params: self.params,
+            nrow: self.nrow,
+            ncol: self.ncol,
+            zero_elem: self.zero_elem,
+        }
     }
 }
 
@@ -509,23 +593,33 @@ impl Mul<&DCRTPolyMatrix> for &DCRTPolyMatrix {
             );
         }
 
+        let mut result_entries = HashMap::new();
+        let zero_elem = self.zero_elem.clone();
+
+        for i in 0..nrow {
+            for j in 0..ncol {
+                let mut sum = zero_elem.clone();
+                let mut has_contribution = false;
+                for k in 0..self.ncol {
+                    let self_value = self.entries.get(&(i, k)).unwrap_or(&self.zero_elem);
+                    let rhs_value = rhs.entries.get(&(k, j)).unwrap_or(&rhs.zero_elem);
+                    if !(self_value == &zero_elem) && !(rhs_value == &zero_elem) {
+                        sum += self_value * rhs_value;
+                        has_contribution = true;
+                    }
+                }
+                if has_contribution && !(sum == zero_elem) {
+                    result_entries.insert((i, j), sum);
+                }
+            }
+        }
+
         DCRTPolyMatrix {
-            inner: parallel_iter!(0..nrow)
-                .map(|i| {
-                    parallel_iter!(0..ncol)
-                        .map(|j| {
-                            let mut sum = &self.inner[i][0] * &rhs.inner[0][j];
-                            for k in 1..self.ncol {
-                                sum += &self.inner[i][k] * &rhs.inner[k][j];
-                            }
-                            sum
-                        })
-                        .collect()
-                })
-                .collect(),
+            entries: result_entries,
             params: self.params.clone(),
             nrow,
             ncol,
+            zero_elem: self.zero_elem.clone(),
         }
     }
 }
@@ -551,14 +645,21 @@ impl Mul<&DCRTPoly> for &DCRTPolyMatrix {
     type Output = DCRTPolyMatrix;
 
     fn mul(self, rhs: &DCRTPoly) -> Self::Output {
-        let nrow = self.nrow;
-        let ncol = self.ncol;
+        let mut result_entries = HashMap::new();
+        for (&(i, j), value) in &self.entries {
+            let product = value * rhs;
+            if !(product == self.zero_elem) {
+                result_entries.insert((i, j), product);
+            }
+        }
 
-        let result: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
-            .map(|i| parallel_iter!(0..ncol).map(|j| &self.inner[i][j] * rhs).collect())
-            .collect();
-
-        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
+        DCRTPolyMatrix {
+            entries: result_entries,
+            params: self.params.clone(),
+            nrow: self.nrow,
+            ncol: self.ncol,
+            zero_elem: self.zero_elem.clone(),
+        }
     }
 }
 
@@ -575,7 +676,7 @@ impl Sub for DCRTPolyMatrix {
 impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
 
-    fn sub(self, rhs: &DCRTPolyMatrix) -> Self::Output {
+    fn sub(mut self, rhs: &DCRTPolyMatrix) -> Self::Output {
         #[cfg(debug_assertions)]
         if self.nrow != rhs.nrow || self.ncol != rhs.ncol {
             panic!(
@@ -583,18 +684,18 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
                 self.nrow, self.ncol, rhs.nrow, rhs.ncol
             );
         }
-
-        let nrow = self.row_size();
-        let ncol = self.col_size();
-        let mut result = self.inner;
-
-        for i in 0..nrow {
-            for j in 0..ncol {
-                result[i][j] -= rhs.inner[i][j].clone();
+        for (&(i, j), rhs_value) in &rhs.entries {
+            if let Some(self_value) = self.entries.get_mut(&(i, j)) {
+                *self_value -= rhs_value.clone();
+                if self_value == &self.zero_elem {
+                    self.entries.remove(&(i, j));
+                }
+            } else {
+                self.entries.insert((i, j), -rhs_value.clone());
             }
         }
 
-        Self { inner: result, params: self.params, ncol, nrow }
+        self
     }
 }
 
@@ -629,8 +730,8 @@ mod tests {
         assert_eq!(matrix.row_size(), 2);
         assert_eq!(matrix.col_size(), 8);
         let value = FinRingElem::new(5u32, params.modulus());
-        matrix.inner[0][0] = DCRTPoly::from_const(&params, &value);
-        matrix.inner[1][1] = DCRTPoly::from_const(&params, &value);
+        matrix.set_entry(0, 0, DCRTPoly::from_const(&params, &value));
+        matrix.set_entry(1, 1, DCRTPoly::from_const(&params, &value));
         let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, 2);
         assert_eq!(gadget_matrix.row_size(), 2);
         assert_eq!(gadget_matrix.col_size(), 2 * bit_length);
@@ -655,8 +756,8 @@ mod tests {
         // Test matrix creation and equality
         let mut matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
         let value = FinRingElem::new(5u32, params.modulus());
-        matrix1.inner[0][0] = DCRTPoly::from_const(&params, &value);
-        matrix1.inner[1][1] = DCRTPoly::from_const(&params, &value);
+        matrix1.set_entry(0, 0, DCRTPoly::from_const(&params, &value));
+        matrix1.set_entry(1, 1, DCRTPoly::from_const(&params, &value));
 
         let matrix2 = matrix1.clone();
         assert_eq!(matrix1, matrix2);
@@ -682,10 +783,10 @@ mod tests {
         let value = FinRingElem::new(5u32, params.modulus());
 
         let mut matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
-        matrix1.inner[0][0] = DCRTPoly::from_const(&params, &value);
+        matrix1.set_entry(0, 0, DCRTPoly::from_const(&params, &value));
 
         let mut matrix2 = DCRTPolyMatrix::zero(&params, 2, 2);
-        matrix2.inner[1][1] = DCRTPoly::from_const(&params, &value);
+        matrix2.set_entry(1, 1, DCRTPoly::from_const(&params, &value));
 
         // Test column concatenation
         let col_concat = matrix1.concat_columns(&[&matrix2]);
@@ -709,10 +810,10 @@ mod tests {
         let value = FinRingElem::new(5u32, params.modulus());
 
         let mut matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
-        matrix1.inner[0][0] = DCRTPoly::from_const(&params, &value);
+        matrix1.set_entry(0, 0, DCRTPoly::from_const(&params, &value));
 
         let mut matrix2 = DCRTPolyMatrix::zero(&params, 2, 2);
-        matrix2.inner[0][0] = DCRTPoly::from_const(&params, &value);
+        matrix2.set_entry(0, 0, DCRTPoly::from_const(&params, &value));
 
         let tensor = matrix1.tensor(&matrix2);
         assert_eq!(tensor.row_size(), 4);
