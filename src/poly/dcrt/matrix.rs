@@ -55,13 +55,7 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn from_poly_vec(params: &DCRTPolyParams, vec: Vec<Vec<DCRTPoly>>) -> Self {
         let nrow = vec.len();
         let ncol = vec[0].len();
-        let mut c: Vec<Vec<DCRTPoly>> = vec![Vec::with_capacity(ncol); nrow];
-        for (i, row) in vec.into_iter().enumerate() {
-            for element in row.into_iter() {
-                c[i].push(element);
-            }
-        }
-        DCRTPolyMatrix { inner: c, params: params.clone(), nrow, ncol }
+        DCRTPolyMatrix { inner: vec, params: params.clone(), nrow, ncol }
     }
 
     fn entry(&self, i: usize, j: usize) -> &Self::P {
@@ -918,7 +912,8 @@ mod tests {
 
         let bound_ceil = bound.ceil() as u32;
 
-        // byte_size is bytes necessary to represent bound*2 which is the maximum possible sampled coefficient value
+        // byte_size is bytes necessary to represent bound*2 which is the maximum possible sampled
+        // coefficient value
         let byte_size = (2 * bound_ceil).to_le_bytes().len();
         let bytes = gauss_mat.to_compact_bytes(byte_size, bound_ceil as usize);
         let new_gauss_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, bound_ceil as usize);

@@ -50,11 +50,11 @@ where
         // From field elements to nrow * ncol polynomials
         let total_poly = nrow * ncol;
 
-        info!("total_poly {}", total_poly);
+        info!("total_poly {} {} {}", total_poly, ncol, nrow);
         let matrix_inner: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
             .map(|row_idx| {
                 let row_offset = row_idx * ncol * n;
-                (0..ncol)
+                parallel_iter!(0..ncol)
                     .map(|col_idx| {
                         let offset = row_offset + col_idx * n;
                         let coeffs = &ring_elems[offset..offset + n];
@@ -63,6 +63,8 @@ where
                     .collect()
             })
             .collect();
+
+        info!("total_poly computed");
 
         DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
