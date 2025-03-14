@@ -20,7 +20,7 @@ impl<M: PolyMatrix> BggEncoding<M> {
     }
 
     pub fn concat_vector(&self, others: &[Self]) -> M {
-        self.vector.concat_columns(&others.iter().map(|x| x.vector.clone()).collect_vec()[..])
+        self.vector.concat_columns(&others.iter().map(|x| &x.vector).collect_vec()[..])
     }
 }
 

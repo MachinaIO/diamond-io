@@ -98,7 +98,7 @@ where
     }
     let m_b = 4 * (2 + log_q);
     let p_init = {
-        let s_connect = s_init.concat_columns(&[s_init.clone()]);
+        let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &bs[0].2;
         let error = sampler_uniform.sample_uniform(
             &params,
@@ -114,8 +114,8 @@ where
     let u_1 = identity_2.concat_diag(&[public_data.r_1.clone()]);
     let u_star = {
         let zeros = M::zero(params.as_ref(), 2, 4);
-        let identities = identity_2.concat_columns(&[identity_2.clone()]);
-        zeros.concat_rows(&[identities])
+        let identities = identity_2.concat_columns(&[&identity_2]);
+        zeros.concat_rows(&[&identities])
     };
     let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
 
@@ -169,7 +169,7 @@ where
             let bottom = public_data.pubkeys[idx + 1][0]
                 .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
                 &inserted_poly_gadget;
-            let k_target = top.concat_rows(&[bottom]);
+            let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
@@ -198,7 +198,7 @@ where
         let unit_vector = identity_2.slice_columns(1, 2);
         eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        (eval_outputs_matrix + public_data.a_prf).concat_rows(&[M::zero(
+        (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             2,
             packed_output_size,

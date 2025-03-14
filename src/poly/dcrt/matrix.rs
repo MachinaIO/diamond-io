@@ -158,40 +158,45 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
     }
+
     // (m * n1), (m * n2) -> (m * (n1 + n2))
-    fn concat_columns(&self, others: &[Self]) -> Self {
+    fn concat_columns(&self, others: &[&Self]) -> Self {
         #[cfg(debug_assertions)]
         for (idx, other) in others.iter().enumerate() {
             if self.nrow != other.nrow {
-                panic!("Concat error: while the shape of the first matrix is ({0}, {1}), that of the {2}-th matirx is ({3},{4})",self.nrow,self.ncol,idx,other.nrow,other.ncol);
+                panic!(
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
+                    self.nrow, self.ncol, idx, other.nrow, other.ncol
+                );
             }
         }
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let mut result = Vec::with_capacity(self.nrow);
-        for i in 0..self.nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..self.ncol {
-                row.push(self.inner[i][j].clone());
-            }
-            for other in others {
-                for j in 0..other.ncol {
-                    row.push(other.inner[i][j].clone());
+        let result: Vec<Vec<DCRTPoly>> = parallel_iter!(0..self.nrow)
+            .map(|i| {
+                let mut row: Vec<&DCRTPoly> = Vec::with_capacity(ncol);
+                row.extend(self.inner[i].iter());
+                for other in others {
+                    row.extend(other.inner[i].iter());
                 }
-            }
-            result.push(row);
-        }
+                row.into_iter().cloned().collect()
+            })
+            .collect();
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
     }
 
     // (m1 * n), (m2 * n) -> ((m1 + m2) * n)
-    fn concat_rows(&self, others: &[Self]) -> Self {
+    fn concat_rows(&self, others: &[&Self]) -> Self {
         #[cfg(debug_assertions)]
         for (idx, other) in others.iter().enumerate() {
             if self.ncol != other.ncol {
-                panic!("Concat error: while the shape of the first matrix is ({0}, {1}), that of the {2}-th matirx is ({3},{4})",self.nrow,self.ncol,idx,other.nrow,other.ncol);
+                panic!(
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({}, {})",
+                    self.nrow, self.ncol, idx, other.nrow, other.ncol
+                );
             }
         }
+
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
         let mut result = Vec::with_capacity(nrow);
         for i in 0..self.nrow {
@@ -328,7 +333,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
             slice_results.push(slice * other);
         }
-        slice_results[0].clone().concat_columns(&slice_results[1..])
+        slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 }
 
@@ -591,12 +596,12 @@ mod tests {
         matrix2.inner[1][1] = DCRTPoly::from_const(&params, &value);
 
         // Test column concatenation
-        let col_concat = matrix1.clone().concat_columns(&[matrix2.clone()]);
+        let col_concat = matrix1.concat_columns(&[&matrix2]);
         assert_eq!(col_concat.row_size(), 2);
         assert_eq!(col_concat.col_size(), 4);
 
         // Test row concatenation
-        let row_concat = matrix1.clone().concat_rows(&[matrix2.clone()]);
+        let row_concat = matrix1.concat_rows(&[&matrix2]);
         assert_eq!(row_concat.row_size(), 4);
         assert_eq!(row_concat.col_size(), 2);
 

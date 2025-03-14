@@ -66,9 +66,9 @@ pub trait PolyMatrix:
     fn identity(params: &<Self::P as Poly>::Params, size: usize, scalar: Option<Self::P>) -> Self;
     fn transpose(&self) -> Self;
     /// (m * n1), (m * n2) -> (m * (n1 + n2))
-    fn concat_columns(&self, others: &[Self]) -> Self;
+    fn concat_columns(&self, others: &[&Self]) -> Self;
     /// (m1 * n), (m2 * n) -> ((m1 + m2) * n)
-    fn concat_rows(&self, others: &[Self]) -> Self;
+    fn concat_rows(&self, others: &[&Self]) -> Self;
     /// (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
     fn concat_diag(&self, others: &[Self]) -> Self;
     fn tensor(&self, other: &Self) -> Self;

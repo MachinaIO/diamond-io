@@ -32,7 +32,7 @@ where
         #[cfg(test)]
         {
             let expected_p_init = {
-                let s_connect = self.s_init.clone().concat_columns(&[self.s_init.clone()]);
+                let s_connect = self.s_init.concat_columns(&[&self.s_init]);
                 s_connect * &self.bs[0].2
             };
             debug_assert_eq!(self.p_init, expected_p_init);
@@ -140,9 +140,9 @@ where
                 };
                 let b_next_bit =
                     if *input { self.bs[idx + 1].1.clone() } else { self.bs[idx + 1].0.clone() };
-                let expected_q = cur_s.concat_columns(&[new_s.clone()]) * &b_next_bit;
+                let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 debug_assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[new_s.clone()]) * &self.bs[idx + 1].2;
+                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1].2;
                 debug_assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
