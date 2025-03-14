@@ -349,11 +349,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
-    fn from_compact_bytes(
-        params: &<Self::P as Poly>::Params,
-        byte_size: usize,
-        bytes: Vec<Bytes>,
-    ) -> Self {
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self {
         Self::zero(params, 2, 2)
     }
 
@@ -369,11 +365,21 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         let mut result = Vec::new();
 
+        let n = self.params.ring_dimension();
+        let nrow = self.nrow;
+        let ncol = self.ncol;
+
+        let mut metadata = Vec::new();
+        metadata.extend_from_slice(&(n).to_le_bytes());
+        metadata.extend_from_slice(&(nrow as u32).to_le_bytes());
+        metadata.extend_from_slice(&(ncol as u32).to_le_bytes());
+        metadata.extend_from_slice(&(byte_size as u32).to_le_bytes());
+        result.push(Bytes::from(metadata));
+
         for i in 0..self.nrow {
             for j in 0..self.ncol {
                 let poly = &self.inner[i][j];
                 let coeffs = poly.coeffs();
-
                 let mut bytes_data = Vec::new();
                 for coeff in coeffs {
                     let value = coeff.value();
@@ -815,5 +821,24 @@ mod tests {
         // Choose a bit size that is greater than the modulus bit size
         let byte_size = params.modulus().to_bytes_le().len() + 1;
         mat.to_compact_bytes(byte_size);
+    }
+
+    #[test]
+    fn test_to_compact_bytes() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        let nrow = 2;
+        let ncol = 12;
+
+        // Create matrix (2x12)
+        let mat =
+            sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
+
+        let byte_size = 1;
+        let bytes = mat.to_compact_bytes(byte_size);
+
+        // the vector should contain 1 (metadata) + nrow * ncol elements
+        assert_eq!(bytes.len(), 1 + (nrow * ncol));
     }
 }

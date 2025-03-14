@@ -27,7 +27,7 @@ impl SerializableBggPublicKey {
         byte_size: usize,
     ) -> BggPublicKey<M> {
         BggPublicKey {
-            matrix: M::from_compact_bytes(params, byte_size, self.matrix),
+            matrix: M::from_compact_bytes(params, self.matrix),
             reveal_plaintext: self.reveal_plaintext,
         }
     }
@@ -59,7 +59,7 @@ impl SerializableBggEncoding {
         byte_size: usize,
     ) -> BggEncoding<M> {
         BggEncoding {
-            vector: M::from_compact_bytes(params, byte_size, self.vector),
+            vector: M::from_compact_bytes(params, self.vector),
             pubkey: self.pubkey.from_compact_bytes(params, byte_size),
             // todo: we don't know yet how to turn poly into bytes
             plaintext: None,
