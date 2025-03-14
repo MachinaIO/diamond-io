@@ -91,8 +91,10 @@ where
             parallel_iter!(0..2)
                 .map(|i| {
                     if i == 0 {
+                        info!("0 computing {} {}", r_0.row_size(), gadget_2.col_size());
                         (&r_0 * &gadget_2).decompose()
                     } else {
+                        info!("1 computing {} {}", r_0.row_size(), gadget_2.col_size());
                         (&r_1 * &gadget_2).decompose()
                     }
                 })
