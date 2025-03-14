@@ -862,7 +862,8 @@ mod tests {
         // the vector should contain 1 (metadata) + nrow * ncol elements
         assert_eq!(bytes.len(), 1 + (nrow * ncol));
 
-        // the total byte size should be 4 * 4 (metadata) + nrow * ncol * ring_dimension * byte_size (coefficients)
+        // the total byte size should be 4 * 4 (metadata) + nrow * ncol * ring_dimension * byte_size
+        // (coefficients)
         let total_byte_size: usize = bytes.iter().map(|b| b.len()).sum();
         assert_eq!(total_byte_size, (4 * 4) + (nrow * ncol * ring_dimension as usize * byte_size));
     }
