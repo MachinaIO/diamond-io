@@ -12,6 +12,7 @@ use super::Obfuscation;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SerializableObfuscation {
     pub hash_key: [u8; 32],
+    pub enc_hardcoded_key: Vec<Bytes>,
     pub encodings_init: Vec<SerializableBggEncoding>,
     pub p_init: Vec<Bytes>,
     pub m_preimages: Vec<(Vec<Bytes>, Vec<Bytes>)>,
@@ -27,8 +28,6 @@ pub struct SerializableObfuscation {
     #[cfg(test)]
     pub hardcoded_key: Bytes,
     #[cfg(test)]
-    pub enc_hardcoded_key: Bytes,
-    #[cfg(test)]
     pub final_preimage_target: Bytes,
 }
 
@@ -36,6 +35,7 @@ impl<M: PolyMatrix> Obfuscation<M> {
     pub fn to_compact_bytes(&self, byte_size: usize) -> SerializableObfuscation {
         SerializableObfuscation {
             hash_key: self.hash_key,
+            enc_hardcoded_key: self.enc_hardcoded_key.to_compact_bytes(byte_size),
             encodings_init: self
                 .encodings_init
                 .iter()
@@ -73,8 +73,6 @@ impl<M: PolyMatrix> Obfuscation<M> {
             #[cfg(test)]
             hardcoded_key: todo!(),
             #[cfg(test)]
-            enc_hardcoded_key: todo!(),
-            #[cfg(test)]
             final_preimage_target: todo!(),
         }
     }
@@ -88,6 +86,7 @@ impl SerializableObfuscation {
     ) -> Obfuscation<M> {
         Obfuscation {
             hash_key: self.hash_key,
+            enc_hardcoded_key: M::from_compact_bytes(params, self.enc_hardcoded_key),
             encodings_init: self
                 .encodings_init
                 .into_iter()
@@ -124,8 +123,6 @@ impl SerializableObfuscation {
             bs: todo!(),
             #[cfg(test)]
             hardcoded_key: todo!(),
-            #[cfg(test)]
-            enc_hardcoded_key: todo!(),
             #[cfg(test)]
             final_preimage_target: todo!(),
         }
