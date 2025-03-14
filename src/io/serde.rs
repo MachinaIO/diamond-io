@@ -35,35 +35,35 @@ impl<M: PolyMatrix> Obfuscation<M> {
     pub fn to_compact_bytes(&self, byte_size: usize) -> SerializableObfuscation {
         SerializableObfuscation {
             hash_key: self.hash_key,
-            enc_hardcoded_key: self.enc_hardcoded_key.to_compact_bytes(byte_size),
+            enc_hardcoded_key: self.enc_hardcoded_key.to_compact_bytes(byte_size, 0),
             encodings_init: self
                 .encodings_init
                 .iter()
                 .map(|e| e.to_compact_bytes(byte_size))
                 .collect_vec(),
-            p_init: self.p_init.to_compact_bytes(byte_size),
+            p_init: self.p_init.to_compact_bytes(byte_size, 0),
             m_preimages: self
                 .m_preimages
                 .iter()
                 .map(|(m_0, m_1)| {
-                    (m_0.to_compact_bytes(byte_size), m_1.to_compact_bytes(byte_size))
+                    (m_0.to_compact_bytes(byte_size, 0), m_1.to_compact_bytes(byte_size, 0))
                 })
                 .collect_vec(),
             n_preimages: self
                 .n_preimages
                 .iter()
                 .map(|(n_0, n_1)| {
-                    (n_0.to_compact_bytes(byte_size), n_1.to_compact_bytes(byte_size))
+                    (n_0.to_compact_bytes(byte_size, 0), n_1.to_compact_bytes(byte_size, 0))
                 })
                 .collect_vec(),
             k_preimages: self
                 .k_preimages
                 .iter()
                 .map(|(k_0, k_1)| {
-                    (k_0.to_compact_bytes(byte_size), k_1.to_compact_bytes(byte_size))
+                    (k_0.to_compact_bytes(byte_size, 0), k_1.to_compact_bytes(byte_size, 0))
                 })
                 .collect_vec(),
-            final_preimage: self.final_preimage.to_compact_bytes(byte_size),
+            final_preimage: self.final_preimage.to_compact_bytes(byte_size, 0),
             #[cfg(test)]
             s_init: todo!(),
             #[cfg(test)]

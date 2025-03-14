@@ -12,9 +12,9 @@ pub struct SerializableBggPublicKey {
 }
 
 impl<M: PolyMatrix> BggPublicKey<M> {
-    pub fn to_compact_bytes(&self, byte_size: usize) -> SerializableBggPublicKey {
+    pub fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> SerializableBggPublicKey {
         SerializableBggPublicKey {
-            matrix: self.matrix.to_compact_bytes(byte_size),
+            matrix: self.matrix.to_compact_bytes(byte_size, offset),
             reveal_plaintext: self.reveal_plaintext,
         }
     }
@@ -44,8 +44,8 @@ pub struct SerializableBggEncoding {
 impl<M: PolyMatrix> BggEncoding<M> {
     pub fn to_compact_bytes(&self, byte_size: usize) -> SerializableBggEncoding {
         SerializableBggEncoding {
-            vector: self.vector.to_compact_bytes(byte_size),
-            pubkey: self.pubkey.to_compact_bytes(byte_size),
+            vector: self.vector.to_compact_bytes(byte_size, 0),
+            pubkey: self.pubkey.to_compact_bytes(byte_size, 0),
             // todo: we don't know yet how to turn poly into bytes
             plaintext: None,
         }

@@ -94,5 +94,5 @@ pub trait PolyMatrix:
     ) -> Self;
     /// Performs the operation S * (identity ⊗ other)
     fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self;
-    fn to_compact_bytes(&self, byte_size: usize) -> Vec<Bytes>;
+    fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Vec<Bytes>;
 }

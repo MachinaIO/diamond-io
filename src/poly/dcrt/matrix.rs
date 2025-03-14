@@ -392,7 +392,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         result
     }
 
-    fn to_compact_bytes(&self, byte_size: usize) -> Vec<Bytes> {
+    fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Vec<Bytes> {
         let modulus_bytes = self.params.modulus().to_bytes_le();
 
         assert!(
@@ -413,12 +413,13 @@ impl PolyMatrix for DCRTPolyMatrix {
         metadata.extend_from_slice(&(nrow as u32).to_le_bytes());
         metadata.extend_from_slice(&(ncol as u32).to_le_bytes());
         metadata.extend_from_slice(&(byte_size as u32).to_le_bytes());
+        metadata.extend_from_slice(&(offset as u32).to_le_bytes());
         result.push(Bytes::from(metadata));
 
         for i in 0..self.nrow {
             for j in 0..self.ncol {
                 let poly = &self.inner[i][j];
-                result.push(poly.to_compact_bytes(byte_size));
+                result.push(poly.to_compact_bytes(byte_size, offset));
             }
         }
         result
@@ -825,7 +826,7 @@ mod tests {
 
         // Choose a byte size that is less than the bytes necessary to represent the coefficients
         let byte_size = 1;
-        mat.to_compact_bytes(byte_size);
+        mat.to_compact_bytes(byte_size, 0);
     }
 
     #[test]
@@ -840,7 +841,7 @@ mod tests {
 
         // Choose a bit size that is greater than the modulus bit size
         let byte_size = params.modulus().to_bytes_le().len() + 1;
-        mat.to_compact_bytes(byte_size);
+        mat.to_compact_bytes(byte_size, 0);
     }
 
     #[test]
@@ -857,15 +858,15 @@ mod tests {
             sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
 
         let byte_size = 1;
-        let bytes = mat.to_compact_bytes(byte_size);
+        let bytes = mat.to_compact_bytes(byte_size, 0);
 
         // the vector should contain 1 (metadata) + nrow * ncol elements
         assert_eq!(bytes.len(), 1 + (nrow * ncol));
 
-        // the total byte size should be 4 * 4 (metadata) + nrow * ncol * ring_dimension * byte_size
+        // the total byte size should be 4 * 5 (metadata) + nrow * ncol * ring_dimension * byte_size
         // (coefficients)
         let total_byte_size: usize = bytes.iter().map(|b| b.len()).sum();
-        assert_eq!(total_byte_size, (4 * 4) + (nrow * ncol * ring_dimension as usize * byte_size));
+        assert_eq!(total_byte_size, (4 * 5) + (nrow * ncol * ring_dimension as usize * byte_size));
     }
 
     #[test]
@@ -885,7 +886,7 @@ mod tests {
 
         let byte_size = params.modulus().to_bytes_le().len();
 
-        let bytes = mat.to_compact_bytes(byte_size);
+        let bytes = mat.to_compact_bytes(byte_size, 0);
         let new_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
 
         assert_eq!(mat, new_mat);
@@ -895,9 +896,26 @@ mod tests {
 
         let byte_size = 1;
 
-        let bytes = bin_mat.to_compact_bytes(byte_size);
+        let bytes = bin_mat.to_compact_bytes(byte_size, 0);
         let new_bin_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
 
         assert_eq!(bin_mat, new_bin_mat);
+
+        let sigma = 4.57825;
+
+        let gauss_mat = sampler.sample_uniform(
+            &params,
+            nrow,
+            ncol,
+            crate::poly::sampler::DistType::GaussDist { sigma },
+        );
+
+        let bound = 3.0 * sigma;
+
+        let bound_ceil = bound.ceil() as u32;
+
+        // byte_size is bytes necessary to represent bound*2 which is the maximum possible sampled coefficient value
+        let byte_size = (2 * bound_ceil).to_le_bytes().len();
+        let bytes = gauss_mat.to_compact_bytes(byte_size, bound_ceil as usize);
     }
 }

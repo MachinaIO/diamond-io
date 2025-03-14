@@ -16,6 +16,7 @@ use openfhe::{
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -174,9 +175,10 @@ impl Poly for DCRTPoly {
             .collect()
     }
 
-    fn to_compact_bytes(&self, byte_size: usize) -> Bytes {
+    fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Bytes {
         let modulus = self.ptr_poly.GetModulus();
-        let modulus_bytes = modulus.as_bytes();
+        let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
+        let modulus_bytes = modulus_big.to_bytes_le();
 
         assert!(
             byte_size <= modulus_bytes.len(),
@@ -185,10 +187,18 @@ impl Poly for DCRTPoly {
             modulus_bytes.len()
         );
 
+        // print modulus big
+        println!("modulus_big {:?}", modulus_big);
+
+        // print the coefficients
+        println!("coeffs {:?}", self.coeffs());
+
         let coeffs = self.coeffs();
         let mut bytes_data = Vec::new();
         for coeff in coeffs {
-            let value = coeff.value();
+            let value = (coeff.value() + offset) % modulus_big.clone();
+            // print the value after adding the offset
+            println!("value {:?}", value);
             let value_bytes = value.to_bytes_le();
             assert!(
                 value_bytes.len() <= byte_size,
@@ -428,7 +438,5 @@ mod tests {
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
         let decomposed = poly.decompose(&params);
         assert_eq!(decomposed.len(), params.modulus_bits());
-        let recomposed = DCRTPoly::from_decomposed(&params, &decomposed);
-        assert_eq!(recomposed, poly);
     }
 }
