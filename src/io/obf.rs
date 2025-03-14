@@ -25,19 +25,19 @@ where
     R: RngCore,
 {
     let public_circuit = &obf_params.public_circuit;
-    let params = Arc::new(obf_params.params.clone());
-    let dim = params.as_ref().ring_dimension() as usize;
-    let log_q = params.as_ref().modulus_bits();
+    let dim = obf_params.params.ring_dimension() as usize;
+    let log_q = obf_params.params.modulus_bits();
     debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
     let sampler_uniform = Arc::new(sampler_uniform);
-    let sampler_hash = Arc::new(sampler_hash);
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler_hash.clone());
+    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash));
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+    let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
+    // todo: instead sample (1,1) and .entry(0, 0).clone(), just sample polynomial as method
     let s_bar =
         sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
     println!("s_bar computed");
