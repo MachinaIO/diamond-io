@@ -38,7 +38,11 @@ pub trait PolyMatrix:
         let wrapped_vec = vec.into_iter().map(|elem| vec![elem]).collect();
         Self::from_poly_vec(params, wrapped_vec)
     }
-    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self;
+    fn from_compact_bytes(
+        params: &<Self::P as Poly>::Params,
+        bytes: Vec<Bytes>,
+        offset: usize,
+    ) -> Self;
     fn entry(&self, i: usize, j: usize) -> &Self::P;
     fn get_row(&self, i: usize) -> Vec<Self::P>;
     fn get_column(&self, j: usize) -> Vec<Self::P>;

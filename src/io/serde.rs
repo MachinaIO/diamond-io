@@ -86,35 +86,35 @@ impl SerializableObfuscation {
     ) -> Obfuscation<M> {
         Obfuscation {
             hash_key: self.hash_key,
-            enc_hardcoded_key: M::from_compact_bytes(params, self.enc_hardcoded_key),
+            enc_hardcoded_key: M::from_compact_bytes(params, self.enc_hardcoded_key, 0),
             encodings_init: self
                 .encodings_init
                 .into_iter()
                 .map(|e| e.from_compact_bytes(params, byte_size))
                 .collect(),
-            p_init: M::from_compact_bytes(params, self.p_init),
+            p_init: M::from_compact_bytes(params, self.p_init, 0),
             m_preimages: self
                 .m_preimages
                 .into_iter()
                 .map(|(m_0, m_1)| {
-                    (M::from_compact_bytes(params, m_0), M::from_compact_bytes(params, m_1))
+                    (M::from_compact_bytes(params, m_0, 0), M::from_compact_bytes(params, m_1, 0))
                 })
                 .collect(),
             n_preimages: self
                 .n_preimages
                 .into_iter()
                 .map(|(n_0, n_1)| {
-                    (M::from_compact_bytes(params, n_0), M::from_compact_bytes(params, n_1))
+                    (M::from_compact_bytes(params, n_0, 0), M::from_compact_bytes(params, n_1, 0))
                 })
                 .collect(),
             k_preimages: self
                 .k_preimages
                 .into_iter()
                 .map(|(k_0, k_1)| {
-                    (M::from_compact_bytes(params, k_0), M::from_compact_bytes(params, k_1))
+                    (M::from_compact_bytes(params, k_0, 0), M::from_compact_bytes(params, k_1, 0))
                 })
                 .collect(),
-            final_preimage: M::from_compact_bytes(params, self.final_preimage),
+            final_preimage: M::from_compact_bytes(params, self.final_preimage, 0),
             #[cfg(test)]
             s_init: todo!(),
             #[cfg(test)]

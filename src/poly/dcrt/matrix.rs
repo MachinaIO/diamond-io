@@ -349,7 +349,11 @@ impl PolyMatrix for DCRTPolyMatrix {
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
-    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self {
+    fn from_compact_bytes(
+        params: &<Self::P as Poly>::Params,
+        bytes: Vec<Bytes>,
+        offset: usize,
+    ) -> Self {
         let metadata = &bytes[0];
 
         let ring_dimension =
@@ -385,7 +389,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             for j in 0..ncol {
                 let poly_bytes = &bytes[idx];
                 idx += 1;
-                let poly = DCRTPoly::from_compact_bytes(params, poly_bytes);
+                let poly = DCRTPoly::from_compact_bytes(params, poly_bytes, offset);
                 result.inner[i][j] = poly;
             }
         }
@@ -887,7 +891,7 @@ mod tests {
         let byte_size = params.modulus().to_bytes_le().len();
 
         let bytes = mat.to_compact_bytes(byte_size, 0);
-        let new_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+        let new_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, 0);
 
         assert_eq!(mat, new_mat);
 
@@ -897,7 +901,7 @@ mod tests {
         let byte_size = 1;
 
         let bytes = bin_mat.to_compact_bytes(byte_size, 0);
-        let new_bin_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+        let new_bin_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, 0);
 
         assert_eq!(bin_mat, new_bin_mat);
 
@@ -917,5 +921,7 @@ mod tests {
         // byte_size is bytes necessary to represent bound*2 which is the maximum possible sampled coefficient value
         let byte_size = (2 * bound_ceil).to_le_bytes().len();
         let bytes = gauss_mat.to_compact_bytes(byte_size, bound_ceil as usize);
+        let new_gauss_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, bound_ceil as usize);
+        assert_eq!(gauss_mat, new_gauss_mat);
     }
 }

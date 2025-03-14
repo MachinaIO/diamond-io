@@ -7,7 +7,7 @@ use crate::{
     parallel_iter,
     poly::{Poly, PolyElem, PolyParams},
 };
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint};
 use openfhe::{
     cxx::UniquePtr,
     ffi::{self, DCRTPoly as DCRTPolyCxx},
@@ -107,9 +107,12 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
-    fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes) -> Self {
+    fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes, offset: usize) -> Self {
         let ring_dimension = params.ring_dimension() as usize;
-        let modulus = params.modulus();
+        let modulus: BigUint = params.modulus().as_ref().clone();
+        let modulus_big_int: BigInt =
+            BigInt::from_bytes_le(num_bigint::Sign::Plus, &modulus.to_bytes_le());
+
         let byte_size = bytes.len() / ring_dimension;
 
         let mut coeffs = Vec::with_capacity(ring_dimension);
@@ -119,9 +122,11 @@ impl Poly for DCRTPoly {
             let end = start + byte_size;
             let value_bytes = &bytes[start..end];
 
-            let value = BigUint::from_bytes_le(value_bytes);
+            let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes)
+                - BigInt::from(offset))
+                % modulus_big_int.clone();
 
-            let coeff = FinRingElem::new(value, modulus.clone());
+            let coeff = FinRingElem::new(value, modulus.clone().into());
 
             coeffs.push(coeff);
         }
@@ -187,18 +192,10 @@ impl Poly for DCRTPoly {
             modulus_bytes.len()
         );
 
-        // print modulus big
-        println!("modulus_big {:?}", modulus_big);
-
-        // print the coefficients
-        println!("coeffs {:?}", self.coeffs());
-
         let coeffs = self.coeffs();
         let mut bytes_data = Vec::new();
         for coeff in coeffs {
             let value = (coeff.value() + offset) % modulus_big.clone();
-            // print the value after adding the offset
-            println!("value {:?}", value);
             let value_bytes = value.to_bytes_le();
             assert!(
                 value_bytes.len() <= byte_size,
