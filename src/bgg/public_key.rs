@@ -16,7 +16,7 @@ impl<M: PolyMatrix> BggPublicKey<M> {
     }
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
-        self.matrix.concat_columns(&others.iter().map(|x| x.matrix.clone()).collect_vec()[..])
+        self.matrix.concat_columns(&others.iter().map(|x| &x.matrix).collect_vec()[..])
     }
 }
 
@@ -82,12 +82,11 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgg::circuit::PolyCircuit;
-    use crate::bgg::sampler::BGGPublicKeySampler;
-    use crate::poly::dcrt::{
-        params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
+    use crate::{
+        bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},
+        poly::dcrt::{params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler},
+        utils::create_random_poly,
     };
-    use crate::utils::create_random_poly;
     use keccak_asm::Keccak256;
     use std::sync::Arc;
 

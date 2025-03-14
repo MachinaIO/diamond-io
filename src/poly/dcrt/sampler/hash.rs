@@ -85,8 +85,9 @@ where
 
         let ring_elems = match dist {
             DistType::FinRingDist => {
-                // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) / hash_output_size)
-                // field_elements = number of field elements sampled = (bits / ceil(log2(q)))
+                // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) /
+                // hash_output_size) field_elements = number of field elements
+                // sampled = (bits / ceil(log2(q)))
                 let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
@@ -132,8 +133,9 @@ where
                 ring_elems
             }
             DistType::BitDist => {
-                // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) / hash_output_size)
-                // field_elements = number of field elements sampled = (bits / ceil(log2(q)))
+                // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) /
+                // hash_output_size) field_elements = number of field elements
+                // sampled = (bits / ceil(log2(q)))
                 let index = (nrow * ncol * n).div_ceil(hash_output_size);
                 let mut ring_elems = Vec::with_capacity(hash_output_size * index);
                 for i in 0..index {

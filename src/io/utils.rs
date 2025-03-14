@@ -1,9 +1,15 @@
-use super::ObfuscationParams;
-use crate::bgg::circuit::{build_circuit_ip_to_int, PolyCircuit};
-use crate::bgg::{sampler::*, BggPublicKey, Evaluable};
-use crate::poly::{matrix::*, sampler::*, Poly, PolyParams};
 use itertools::Itertools;
-use std::marker::PhantomData;
+
+use super::ObfuscationParams;
+use crate::{
+    bgg::{
+        circuit::{build_circuit_ip_to_int, PolyCircuit},
+        sampler::*,
+        BggPublicKey, Evaluable,
+    },
+    poly::{matrix::*, sampler::*, Poly, PolyParams},
+};
+use std::{marker::PhantomData, ops::Mul};
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -26,7 +32,10 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     _s: PhantomData<S>,
 }
 
-impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
+impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S>
+where
+    for<'a> &'a S::M: Mul<&'a S::M, Output = S::M>,
+{
     pub fn sample(
         obf_params: &ObfuscationParams<S::M>,
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
@@ -36,8 +45,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
         let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
         let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[one.clone()]);
-        let r_1 = r_1_bar.concat_diag(&[one.clone()]);
+        let r_0 = r_0_bar.concat_diag(&[&one]);
+        let r_1 = r_1_bar.concat_diag(&[&one]);
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
@@ -71,15 +80,9 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
-        let mut rgs_decomposed = vec![];
-        for bit in 0..2 {
-            let r = if bit == 0 { r_0.clone() } else { r_1.clone() };
-            let rg = r * &gadget_2;
-            let rg_decomposed = rg.decompose();
-            // let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
-            rgs_decomposed.push(rg_decomposed);
-        }
-        let rgs_decomposed = rgs_decomposed.try_into().unwrap();
+        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
+            [(&r_0 * &gadget_2).decompose(), (&r_1 * &gadget_2).decompose()];
+
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -116,10 +119,10 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         let circuit_id = ct_output_circuit.register_sub_circuit(public_circuit);
         let inputs = ct_output_circuit.input(packed_public_input_size);
         let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &inputs);
-        let mut outputs = vec![];
-        for (idx, b_bit) in pc_outputs.iter().enumerate() {
+        let mut outputs = Vec::with_capacity(pc_outputs.len() * 2);
+        for (idx, b_bit) in pc_outputs.into_iter().enumerate() {
             outputs.push(ct_output_circuit.const_scalar(a_decomposed_polys[idx].clone()));
-            outputs.push(*b_bit);
+            outputs.push(b_bit);
             // let ct_bit = circuit.and_gate(*b_bit, inputs[packed_public_input_size]);
             // ct_bits.push(ct_bit);
         }
@@ -151,15 +154,21 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
-    use crate::bgg::BggEncoding;
-    use crate::poly::dcrt::{
-        DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
-        FinRingElem,
+    use crate::{
+        bgg::{
+            sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+            BggEncoding,
+        },
+        poly::{
+            dcrt::{
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
+                DCRTPolyUniformSampler, FinRingElem,
+            },
+            element::PolyElem,
+            sampler::DistType,
+        },
+        utils::create_bit_random_poly,
     };
-    use crate::poly::element::PolyElem;
-    use crate::poly::sampler::DistType;
-    use crate::utils::create_bit_random_poly;
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
@@ -348,9 +357,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec
-                * (outputs_encodings[0].pubkey.matrix.clone()
-                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+            bgg_encoding_sampler.secret_vec *
+                (outputs_encodings[0].pubkey.matrix.clone() -
+                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }
