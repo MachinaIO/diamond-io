@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -122,9 +123,9 @@ impl Poly for DCRTPoly {
             let end = start + byte_size;
             let value_bytes = &bytes[start..end];
 
-            let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes)
-                - BigInt::from(offset))
-                % modulus_big_int.clone();
+            let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes) -
+                BigInt::from(offset)) %
+                modulus_big_int.clone();
 
             let coeff = FinRingElem::new(value, modulus.clone().into());
 
@@ -167,15 +168,18 @@ impl Poly for DCRTPoly {
         let bit_length = params.modulus_bits();
         parallel_iter!(0..bit_length)
             .map(|h| {
-                let bit_coeffs: Vec<_> = coeffs
-                    .iter()
-                    .map(|j| {
-                        let val = (j.value() >> h) & BigUint::from(1u32);
-                        FinRingElem::new(val, params.modulus())
-                    })
-                    .collect();
-
-                DCRTPoly::from_coeffs(params, &bit_coeffs)
+                DCRTPoly::from_coeffs(
+                    params,
+                    &coeffs
+                        .iter()
+                        .map(|j| {
+                            FinRingElem::new(
+                                (j.value() >> h) & BigUint::from(1u32),
+                                params.modulus(),
+                            )
+                        })
+                        .collect_vec(),
+                )
             })
             .collect()
     }

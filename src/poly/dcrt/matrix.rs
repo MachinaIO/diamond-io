@@ -298,24 +298,26 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     fn decompose(&self) -> Self {
         let bit_length = self.params.modulus_bits();
-        let new_nrow = self.nrow * bit_length;
-        let new_inner: Vec<Vec<_>> = parallel_iter!(0..self.nrow)
-            .flat_map(|i| {
-                let decomposed_cols: Vec<_> = parallel_iter!(0..self.ncol)
-                    .map(|j| self.inner[i][j].decompose(&self.params))
-                    .collect();
 
-                let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
-                for col_decomp in decomposed_cols {
-                    for bit in 0..bit_length {
-                        decomposed_rows[bit].push(col_decomp[bit].clone());
+        Self {
+            nrow: self.nrow * bit_length,
+            ncol: self.ncol,
+            inner: parallel_iter!(0..self.nrow)
+                .flat_map(|i| {
+                    let decompositions: Vec<_> = parallel_iter!(0..self.ncol)
+                        .map(|j| self.inner[i][j].decompose(&self.params))
+                        .collect();
+                    let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
+                    for col_decomp in decompositions {
+                        for bit in 0..bit_length {
+                            decomposed_rows[bit].push(col_decomp[bit].clone());
+                        }
                     }
-                }
-                decomposed_rows
-            })
-            .collect();
-
-        Self { nrow: new_nrow, ncol: self.ncol, inner: new_inner, params: self.params.clone() }
+                    decomposed_rows
+                })
+                .collect(),
+            params: self.params.clone(),
+        }
     }
 
     fn modulus_switch(
@@ -506,22 +508,25 @@ impl Mul<&DCRTPolyMatrix> for &DCRTPolyMatrix {
                 rhs.nrow, self.ncol
             );
         }
-        let common = self.ncol;
-        let c: Vec<Vec<_>> = parallel_iter!(0..nrow)
-            .map(|i| {
-                parallel_iter!(0..ncol)
-                    .map(|j| {
-                        let mut sum = &self.inner[i][0] * &rhs.inner[0][j];
-                        for k in 1..common {
-                            sum += &self.inner[i][k] * &rhs.inner[k][j];
-                        }
-                        sum
-                    })
-                    .collect()
-            })
-            .collect();
 
-        DCRTPolyMatrix { inner: c, params: self.params.clone(), nrow, ncol }
+        DCRTPolyMatrix {
+            inner: parallel_iter!(0..nrow)
+                .map(|i| {
+                    parallel_iter!(0..ncol)
+                        .map(|j| {
+                            let mut sum = &self.inner[i][0] * &rhs.inner[0][j];
+                            for k in 1..self.ncol {
+                                sum += &self.inner[i][k] * &rhs.inner[k][j];
+                            }
+                            sum
+                        })
+                        .collect()
+                })
+                .collect(),
+            params: self.params.clone(),
+            nrow,
+            ncol,
+        }
     }
 }
 

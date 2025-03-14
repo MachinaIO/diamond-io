@@ -1,6 +1,3 @@
-use itertools::Itertools;
-use tracing::info;
-
 use super::ObfuscationParams;
 use crate::{
     bgg::{
@@ -8,9 +5,14 @@ use crate::{
         sampler::*,
         BggPublicKey, Evaluable,
     },
+    parallel_iter,
     poly::{matrix::*, sampler::*, Poly, PolyParams},
 };
+use itertools::Itertools;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 use std::{marker::PhantomData, ops::Mul};
+use tracing::info;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -43,11 +45,9 @@ where
     ) -> Self {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
-        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
-        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
+
         let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[&one]);
-        let r_1 = r_1_bar.concat_diag(&[&one]);
+
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
@@ -82,10 +82,25 @@ where
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         info!("pubkeys computed");
         let gadget_2 = S::M::gadget_matrix(params, 2);
-        // let identity_2 = S::M::identity(params, 2, None);
-        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(&r_0 * &gadget_2).decompose(), (&r_1 * &gadget_2).decompose()];
-
+        info!("gadget_2 computed");
+        let r_0 =
+            hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist).concat_diag(&[&one]);
+        let r_1 =
+            hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist).concat_diag(&[&one]);
+        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] = {
+            parallel_iter!(0..2)
+                .map(|i| {
+                    if i == 0 {
+                        (&r_0 * &gadget_2).decompose()
+                    } else {
+                        (&r_1 * &gadget_2).decompose()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        };
+        info!("rgs_decomposed computed");
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -121,7 +136,7 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
     debug_assert_eq!(b_decomposed_polys.len(), log_q);
     let packed_eval_input_size = public_circuit.num_input() - log_q;
 
-    /// circuit outputs the ciper text
+    // circuit outputs the ciper text
     let mut ct_output_circuit = PolyCircuit::<P>::new();
     {
         let inputs = ct_output_circuit.input(packed_eval_input_size);
@@ -142,7 +157,6 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         ct_output_circuit.output(outputs);
     }
 
-    /// actual
     let mut circuit = PolyCircuit::<P>::new();
     {
         let mut inputs = circuit.input(packed_eval_input_size + 1);
