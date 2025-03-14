@@ -23,6 +23,7 @@ def log_params_to_file(
     stddev_e: int,
     p: int,
     estimated_secpar: float,
+    size: int,
 ):
     """
     Log parameters to params.log file
@@ -51,7 +52,8 @@ def log_params_to_file(
         f"stddev_e={stddev_e}, "
         f"p={p}, "
         f"log_p={log_p}, "
-        f"estimated_secpar={estimated_secpar}\n"
+        f"estimated_secpar={estimated_secpar}, "
+        f"size={size} [GB]\n"
     )
 
     # Append to params.log file
@@ -69,10 +71,10 @@ def find_params(
     m_polys: list[list[int]],
 ):
 
-    min_alpha_k = -500
+    min_alpha_k = -2000
     max_alpha_k = -1
     min_q_k = target_secpar + 2
-    max_q_k = 800
+    max_q_k = 1024
     middle_q_k = math.floor((min_q_k + max_q_k) // 2)
 
     found_alphas = []
@@ -132,7 +134,18 @@ def find_params(
     if found_params == []:
         raise ValueError("p is not found after binary search")
     # minimum q in found_params
-    return min(found_params, key=lambda x: x[1]) + (alpha,)
+    (q, stddev_e, p, estimated_secpar) = min(found_params, key=lambda x: x[0])
+    log_q = math.ceil(math.log2(q))
+    size = compute_obf_size(
+        n,
+        log_q,
+        d,
+        (d + 1) * log_q,
+        (d + 1) * (log_q + 2),
+        input_size,
+        1,
+    )
+    return (q, stddev_e, p, estimated_secpar, alpha, size)
 
 
 def find_p(
@@ -161,11 +174,7 @@ def find_p(
     # Calculate log2 using Decimal
     # Handle infinity or very large numbers
     if math.isinf(final_err):
-        # If final_err is infinity, set log_final_err to a very large value
-        log_final_err = 10000  # A very large value that will likely fail the next check
-        print(
-            f"Warning: final_err is infinity, setting log_final_err to {log_final_err}"
-        )
+        raise ValueError(f"Error: final_err is infinity.")
     elif final_err_decimal > 0:
         try:
             # Try to calculate log2 using Decimal
@@ -173,19 +182,13 @@ def find_p(
                 float(final_err_decimal.ln() / Decimal("0.693147180559945"))
             )  # ln(2)
         except (OverflowError, ValueError):
-            # If there's an overflow, set log_final_err to a very large value
-            log_final_err = (
-                10000  # A very large value that will likely fail the next check
-            )
-            print(
-                f"Warning: final_err is too large for ln(), setting log_final_err to {log_final_err}"
-            )
+            raise ValueError(f"Error: final_err is too large for ln().")
     else:
         raise ValueError(f"Cannot calculate log2 of non-positive value: {final_err}")
 
-    if log_q - 2 <= log_final_err:
+    if log_q - 2 < log_final_err + secpar:
         raise ValueError(
-            f"log2(final error) should be less than log2(q) - 2 (given log2(final error): {log_final_err}, log2(q): {log_q})"
+            f"log_q - 2 >= log_final_err + secpar should hold. log2(final_error): {log_final_err}, log2(q): {log_q})"
         )
 
     # Use Decimal for high precision arithmetic
@@ -195,17 +198,19 @@ def find_p(
         rounding="ROUND_CEILING"
     ) - final_err_decimal
     p = int(p_decimal)
+    if p < 0:
+        raise ValueError(f"p should be non-negative: {p}")
 
     # Calculate log2(p) using Decimal
-    if p_decimal > 0:
-        log_p = math.ceil(float(p_decimal.ln() / Decimal("0.693147180559945")))  # ln(2)
-    else:
-        raise ValueError(f"Cannot calculate log2 of non-positive value: {p}")
+    # if p_decimal > 0:
+    #     log_p = math.ceil(float(p_decimal.ln() / Decimal("0.693147180559945")))  # ln(2)
+    # else:
+    #     raise ValueError(f"Cannot calculate log2 of non-positive value: {p}")
 
-    if log_p - log_final_err < secpar:
-        raise ValueError(
-            f"p - error should be larger than 2^secpar (given p: {p}, secpar: {secpar})"
-        )
+    # if log_p - log_final_err < secpar:
+    #     raise ValueError(
+    #         f"p - error should be larger than 2^secpar (given p: {p}, secpar: {secpar})"
+    #     )
 
     return p
 
@@ -288,6 +293,38 @@ def bound_final_error(
 
     # Return the final result as a Decimal
     return bound_c_final_d + bound_v_final_d
+
+
+def compute_obf_size(
+    n: int,
+    log_q: int,
+    d: int,
+    m: int,
+    m_b: int,
+    input_size: int,
+    output_size: int,
+):
+    size = 32
+    encoding_init_size = log_q * n * input_size * m
+    print("encoding_init_size GB", encoding_init_size / 8 / 10**9)
+    size += encoding_init_size
+    p_init_size = log_q * n * m_b
+    print("p_init_size GB", p_init_size / 8 / 10**9)
+    size += p_init_size
+    stddev_b = Decimal(compute_stddev_b(n, log_q, d))
+    sqrt_secpar = Decimal(sqrt_ceil(secpar))
+    bound_b_log = math.ceil(math.log2(stddev_b * sqrt_secpar))
+    m_n_preimages_size = 2 * input_size * bound_b_log * n * m_b * m_b
+    print("m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9)
+    size += m_n_preimages_size
+    k_preimages_size = input_size * bound_b_log * n * m_b * (input_size * m)
+    print("k_preimage_size GB", k_preimages_size / 8 / 10**9)
+    size += k_preimages_size
+    packed_output_size = math.ceil(output_size / n)
+    final_preimage_size = bound_b_log * n * m_b * packed_output_size
+    print("final_preimage_size GB", final_preimage_size / 8 / 10**9)
+    size += final_preimage_size
+    return size / 8 / 10**9
 
 
 def sqrt_ceil(x):
@@ -511,23 +548,24 @@ def sqrt_ceil(x):
 
 
 if __name__ == "__main__":
-    secpar = 100
-    n = 2**10
-    d = 14
+    secpar = 80
+    n = 2**13
+    d = 5
     # alpha = 2 ** (-320)
-    input_size = 1
-    m_polys = [[0, 2720, 2176, 17408]]
-    q, stddev_e, p, estimated_secpar, alpha = find_params(
+    input_size = 4
+    m_polys = [[1, 1000, 1000, 1000]]
+    q, stddev_e, p, estimated_secpar, alpha, size = find_params(
         secpar, n, d, input_size, m_polys
     )
     print(f"q: {q}, log_2 q: {math.log2(q)}")
     print(f"stddev_e: {stddev_e}")
     print(f"p: {p}, log_2 p: {math.log2(p)}")
     print(f"estimated_secpar: {estimated_secpar}")
-
+    print(f"alpha: {alpha}")
+    print(f"size: {size} [GB]")
     # Log parameters to params.log file
     log_params_to_file(
-        secpar, n, d, alpha, input_size, m_polys, q, stddev_e, p, estimated_secpar
+        secpar, n, d, alpha, input_size, m_polys, q, stddev_e, p, estimated_secpar, size
     )
     # output_secpar(586, 2**32, 2 ** (-24.8) * 2**32)
     # q = 2**1024
