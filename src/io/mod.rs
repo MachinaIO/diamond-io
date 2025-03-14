@@ -2,9 +2,10 @@ pub mod eval;
 pub mod obf;
 pub mod utils;
 
-use crate::bgg::circuit::PolyCircuit;
-use crate::bgg::BggEncoding;
-use crate::poly::{Poly, PolyMatrix, PolyParams};
+use crate::{
+    bgg::{circuit::PolyCircuit, BggEncoding},
+    poly::{Poly, PolyMatrix, PolyParams},
+};
 
 #[derive(Debug, Clone)]
 pub struct Obfuscation<M: PolyMatrix> {

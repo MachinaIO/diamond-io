@@ -110,13 +110,18 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgg::circuit::PolyCircuit;
-    use crate::bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler};
-    use crate::poly::dcrt::{
-        params::DCRTPolyParams, poly::DCRTPoly, sampler::hash::DCRTPolyHashSampler,
-        sampler::uniform::DCRTPolyUniformSampler,
+    use crate::{
+        bgg::{
+            circuit::PolyCircuit,
+            sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+        },
+        poly::dcrt::{
+            params::DCRTPolyParams,
+            poly::DCRTPoly,
+            sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+        },
+        utils::{create_bit_random_poly, create_random_poly},
     };
-    use crate::utils::{create_bit_random_poly, create_random_poly};
     use keccak_asm::Keccak256;
     use std::sync::Arc;
 
@@ -501,8 +506,8 @@ mod tests {
     //     // c1 = -a
     //     let m = uniform_sampler.sample_poly(&params, &DistType::BitDist);
     //     let s = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-    //     let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 }); // todo: set error
-    //     let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
+    //     let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 }); //
+    // todo: set error     let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
     //     let c0 = -a.clone();
     //     let c1 = a * s.clone() + e + m.clone();
 
@@ -514,22 +519,23 @@ mod tests {
 
     //     // plaintexts is the concatenation of 1, c0_bits, c1_bits, k
     //     let plaintexts =
-    //         [vec![DCRTPoly::const_one(&params)], c0_bits.clone(), c1_bits.clone(), vec![k.clone()]]
-    //             .concat();
+    //         [vec![DCRTPoly::const_one(&params)], c0_bits.clone(), c1_bits.clone(),
+    // vec![k.clone()]]             .concat();
 
     //     assert_eq!(plaintexts.len(), (params.modulus_bits() * 2) + 2);
 
     //     // Create encoding sampler and encodings
-    //     let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
-    //     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts, true);
-    //     let enc_one = encodings[0].clone();
+    //     let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler,
+    // 0.0);     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts,
+    // true);     let enc_one = encodings[0].clone();
 
     //     assert_eq!(encodings.len(), plaintexts.len());
 
-    //     // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ..., c1_bits[modulus_bits - 1], k
-    //     // Output: c0_bits[0] * k, ..., c0_bits[modulus_bits - 1] * k, c1_bits[0] * k, ..., c1_bits[modulus_bits - 1] * k
-    //     let mut circuit = PolyCircuit::<DCRTPoly>::new();
-    //     let inputs = circuit.input((params.modulus_bits() * 2) + 1);
+    //     // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ...,
+    // c1_bits[modulus_bits - 1], k     // Output: c0_bits[0] * k, ..., c0_bits[modulus_bits -
+    // 1] * k, c1_bits[0] * k, ..., c1_bits[modulus_bits - 1] * k     let mut circuit =
+    // PolyCircuit::<DCRTPoly>::new();     let inputs = circuit.input((params.modulus_bits() *
+    // 2) + 1);
 
     //     let k_id = inputs[inputs.len() - 1];
     //     let output_ids = inputs

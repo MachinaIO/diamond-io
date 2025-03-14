@@ -1,8 +1,8 @@
-use super::utils::*;
-use super::{Obfuscation, ObfuscationParams};
-use crate::bgg::sampler::BGGPublicKeySampler;
-use crate::bgg::BggEncoding;
-use crate::poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams};
+use super::{utils::*, Obfuscation, ObfuscationParams};
+use crate::{
+    bgg::{sampler::BGGPublicKeySampler, BggEncoding},
+    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+};
 use itertools::Itertools;
 use std::sync::Arc;
 
@@ -53,9 +53,9 @@ where
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
-            let expected_encoding_init = self.s_init.clone()
-                * (public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
-                    - inserted_poly_gadget);
+            let expected_encoding_init = self.s_init.clone() *
+                (public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
+                    inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -222,27 +222,27 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s.clone()
-                    * (output_encodings[0].pubkey.matrix.clone()
-                        - M::gadget_matrix(&params, 2)
-                            * output_encodings[0].plaintext.clone().unwrap());
+                let expcted = last_s.clone() *
+                    (output_encodings[0].pubkey.matrix.clone() -
+                        M::gadget_matrix(&params, 2) *
+                            output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
 
             // let a_f = obfuscation.final_preimage_target.slice_rows(0, 2).clone();
-            // debug_assert_eq!(output_encodings[0].pubkey.matrix.clone() * unit_vector.decompose(), a_f);
-            // let expected_final_v = last_s.clone() * &a_f;
+            // debug_assert_eq!(output_encodings[0].pubkey.matrix.clone() * unit_vector.decompose(),
+            // a_f); let expected_final_v = last_s.clone() * &a_f;
             // debug_assert_eq!(final_v, expected_final_v);
 
             // let expected_output_encodings_vec = last_s.clone() * &a_f
-            //     + M::from_poly_vec_row(
-            //         &params,
-            //         vec![output_encodings[0].plaintext.as_ref().unwrap().clone()],
+            //     + M::from_poly_vec_row( &params,
+            //       vec![output_encodings[0].plaintext.as_ref().unwrap().clone()],
             //     );
             // debug_assert_eq!(output_encodings_vec, expected_output_encodings_vec);
 
-            // let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-            // debug_assert_eq!(z, obfuscation.hardcoded_key * scale);
+            // let scale = M::P::from_const(&params, &<M::P as
+            // Poly>::Elem::half_q(&params.modulus())); debug_assert_eq!(z,
+            // obfuscation.hardcoded_key * scale);
         }
         z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
     }

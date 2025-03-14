@@ -8,40 +8,44 @@ on:
     branches:
       - main
 
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo +nightly fmt --all --check
+          
   test:
     runs-on: ubuntu-latest
+    strategy:
+        fail-fast: false
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: stable
+          components: clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake libgmp-dev
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache OpenFHE build
-        uses: actions/cache@v3
-        with:
-          path: openfhe/build
-          key: ${{ runner.os }}-openfhe-${{ hashFiles('openfhe/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-openfhe-
-
       - name: Checkout OpenFHE
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: openfheorg/openfhe-development
           path: openfhe
@@ -59,12 +63,26 @@ jobs:
           echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
           sudo ldconfig
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: taiki-e/install-action@nextest
-      - name: Install clippy and rustfmt
-        run: |
-          rustup component add clippy
-          rustup component add rustfmt
-      - uses: taiki-e/install-action@just
-      - name: Run ci
-        run: just ci
+      - name: Verify OpenFHE installation
+        run: ls -lah /usr/local/lib | grep OpenFHE
+
+      - name: Run clippy
+        run: cargo +nightly clippy --workspace --all-targets --all-features
+        env:
+          RUSTFLAGS: -A unused
+
+      - name: Run test
+        run: cargo test --features="parallel"
+  
+  ci-success:
+    name: ci success
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - test
+      - fmt
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
