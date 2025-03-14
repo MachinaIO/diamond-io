@@ -65,6 +65,7 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
+                info!("try pubkey 1 computed");
                 bgg_pubkey_sampler.sample(
                     params,
                     &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
@@ -82,6 +83,7 @@ where
         //     })
         //     .collect_vec();
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
+        info!("pubkeys computed");
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
         let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
@@ -94,7 +96,9 @@ where
             packed_output_size,
             DistType::FinRingDist,
         );
+        info!("a_prf_raw computed");
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
+        info!("modulus_switch");
         Self {
             r_0,
             r_1,
