@@ -70,7 +70,7 @@ pub trait PolyMatrix:
     /// (m1 * n), (m2 * n) -> ((m1 + m2) * n)
     fn concat_rows(&self, others: &[&Self]) -> Self;
     /// (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
-    fn concat_diag(&self, others: &[Self]) -> Self;
+    fn concat_diag(&self, others: &[&Self]) -> Self;
     fn tensor(&self, other: &Self) -> Self;
     /// Constructs a gadget matrix Gₙ
     ///

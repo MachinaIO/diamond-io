@@ -4,7 +4,7 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
-use std::sync::Arc;
+use std::{ops::Mul, sync::Arc};
 
 impl<M> Obfuscation<M>
 where
@@ -18,6 +18,7 @@ where
     ) -> Vec<bool>
     where
         SH: PolyHashSampler<[u8; 32], M = M>,
+        for<'a> &'a M: Mul<&'a M, Output = M>,
     {
         sampler_hash.set_key(self.hash_key);
         let params = Arc::new(obf_params.params.clone());
@@ -53,8 +54,8 @@ where
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
-            let expected_encoding_init = self.s_init.clone() *
-                (public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
+            let expected_encoding_init = &self.s_init *
+                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
                     inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
@@ -71,11 +72,11 @@ where
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
             let m = if *input { &self.m_preimages[idx].1 } else { &self.m_preimages[idx].0 };
-            let q = ps[idx].clone() * m;
+            let q = &ps[idx] * m;
             let n = if *input { &self.n_preimages[idx].1 } else { &self.n_preimages[idx].0 };
-            let p = q.clone() * n;
+            let p = &q * n;
             let k = if *input { &self.k_preimages[idx].1 } else { &self.k_preimages[idx].0 };
-            let v = q.clone() * k;
+            let v = &q * k;
             // let v_input = v.slice_columns(0, 2 * log_q * (packed_input_size + 1));
             // let v_fhe_key = v.slice_columns(
             //     2 * log_q * (packed_input_size + 1),
@@ -133,11 +134,8 @@ where
                     let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
                     cur_s = cur_s * r;
                 }
-                let new_s = if *input {
-                    cur_s.clone() * public_data.r_1.clone()
-                } else {
-                    cur_s.clone() * public_data.r_0.clone()
-                };
+                let new_s =
+                    if *input { &cur_s * &public_data.r_1 } else { &cur_s * &public_data.r_0 };
                 let b_next_bit =
                     if *input { self.bs[idx + 1].1.clone() } else { self.bs[idx + 1].0.clone() };
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
@@ -200,7 +198,7 @@ where
         let unit_vector = identity_2.slice_columns(1, 2);
         let output_encodings_vec =
             output_encodings[0].concat_vector(&output_encodings[1..]) * unit_vector.decompose();
-        let final_v = ps.last().unwrap().clone() * &self.final_preimage;
+        let final_v = ps.last().unwrap() * &self.final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(test)]
@@ -221,7 +219,7 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s.clone() *
+                let expcted = last_s *
                     (output_encodings[0].pubkey.matrix.clone() -
                         M::gadget_matrix(&params, 2) *
                             output_encodings[0].plaintext.clone().unwrap());

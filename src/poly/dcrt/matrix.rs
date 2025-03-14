@@ -220,38 +220,50 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
-    fn concat_diag(&self, others: &[Self]) -> Self {
+    fn concat_diag(&self, others: &[&Self]) -> Self {
+        #[cfg(debug_assertions)]
+        for (idx, other) in others.iter().enumerate() {
+            if self.nrow != other.nrow {
+                panic!(
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
+                    self.nrow, self.ncol, idx, other.nrow, other.ncol
+                );
+            }
+        }
+
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let mut result = Vec::with_capacity(nrow);
+
         let zero_elem = DCRTPoly::const_zero(&self.params);
+
+        let mut result: Vec<Vec<DCRTPoly>> = Vec::with_capacity(nrow);
+
+        // First part of the matrix (self)
         for i in 0..self.nrow {
             let mut row = Vec::with_capacity(ncol);
-            for j in 0..self.ncol {
-                row.push(self.inner[i][j].clone());
-            }
-            for _ in self.ncol..ncol {
-                row.push(zero_elem.clone());
-            }
-
+            row.extend(self.inner[i].iter().cloned());
+            row.extend(std::iter::repeat_n(zero_elem.clone(), ncol - self.ncol));
             result.push(row);
         }
 
         let mut col_offset = self.ncol;
-        for other in others {
-            for i in 0..other.nrow {
-                let mut row = Vec::with_capacity(ncol);
-                for _ in 0..col_offset {
-                    row.push(zero_elem.clone());
-                }
-                for j in 0..other.ncol {
-                    row.push(other.inner[i][j].clone());
-                }
-                for _ in (col_offset + other.ncol)..ncol {
-                    row.push(zero_elem.clone());
-                }
-                result.push(row);
-            }
+        // Concatenating with others in parallel
+        for other in others.iter() {
+            result.extend(
+                parallel_iter!(0..other.nrow)
+                    .map(|i| {
+                        let mut row = Vec::with_capacity(ncol);
+                        row.extend(std::iter::repeat_n(zero_elem.clone(), col_offset));
+                        row.extend(other.inner[i].iter().cloned());
+                        row.extend(std::iter::repeat_n(
+                            zero_elem.clone(),
+                            ncol - col_offset - other.ncol,
+                        ));
+                        row
+                    })
+                    .collect::<Vec<Vec<DCRTPoly>>>()
+                    .into_iter(),
+            );
             col_offset += other.ncol;
         }
 
@@ -606,7 +618,7 @@ mod tests {
         assert_eq!(row_concat.col_size(), 2);
 
         // Test diagonal concatenation
-        let diag_concat = matrix1.concat_diag(&[matrix2]);
+        let diag_concat = matrix1.concat_diag(&[&matrix2]);
         assert_eq!(diag_concat.row_size(), 4);
         assert_eq!(diag_concat.col_size(), 4);
     }

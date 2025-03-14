@@ -41,8 +41,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
         let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
         let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[one.clone()]);
-        let r_1 = r_1_bar.concat_diag(&[one.clone()]);
+        let r_0 = r_0_bar.concat_diag(&[&one]);
+        let r_1 = r_1_bar.concat_diag(&[&one]);
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)

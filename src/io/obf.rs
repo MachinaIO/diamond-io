@@ -110,8 +110,8 @@ where
     };
     println!("p_init computed");
     let identity_2 = M::identity(params.as_ref(), 2, None);
-    let u_0 = identity_2.concat_diag(&[public_data.r_0.clone()]);
-    let u_1 = identity_2.concat_diag(&[public_data.r_1.clone()]);
+    let u_0 = identity_2.concat_diag(&[&public_data.r_0]);
+    let u_1 = identity_2.concat_diag(&[&public_data.r_1]);
     let u_star = {
         let zeros = M::zero(params.as_ref(), 2, 4);
         let identities = identity_2.concat_columns(&[&identity_2]);
