@@ -40,13 +40,9 @@ where
 
             let zero = <M::P as Poly>::const_zero(&params);
             let one = <M::P as Poly>::const_one(&params);
-            let enc_hardcoded_key_decomposed = self.enc_hardcoded_key.decompose().get_column(0);
             let inserted_poly_gadget = {
                 let mut polys = vec![];
                 polys.push(one.clone());
-                for poly in enc_hardcoded_key_decomposed.iter() {
-                    polys.push(poly.clone());
-                }
                 for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
                     polys.push(zero.clone());
                 }
@@ -54,9 +50,9 @@ where
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
-            let expected_encoding_init = &self.s_init *
-                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
-                    inserted_poly_gadget);
+            let expected_encoding_init = &self.s_init
+                * &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
+                    - inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -89,13 +85,13 @@ where
                     &public_data.rgs_decomposed[0]
                 };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
-                let packed_input_size = log_q + obf_params.input_size.div_ceil(dim) + 1;
+                let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
                 encode_vec.mul_tensor_identity(t, packed_input_size + 1) + v
             };
             let mut new_encodings = vec![];
             // let zero_poly = <M::P as Poly>::const_zero(&params);
             // let one_poly = <M::P as Poly>::const_one(&params);
-            let inserted_poly_index = 1 + log_q + idx / dim;
+            let inserted_poly_index = 1 + idx / dim;
             for (j, encode) in encodings[idx].iter().enumerate() {
                 // let encode = encodings[idx][j].clone();
                 let m = 2 * log_q;
@@ -151,9 +147,6 @@ where
                     let inserted_poly_gadget = {
                         let mut polys = vec![];
                         polys.push(one.clone());
-                        for poly in enc_hardcoded_key_decomposed.iter() {
-                            polys.push(poly.clone());
-                        }
                         let mut coeffs = vec![];
                         for bit in inputs[0..=idx].iter() {
                             if *bit {
@@ -186,6 +179,7 @@ where
         let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
             &params,
             &a_decomposed_polys,
+            &self.enc_hardcoded_key.decompose().get_column(0),
             obf_params.public_circuit.clone(),
         );
         let last_input_encodings = encodings.last().unwrap();
@@ -219,10 +213,10 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s *
-                    (output_encodings[0].pubkey.matrix.clone() -
-                        M::gadget_matrix(&params, 2) *
-                            output_encodings[0].plaintext.clone().unwrap());
+                let expcted = last_s
+                    * (output_encodings[0].pubkey.matrix.clone()
+                        - M::gadget_matrix(&params, 2)
+                            * output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
 

@@ -10,6 +10,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
+    pub enc_hardcoded_key: M,
     pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
     pub m_preimages: Vec<(M, M)>,
@@ -24,8 +25,6 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub bs: Vec<(M, M, M)>,
     #[cfg(test)]
     pub hardcoded_key: <M as PolyMatrix>::P,
-    #[cfg(test)]
-    pub enc_hardcoded_key: M,
     #[cfg(test)]
     pub final_preimage_target: M,
 }
@@ -75,23 +74,11 @@ mod test {
             public_circuit.output(outputs);
         }
 
-        // let all_a_vec =
-        let a_decomposed_polys =
-            DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
-                .decompose();
-        let final_circuit = build_final_step_circuit::<_, ErrorSimulator>(
-            &params,
-            &a_decomposed_polys.get_column(0),
-            public_circuit.clone(),
-        );
-        let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
-        println!("error_m_polys {:?}", error_m_polys);
-
         let obf_params = ObfuscationParams {
             params: params.clone(),
             switched_modulus,
             input_size: 1,
-            public_circuit,
+            public_circuit: public_circuit.clone(),
             error_gauss_sigma: 0.0,
         };
 
@@ -108,6 +95,7 @@ mod test {
         );
         let obfuscation_time = start_time.elapsed();
         println!("Time to obfuscate: {:?}", obfuscation_time);
+
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let hardcoded_key = obfuscation
@@ -125,12 +113,10 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_io_just_mul_enc_and_bit_real_params() {
         let start_time = std::time::Instant::now();
-        println!("start_time {:?}", start_time);
-        let params = DCRTPolyParams::new(1024, 9, 51);
-        println!("{:?}", params);
+        let params = DCRTPolyParams::new(8192, 9, 51);
+        println!("params {:?}", params);
         let log_q = params.modulus_bits();
         let switched_modulus = Arc::new(BigUint::from(2u32).pow(449u32));
         let mut public_circuit = PolyCircuit::new();
@@ -145,22 +131,28 @@ mod test {
             public_circuit.output(outputs);
         }
 
-        let a_decomposed_polys =
-            DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
-                .decompose();
-        let final_circuit = build_final_step_circuit::<_, ErrorSimulator>(
-            &params,
-            &a_decomposed_polys.get_column(0),
-            public_circuit.clone(),
-        );
-        let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
-        println!("error_m_polys {:?}", error_m_polys);
+        {
+            let dummy_a_decomposed_polys =
+                DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
+                    .decompose();
+            let dummy_b_decomposed_polys =
+                DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
+                    .decompose();
+            let final_circuit = build_final_step_circuit::<_, ErrorSimulator>(
+                &params,
+                &dummy_a_decomposed_polys.get_column(0),
+                &dummy_b_decomposed_polys.get_column(0),
+                public_circuit.clone(),
+            );
+            let error_m_polys = final_circuit.simulate_error(params.ring_dimension());
+            println!("error_m_polys {:?}", error_m_polys);
+        }
 
         let obf_params = ObfuscationParams {
-            params,
+            params: params.clone(),
             switched_modulus,
             input_size: 1,
-            public_circuit,
+            public_circuit: public_circuit.clone(),
             error_gauss_sigma: 2251799813685248.0,
         };
 
@@ -177,6 +169,7 @@ mod test {
         );
         let obfuscation_time = start_time.elapsed();
         println!("Time to obfuscate: {:?}", obfuscation_time);
+
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         // todo: we can wrap into method prob (even store hardcoded_key as Vec<bool> which is way

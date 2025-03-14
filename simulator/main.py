@@ -158,10 +158,6 @@ def find_p(
     m_polys: list[list[int]],
 ):
     log_q = math.ceil(math.log2(q))
-    if log_q - 2 < secpar:
-        raise ValueError(
-            f"log2(q) - 2 should be larger than secpar (given log2(q): {log_q}, secpar: {secpar})"
-        )
     stddev_b = compute_stddev_b(n, log_q, d)
 
     final_err = bound_final_error(
