@@ -41,7 +41,7 @@ impl Add<Self> for ErrorSimulator {
     }
 }
 
-impl<'a> Add<&'a Self> for ErrorSimulator {
+impl Add<&Self> for ErrorSimulator {
     type Output = Self;
 
     fn add(self, rhs: &Self) -> Self {
@@ -57,11 +57,11 @@ impl Sub<Self> for ErrorSimulator {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        self + &rhs
+        self - &rhs
     }
 }
 
-impl<'a> Sub<&'a Self> for ErrorSimulator {
+impl Sub<&Self> for ErrorSimulator {
     type Output = Self;
 
     fn sub(self, rhs: &Self) -> Self {
@@ -81,7 +81,7 @@ impl Mul<Self> for ErrorSimulator {
     }
 }
 
-impl<'a> Mul<&'a Self> for ErrorSimulator {
+impl Mul<&Self> for ErrorSimulator {
     type Output = Self;
 
     fn mul(self, rhs: &Self) -> Self {
@@ -129,7 +129,7 @@ impl Add<Self> for MPolyCoeffs {
     }
 }
 
-impl<'a> Add<&'a Self> for MPolyCoeffs {
+impl Add<&Self> for MPolyCoeffs {
     type Output = Self;
 
     fn add(self, rhs: &Self) -> Self::Output {
@@ -149,14 +149,14 @@ impl<'a> Add<&'a Self> for MPolyCoeffs {
     }
 }
 
-impl<'a> Mul<BigUint> for MPolyCoeffs {
+impl Mul<BigUint> for MPolyCoeffs {
     type Output = Self;
     fn mul(self, rhs: BigUint) -> Self::Output {
         self * &rhs
     }
 }
 
-impl<'a> Mul<&'a BigUint> for MPolyCoeffs {
+impl Mul<&BigUint> for MPolyCoeffs {
     type Output = Self;
     fn mul(self, rhs: &BigUint) -> Self {
         Self(self.0.iter().map(|a| a.clone() * rhs).collect())
