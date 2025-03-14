@@ -51,3 +51,18 @@ impl<M: PolyMatrix> BggEncoding<M> {
         }
     }
 }
+
+impl SerializableBggEncoding {
+    pub fn from_compact_bytes<M: PolyMatrix>(
+        self,
+        params: &<M::P as Poly>::Params,
+        byte_size: usize,
+    ) -> BggEncoding<M> {
+        BggEncoding {
+            vector: M::from_compact_bytes(params, byte_size, self.vector),
+            pubkey: self.pubkey.from_compact_bytes(params, byte_size),
+            // todo: we don't know yet how to turn poly into bytes
+            plaintext: None,
+        }
+    }
+}
