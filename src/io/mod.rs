@@ -1,7 +1,7 @@
 pub mod eval;
 pub mod obf;
+pub mod serde;
 pub mod utils;
-
 use crate::{
     bgg::{circuit::PolyCircuit, BggEncoding},
     poly::{Poly, PolyMatrix, PolyParams},
@@ -55,9 +55,15 @@ mod test {
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
+    use tracing::info;
+
+    fn init_tracing() {
+        tracing_subscriber::fmt::init();
+    }
 
     #[test]
     fn test_io_just_mul_enc_and_bit() {
+        init_tracing();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
@@ -114,6 +120,7 @@ mod test {
 
     #[test]
     fn test_io_just_mul_enc_and_bit_real_params() {
+        init_tracing();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::new(8192, 9, 51);
         println!("params {:?}", params);

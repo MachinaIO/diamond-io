@@ -12,6 +12,7 @@ use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
+use tracing::info;
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
@@ -50,6 +51,7 @@ where
         let log_q = params.modulus_bits();
         let columns = 2 * log_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
+        info!("before all_matrix");
         let all_matrix = self.sampler.sample_hash(
             params,
             tag,
@@ -57,6 +59,7 @@ where
             columns * packed_input_size,
             DistType::FinRingDist,
         );
+        info!("all_matrix");
 
         parallel_iter!(0..packed_input_size)
             .map(|idx| {
