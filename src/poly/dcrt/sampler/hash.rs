@@ -7,6 +7,7 @@ use crate::poly::{
 };
 use digest::OutputSizeUser;
 use num_bigint::BigUint;
+use tracing::info;
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     key: [u8; 32],
@@ -67,7 +68,7 @@ where
 
 impl<H> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H>
 where
-    H: OutputSizeUser + digest::Digest,
+    H: OutputSizeUser + digest::Digest + Clone,
 {
     type M = DCRTPolyMatrix;
 
@@ -79,6 +80,7 @@ where
         ncol: usize,
         dist: DistType,
     ) -> DCRTPolyMatrix {
+        info!("gm");
         let hash_output_size = <H as digest::Digest>::output_size() * 8;
         let n = params.ring_dimension() as usize;
         let q = params.modulus();
@@ -91,29 +93,17 @@ where
                 let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
-                let mut bits = Vec::with_capacity(hash_output_size * index);
                 let mut ring_elems = Vec::with_capacity((index * hash_output_size) / bit_length);
-                for i in 0..(index) {
+                let mut bits = Vec::with_capacity(hash_output_size * index);
+                let mut og_hasher: H = H::new();
+                og_hasher.update(&self.key);
+                og_hasher.update(tag.as_ref());
+                info!("before loop {}, {}", index, bit_length);
+                // todo https://docs.rs/bitvec/latest/bitvec/ other wise 32gb
+                for i in 0..index {
+                    let mut hasher = og_hasher.clone();
                     //  H ( key || tag || i )
-                    let mut hasher = H::new();
-                    // todo: we currently assuming index is less than u32
-                    let min_i_type = std::mem::size_of_val(&i);
-                    if min_i_type > std::mem::size_of::<u8>() {
-                        let mut combined =
-                            Vec::with_capacity(self.key.len() + tag.as_ref().len() + 32);
-                        combined.extend_from_slice(&self.key);
-                        combined.extend_from_slice(tag.as_ref());
-                        combined.extend_from_slice(&i.to_be_bytes());
-                        hasher.update(&combined);
-                    } else {
-                        let mut combined =
-                            Vec::with_capacity(self.key.len() + tag.as_ref().len() + 1);
-                        combined.extend_from_slice(&self.key);
-                        combined.extend_from_slice(tag.as_ref());
-                        combined.push(i as u8);
-                        hasher.update(&combined);
-                    }
-
+                    hasher.update(&i.to_be_bytes());
                     for &byte in hasher.finalize().iter() {
                         for bit_index in 0..8 {
                             let bit = (byte >> bit_index) & 1;
@@ -121,6 +111,7 @@ where
                         }
                     }
                 }
+                info!("hash");
                 // From bits to field elements
                 let mut offset = 0;
                 for _ in 0..(bits.len() / bit_length) {
