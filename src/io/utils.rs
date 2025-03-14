@@ -44,9 +44,7 @@ where
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
-        info!("r_0_bar computed");
         let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
-        info!("r_1_bar computed");
         let one = S::M::identity(params, 1, None);
         let r_0 = r_0_bar.concat_diag(&[&one]);
         let r_1 = r_1_bar.concat_diag(&[&one]);
@@ -57,7 +55,6 @@ where
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
-        info!("a_rlwe_bar computed");
         // let reveal_plaintexts_fhe_key = vec![true; 2];
         #[cfg(test)]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();

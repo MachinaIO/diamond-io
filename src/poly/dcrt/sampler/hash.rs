@@ -1,12 +1,17 @@
-use std::marker::PhantomData;
-
-use crate::poly::{
-    dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem},
-    sampler::{DistType, PolyHashSampler},
-    Poly, PolyMatrix, PolyParams,
+use crate::{
+    parallel_iter,
+    poly::{
+        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem},
+        sampler::{DistType, PolyHashSampler},
+        Poly, PolyMatrix, PolyParams,
+    },
 };
+use bitvec::prelude::*;
 use digest::OutputSizeUser;
 use num_bigint::BigUint;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+use std::marker::PhantomData;
 use tracing::info;
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
@@ -44,23 +49,20 @@ where
 
         // From field elements to nrow * ncol polynomials
         let total_poly = nrow * ncol;
-        let mut offset = 0;
-        let mut all_polys = Vec::with_capacity(total_poly);
-        for _ in 0..total_poly {
-            let coeffs = &ring_elems[offset..offset + n];
-            offset += n;
-            let poly = DCRTPoly::from_coeffs(params, coeffs);
-            all_polys.push(poly);
-        }
 
-        // From polynomials to matrix such that the first row of the matrixcontains the first ncol
-        // polynomials
-        let mut matrix_inner = Vec::with_capacity(nrow);
-        let mut poly_iter = all_polys.into_iter();
-        for _ in 0..nrow {
-            let row_polys: Vec<DCRTPoly> = poly_iter.by_ref().take(ncol).collect();
-            matrix_inner.push(row_polys);
-        }
+        info!("total_poly {}", total_poly);
+        let matrix_inner: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
+            .map(|row_idx| {
+                let row_offset = row_idx * ncol * n;
+                (0..ncol)
+                    .map(|col_idx| {
+                        let offset = row_offset + col_idx * n;
+                        let coeffs = &ring_elems[offset..offset + n];
+                        DCRTPoly::from_coeffs(params, coeffs)
+                    })
+                    .collect()
+            })
+            .collect();
 
         DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
@@ -80,7 +82,6 @@ where
         ncol: usize,
         dist: DistType,
     ) -> DCRTPolyMatrix {
-        info!("gm");
         let hash_output_size = <H as digest::Digest>::output_size() * 8;
         let n = params.ring_dimension() as usize;
         let q = params.modulus();
@@ -93,34 +94,41 @@ where
                 let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
-                let mut ring_elems = Vec::with_capacity((index * hash_output_size) / bit_length);
-                let mut bits = Vec::with_capacity(hash_output_size * index);
+                let mut bv = bitvec![u8, Msb0;];
                 let mut og_hasher: H = H::new();
                 og_hasher.update(&self.key);
                 og_hasher.update(tag.as_ref());
                 info!("before loop {}, {}", index, bit_length);
-                // todo https://docs.rs/bitvec/latest/bitvec/ other wise 32gb
                 for i in 0..index {
                     let mut hasher = og_hasher.clone();
                     //  H ( key || tag || i )
                     hasher.update(&i.to_be_bytes());
                     for &byte in hasher.finalize().iter() {
-                        for bit_index in 0..8 {
-                            let bit = (byte >> bit_index) & 1;
-                            bits.push(bit);
+                        for bit_index in (0..8).rev() {
+                            bv.push((byte >> bit_index) & 1 != 0);
                         }
                     }
                 }
-                info!("hash");
-                // From bits to field elements
-                let mut offset = 0;
-                for _ in 0..(bits.len() / bit_length) {
-                    let value_bits = &bits[offset..offset + bit_length];
-                    let value = BigUint::from_radix_be(value_bits, 2).unwrap();
-                    offset += bit_length;
-                    let fe = FinRingElem::new(value, q.clone());
-                    ring_elems.push(fe);
-                }
+                info!(?bit_length, "finished hasher, bv length {}", bv.len());
+                let num_chunks = bv.len() / bit_length;
+                let ring_elems: Vec<FinRingElem> = parallel_iter!(0..num_chunks)
+                    .map(|i| {
+                        let start = i * bit_length;
+                        let end = start + bit_length;
+                        let value_bits = &bv[start..end];
+
+                        let mut value = BigUint::default();
+                        for bit in value_bits.iter() {
+                            value <<= 1;
+                            if *bit {
+                                value |= BigUint::from(1u32);
+                            }
+                        }
+                        FinRingElem::new(value, q.clone())
+                    })
+                    .collect();
+                info!("finished ring_elems");
+                debug_assert_eq!(ring_elems.len(), (index * hash_output_size) / bit_length);
                 ring_elems
             }
             DistType::BitDist => {
