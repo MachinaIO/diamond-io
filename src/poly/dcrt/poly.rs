@@ -118,21 +118,19 @@ impl Poly for DCRTPoly {
 
         let byte_size = bytes.len() / ring_dimension;
 
-        let mut coeffs = Vec::with_capacity(ring_dimension);
+        let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
+            .map(|i| {
+                let start = i * byte_size;
+                let end = start + byte_size;
+                let value_bytes = &bytes[start..end];
 
-        for i in 0..ring_dimension {
-            let start = i * byte_size;
-            let end = start + byte_size;
-            let value_bytes = &bytes[start..end];
+                let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes)
+                    - BigInt::from(offset))
+                    % modulus_big_int.clone();
 
-            let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes)
-                - BigInt::from(offset))
-                % modulus_big_int.clone();
-
-            let coeff = FinRingElem::new(value, modulus.clone().into());
-
-            coeffs.push(coeff);
-        }
+                FinRingElem::new(value, modulus.clone().into())
+            })
+            .collect();
 
         Self::from_coeffs(params, &coeffs)
     }
