@@ -202,10 +202,14 @@ impl Poly for DCRTPoly {
         );
 
         let coeffs = self.coeffs();
-        let mut bytes_poly_data = Vec::new();
-        for coeff in coeffs {
+        let ring_dimension = coeffs.len();
+        let mut bytes_poly_data = vec![0u8; ring_dimension * byte_size];
+
+        parallel_iter!(0..ring_dimension).for_each(|i| {
+            let coeff = &coeffs[i];
             let value = (coeff.value() + offset) % modulus_big.clone();
             let value_bytes = value.to_bytes_le();
+
             assert!(
                 value_bytes.len() <= byte_size,
                 "value_bytes exceeds the specified byte_size: {} > {}",
@@ -213,13 +217,13 @@ impl Poly for DCRTPoly {
                 byte_size
             );
 
-            if value_bytes.len() == byte_size {
-                bytes_poly_data.extend_from_slice(&value_bytes[0..byte_size]);
-            } else {
-                bytes_poly_data.extend_from_slice(&value_bytes);
-                bytes_poly_data.extend(vec![0; byte_size - value_bytes.len()]);
-            }
-        }
+            let start_pos = i * byte_size;
+
+            let copy_len = std::cmp::min(value_bytes.len(), byte_size);
+            bytes_poly_data[start_pos..start_pos + copy_len]
+                .copy_from_slice(&value_bytes[0..copy_len]);
+        });
+
         Bytes::from(bytes_poly_data)
     }
 }

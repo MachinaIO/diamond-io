@@ -379,19 +379,19 @@ impl PolyMatrix for DCRTPolyMatrix {
             modulus_bytes.len()
         );
 
-        let mut result = Self::zero(params, nrow, ncol);
+        let inner: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
+            .map(|i| {
+                parallel_iter!(0..ncol)
+                    .map(|j| {
+                        let idx = 1 + i * ncol + j; // 1 + (row index * number of columns + column index)
+                        let poly_bytes = &bytes[idx];
+                        DCRTPoly::from_compact_bytes(params, poly_bytes, offset)
+                    })
+                    .collect()
+            })
+            .collect();
 
-        let mut idx = 1; // Start from 1 because index 0 is for metadata
-
-        for i in 0..nrow {
-            for j in 0..ncol {
-                let poly_bytes = &bytes[idx];
-                idx += 1;
-                let poly = DCRTPoly::from_compact_bytes(params, poly_bytes, offset);
-                result.inner[i][j] = poly;
-            }
-        }
-        result
+        Self { inner, params: params.clone(), nrow, ncol }
     }
 
     /// Converts the matrix to a `Vec<Bytes>` object.
@@ -422,12 +422,18 @@ impl PolyMatrix for DCRTPolyMatrix {
         metadata.extend_from_slice(&(offset as u32).to_le_bytes());
         result.push(Bytes::from(metadata));
 
-        for i in 0..self.nrow {
-            for j in 0..self.ncol {
-                let poly = &self.inner[i][j];
-                result.push(poly.to_compact_bytes(byte_size, offset));
-            }
-        }
+        let element_bytes: Vec<Bytes> = parallel_iter!(0..self.nrow)
+            .flat_map(|i| {
+                parallel_iter!(0..self.ncol)
+                    .map(|j| {
+                        let poly = &self.inner[i][j];
+                        poly.to_compact_bytes(byte_size, offset)
+                    })
+                    .collect::<Vec<Bytes>>()
+            })
+            .collect();
+
+        result.extend(element_bytes);
         result
     }
 }
