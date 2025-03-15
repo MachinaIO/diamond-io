@@ -108,6 +108,8 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
+    /// Create a polynomial from a `Bytes` object.
+    /// `offset` is subtracted from each coefficient before converting to a polynomial.
     fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes, offset: usize) -> Self {
         let ring_dimension = params.ring_dimension() as usize;
         let modulus: BigUint = params.modulus().as_ref().clone();
@@ -123,9 +125,9 @@ impl Poly for DCRTPoly {
             let end = start + byte_size;
             let value_bytes = &bytes[start..end];
 
-            let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes) -
-                BigInt::from(offset)) %
-                modulus_big_int.clone();
+            let value = (BigInt::from_bytes_le(num_bigint::Sign::Plus, value_bytes)
+                - BigInt::from(offset))
+                % modulus_big_int.clone();
 
             let coeff = FinRingElem::new(value, modulus.clone().into());
 
@@ -184,6 +186,9 @@ impl Poly for DCRTPoly {
             .collect()
     }
 
+    /// Convert the polynomial to a `Bytes` object
+    /// `byte_size` is the number of bytes used to represent each polynomial coefficient
+    /// `offset` is added to each coefficient before converting to bytes.
     fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Bytes {
         let modulus = self.ptr_poly.GetModulus();
         let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
@@ -197,7 +202,7 @@ impl Poly for DCRTPoly {
         );
 
         let coeffs = self.coeffs();
-        let mut bytes_data = Vec::new();
+        let mut bytes_poly_data = Vec::new();
         for coeff in coeffs {
             let value = (coeff.value() + offset) % modulus_big.clone();
             let value_bytes = value.to_bytes_le();
@@ -209,13 +214,13 @@ impl Poly for DCRTPoly {
             );
 
             if value_bytes.len() == byte_size {
-                bytes_data.extend_from_slice(&value_bytes[0..byte_size]);
+                bytes_poly_data.extend_from_slice(&value_bytes[0..byte_size]);
             } else {
-                bytes_data.extend_from_slice(&value_bytes);
-                bytes_data.extend(vec![0; byte_size - value_bytes.len()]);
+                bytes_poly_data.extend_from_slice(&value_bytes);
+                bytes_poly_data.extend(vec![0; byte_size - value_bytes.len()]);
             }
         }
-        Bytes::from(bytes_data)
+        Bytes::from(bytes_poly_data)
     }
 }
 

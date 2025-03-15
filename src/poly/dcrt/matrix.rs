@@ -345,6 +345,8 @@ impl PolyMatrix for DCRTPolyMatrix {
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
+    /// Create a matrix from a `Vec<Bytes>` object
+    /// `offset` is subtracted from each coefficient before converting to a polynomial.
     fn from_compact_bytes(
         params: &<Self::P as Poly>::Params,
         bytes: Vec<Bytes>,
@@ -379,7 +381,7 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         let mut result = Self::zero(params, nrow, ncol);
 
-        let mut idx = 1; // Start from 1 because 0 is metadata
+        let mut idx = 1; // Start from 1 because index 0 is for metadata
 
         for i in 0..nrow {
             for j in 0..ncol {
@@ -392,6 +394,10 @@ impl PolyMatrix for DCRTPolyMatrix {
         result
     }
 
+    /// Converts the matrix to a `Vec<Bytes>` object.
+    /// `byte_size` is the number of bytes used to represent each coefficient.
+    /// `offset` is added to each coefficient before converting to bytes.
+    /// The first element of the vector contains metadata about the matrix.
     fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Vec<Bytes> {
         let modulus_bytes = self.params.modulus().to_bytes_le();
 
@@ -913,12 +919,11 @@ mod tests {
             crate::poly::sampler::DistType::GaussDist { sigma },
         );
 
-        let bound = 3.0 * sigma;
+        let bound = 4.0 * sigma; // TODO: This is not a precise bound
 
         let bound_ceil = bound.ceil() as u32;
 
-        // byte_size is bytes necessary to represent bound*2 which is the maximum possible sampled
-        // coefficient value
+        // byte_size is bytes necessary to represent bound*2 which is the max value that a coefficient can take
         let byte_size = (2 * bound_ceil).to_le_bytes().len();
         let bytes = gauss_mat.to_compact_bytes(byte_size, bound_ceil as usize);
         let new_gauss_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, bound_ceil as usize);
