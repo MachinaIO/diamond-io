@@ -112,7 +112,6 @@ impl Poly for DCRTPoly {
     fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes) -> Self {
         let ring_dimension = params.ring_dimension() as usize;
         let modulus: BigUint = params.modulus().as_ref().clone();
-        let q_half = modulus.clone() / 2u8;
 
         assert!(
             ring_dimension % 8 == 0,
@@ -134,17 +133,22 @@ impl Poly for DCRTPoly {
                 let end = start + byte_size;
                 let value_bytes = &bytes[start..end];
 
-                let mut value = BigUint::from_bytes_le(value_bytes);
+                let value = BigUint::from_bytes_le(value_bytes);
 
                 let byte_idx = i / 8;
                 let bit_idx = i % 8;
-                let is_greater_than_q_half = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
+                let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
 
-                if is_greater_than_q_half {
-                    value += &q_half;
-                }
+                // Convert back from centered representation
+                let final_value = if is_negative {
+                    // If negative flag is set, compute q - value
+                    &modulus - &value
+                } else {
+                    // Otherwise, use value as is
+                    value
+                };
 
-                FinRingElem::new(value, modulus.clone().into())
+                FinRingElem::new(final_value, modulus.clone().into())
             })
             .collect();
 
@@ -203,8 +207,8 @@ impl Poly for DCRTPoly {
     /// Convert the polynomial to a `Bytes` object
     /// The returned bytes have the following format:
     /// - First byte: metadata about the byte size per coefficient
-    /// - Next n/8 bytes: bit vector (1 bit per coefficient, indicating if coeff > modulus/2)
-    /// - Remaining bytes: coefficient values
+    /// - Next n/8 bytes: bit vector (1 bit per coefficient, indicating if coeff is negative)
+    /// - Remaining bytes: coefficient values (centered around 0)
     fn to_compact_bytes(&self) -> Bytes {
         let modulus = self.ptr_poly.GetModulus();
         let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
@@ -219,7 +223,7 @@ impl Poly for DCRTPoly {
             ring_dimension
         );
 
-        // Create a bit vector to store flags for coefficients > q_half
+        // Create a bit vector to store flags for negative coefficients
         let bit_vector_size = ring_dimension / 8;
         let mut bit_vector = vec![0u8; bit_vector_size];
 
@@ -227,11 +231,14 @@ impl Poly for DCRTPoly {
         let mut processed_values = Vec::with_capacity(ring_dimension);
 
         for (i, coeff) in coeffs.iter().enumerate() {
+            // Center coefficients around 0
             let value = if coeff.value() > &q_half {
                 let byte_idx = i / 8;
                 let bit_idx = i % 8;
-                bit_vector[byte_idx] |= 1 << bit_idx;
-                coeff.value() - &q_half
+                bit_vector[byte_idx] |= 1 << bit_idx; // Set flag for negative coefficient
+                &modulus_big - coeff.value() // Convert to absolute value: q - a
+            } else if coeff.value() == &BigUint::from(0u32) {
+                BigUint::from(0u32)
             } else {
                 coeff.value().clone()
             };
@@ -498,7 +505,7 @@ mod tests {
         // Since we're using BitDist, we expect byte_size to be 1
         assert_eq!(bytes[0], 1, "Byte size should be 1 for BitDist");
 
-        // Next n/8 bytes are the bit vector
+        // Next n/8 bytes are the bit vector (1 bit per coefficient)
         let bit_vector_size = ring_dimension / 8;
 
         // Calculate expected total size:
