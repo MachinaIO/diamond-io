@@ -3,6 +3,7 @@ use crate::{
     parallel_iter,
     poly::{Poly, PolyMatrix, PolyParams},
 };
+use bytes::Bytes;
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -158,40 +159,45 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
     }
+
     // (m * n1), (m * n2) -> (m * (n1 + n2))
-    fn concat_columns(&self, others: &[Self]) -> Self {
+    fn concat_columns(&self, others: &[&Self]) -> Self {
         #[cfg(debug_assertions)]
         for (idx, other) in others.iter().enumerate() {
             if self.nrow != other.nrow {
-                panic!("Concat error: while the shape of the first matrix is ({0}, {1}), that of the {2}-th matirx is ({3},{4})",self.nrow,self.ncol,idx,other.nrow,other.ncol);
+                panic!(
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
+                    self.nrow, self.ncol, idx, other.nrow, other.ncol
+                );
             }
         }
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let mut result = Vec::with_capacity(self.nrow);
-        for i in 0..self.nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..self.ncol {
-                row.push(self.inner[i][j].clone());
-            }
-            for other in others {
-                for j in 0..other.ncol {
-                    row.push(other.inner[i][j].clone());
+        let result: Vec<Vec<DCRTPoly>> = parallel_iter!(0..self.nrow)
+            .map(|i| {
+                let mut row: Vec<&DCRTPoly> = Vec::with_capacity(ncol);
+                row.extend(self.inner[i].iter());
+                for other in others {
+                    row.extend(other.inner[i].iter());
                 }
-            }
-            result.push(row);
-        }
+                row.into_iter().cloned().collect()
+            })
+            .collect();
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
     }
 
     // (m1 * n), (m2 * n) -> ((m1 + m2) * n)
-    fn concat_rows(&self, others: &[Self]) -> Self {
+    fn concat_rows(&self, others: &[&Self]) -> Self {
         #[cfg(debug_assertions)]
         for (idx, other) in others.iter().enumerate() {
             if self.ncol != other.ncol {
-                panic!("Concat error: while the shape of the first matrix is ({0}, {1}), that of the {2}-th matirx is ({3},{4})",self.nrow,self.ncol,idx,other.nrow,other.ncol);
+                panic!(
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({}, {})",
+                    self.nrow, self.ncol, idx, other.nrow, other.ncol
+                );
             }
         }
+
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
         let mut result = Vec::with_capacity(nrow);
         for i in 0..self.nrow {
@@ -215,38 +221,50 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
-    fn concat_diag(&self, others: &[Self]) -> Self {
+    fn concat_diag(&self, others: &[&Self]) -> Self {
+        #[cfg(debug_assertions)]
+        for (idx, other) in others.iter().enumerate() {
+            if self.nrow != other.nrow {
+                panic!(
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
+                    self.nrow, self.ncol, idx, other.nrow, other.ncol
+                );
+            }
+        }
+
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
-        let mut result = Vec::with_capacity(nrow);
+
         let zero_elem = DCRTPoly::const_zero(&self.params);
+
+        let mut result: Vec<Vec<DCRTPoly>> = Vec::with_capacity(nrow);
+
+        // First part of the matrix (self)
         for i in 0..self.nrow {
             let mut row = Vec::with_capacity(ncol);
-            for j in 0..self.ncol {
-                row.push(self.inner[i][j].clone());
-            }
-            for _ in self.ncol..ncol {
-                row.push(zero_elem.clone());
-            }
-
+            row.extend(self.inner[i].iter().cloned());
+            row.extend(std::iter::repeat_n(zero_elem.clone(), ncol - self.ncol));
             result.push(row);
         }
 
         let mut col_offset = self.ncol;
-        for other in others {
-            for i in 0..other.nrow {
-                let mut row = Vec::with_capacity(ncol);
-                for _ in 0..col_offset {
-                    row.push(zero_elem.clone());
-                }
-                for j in 0..other.ncol {
-                    row.push(other.inner[i][j].clone());
-                }
-                for _ in (col_offset + other.ncol)..ncol {
-                    row.push(zero_elem.clone());
-                }
-                result.push(row);
-            }
+        // Concatenating with others in parallel
+        for other in others.iter() {
+            result.extend(
+                parallel_iter!(0..other.nrow)
+                    .map(|i| {
+                        let mut row = Vec::with_capacity(ncol);
+                        row.extend(std::iter::repeat_n(zero_elem.clone(), col_offset));
+                        row.extend(other.inner[i].iter().cloned());
+                        row.extend(std::iter::repeat_n(
+                            zero_elem.clone(),
+                            ncol - col_offset - other.ncol,
+                        ));
+                        row
+                    })
+                    .collect::<Vec<Vec<DCRTPoly>>>()
+                    .into_iter(),
+            );
             col_offset += other.ncol;
         }
 
@@ -328,7 +346,82 @@ impl PolyMatrix for DCRTPolyMatrix {
             let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
             slice_results.push(slice * other);
         }
-        slice_results[0].clone().concat_columns(&slice_results[1..])
+        slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
+    }
+
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self {
+        let metadata = &bytes[0];
+
+        let ring_dimension =
+            u32::from_le_bytes([metadata[0], metadata[1], metadata[2], metadata[3]]);
+        let nrow =
+            u32::from_le_bytes([metadata[4], metadata[5], metadata[6], metadata[7]]) as usize;
+        let ncol =
+            u32::from_le_bytes([metadata[8], metadata[9], metadata[10], metadata[11]]) as usize;
+        let byte_size =
+            u32::from_le_bytes([metadata[12], metadata[13], metadata[14], metadata[15]]) as usize;
+
+        assert_eq!(
+            ring_dimension,
+            params.ring_dimension(),
+            "Ring dimension mismatch: {} != {}",
+            ring_dimension,
+            params.ring_dimension()
+        );
+
+        let modulus_bytes = params.modulus().to_bytes_le();
+        assert!(
+            byte_size <= modulus_bytes.len(),
+            "byte_size must not be greater than modulus_bytes: {} > {}",
+            byte_size,
+            modulus_bytes.len()
+        );
+
+        let mut result = Self::zero(params, nrow, ncol);
+
+        let mut idx = 1; // Start from 1 because 0 is metadata
+
+        for i in 0..nrow {
+            for j in 0..ncol {
+                let poly_bytes = &bytes[idx];
+                idx += 1;
+                let poly = DCRTPoly::from_compact_bytes(params, poly_bytes);
+                result.inner[i][j] = poly;
+            }
+        }
+        result
+    }
+
+    fn to_compact_bytes(&self, byte_size: usize) -> Vec<Bytes> {
+        let modulus_bytes = self.params.modulus().to_bytes_le();
+
+        assert!(
+            byte_size <= modulus_bytes.len(),
+            "byte_size must not be greater than modulus_bytes: {} > {}",
+            byte_size,
+            modulus_bytes.len()
+        );
+
+        let mut result = Vec::new();
+
+        let ring_dimension: u32 = self.params.ring_dimension();
+        let nrow = self.nrow;
+        let ncol = self.ncol;
+
+        let mut metadata = Vec::new();
+        metadata.extend_from_slice(&(ring_dimension).to_le_bytes());
+        metadata.extend_from_slice(&(nrow as u32).to_le_bytes());
+        metadata.extend_from_slice(&(ncol as u32).to_le_bytes());
+        metadata.extend_from_slice(&(byte_size as u32).to_le_bytes());
+        result.push(Bytes::from(metadata));
+
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                let poly = &self.inner[i][j];
+                result.push(poly.to_compact_bytes(byte_size));
+            }
+        }
+        result
     }
 }
 
@@ -442,22 +535,26 @@ impl Mul<DCRTPoly> for DCRTPolyMatrix {
     }
 }
 
-// Implement multiplication of a matrix by a polynomial reference
 impl Mul<&DCRTPoly> for DCRTPolyMatrix {
     type Output = Self;
 
     fn mul(self, rhs: &DCRTPoly) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl Mul<&DCRTPoly> for &DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn mul(self, rhs: &DCRTPoly) -> Self::Output {
         let nrow = self.nrow;
         let ncol = self.ncol;
-        let mut result: Vec<Vec<DCRTPoly>> = self.inner;
 
-        for i in 0..nrow {
-            for j in 0..ncol {
-                result[i][j] *= rhs.clone();
-            }
-        }
+        let result: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
+            .map(|i| parallel_iter!(0..ncol).map(|j| &self.inner[i][j] * rhs).collect())
+            .collect();
 
-        DCRTPolyMatrix { inner: result, params: self.params, nrow, ncol }
+        DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow, ncol }
     }
 }
 
@@ -587,17 +684,17 @@ mod tests {
         matrix2.inner[1][1] = DCRTPoly::from_const(&params, &value);
 
         // Test column concatenation
-        let col_concat = matrix1.clone().concat_columns(&[matrix2.clone()]);
+        let col_concat = matrix1.concat_columns(&[&matrix2]);
         assert_eq!(col_concat.row_size(), 2);
         assert_eq!(col_concat.col_size(), 4);
 
         // Test row concatenation
-        let row_concat = matrix1.clone().concat_rows(&[matrix2.clone()]);
+        let row_concat = matrix1.concat_rows(&[&matrix2]);
         assert_eq!(row_concat.row_size(), 4);
         assert_eq!(row_concat.col_size(), 2);
 
         // Test diagonal concatenation
-        let diag_concat = matrix1.concat_diag(&[matrix2]);
+        let diag_concat = matrix1.concat_diag(&[&matrix2]);
         assert_eq!(diag_concat.row_size(), 4);
         assert_eq!(diag_concat.col_size(), 4);
     }
@@ -714,5 +811,93 @@ mod tests {
         assert_eq!(expected_result.row_size(), 2);
         assert_eq!(expected_result.col_size(), 12);
         assert_eq!(result, expected_result)
+    }
+
+    #[test]
+    #[should_panic(expected = "value_bytes exceeds the specified byte_size:")]
+    fn test_to_compact_bytes_failure_1() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix (2x12)
+        let mat =
+            sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
+
+        // Choose a byte size that is less than the bytes necessary to represent the coefficients
+        let byte_size = 1;
+        mat.to_compact_bytes(byte_size);
+    }
+
+    #[test]
+    #[should_panic(expected = "byte_size must not be greater than modulus_bytes")]
+    fn test_to_compact_bytes_failure_2() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix (2x12)
+        let mat =
+            sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
+
+        // Choose a bit size that is greater than the modulus bit size
+        let byte_size = params.modulus().to_bytes_le().len() + 1;
+        mat.to_compact_bytes(byte_size);
+    }
+
+    #[test]
+    fn test_to_compact_bytes() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        let nrow = 2;
+        let ncol = 12;
+        let ring_dimension = params.ring_dimension();
+
+        // Create matrix (2x12)
+        let mat =
+            sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
+
+        let byte_size = 1;
+        let bytes = mat.to_compact_bytes(byte_size);
+
+        // the vector should contain 1 (metadata) + nrow * ncol elements
+        assert_eq!(bytes.len(), 1 + (nrow * ncol));
+
+        // the total byte size should be 4 * 4 (metadata) + nrow * ncol * ring_dimension * byte_size
+        // (coefficients)
+        let total_byte_size: usize = bytes.iter().map(|b| b.len()).sum();
+        assert_eq!(total_byte_size, (4 * 4) + (nrow * ncol * ring_dimension as usize * byte_size));
+    }
+
+    #[test]
+    fn test_from_compact_bytes() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        let nrow = 2;
+        let ncol = 12;
+
+        let mat = sampler.sample_uniform(
+            &params,
+            nrow,
+            ncol,
+            crate::poly::sampler::DistType::FinRingDist,
+        );
+
+        let byte_size = params.modulus().to_bytes_le().len();
+
+        let bytes = mat.to_compact_bytes(byte_size);
+        let new_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+
+        assert_eq!(mat, new_mat);
+
+        let bin_mat =
+            sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
+
+        let byte_size = 1;
+
+        let bytes = bin_mat.to_compact_bytes(byte_size);
+        let new_bin_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+
+        assert_eq!(bin_mat, new_bin_mat);
     }
 }

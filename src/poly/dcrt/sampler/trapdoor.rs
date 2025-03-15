@@ -143,7 +143,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 .collect();
 
             // Concatenate all preimages horizontally
-            return preimages[0].concat_columns(&preimages[1..]);
+            return preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>());
         }
 
         // Case 2: Target columns is equal or less than size

@@ -8,7 +8,8 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use rand::{Rng, RngCore};
-use std::sync::Arc;
+use std::{ops::Mul, sync::Arc};
+use tracing::info;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -23,23 +24,26 @@ where
     SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
+    for<'a> &'a M: Mul<&'a <M as PolyMatrix>::P, Output = M>,
+    for<'a> &'a M: Mul<&'a M, Output = M>,
 {
+    info!("gm");
     let public_circuit = &obf_params.public_circuit;
-    let params = Arc::new(obf_params.params.clone());
-    let dim = params.as_ref().ring_dimension() as usize;
-    let log_q = params.as_ref().modulus_bits();
+    let dim = obf_params.params.ring_dimension() as usize;
+    let log_q = obf_params.params.modulus_bits();
     debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
     let sampler_uniform = Arc::new(sampler_uniform);
-    let sampler_hash = Arc::new(sampler_hash);
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler_hash.clone());
+    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash));
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+    let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
     let s_bar =
         sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
+    info!("s_bar computed");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bar,
@@ -47,12 +51,9 @@ where
         obf_params.error_gauss_sigma,
     );
     let s_init = &bgg_encode_sampler.secret_vec;
-    let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-    // let minus_one_poly =
-    //     M::from_poly_vec_row(params.as_ref(), vec![M::P::const_minus_one(params.as_ref())]);
-    // let t = t_bar.concat_columns(&[minus_one_poly]);
-
-    let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+    let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    info!("t_bar computed");
+    let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     let enc_hardcoded_key = {
         let e = sampler_uniform.sample_uniform(
             &params,
@@ -61,22 +62,27 @@ where
             DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        t_bar.clone() * &public_data.a_rlwe_bar.clone() + &e - &(hardcoded_key.clone() * &scale)
+        &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale)
     };
+
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+    info!("enc_hardcoded_key computed");
+    let t_bar = t_bar_matrix.entry(0, 0).clone();
+    #[cfg(test)]
+    let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
 
     let mut plaintexts = vec![];
-    plaintexts.extend(enc_hardcoded_key_polys);
     let zero_plaintexts: Vec<M::P> = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect();
     plaintexts.extend(zero_plaintexts);
-    plaintexts.push(t_bar.entry(0, 0).clone());
+    plaintexts.push(t_bar.clone());
     // let mut input_encoded_polys: Vec<<M as PolyMatrix>::P> =
     //     vec![<M::P as Poly>::const_one(params.as_ref())];
     // input_encoded_polys.extend(enc_hardcoded_key_polys);
     // input_encoded_polys.extend(zero_plaintexts);
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
+    info!("encodings_init computed");
     // let encode_fhe_key =
     //     bgg_encode_sampler.sample(&params, &public_data.pubkeys_fhe_key[0], &t.get_row(0),
     // false);
@@ -89,10 +95,11 @@ where
         let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 4);
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
+        info!("bs computed");
     }
     let m_b = 4 * (2 + log_q);
     let p_init = {
-        let s_connect = s_init.concat_columns(&[s_init.clone()]);
+        let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &bs[0].2;
         let error = sampler_uniform.sample_uniform(
             &params,
@@ -102,13 +109,14 @@ where
         );
         s_b + error
     };
+    info!("p_init computed");
     let identity_2 = M::identity(params.as_ref(), 2, None);
-    let u_0 = identity_2.concat_diag(&[public_data.r_0.clone()]);
-    let u_1 = identity_2.concat_diag(&[public_data.r_1.clone()]);
+    let u_0 = identity_2.concat_diag(&[&public_data.r_0]);
+    let u_1 = identity_2.concat_diag(&[&public_data.r_1]);
     let u_star = {
         let zeros = M::zero(params.as_ref(), 2, 4);
-        let identities = identity_2.concat_columns(&[identity_2.clone()]);
-        zeros.concat_rows(&[identities])
+        let identities = identity_2.concat_columns(&[&identity_2]);
+        zeros.concat_rows(&[&identities])
     };
     let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
 
@@ -137,7 +145,7 @@ where
             let rg_decomposed = &public_data.rgs_decomposed[bit];
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
             let top = lhs.mul_tensor_identity(rg_decomposed, 1 + packed_input_size);
-            let inserted_poly_index = 1 + log_q + idx / dim;
+            let inserted_poly_index = 1 + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
             let mut coeffs = vec![zero_coeff; dim];
@@ -162,7 +170,7 @@ where
             let bottom = public_data.pubkeys[idx + 1][0]
                 .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
                 &inserted_poly_gadget;
-            let k_target = top.concat_rows(&[bottom]);
+            let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
@@ -174,12 +182,14 @@ where
         m_preimages.push(mp);
         n_preimages.push(np);
         k_preimages.push(kp);
+        info!("m_preimages, n_preimages, k_preimages computed");
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
     let final_circuit = build_final_step_circuit::<_, BggPublicKey<M>>(
         &params,
         &a_decomposed_polys,
+        &enc_hardcoded_key_polys,
         public_circuit.clone(),
     );
     let final_preimage_target = {
@@ -190,7 +200,7 @@ where
         let unit_vector = identity_2.slice_columns(1, 2);
         eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        (eval_outputs_matrix + public_data.a_prf).concat_rows(&[M::zero(
+        (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             2,
             packed_output_size,
@@ -200,9 +210,10 @@ where
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
-
+    info!("final_preimage computed");
     Obfuscation {
         hash_key,
+        enc_hardcoded_key,
         encodings_init,
         p_init,
         m_preimages,
@@ -217,8 +228,6 @@ where
         bs,
         #[cfg(test)]
         hardcoded_key: hardcoded_key.clone(),
-        #[cfg(test)]
-        enc_hardcoded_key: enc_hardcoded_key.clone(),
         #[cfg(test)]
         final_preimage_target,
     }

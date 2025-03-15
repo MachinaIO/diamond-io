@@ -20,7 +20,7 @@ impl<M: PolyMatrix> BggEncoding<M> {
     }
 
     pub fn concat_vector(&self, others: &[Self]) -> M {
-        self.vector.concat_columns(&others.iter().map(|x| x.vector.clone()).collect_vec()[..])
+        self.vector.concat_columns(&others.iter().map(|x| &x.vector).collect_vec()[..])
     }
 }
 
@@ -95,6 +95,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
 }
 
 impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
+    type Params = <M::P as Poly>::Params;
     fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
         let gadget = M::gadget_matrix(params, 2);
         let scalared = gadget * scalar;

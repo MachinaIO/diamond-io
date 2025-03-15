@@ -1,3 +1,6 @@
+use itertools::Itertools;
+use tracing::info;
+
 use super::ObfuscationParams;
 use crate::{
     bgg::{
@@ -7,8 +10,7 @@ use crate::{
     },
     poly::{matrix::*, sampler::*, Poly, PolyParams},
 };
-use itertools::Itertools;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Mul};
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -31,7 +33,10 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     _s: PhantomData<S>,
 }
 
-impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
+impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S>
+where
+    for<'a> &'a S::M: Mul<&'a S::M, Output = S::M>,
+{
     pub fn sample(
         obf_params: &ObfuscationParams<S::M>,
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
@@ -39,17 +44,20 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
+        info!("r_0_bar computed");
         let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
+        info!("r_1_bar computed");
         let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[one.clone()]);
-        let r_1 = r_1_bar.concat_diag(&[one.clone()]);
+        let r_0 = r_0_bar.concat_diag(&[&one]);
+        let r_1 = r_1_bar.concat_diag(&[&one]);
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
-        let packed_input_size = log_q + obf_params.input_size.div_ceil(dim) + 1;
+        let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
+        info!("a_rlwe_bar computed");
         // let reveal_plaintexts_fhe_key = vec![true; 2];
         #[cfg(test)]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
@@ -57,6 +65,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
+                info!("try pubkey 1 computed");
                 bgg_pubkey_sampler.sample(
                     params,
                     &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
@@ -74,17 +83,12 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         //     })
         //     .collect_vec();
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
+        info!("pubkeys computed");
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
-        let mut rgs_decomposed = vec![];
-        for bit in 0..2 {
-            let r = if bit == 0 { r_0.clone() } else { r_1.clone() };
-            let rg = r * &gadget_2;
-            let rg_decomposed = rg.decompose();
-            // let t_fhe_key = identity_2.clone().tensor(&rg_decomposed);
-            rgs_decomposed.push(rg_decomposed);
-        }
-        let rgs_decomposed = rgs_decomposed.try_into().unwrap();
+        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
+            [(&r_0 * &gadget_2).decompose(), (&r_1 * &gadget_2).decompose()];
+
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -92,7 +96,9 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             packed_output_size,
             DistType::FinRingDist,
         );
+        info!("a_prf_raw computed");
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
+        info!("modulus_switch");
         Self {
             r_0,
             r_1,
@@ -110,30 +116,39 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
     params: &P::Params,
     a_decomposed_polys: &[P],
+    b_decomposed_polys: &[P],
     public_circuit: PolyCircuit<P>,
 ) -> PolyCircuit<P> {
     let log_q = params.modulus_bits();
     debug_assert_eq!(a_decomposed_polys.len(), log_q);
-    let packed_public_input_size = public_circuit.num_input();
+    debug_assert_eq!(b_decomposed_polys.len(), log_q);
+    let packed_eval_input_size = public_circuit.num_input() - log_q;
 
+    /// circuit outputs the ciper text
     let mut ct_output_circuit = PolyCircuit::<P>::new();
     {
+        let inputs = ct_output_circuit.input(packed_eval_input_size);
         let circuit_id = ct_output_circuit.register_sub_circuit(public_circuit);
-        let inputs = ct_output_circuit.input(packed_public_input_size);
-        let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &inputs);
-        let mut outputs = vec![];
-        for (idx, b_bit) in pc_outputs.iter().enumerate() {
+        let mut public_circuit_inputs = vec![];
+        for poly in b_decomposed_polys.iter() {
+            public_circuit_inputs.push(ct_output_circuit.const_scalar(poly.clone()));
+        }
+        public_circuit_inputs.extend(inputs);
+        let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &public_circuit_inputs);
+        let mut outputs = Vec::with_capacity(pc_outputs.len() * 2);
+        for (idx, b_bit) in pc_outputs.into_iter().enumerate() {
             outputs.push(ct_output_circuit.const_scalar(a_decomposed_polys[idx].clone()));
-            outputs.push(*b_bit);
+            outputs.push(b_bit);
             // let ct_bit = circuit.and_gate(*b_bit, inputs[packed_public_input_size]);
             // ct_bits.push(ct_bit);
         }
         ct_output_circuit.output(outputs);
     }
+
+    /// actual
     let mut circuit = PolyCircuit::<P>::new();
     {
-        let mut inputs = circuit.input(packed_public_input_size + 1);
-        debug_assert_eq!(inputs.len(), packed_public_input_size + 1);
+        let mut inputs = circuit.input(packed_eval_input_size + 1);
         let minus_one = circuit.const_minus_one_gate();
         inputs.push(minus_one);
         let sub_circuit = build_circuit_ip_to_int::<P, E>(params, ct_output_circuit, 2, log_q);
@@ -184,8 +199,8 @@ mod test {
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::<DCRTPoly>::new();
         {
-            let inputs = public_circuit.input(log_q);
-            public_circuit.output(inputs.to_vec());
+            let inputs = public_circuit.input(log_q + 1);
+            public_circuit.output(inputs[0..log_q].to_vec());
         }
 
         // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
@@ -216,14 +231,15 @@ mod test {
         let final_circuit = build_final_step_circuit::<DCRTPoly, DCRTPoly>(
             &params,
             &a_decomposed_polys,
+            &enc_hardcoded_key_polys,
             public_circuit,
         );
 
         // 8. Evaluate the circuit with the decomposed ciphertext
         let one = DCRTPoly::const_one(&params);
-        let mut inputs = enc_hardcoded_key_polys;
+        let mut inputs = vec![one.clone()];
         inputs.push(t_bar.entry(0, 0).clone());
-        let outputs = final_circuit.eval(&params, one, &inputs);
+        let outputs = final_circuit.eval(&(), one, &inputs);
 
         // 9. Extract the hardcoded key bits
         let hardcoded_key_bits = hardcoded_key
@@ -254,8 +270,8 @@ mod test {
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::<DCRTPoly>::new();
         {
-            let inputs = public_circuit.input(log_q);
-            public_circuit.output(inputs.to_vec());
+            let inputs = public_circuit.input(log_q + 1);
+            public_circuit.output(inputs[0..log_q].to_vec());
         }
 
         // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
@@ -291,12 +307,16 @@ mod test {
         let final_circuit_pubkey = build_final_step_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
             &params,
             &a_decomposed_polys,
+            &enc_hardcoded_key_polys,
             public_circuit.clone(),
         );
-        let final_circuit_encoding = build_final_step_circuit::<
-            DCRTPoly,
-            BggEncoding<DCRTPolyMatrix>,
-        >(&params, &a_decomposed_polys, public_circuit);
+        let final_circuit_encoding =
+            build_final_step_circuit::<DCRTPoly, BggEncoding<DCRTPolyMatrix>>(
+                &params,
+                &a_decomposed_polys,
+                &enc_hardcoded_key_polys,
+                public_circuit,
+            );
 
         // 9. Create BggEncoding instances for the inputs
         // First, create a secret key for the BGGEncodingSampler
@@ -307,11 +327,11 @@ mod test {
         let tag_bytes = tag.to_le_bytes();
 
         // Create public keys for the encodings
-        let reveal_plaintexts = vec![true; log_q + 1]; // +1 for t_bar
+        let reveal_plaintexts = vec![true; 1 + 1]; // +1 for t_bar
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create plaintexts from the decomposed ciphertext
-        let mut plaintexts = enc_hardcoded_key_polys.clone();
+        let mut plaintexts = vec![DCRTPoly::const_one(&params)];
         plaintexts.push(t_bar.entry(0, 0).clone());
 
         // Create encoding sampler and encodings
