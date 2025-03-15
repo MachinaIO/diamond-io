@@ -345,13 +345,8 @@ impl PolyMatrix for DCRTPolyMatrix {
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
-    /// Create a matrix from a `Vec<Bytes>` object
-    /// `offset` is subtracted from each coefficient before converting to a polynomial.
-    fn from_compact_bytes(
-        params: &<Self::P as Poly>::Params,
-        bytes: Vec<Bytes>,
-        offset: usize,
-    ) -> Self {
+    /// Create a matrix from a `Vec<Bytes>` object created by `to_compact_bytes`.
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self {
         let metadata = &bytes[0];
 
         let ring_dimension =
@@ -360,8 +355,6 @@ impl PolyMatrix for DCRTPolyMatrix {
             u32::from_le_bytes([metadata[4], metadata[5], metadata[6], metadata[7]]) as usize;
         let ncol =
             u32::from_le_bytes([metadata[8], metadata[9], metadata[10], metadata[11]]) as usize;
-        let byte_size =
-            u32::from_le_bytes([metadata[12], metadata[13], metadata[14], metadata[15]]) as usize;
 
         assert_eq!(
             ring_dimension,
@@ -371,21 +364,13 @@ impl PolyMatrix for DCRTPolyMatrix {
             params.ring_dimension()
         );
 
-        let modulus_bytes = params.modulus().to_bytes_le();
-        assert!(
-            byte_size <= modulus_bytes.len(),
-            "byte_size must not be greater than modulus_bytes: {} > {}",
-            byte_size,
-            modulus_bytes.len()
-        );
-
         let inner: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
             .map(|i| {
                 parallel_iter!(0..ncol)
                     .map(|j| {
                         let idx = 1 + i * ncol + j; // 1 + (row index * number of columns + column index)
                         let poly_bytes = &bytes[idx];
-                        DCRTPoly::from_compact_bytes(params, poly_bytes, offset)
+                        DCRTPoly::from_compact_bytes(params, poly_bytes)
                     })
                     .collect()
             })
@@ -395,19 +380,12 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     /// Converts the matrix to a `Vec<Bytes>` object.
-    /// `byte_size` is the number of bytes used to represent each coefficient.
-    /// `offset` is added to each coefficient before converting to bytes.
-    /// The first element of the vector contains metadata about the matrix.
-    fn to_compact_bytes(&self, byte_size: usize, offset: usize) -> Vec<Bytes> {
-        let modulus_bytes = self.params.modulus().to_bytes_le();
-
-        assert!(
-            byte_size <= modulus_bytes.len(),
-            "byte_size must not be greater than modulus_bytes: {} > {}",
-            byte_size,
-            modulus_bytes.len()
-        );
-
+    /// The first element of the vector contains metadata about the matrix:
+    /// - ring_dimension (4 bytes)
+    /// - nrow (4 bytes)
+    /// - ncol (4 bytes)
+    /// The remaining elements are the compact byte representations of each polynomial in the matrix.
+    fn to_compact_bytes(&self) -> Vec<Bytes> {
         let mut result = Vec::new();
 
         let ring_dimension: u32 = self.params.ring_dimension();
@@ -418,8 +396,6 @@ impl PolyMatrix for DCRTPolyMatrix {
         metadata.extend_from_slice(&(ring_dimension).to_le_bytes());
         metadata.extend_from_slice(&(nrow as u32).to_le_bytes());
         metadata.extend_from_slice(&(ncol as u32).to_le_bytes());
-        metadata.extend_from_slice(&(byte_size as u32).to_le_bytes());
-        metadata.extend_from_slice(&(offset as u32).to_le_bytes());
         result.push(Bytes::from(metadata));
 
         let element_bytes: Vec<Bytes> = parallel_iter!(0..self.nrow)
@@ -427,7 +403,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                 parallel_iter!(0..self.ncol)
                     .map(|j| {
                         let poly = &self.inner[i][j];
-                        poly.to_compact_bytes(byte_size, offset)
+                        poly.to_compact_bytes()
                     })
                     .collect::<Vec<Bytes>>()
             })
@@ -619,7 +595,7 @@ mod tests {
     use super::*;
     use crate::poly::{
         dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
-        sampler::PolyUniformSampler,
+        sampler::{DistType, PolyUniformSampler},
     };
 
     #[test]
@@ -830,58 +806,45 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "value_bytes exceeds the specified byte_size:")]
-    fn test_to_compact_bytes_failure_1() {
-        let params = DCRTPolyParams::default();
-        let sampler = DCRTPolyUniformSampler::new();
-
-        // Create matrix (2x12)
-        let mat =
-            sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
-
-        // Choose a byte size that is less than the bytes necessary to represent the coefficients
-        let byte_size = 1;
-        mat.to_compact_bytes(byte_size, 0);
-    }
-
-    #[test]
-    #[should_panic(expected = "byte_size must not be greater than modulus_bytes")]
-    fn test_to_compact_bytes_failure_2() {
-        let params = DCRTPolyParams::default();
-        let sampler = DCRTPolyUniformSampler::new();
-
-        // Create matrix (2x12)
-        let mat =
-            sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
-
-        // Choose a bit size that is greater than the modulus bit size
-        let byte_size = params.modulus().to_bytes_le().len() + 1;
-        mat.to_compact_bytes(byte_size, 0);
-    }
-
-    #[test]
     fn test_to_compact_bytes() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
+        let ring_dimension = params.ring_dimension();
 
         let nrow = 2;
         let ncol = 12;
-        let ring_dimension = params.ring_dimension();
 
         // Create matrix (2x12)
         let mat =
             sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
 
-        let byte_size = 1;
-        let bytes = mat.to_compact_bytes(byte_size, 0);
+        let bytes = mat.to_compact_bytes();
 
-        // the vector should contain 1 (metadata) + nrow * ncol elements
-        assert_eq!(bytes.len(), 1 + (nrow * ncol));
+        let mut byte_size_compact = 0;
 
-        // the total byte size should be 4 * 5 (metadata) + nrow * ncol * ring_dimension * byte_size
-        // (coefficients)
-        let total_byte_size: usize = bytes.iter().map(|b| b.len()).sum();
-        assert_eq!(total_byte_size, (4 * 5) + (nrow * ncol * ring_dimension as usize * byte_size));
+        // the first element of the vector containing the metadata should be 12 bytes
+        assert_eq!(bytes[0].len(), 12);
+
+        byte_size_compact += bytes[0].len();
+
+        for i in 1..bytes.len() {
+            // each element should be 1 byte for metadata + ring_dimension / 8 bytes for the bit vector + ring_dimension * byte_size (=1) for the coefficients
+            assert_eq!(
+                bytes[i].len(),
+                1 + (ring_dimension as usize / 8) + (ring_dimension as usize * 1)
+            );
+            byte_size_compact += bytes[i].len();
+        }
+
+        // calculate the byte necessary to store the original matrix
+        // for each polynomial we need log2(params.modulus) * params.ring_dimension / 8 bytes
+        let byte_size_original =
+            ((params.modulus_bits() * params.ring_dimension() as usize) / 8) * nrow * ncol;
+
+        println!(
+            "Byte size (original): {}, Byte size (compact): {}",
+            byte_size_original, byte_size_compact
+        );
     }
 
     #[test]
@@ -889,50 +852,38 @@ mod tests {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
-        let nrow = 2;
-        let ncol = 12;
+        // Test with BitDist (binary coefficients)
+        let original_mat = sampler.sample_uniform(&params, 2, 12, DistType::BitDist);
+        let bytes = original_mat.to_compact_bytes();
+        let reconstructed_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
 
-        let mat = sampler.sample_uniform(
-            &params,
-            nrow,
-            ncol,
-            crate::poly::sampler::DistType::FinRingDist,
+        // The original and reconstructed matrices should be equal
+        assert_eq!(
+            original_mat, reconstructed_mat,
+            "Reconstructed matrix does not match original (BitDist)"
         );
 
-        let byte_size = params.modulus().to_bytes_le().len();
+        // Test with FinRingDist (random coefficients in the ring)
+        let original_mat = sampler.sample_uniform(&params, 2, 12, DistType::FinRingDist);
+        let bytes = original_mat.to_compact_bytes();
+        let reconstructed_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
 
-        let bytes = mat.to_compact_bytes(byte_size, 0);
-        let new_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, 0);
-
-        assert_eq!(mat, new_mat);
-
-        let bin_mat =
-            sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
-
-        let byte_size = 1;
-
-        let bytes = bin_mat.to_compact_bytes(byte_size, 0);
-        let new_bin_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, 0);
-
-        assert_eq!(bin_mat, new_bin_mat);
-
-        let sigma = 4.57825;
-
-        let gauss_mat = sampler.sample_uniform(
-            &params,
-            nrow,
-            ncol,
-            crate::poly::sampler::DistType::GaussDist { sigma },
+        // The original and reconstructed matrices should be equal
+        assert_eq!(
+            original_mat, reconstructed_mat,
+            "Reconstructed matrix does not match original (FinRingDist)"
         );
 
-        let bound = 4.0 * sigma; // TODO: This is not a precise bound
+        // Test with GaussDist (Gaussian distribution)
+        let original_mat =
+            sampler.sample_uniform(&params, 2, 12, DistType::GaussDist { sigma: 3.0 });
+        let bytes = original_mat.to_compact_bytes();
+        let reconstructed_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
 
-        let bound_ceil = bound.ceil() as u32;
-
-        // byte_size is bytes necessary to represent bound*2 which is the max value that a coefficient can take
-        let byte_size = (2 * bound_ceil).to_le_bytes().len();
-        let bytes = gauss_mat.to_compact_bytes(byte_size, bound_ceil as usize);
-        let new_gauss_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes, bound_ceil as usize);
-        assert_eq!(gauss_mat, new_gauss_mat);
+        // The original and reconstructed matrices should be equal
+        assert_eq!(
+            original_mat, reconstructed_mat,
+            "Reconstructed matrix does not match original (GaussDist)"
+        );
     }
 }
