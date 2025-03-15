@@ -141,7 +141,7 @@ def find_params(
         log_q,
         d,
         (d + 1) * log_q,
-        (d + 1) * (log_q + 2),
+        2 * (d + 1) * (log_q + 2),
         input_size,
         1,
     )
@@ -256,7 +256,7 @@ def bound_final_error(
 
     # Calculate intermediate values with Decimal
     m_d = (d_d + Decimal(1)) * log_q_d
-    m_b_d = (d_d + Decimal(1)) * (log_q_d + Decimal(2))
+    m_b_d = Decimal(2) * (d_d + Decimal(1)) * (log_q_d + Decimal(2))
     sqrt_secpar_d = Decimal(sqrt_ceil(secpar))
 
     # Use Decimal for all calculations to maintain precision
@@ -312,9 +312,13 @@ def compute_obf_size(
     bound_b_log = math.ceil(math.log2(stddev_b * sqrt_secpar))
     m_n_preimages_size = 2 * input_size * bound_b_log * n * m_b * m_b
     print("m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9)
+    print(
+        "indiv m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9 / 2 / input_size
+    )
     size += m_n_preimages_size
     k_preimages_size = input_size * bound_b_log * n * m_b * (input_size * m)
     print("k_preimage_size GB", k_preimages_size / 8 / 10**9)
+    print("indiv k_preimage_size GB", k_preimages_size / 8 / 10**9 / input_size)
     size += k_preimages_size
     packed_output_size = math.ceil(output_size / n)
     final_preimage_size = bound_b_log * n * m_b * packed_output_size
@@ -546,10 +550,10 @@ def sqrt_ceil(x):
 if __name__ == "__main__":
     secpar = 80
     n = 2**13
-    d = 5
+    d = 3
     # alpha = 2 ** (-320)
-    input_size = 4
-    m_polys = [[1, 1000, 1000, 1000]]
+    input_size = 2
+    m_polys = [[0, 100, 200, 2000]]
     q, stddev_e, p, estimated_secpar, alpha, size = find_params(
         secpar, n, d, input_size, m_polys
     )
