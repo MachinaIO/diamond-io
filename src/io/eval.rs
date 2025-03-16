@@ -60,12 +60,6 @@ where
                 expected_encoding_init
             );
         }
-        // let encode_inputs =
-        //     self.encode_input.iter().map(|pubkey| pubkey.vector.clone()).collect_vec();
-        // cs_input.push(encode_inputs[0].concat_columns(&encode_inputs[1..]));
-        // let encode_fhe_key =
-        //     self.encode_fhe_key.iter().map(|pubkey| pubkey.vector.clone()).collect_vec();
-        // cs_fhe_key.push(encode_fhe_key[0].concat_columns(&encode_fhe_key[1..]));
         let log_q = params.as_ref().modulus_bits();
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
@@ -75,11 +69,6 @@ where
             let p = &q * n;
             let k = if *input { &self.k_preimages[idx].1 } else { &self.k_preimages[idx].0 };
             let v = &q * k;
-            // let v_input = v.slice_columns(0, 2 * log_q * (packed_input_size + 1));
-            // let v_fhe_key = v.slice_columns(
-            //     2 * log_q * (packed_input_size + 1),
-            //     2 * log_q * (packed_input_size + 3),
-            // );
             let new_encode_vec = {
                 let t = if *input {
                     &public_data.rgs_decomposed[1]
@@ -91,11 +80,8 @@ where
                 encode_vec.mul_tensor_identity(t, packed_input_size + 1) + v
             };
             let mut new_encodings = vec![];
-            // let zero_poly = <M::P as Poly>::const_zero(&params);
-            // let one_poly = <M::P as Poly>::const_one(&params);
             let inserted_poly_index = 1 + idx / dim;
             for (j, encode) in encodings[idx].iter().enumerate() {
-                // let encode = encodings[idx][j].clone();
                 let m = d1 * log_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
                 let plaintext = if j == inserted_poly_index {
@@ -115,14 +101,6 @@ where
                     BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
                 new_encodings.push(new_encode);
             }
-            // let c_input = {
-            //     let t = if *input { &public_data.t_1.0 } else { &public_data.t_0.0 };
-            //     cs_input[idx].clone() * t + v_input
-            // };
-            // let c_fhe_key = {
-            //     let t = if *input { &public_data.t_1.1 } else { &public_data.t_0.1 };
-            //     cs_fhe_key[idx].clone() * t + v_fhe_key
-            // };
             ps.push(p.clone());
             encodings.push(new_encodings);
             #[cfg(test)]
@@ -172,8 +150,6 @@ where
                 };
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
             }
-            // cs_input.push(c_input);
-            // cs_fhe_key.push(c_fhe_key);
         }
         let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
         let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
@@ -219,21 +195,6 @@ where
                             * output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
-
-            // let a_f = obfuscation.final_preimage_target.slice_rows(0, 2).clone();
-            // debug_assert_eq!(output_encodings[0].pubkey.matrix.clone() * unit_vector.decompose(),
-            // a_f); let expected_final_v = last_s.clone() * &a_f;
-            // debug_assert_eq!(final_v, expected_final_v);
-
-            // let expected_output_encodings_vec = last_s.clone() * &a_f
-            //     + M::from_poly_vec_row( &params,
-            //       vec![output_encodings[0].plaintext.as_ref().unwrap().clone()],
-            //     );
-            // debug_assert_eq!(output_encodings_vec, expected_output_encodings_vec);
-
-            // let scale = M::P::from_const(&params, &<M::P as
-            // Poly>::Elem::half_q(&params.modulus())); debug_assert_eq!(z,
-            // obfuscation.hardcoded_key * scale);
         }
         z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
     }

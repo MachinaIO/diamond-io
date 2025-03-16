@@ -79,15 +79,8 @@ where
         .collect();
     plaintexts.extend(zero_plaintexts);
     plaintexts.push(t_bar.clone());
-    // let mut input_encoded_polys: Vec<<M as PolyMatrix>::P> =
-    //     vec![<M::P as Poly>::const_one(params.as_ref())];
-    // input_encoded_polys.extend(enc_hardcoded_key_polys);
-    // input_encoded_polys.extend(zero_plaintexts);
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
     info!("encodings_init computed");
-    // let encode_fhe_key =
-    //     bgg_encode_sampler.sample(&params, &public_data.pubkeys_fhe_key[0], &t.get_row(0),
-    // false);
 
     let mut bs = vec![];
     let mut b_trapdoors = vec![];
