@@ -4,9 +4,9 @@ use tracing::info;
 use super::ObfuscationParams;
 use crate::{
     bgg::{
-        circuit::{build_circuit_ip_to_int, PolyCircuit},
+        circuit::{build_circuit_ip_to_int, Evaluable, PolyCircuit},
         sampler::*,
-        BggPublicKey, Evaluable,
+        BggPublicKey,
     },
     poly::{matrix::*, sampler::*, Poly, PolyParams},
 };

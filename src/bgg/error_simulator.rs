@@ -1,4 +1,4 @@
-use super::{circuit::PolyCircuit, Evaluable};
+use super::circuit::{Evaluable, PolyCircuit};
 use crate::poly::{Poly, PolyElem};
 use itertools::Itertools;
 use num_bigint::BigUint;

@@ -1,12 +1,15 @@
+pub mod eval;
 pub mod gate;
+pub mod serde;
 pub mod utils;
-use crate::{bgg::Evaluable, poly::Poly};
+use crate::poly::Poly;
+pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};
 use itertools::Itertools;
 use std::{collections::BTreeMap, fmt::Debug};
 pub use utils::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolyCircuit<P: Poly> {
     gates: BTreeMap<usize, PolyGate<P>>,
     sub_circuits: BTreeMap<usize, Self>,
@@ -631,10 +634,10 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = (poly1.clone() + poly2.clone()) -
-            (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                poly1 *
-                poly2);
+        let expected = (poly1.clone() + poly2.clone())
+            - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                * poly1
+                * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -650,11 +653,11 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_one(&params) -
-            ((poly1.clone() + poly2.clone()) -
-                (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                    poly1 *
-                    poly2));
+        let expected = DCRTPoly::const_one(&params)
+            - ((poly1.clone() + poly2.clone())
+                - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                    * poly1
+                    * poly2));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
