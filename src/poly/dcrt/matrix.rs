@@ -2,6 +2,7 @@ use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::{
     parallel_iter,
     poly::{Poly, PolyMatrix, PolyParams},
+    utils::log_mem,
 };
 use bytes::Bytes;
 use num_bigint::BigInt;
@@ -11,6 +12,7 @@ use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
+use tracing::info;
 
 #[derive(Clone)]
 pub struct DCRTPolyMatrix {
@@ -305,7 +307,13 @@ impl PolyMatrix for DCRTPolyMatrix {
             inner: parallel_iter!(0..self.nrow)
                 .flat_map(|i| {
                     let decompositions: Vec<_> = parallel_iter!(0..self.ncol)
-                        .map(|j| self.inner[i][j].decompose(&self.params))
+                        .map(|j| {
+                            log_mem();
+                            let decomposition = self.inner[i][j].decompose(&self.params);
+                            log_mem();
+                            info!("🔥");
+                            decomposition
+                        })
                         .collect();
                     let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
                     for col_decomp in decompositions {
@@ -384,7 +392,8 @@ impl PolyMatrix for DCRTPolyMatrix {
     /// - ring_dimension (4 bytes)
     /// - nrow (4 bytes)
     /// - ncol (4 bytes)
-    /// The remaining elements are the compact byte representations of each polynomial in the matrix.
+    /// The remaining elements are the compact byte representations of each polynomial in the
+    /// matrix.
     fn to_compact_bytes(&self) -> Vec<Bytes> {
         let mut result = Vec::new();
 
@@ -828,7 +837,8 @@ mod tests {
         byte_size_compact += bytes[0].len();
 
         for i in 1..bytes.len() {
-            // each element should be 1 byte for metadata + ring_dimension / 8 bytes for the bit vector + ring_dimension * byte_size (=1) for the coefficients
+            // each element should be 1 byte for metadata + ring_dimension / 8 bytes for the bit
+            // vector + ring_dimension * byte_size (=1) for the coefficients
             assert_eq!(
                 bytes[i].len(),
                 1 + (ring_dimension as usize / 8) + (ring_dimension as usize * 1)

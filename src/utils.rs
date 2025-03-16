@@ -3,8 +3,10 @@ use crate::poly::{
     sampler::DistType,
     Poly,
 };
+use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
+use tracing::info;
 
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
@@ -67,6 +69,15 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
         DCRTPoly::const_one(params)
     } else {
         DCRTPoly::const_zero(params)
+    }
+}
+
+pub fn log_mem() {
+    if let Some(usage) = memory_stats() {
+        info!("Current physical memory usage: {}", usage.physical_mem);
+        info!("Current virtual memory usage: {}", usage.virtual_mem);
+    } else {
+        info!("Couldn't get the current memory usage :(");
     }
 }
 
