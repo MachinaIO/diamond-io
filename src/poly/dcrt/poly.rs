@@ -56,8 +56,6 @@ impl DCRTPoly {
     }
 
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
-        info!("Current physical memory usage: {}", usage.physical_mem);
-        println!("Current virtual memory usage: {}", usage.virtual_mem);
         DCRTPoly::new(ffi::DCRTPolyGenFromVec(
             params.ring_dimension(),
             params.crt_depth(),
