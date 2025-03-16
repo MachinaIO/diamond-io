@@ -43,9 +43,10 @@ where
     ) -> Self {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
-        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
+        let d = obf_params.d;
+        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, d, d, DistType::BitDist);
         info!("r_0_bar computed");
-        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
+        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, d, d, DistType::BitDist);
         info!("r_1_bar computed");
         let one = S::M::identity(params, 1, None);
         let r_0 = r_0_bar.concat_diag(&[&one]);
@@ -84,15 +85,15 @@ where
         //     .collect_vec();
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         info!("pubkeys computed");
-        let gadget_2 = S::M::gadget_matrix(params, 2);
+        let gadget_d1 = S::M::gadget_matrix(params, d + 1);
         // let identity_2 = S::M::identity(params, 2, None);
         let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(&r_0 * &gadget_2).decompose(), (&r_1 * &gadget_2).decompose()];
+            [(&r_0 * &gadget_d1).decompose(), (&r_1 * &gadget_d1).decompose()];
 
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
-            2,
+            d + 1,
             packed_output_size,
             DistType::FinRingDist,
         );
@@ -281,7 +282,8 @@ mod test {
         // 4. Set up samplers for BggEncoding
         let hash_key = [0u8; 32];
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(hash_key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler.clone());
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler.clone(), d);
         let uniform_sampler = Arc::new(sampler_uniform);
 
         // 5. Get the public polynomial a from PublicSampledData's sample function
@@ -320,7 +322,7 @@ mod test {
 
         // 9. Create BggEncoding instances for the inputs
         // First, create a secret key for the BGGEncodingSampler
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -335,7 +337,7 @@ mod test {
         plaintexts.push(t_bar.entry(0, 0).clone());
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
 
         // 10. Evaluate the circuit with the BggPublicKey/BggEncoding inputs
@@ -381,7 +383,7 @@ mod test {
             );
             bgg_encoding_sampler.secret_vec
                 * (outputs_encodings[0].pubkey.matrix.clone()
-                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, d + 1)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }

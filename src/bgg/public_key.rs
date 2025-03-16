@@ -70,7 +70,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
     fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
-        let gadget = M::gadget_matrix(params, 2);
+        let gadget = M::gadget_matrix(params, self.matrix.row_size());
         let scalared = gadget * scalar;
         let decomposed = scalared.decompose();
         let matrix = self.matrix.clone() * decomposed;
@@ -98,7 +98,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -137,7 +138,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -176,7 +178,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -215,7 +218,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -256,7 +260,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -308,7 +313,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -378,7 +384,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -445,7 +452,8 @@ mod tests {
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();

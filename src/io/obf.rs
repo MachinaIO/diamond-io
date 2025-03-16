@@ -32,23 +32,25 @@ where
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
     debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
+    let d = obf_params.d;
+    let d1 = d + 1;
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
     let sampler_uniform = Arc::new(sampler_uniform);
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash));
+    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-    let s_bar =
-        sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist).entry(0, 0).clone();
+    let s_bars =
+        sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0).clone();
     info!("s_bar computed");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
-        &s_bar,
+        &s_bars,
         sampler_uniform.clone(),
-        obf_params.error_gauss_sigma,
+        obf_params.encoding_sigma,
     );
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
@@ -59,7 +61,7 @@ where
             &params,
             1,
             1,
-            DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
+            DistType::GaussDist { sigma: obf_params.hardcoded_key_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
         &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale)
@@ -90,14 +92,14 @@ where
     let mut bs = vec![];
     let mut b_trapdoors = vec![];
     for _ in 0..=obf_params.input_size {
-        let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params, 4);
-        let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params, 4);
-        let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 4);
+        let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params, 2 * d1);
+        let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params, 2 * d1);
+        let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 2 * d1);
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
         info!("bs computed");
     }
-    let m_b = 4 * (2 + log_q);
+    let m_b = (2 * d1) * (2 + log_q);
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &bs[0].2;
@@ -105,20 +107,20 @@ where
             &params,
             1,
             m_b,
-            DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
+            DistType::GaussDist { sigma: obf_params.p_sigma },
         );
         s_b + error
     };
     info!("p_init computed");
-    let identity_2 = M::identity(params.as_ref(), 2, None);
-    let u_0 = identity_2.concat_diag(&[&public_data.r_0]);
-    let u_1 = identity_2.concat_diag(&[&public_data.r_1]);
+    let identity_d1 = M::identity(params.as_ref(), d1, None);
+    let u_0 = identity_d1.concat_diag(&[&public_data.r_0]);
+    let u_1 = identity_d1.concat_diag(&[&public_data.r_1]);
     let u_star = {
-        let zeros = M::zero(params.as_ref(), 2, 4);
-        let identities = identity_2.concat_columns(&[&identity_2]);
+        let zeros = M::zero(params.as_ref(), d1, 2 * d1);
+        let identities = identity_d1.concat_columns(&[&identity_d1]);
         zeros.concat_rows(&[&identities])
     };
-    let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
+    let gadget_d1 = M::gadget_matrix(params.as_ref(), d1);
 
     let (mut m_preimages, mut n_preimages, mut k_preimages) = (vec![], vec![], vec![]);
     for idx in 0..obf_params.input_size {
@@ -165,11 +167,11 @@ where
                 for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
                     polys.push(zero.clone());
                 }
-                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
+                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
-                &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
+                - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
@@ -197,12 +199,12 @@ where
         let input = &public_data.pubkeys[obf_params.input_size][1..];
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
         let mut eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
-        let unit_vector = identity_2.slice_columns(1, 2);
+        let unit_vector = identity_d1.slice_columns(d, d1);
         eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
-            2,
+            d1,
             packed_output_size,
         )])
     };

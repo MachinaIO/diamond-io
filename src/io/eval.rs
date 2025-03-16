@@ -22,9 +22,11 @@ where
     {
         sampler_hash.set_key(self.hash_key);
         let params = Arc::new(obf_params.params.clone());
+        let d = obf_params.d;
+        let d1 = d + 1;
         let sampler = Arc::new(sampler_hash);
         debug_assert_eq!(inputs.len(), obf_params.input_size);
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone());
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
         let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
         let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
@@ -47,12 +49,12 @@ where
                     polys.push(zero.clone());
                 }
                 polys.push(self.t_bar.clone());
-                let gadget_2 = M::gadget_matrix(&params, 2);
-                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
+                let gadget_d1 = M::gadget_matrix(&params, d1);
+                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = &self.s_init *
-                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
-                    inserted_poly_gadget);
+            let expected_encoding_init = &self.s_init
+                * &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
+                    - inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -94,7 +96,7 @@ where
             let inserted_poly_index = 1 + idx / dim;
             for (j, encode) in encodings[idx].iter().enumerate() {
                 // let encode = encodings[idx][j].clone();
-                let m = 2 * log_q;
+                let m = d1 * log_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
                 let plaintext = if j == inserted_poly_index {
                     let inserted_coeff_index = idx % dim;
@@ -141,9 +143,7 @@ where
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
                     let one = <M::P as Poly>::const_one(&params);
-                    let gadget_2 = M::gadget_matrix(&params, 2);
-                    let enc_hardcoded_key_decomposed =
-                        self.enc_hardcoded_key.decompose().get_column(0);
+                    let gadget_d1 = M::gadget_matrix(&params, d1);
                     let inserted_poly_gadget = {
                         let mut polys = vec![];
                         polys.push(one.clone());
@@ -164,7 +164,7 @@ where
                             .collect_vec();
                         polys.extend(input_polys);
                         polys.push(self.t_bar.clone());
-                        M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
+                        M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
                     let pubkey = public_data.pubkeys[idx + 1][0]
                         .concat_matrix(&public_data.pubkeys[idx + 1][1..]);
@@ -188,8 +188,8 @@ where
             last_input_encodings[0].clone(),
             &last_input_encodings[1..],
         );
-        let identity_2 = M::identity(&params, 2, None);
-        let unit_vector = identity_2.slice_columns(1, 2);
+        let identity_d1 = M::identity(&params, d1, None);
+        let unit_vector = identity_d1.slice_columns(d, d1);
         let output_encodings_vec =
             output_encodings[0].concat_vector(&output_encodings[1..]) * unit_vector.decompose();
         let final_v = ps.last().unwrap() * &self.final_preimage;
@@ -213,10 +213,10 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s *
-                    (output_encodings[0].pubkey.matrix.clone() -
-                        M::gadget_matrix(&params, 2) *
-                            output_encodings[0].plaintext.clone().unwrap());
+                let expcted = last_s
+                    * (output_encodings[0].pubkey.matrix.clone()
+                        - M::gadget_matrix(&params, d1)
+                            * output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
 

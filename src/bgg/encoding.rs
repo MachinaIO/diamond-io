@@ -97,7 +97,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
 impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
     fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
-        let gadget = M::gadget_matrix(params, 2);
+        let gadget = M::gadget_matrix(params, self.pubkey.matrix.row_size());
         let scalared = gadget * scalar;
         let decomposed = scalared.decompose();
         let vector = self.vector.clone() * decomposed;
@@ -133,7 +133,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -145,11 +146,11 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
@@ -182,7 +183,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -194,11 +196,11 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
@@ -231,7 +233,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -243,11 +246,11 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
@@ -280,7 +283,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -292,11 +296,11 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params)];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc = encodings[1].clone();
@@ -331,7 +335,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -343,7 +348,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![
             create_random_poly(&params),
             create_random_poly(&params),
@@ -351,7 +356,7 @@ mod tests {
         ];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
@@ -398,7 +403,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -410,7 +416,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![
             create_random_poly(&params),
             create_random_poly(&params),
@@ -419,7 +425,7 @@ mod tests {
         ];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
@@ -582,7 +588,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -594,11 +601,11 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
@@ -659,7 +666,8 @@ mod tests {
         // Create samplers
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -671,7 +679,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![
             create_random_poly(&params),
             create_random_poly(&params),
@@ -679,7 +687,7 @@ mod tests {
         ];
 
         // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler, 0.0);
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();

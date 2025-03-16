@@ -19,6 +19,8 @@ use openfhe::{
     },
 };
 
+const SIGMA: f64 = 4.578;
+
 pub struct RLWETrapdoor {
     ptr_trapdoor: Arc<UniquePtr<RLWETrapdoorPair>>,
 }
@@ -58,14 +60,11 @@ unsafe impl Sync for DCRTTrapdoor {}
 unsafe impl Send for RLWETrapdoor {}
 unsafe impl Sync for RLWETrapdoor {}
 
-pub struct DCRTPolyTrapdoorSampler {
-    base: usize,
-    sigma: f64,
-}
+pub struct DCRTPolyTrapdoorSampler {}
 
 impl DCRTPolyTrapdoorSampler {
-    pub fn new(base: usize, sigma: f64) -> Self {
-        Self { base, sigma }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -83,8 +82,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             params.crt_depth(),
             params.crt_bits(),
             size,
-            self.sigma,
-            self.base as i64,
+            SIGMA,
+            2 as i64,
             false,
         );
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
@@ -187,8 +186,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             &public_matrix_ptr,
             &trapdoor.ptr_trapdoor,
             &target_matrix_ptr,
-            self.base as i64,
-            self.sigma,
+            2 as i64,
+            SIGMA,
         );
 
         let nrow = size * (k + 2);
@@ -229,7 +228,7 @@ mod tests {
         let base = 2;
         let sigma = 4.57825;
         let size: usize = 3;
-        let sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let sampler = DCRTPolyTrapdoorSampler::new();
         let params = DCRTPolyParams::default();
 
         let (_, public_matrix) = sampler.trapdoor(&params, size);
@@ -264,7 +263,7 @@ mod tests {
         let sigma = 4.57825;
         let size = 3;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -300,7 +299,7 @@ mod tests {
         let size = 4;
         let target_cols = 2;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols < size
@@ -342,7 +341,7 @@ mod tests {
         let multiple = 2;
         let target_cols = size * multiple;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size and
@@ -384,7 +383,7 @@ mod tests {
         let size = 4;
         let target_cols = 6;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size but

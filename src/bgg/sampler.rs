@@ -18,6 +18,7 @@ use tracing::info;
 #[derive(Clone)]
 pub struct BGGPublicKeySampler<K: AsRef<[u8]>, S: PolyHashSampler<K>> {
     pub sampler: Arc<S>,
+    pub d: usize,
     _k: PhantomData<K>,
 }
 
@@ -29,10 +30,11 @@ where
     /// Create a new public key sampler
     /// # Arguments
     /// * `sampler`: The sampler to generate the public key matrix
+    /// * `d`: The number of secret polynomials used with the sampled public key matrices.
     /// # Returns
     /// A new public key sampler
-    pub fn new(sampler: Arc<S>) -> Self {
-        Self { sampler, _k: PhantomData }
+    pub fn new(sampler: Arc<S>, d: usize) -> Self {
+        Self { sampler, d, _k: PhantomData }
     }
 
     /// Sample a public key matrix
@@ -49,13 +51,14 @@ where
         reveal_plaintexts: &[bool],
     ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
         let log_q = params.modulus_bits();
-        let columns = 2 * log_q;
+        let secret_vec_size = self.d + 1;
+        let columns = secret_vec_size * log_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         info!("before all_matrix");
         let all_matrix = self.sampler.sample_hash(
             params,
             tag,
-            2,
+            secret_vec_size,
             columns * packed_input_size,
             DistType::FinRingDist,
         );
@@ -94,20 +97,22 @@ where
 {
     /// Create a new encoding sampler
     /// # Arguments
-    /// * `secret`: The secret polynomial
+    /// * `secrets`: The secret polynomials
     /// * `error_sampler`: The sampler to generate RLWE errors
     /// * `gauss_sigma`: The standard deviation of the Gaussian distribution
     /// # Returns
     /// A new encoding sampler
     pub fn new(
         params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
-        secret: &<S::M as PolyMatrix>::P,
+        secrets: &[<S::M as PolyMatrix>::P],
         error_sampler: Arc<S>,
         gauss_sigma: f64,
     ) -> Self {
         let minus_one_poly = <S::M as PolyMatrix>::P::const_minus_one(params);
-        // 1*2 row vector
-        let secret_vec = S::M::from_poly_vec_row(params, vec![secret.clone(), minus_one_poly]);
+        // 1*(d+1) row vector
+        let mut secrets = secrets.to_vec();
+        secrets.push(minus_one_poly);
+        let secret_vec = S::M::from_poly_vec_row(params, secrets);
         Self { secret_vec, error_sampler, gauss_sigma }
     }
 
@@ -123,7 +128,8 @@ where
         let plaintexts: Vec<<S::M as PolyMatrix>::P> =
             [&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
                 .concat();
-        let columns = 2 * log_q * packed_input_size;
+        let secret_vec_size = self.secret_vec.col_size();
+        let columns = secret_vec_size * log_q * packed_input_size;
         let error: S::M = self.error_sampler.sample_uniform(
             params,
             1,
@@ -136,16 +142,17 @@ where
             .concat_columns(&public_keys[1..].iter().map(|pk| &pk.matrix).collect_vec());
         let first_term = secret_vec.clone() * all_public_key_matrix;
 
-        let gadget = S::M::gadget_matrix(params, 2);
+        let gadget = S::M::gadget_matrix(params, secret_vec_size);
         let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
         let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
 
         let all_vector = first_term - second_term + error;
 
+        let m = secret_vec_size * log_q;
         parallel_iter!(plaintexts)
             .enumerate()
             .map(|(idx, plaintext)| {
-                let vector = all_vector.slice_columns(2 * log_q * idx, 2 * log_q * (idx + 1));
+                let vector = all_vector.slice_columns(m * idx, m * (idx + 1));
                 BggEncoding {
                     vector,
                     pubkey: public_keys[idx].clone(),
@@ -181,7 +188,8 @@ mod tests {
         let params = DCRTPolyParams::default();
         let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
         let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into());
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         assert_eq!(sampled_pub_keys.len(), packed_input_size + 1);
@@ -195,16 +203,17 @@ mod tests {
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
         let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into());
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let log_q = params.modulus_bits();
-        let columns = 2 * log_q;
+        let columns = (d + 1) * log_q;
 
         for pair in sampled_pub_keys[1..].chunks(2) {
             if let [a, b] = pair {
                 let addition = a.clone() + b.clone();
-                assert_eq!(addition.matrix.row_size(), 2);
+                assert_eq!(addition.matrix.row_size(), d + 1);
                 assert_eq!(addition.matrix.col_size(), columns);
                 assert_eq!(addition.matrix, a.matrix.clone() + b.matrix.clone());
             }
@@ -219,16 +228,17 @@ mod tests {
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
         let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into());
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let log_q = params.modulus_bits();
-        let columns = 2 * log_q;
+        let columns = (d + 1) * log_q;
 
         for pair in sampled_pub_keys[1..].chunks(2) {
             if let [a, b] = pair {
                 let multiplication = a.clone() * b.clone();
-                assert_eq!(multiplication.matrix.row_size(), 2);
+                assert_eq!(multiplication.matrix.row_size(), d + 1);
                 assert_eq!(multiplication.matrix.col_size(), columns);
                 assert_eq!(multiplication.matrix, (a.matrix.clone() * b.matrix.decompose().clone()))
             }
@@ -243,28 +253,29 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
+        let d = 3;
         let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into());
+            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
-        let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+        let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
         assert_eq!(bgg_encodings.len(), packed_input_size + 1);
         assert_eq!(
             bgg_encodings[0].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone() -
-                bgg_sampler.secret_vec.clone() *
-                    (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone()
+                - bgg_sampler.secret_vec.clone()
+                    * (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
         );
         assert_eq!(
             bgg_encodings[1].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone() -
-                bgg_sampler.secret_vec.clone() *
-                    (g * bgg_encodings[1].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone()
+                - bgg_sampler.secret_vec.clone()
+                    * (g * bgg_encodings[1].plaintext.clone().unwrap())
         )
     }
 
@@ -275,15 +286,16 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
+        let d = 3;
         let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into());
+            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params); packed_input_size];
         // TODO: set the standard deviation to a non-zero value
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 
         for pair in bgg_encodings[1..].chunks(2) {
@@ -294,12 +306,12 @@ mod tests {
                     addition.clone().plaintext.unwrap(),
                     a.plaintext.clone().unwrap() + b.plaintext.clone().unwrap()
                 );
-                let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+                let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
                 assert_eq!(addition.vector, a.clone().vector + b.clone().vector);
                 assert_eq!(
                     addition.vector,
-                    bgg_sampler.secret_vec.clone() *
-                        (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
+                    bgg_sampler.secret_vec.clone()
+                        * (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
                 )
             }
         }
@@ -312,15 +324,16 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
+        let d = 3;
         let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into());
+            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params); packed_input_size];
         // TODO: set the standard deviation to a non-zero value
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 
         for pair in bgg_encodings[1..].chunks(2) {
@@ -331,11 +344,11 @@ mod tests {
                     multiplication.clone().plaintext.unwrap(),
                     a.clone().plaintext.unwrap() * b.clone().plaintext.unwrap()
                 );
-                let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+                let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
                 assert_eq!(
                     multiplication.vector,
-                    (bgg_sampler.secret_vec.clone() *
-                        (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
+                    (bgg_sampler.secret_vec.clone()
+                        * (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
                 )
             }
         }
@@ -348,15 +361,16 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = 1;
+        let d = 3;
         let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into());
+            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let secret = create_bit_random_poly(&params);
+        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params); packed_input_size];
         // TODO: set the standard deviation to a non-zero value
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 
         // Create a scalar (polynomial) for scalar multiplication
@@ -377,7 +391,7 @@ mod tests {
             );
 
             // Verify the vector is correctly transformed
-            let g = DCRTPolyMatrix::gadget_matrix(&params, 2);
+            let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
             let gadget_scalar = g.clone() * &scalar;
             let decomposed_gadget_scalar = gadget_scalar.decompose();
 
@@ -387,9 +401,9 @@ mod tests {
             // Alternative verification: check that the vector satisfies the BGG encoding relation
             assert_eq!(
                 scalar_mul.vector,
-                bgg_sampler.secret_vec.clone() *
-                    (scalar_mul.pubkey.matrix.clone() -
-                        (g * scalar_mul.plaintext.as_ref().unwrap().clone()))
+                bgg_sampler.secret_vec.clone()
+                    * (scalar_mul.pubkey.matrix.clone()
+                        - (g * scalar_mul.plaintext.as_ref().unwrap().clone()))
             );
         }
     }
