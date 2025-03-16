@@ -46,7 +46,7 @@ impl PolyParams for DCRTPolyParams {
 #[cfg(test)]
 impl Default for DCRTPolyParams {
     fn default() -> Self {
-        Self::new(4, 2, 17)
+        Self::new(8, 2, 17)
     }
 }
 

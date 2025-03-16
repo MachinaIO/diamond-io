@@ -1,9 +1,7 @@
+use super::{BggEncoding, BggPublicKey};
+use crate::poly::{Poly, PolyMatrix};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-
-use crate::poly::{Poly, PolyMatrix};
-
-use super::{BggEncoding, BggPublicKey};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SerializableBggPublicKey {
@@ -12,9 +10,9 @@ pub struct SerializableBggPublicKey {
 }
 
 impl<M: PolyMatrix> BggPublicKey<M> {
-    pub fn to_compact_bytes(&self, byte_size: usize) -> SerializableBggPublicKey {
+    pub fn to_compact_bytes(&self) -> SerializableBggPublicKey {
         SerializableBggPublicKey {
-            matrix: self.matrix.to_compact_bytes(byte_size),
+            matrix: self.matrix.to_compact_bytes(),
             reveal_plaintext: self.reveal_plaintext,
         }
     }
@@ -24,7 +22,6 @@ impl SerializableBggPublicKey {
     pub fn from_compact_bytes<M: PolyMatrix>(
         self,
         params: &<M::P as Poly>::Params,
-        byte_size: usize,
     ) -> BggPublicKey<M> {
         BggPublicKey {
             matrix: M::from_compact_bytes(params, self.matrix),
@@ -42,10 +39,10 @@ pub struct SerializableBggEncoding {
 }
 
 impl<M: PolyMatrix> BggEncoding<M> {
-    pub fn to_compact_bytes(&self, byte_size: usize) -> SerializableBggEncoding {
+    pub fn to_compact_bytes(&self) -> SerializableBggEncoding {
         SerializableBggEncoding {
-            vector: self.vector.to_compact_bytes(byte_size),
-            pubkey: self.pubkey.to_compact_bytes(byte_size),
+            vector: self.vector.to_compact_bytes(),
+            pubkey: self.pubkey.to_compact_bytes(),
             // todo: we don't know yet how to turn poly into bytes
             plaintext: None,
         }
@@ -56,11 +53,10 @@ impl SerializableBggEncoding {
     pub fn from_compact_bytes<M: PolyMatrix>(
         self,
         params: &<M::P as Poly>::Params,
-        byte_size: usize,
     ) -> BggEncoding<M> {
         BggEncoding {
             vector: M::from_compact_bytes(params, self.vector),
-            pubkey: self.pubkey.from_compact_bytes(params, byte_size),
+            pubkey: self.pubkey.from_compact_bytes(params),
             // todo: we don't know yet how to turn poly into bytes
             plaintext: None,
         }
