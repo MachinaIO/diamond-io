@@ -2,11 +2,13 @@ use bytes::Bytes;
 use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use tracing::info;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
     parallel_iter,
     poly::{Poly, PolyElem, PolyParams},
+    utils::log_mem,
 };
 use num_bigint::{BigInt, BigUint};
 use openfhe::{
@@ -54,6 +56,8 @@ impl DCRTPoly {
     }
 
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
+        info!("Current physical memory usage: {}", usage.physical_mem);
+        println!("Current virtual memory usage: {}", usage.virtual_mem);
         DCRTPoly::new(ffi::DCRTPolyGenFromVec(
             params.ring_dimension(),
             params.crt_depth(),

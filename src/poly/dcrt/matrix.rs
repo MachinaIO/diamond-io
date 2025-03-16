@@ -2,6 +2,7 @@ use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::{
     parallel_iter,
     poly::{Poly, PolyMatrix, PolyParams},
+    utils::log_mem,
 };
 use bytes::Bytes;
 use num_bigint::BigInt;
@@ -375,13 +376,19 @@ impl PolyMatrix for DCRTPolyMatrix {
         let mut decomposed_entries = HashMap::new();
         let decomposed_nrow = self.nrow * bit_length;
 
-        info!("decompose decomposed_nrow{}", decomposed_nrow);
+        info!(
+            "decompose decomposed_nrow {}, self.nrow {}, self.col {}, bit_length{}",
+            decomposed_nrow, self.nrow, self.ncol, bit_length
+        );
 
         for i in 0..self.nrow {
+            info!("idx row: {}", i);
             for j in 0..self.ncol {
                 let entry = self.entries.get(&(i, j)).unwrap_or(&self.zero_elem);
+                log_mem();
                 let decomposition = entry.decompose(&self.params);
-
+                log_mem();
+                info!("🔥");
                 for bit in 0..bit_length {
                     decomposed_entries
                         .insert((i * bit_length + bit, j), decomposition[bit].clone());
