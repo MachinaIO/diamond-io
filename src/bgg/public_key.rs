@@ -2,7 +2,7 @@ use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
 
-use super::Evaluable;
+use super::circuit::Evaluable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {

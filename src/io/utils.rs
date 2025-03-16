@@ -1,16 +1,18 @@
-use itertools::Itertools;
-use tracing::info;
-
 use super::ObfuscationParams;
 use crate::{
     bgg::{
-        circuit::{build_circuit_ip_to_int, PolyCircuit},
+        circuit::{build_circuit_ip_to_int, Evaluable, PolyCircuit},
         sampler::*,
-        BggPublicKey, Evaluable,
+        BggPublicKey,
     },
+    parallel_iter,
     poly::{matrix::*, sampler::*, Poly, PolyParams},
 };
+use itertools::Itertools;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 use std::{marker::PhantomData, ops::Mul};
+use tracing::info;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -44,13 +46,7 @@ where
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let d = obf_params.d;
-        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, d, d, DistType::BitDist);
-        info!("r_0_bar computed");
-        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, d, d, DistType::BitDist);
-        info!("r_1_bar computed");
-        let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[&one]);
-        let r_1 = r_1_bar.concat_diag(&[&one]);
+
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
@@ -58,7 +54,6 @@ where
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
-        info!("a_rlwe_bar computed");
         // let reveal_plaintexts_fhe_key = vec![true; 2];
         #[cfg(test)]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
@@ -86,10 +81,26 @@ where
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
         info!("pubkeys computed");
         let gadget_d1 = S::M::gadget_matrix(params, d + 1);
-        // let identity_2 = S::M::identity(params, 2, None);
-        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(&r_0 * &gadget_d1).decompose(), (&r_1 * &gadget_d1).decompose()];
-
+        info!("gadget_d1 computed");
+        let one = S::M::identity(params, 1, None);
+        let r_0 =
+            hash_sampler.sample_hash(params, TAG_R_0, d, d, DistType::BitDist).concat_diag(&[&one]);
+        let r_1 =
+            hash_sampler.sample_hash(params, TAG_R_1, d, d, DistType::BitDist).concat_diag(&[&one]);
+        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] = {
+            parallel_iter!(0..2)
+                .map(|i| {
+                    if i == 0 {
+                        (&r_0 * &gadget_d1).decompose()
+                    } else {
+                        (&r_1 * &gadget_d1).decompose()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        };
+        info!("rgs_decomposed computed");
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -140,8 +151,6 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         for (idx, b_bit) in pc_outputs.into_iter().enumerate() {
             outputs.push(ct_output_circuit.const_scalar(a_decomposed_polys[idx].clone()));
             outputs.push(b_bit);
-            // let ct_bit = circuit.and_gate(*b_bit, inputs[packed_public_input_size]);
-            // ct_bits.push(ct_bit);
         }
         ct_output_circuit.output(outputs);
     }
@@ -154,15 +163,6 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         inputs.push(minus_one);
         let sub_circuit = build_circuit_ip_to_int::<P, E>(params, ct_output_circuit, 2, log_q);
         let circuit_id = circuit.register_sub_circuit(sub_circuit);
-        // debug_assert_eq!(public_outputs.len(), log_q);
-        // let mut ct_bits = vec![];
-        // for (idx, b_bit) in public_outputs.iter().enumerate() {
-        //     ct_bits.push(circuit.const_scalar(a_decomposed_polys[idx].clone()));
-        //     ct_bits.push(*b_bit);
-        //     // let ct_bit = circuit.and_gate(*b_bit, inputs[packed_public_input_size]);
-        //     // ct_bits.push(ct_bit);
-        // }
-        // inputs.extend(ct_bits);
         let outputs = circuit.call_sub_circuit(circuit_id, &inputs);
         circuit.output(outputs);
     }

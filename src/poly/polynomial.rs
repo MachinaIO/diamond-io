@@ -46,5 +46,5 @@ pub trait Poly:
         bits
     }
     fn decompose(&self, params: &Self::Params) -> Vec<Self>;
-    fn to_compact_bytes(&self, byte_size: usize) -> Bytes;
+    fn to_compact_bytes(&self) -> Bytes;
 }

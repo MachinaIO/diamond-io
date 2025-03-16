@@ -1,4 +1,4 @@
-use super::{BggPublicKey, Evaluable};
+use super::{circuit::Evaluable, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};

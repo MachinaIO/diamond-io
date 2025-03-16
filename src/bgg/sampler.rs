@@ -171,7 +171,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        bgg::eval::Evaluable,
+        bgg::circuit::Evaluable,
         poly::dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
         },

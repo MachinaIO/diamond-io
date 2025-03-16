@@ -1,4 +1,4 @@
-use crate::{bgg::Evaluable, poly::Poly};
+use crate::{bgg::circuit::Evaluable, poly::Poly};
 
 use super::PolyCircuit;
 
