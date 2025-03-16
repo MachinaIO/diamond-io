@@ -124,7 +124,7 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
     debug_assert_eq!(b_decomposed_polys.len(), log_q);
     let packed_eval_input_size = public_circuit.num_input() - log_q;
 
-    /// circuit outputs the ciper text
+    // circuit outputs the cipertext
     let mut ct_output_circuit = PolyCircuit::<P>::new();
     {
         let inputs = ct_output_circuit.input(packed_eval_input_size);
@@ -145,7 +145,7 @@ pub fn build_final_step_circuit<P: Poly, E: Evaluable<P>>(
         ct_output_circuit.output(outputs);
     }
 
-    /// actual
+    // actual
     let mut circuit = PolyCircuit::<P>::new();
     {
         let mut inputs = circuit.input(packed_eval_input_size + 1);
@@ -379,9 +379,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec *
-                (outputs_encodings[0].pubkey.matrix.clone() -
-                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+            bgg_encoding_sampler.secret_vec
+                * (outputs_encodings[0].pubkey.matrix.clone()
+                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }
