@@ -52,9 +52,9 @@ where
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = &self.s_init
-                * &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
-                    - inserted_poly_gadget);
+            let expected_encoding_init = &self.s_init *
+                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
+                    inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -189,10 +189,10 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s
-                    * (output_encodings[0].pubkey.matrix.clone()
-                        - M::gadget_matrix(&params, d1)
-                            * output_encodings[0].plaintext.clone().unwrap());
+                let expcted = last_s *
+                    (output_encodings[0].pubkey.matrix.clone() -
+                        M::gadget_matrix(&params, d1) *
+                            output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
         }

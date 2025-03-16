@@ -267,15 +267,15 @@ mod tests {
         assert_eq!(bgg_encodings.len(), packed_input_size + 1);
         assert_eq!(
             bgg_encodings[0].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone()
-                - bgg_sampler.secret_vec.clone()
-                    * (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone() -
+                bgg_sampler.secret_vec.clone() *
+                    (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
         );
         assert_eq!(
             bgg_encodings[1].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone()
-                - bgg_sampler.secret_vec.clone()
-                    * (g * bgg_encodings[1].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone() -
+                bgg_sampler.secret_vec.clone() *
+                    (g * bgg_encodings[1].plaintext.clone().unwrap())
         )
     }
 
@@ -310,8 +310,8 @@ mod tests {
                 assert_eq!(addition.vector, a.clone().vector + b.clone().vector);
                 assert_eq!(
                     addition.vector,
-                    bgg_sampler.secret_vec.clone()
-                        * (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
+                    bgg_sampler.secret_vec.clone() *
+                        (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
                 )
             }
         }
@@ -347,8 +347,8 @@ mod tests {
                 let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
                 assert_eq!(
                     multiplication.vector,
-                    (bgg_sampler.secret_vec.clone()
-                        * (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
+                    (bgg_sampler.secret_vec.clone() *
+                        (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
                 )
             }
         }
@@ -401,9 +401,9 @@ mod tests {
             // Alternative verification: check that the vector satisfies the BGG encoding relation
             assert_eq!(
                 scalar_mul.vector,
-                bgg_sampler.secret_vec.clone()
-                    * (scalar_mul.pubkey.matrix.clone()
-                        - (g * scalar_mul.plaintext.as_ref().unwrap().clone()))
+                bgg_sampler.secret_vec.clone() *
+                    (scalar_mul.pubkey.matrix.clone() -
+                        (g * scalar_mul.plaintext.as_ref().unwrap().clone()))
             );
         }
     }

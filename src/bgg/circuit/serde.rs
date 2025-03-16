@@ -20,9 +20,9 @@ impl SerializablePolyGateType {
         match self {
             SerializablePolyGateType::Input => 0,
             SerializablePolyGateType::ScalarMul(_) => 1,
-            SerializablePolyGateType::Add
-            | SerializablePolyGateType::Sub
-            | SerializablePolyGateType::Mul => 2,
+            SerializablePolyGateType::Add |
+            SerializablePolyGateType::Sub |
+            SerializablePolyGateType::Mul => 2,
             SerializablePolyGateType::Call { num_input, .. } => *num_input,
         }
     }
@@ -181,7 +181,8 @@ mod tests {
         let scalar = create_random_poly(&params);
         let scalar_mul_gate = original_circuit.scalar_mul_gate(add_gate, scalar.clone());
 
-        // Create a more complex expression: (inputs[0] + inputs[1]) * scalar - (inputs[0] - inputs[2])
+        // Create a more complex expression: (inputs[0] + inputs[1]) * scalar - (inputs[0] -
+        // inputs[2])
         let final_gate = original_circuit.sub_gate(scalar_mul_gate, sub_gate);
 
         // Create a sub-circuit
@@ -235,7 +236,8 @@ mod tests {
         let scalar = create_random_poly(&params);
         let scalar_mul_gate = original_circuit.scalar_mul_gate(add_gate, scalar.clone());
 
-        // Create a more complex expression: (inputs[0] + inputs[1]) * scalar - (inputs[0] - inputs[2])
+        // Create a more complex expression: (inputs[0] + inputs[1]) * scalar - (inputs[0] -
+        // inputs[2])
         let final_gate = original_circuit.sub_gate(scalar_mul_gate, sub_gate);
 
         // Create a sub-circuit

@@ -381,9 +381,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec
-                * (outputs_encodings[0].pubkey.matrix.clone()
-                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, d + 1)))
+            bgg_encoding_sampler.secret_vec *
+                (outputs_encodings[0].pubkey.matrix.clone() -
+                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, d + 1)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }
