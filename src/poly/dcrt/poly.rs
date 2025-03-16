@@ -2,16 +2,18 @@ use bytes::Bytes;
 use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use tracing::info;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
     parallel_iter,
     poly::{Poly, PolyElem, PolyParams},
+    utils::log_mem,
 };
 use num_bigint::BigUint;
 use openfhe::{
     cxx::UniquePtr,
-    ffi::{self, DCRTPoly as DCRTPolyCxx},
+    ffi::{self, DCRTPoly as DCRTPolyCxx, GetMatrixElement},
 };
 
 use std::{
@@ -184,24 +186,20 @@ impl Poly for DCRTPoly {
     /// Return a vector of polynomials, where the h-th polynomial is defined as
     /// b_{0, h} + b_{1, h} * x + b_{2, h} * x^2 + ... + b_{n-1, h} * x^{n-1}.
     fn decompose(&self, params: &Self::Params) -> Vec<Self> {
-        let coeffs = self.coeffs();
-        let bit_length = params.modulus_bits();
-        parallel_iter!(0..bit_length)
-            .map(|h| {
-                DCRTPoly::from_coeffs(
-                    params,
-                    &coeffs
-                        .iter()
-                        .map(|j| {
-                            FinRingElem::new(
-                                (j.value() >> h) & BigUint::from(1u32),
-                                params.modulus(),
-                            )
-                        })
-                        .collect_vec(),
-                )
-            })
-            .collect()
+        let decomposed = self.ptr_poly.Decompose();
+        info!("after decompose");
+        log_mem();
+
+        let mut vec = Vec::with_capacity(params.modulus_bits());
+        for i in 0..params.modulus_bits() {
+            let poly = GetMatrixElement(&decomposed, 0, i);
+            vec.push(DCRTPoly::new(poly));
+        }
+
+        info!("after conversion");
+        log_mem();
+
+        vec
     }
 
     /// Convert the polynomial to a `Bytes` object
