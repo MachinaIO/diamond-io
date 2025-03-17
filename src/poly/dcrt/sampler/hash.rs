@@ -96,13 +96,13 @@ where
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
                 let mut bv = bitvec![u8, Msb0;];
                 let mut og_hasher: H = H::new();
-                og_hasher.update(&self.key);
+                og_hasher.update(self.key);
                 og_hasher.update(tag.as_ref());
                 info!("before loop {}, {}", index, bit_length);
                 for i in 0..index {
                     let mut hasher = og_hasher.clone();
                     //  H ( key || tag || i )
-                    hasher.update(&i.to_be_bytes());
+                    hasher.update(i.to_be_bytes());
                     for &byte in hasher.finalize().iter() {
                         for bit_index in (0..8).rev() {
                             bv.push((byte >> bit_index) & 1 != 0);
