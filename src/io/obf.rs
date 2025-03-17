@@ -158,7 +158,13 @@ where
         info!("aft np computed");
 
         let k_preimage = |bit: usize| {
-            info!("🟢 :{} | {}", public_data.pubkeys.len(), public_data.pubkeys[0].len());
+            info!(
+                "🟢 :{} | {} | {} | {}",
+                public_data.pubkeys.len(),
+                public_data.pubkeys[0].len(),
+                public_data.pubkeys[idx][0].matrix.col_size(),
+                public_data.pubkeys[idx][0].matrix.row_size()
+            );
             let rg = &public_data.rgs[bit];
             log_mem();
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
@@ -169,10 +175,8 @@ where
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
             let mut coeffs = vec![zero_coeff; dim];
-            coeffs[inserted_coeff_index] = if bit == 0 {
-                <M::P as Poly>::Elem::zero(&params.modulus())
-            } else {
-                <M::P as Poly>::Elem::one(&params.modulus())
+            if bit != 0 {
+                coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
             };
             let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             let inserted_poly_gadget = {
