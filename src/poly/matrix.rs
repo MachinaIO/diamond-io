@@ -74,6 +74,11 @@ pub trait PolyMatrix:
     /// (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
     fn concat_diag(&self, others: &[&Self]) -> Self;
     fn tensor(&self, other: &Self) -> Self;
+    fn unit_column_vector(params: &<Self::P as Poly>::Params, size: usize, index: usize) -> Self {
+        let mut vec = vec![Self::P::const_zero(params); size];
+        vec[index] = Self::P::const_one(params);
+        Self::from_poly_vec_column(params, vec)
+    }
     /// Constructs a gadget matrix Gₙ
     ///
     /// Gadget vector g = (2^0, 2^1, ..., 2^{log(q)-1}),

@@ -2,11 +2,12 @@ use super::{utils::*, Obfuscation, ObfuscationParams};
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggPublicKey,
+        BggPublicKey, BitToInt,
     },
     join,
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
+use itertools::Itertools;
 use rand::{Rng, RngCore};
 use std::{ops::Mul, sync::Arc};
 use tracing::info;
@@ -163,8 +164,8 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
-                &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
+                - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
@@ -181,7 +182,7 @@ where
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
-    let final_circuit = build_final_step_circuit::<_, BggPublicKey<M>>(
+    let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
         &params,
         &a_decomposed_polys,
         &enc_hardcoded_key_polys,
@@ -191,10 +192,18 @@ where
         let one = public_data.pubkeys[obf_params.input_size][0].clone();
         let input = &public_data.pubkeys[obf_params.input_size][1..];
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
-        let mut eval_outputs_matrix = eval_outputs[0].concat_matrix(&eval_outputs[1..]);
-        let unit_vector = identity_d1.slice_columns(d, d1);
-        eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
+        info!("eval_outputs computed");
+        assert_eq!(eval_outputs.len(), log_q * packed_output_size);
+        let output_ints = eval_outputs
+            .chunks(log_q)
+            .map(|bits| BggPublicKey::bits_to_int(bits, &params))
+            .collect_vec();
+        info!("output_ints computed");
+        let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
+        // let unit_vector = identity_d1.slice_columns(d, d1);
+        // eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
+        info!("eval_outputs_matrix computed");
         (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             d1,

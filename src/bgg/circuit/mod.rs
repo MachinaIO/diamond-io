@@ -9,21 +9,15 @@ use itertools::Itertools;
 use std::{collections::BTreeMap, fmt::Debug};
 pub use utils::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PolyCircuit<P: Poly> {
-    gates: BTreeMap<usize, PolyGate<P>>,
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PolyCircuit {
+    gates: BTreeMap<usize, PolyGate>,
     sub_circuits: BTreeMap<usize, Self>,
     output_ids: Vec<usize>,
     num_input: usize,
 }
 
-impl<P: Poly> Default for PolyCircuit<P> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<P: Poly> PolyCircuit<P> {
+impl PolyCircuit {
     pub fn new() -> Self {
         Self {
             gates: BTreeMap::new(),
@@ -84,9 +78,16 @@ impl<P: Poly> PolyCircuit<P> {
         self.sub_gate(zero, 0)
     }
 
-    pub fn const_scalar(&mut self, scalar: P) -> usize {
+    pub fn const_bit_poly(&mut self, coeffs: &[bool]) -> usize {
+        let zero = self.const_zero_gate();
         let one = self.const_one_gate();
-        self.scalar_mul_gate(one, scalar)
+        let mut sum = zero.clone();
+        for (idx, bit_coeff) in coeffs.iter().enumerate() {
+            let bit = if *bit_coeff { one } else { zero };
+            let rotated = self.rotate_gate(bit, idx);
+            sum = self.add_gate(sum, rotated);
+        }
+        sum
     }
 
     pub fn and_gate(&mut self, left: usize, right: usize) -> usize {
@@ -168,15 +169,15 @@ impl<P: Poly> PolyCircuit<P> {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Sub)
     }
 
-    pub fn scalar_mul_gate(&mut self, input: usize, scalar: P) -> usize {
-        self.new_gate_generic(vec![input], PolyGateType::ScalarMul(scalar))
-    }
-
     pub fn mul_gate(&mut self, left_input: usize, right_input: usize) -> usize {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Mul)
     }
 
-    fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType<P>) -> usize {
+    pub fn rotate_gate(&mut self, input: usize, shift: usize) -> usize {
+        self.new_gate_generic(vec![input], PolyGateType::Rotate { shift })
+    }
+
+    fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType) -> usize {
         #[cfg(debug_assertions)]
         {
             assert_ne!(self.num_input, 0);
@@ -192,7 +193,7 @@ impl<P: Poly> PolyCircuit<P> {
     }
 
     /// Evaluate [`PolyCircuit`]
-    pub fn eval<E: Evaluable<P>>(&self, params: &E::Params, one: E, inputs: &[E]) -> Vec<E> {
+    pub fn eval<E: Evaluable>(&self, params: &E::Params, one: E, inputs: &[E]) -> Vec<E> {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), inputs.len());
@@ -214,12 +215,12 @@ impl<P: Poly> PolyCircuit<P> {
             .collect_vec()
     }
 
-    fn eval_poly_gate<E: Evaluable<P>>(
+    fn eval_poly_gate<E: Evaluable>(
         &self,
         params: &E::Params,
         one: &E,
         wires: &mut BTreeMap<usize, E>,
-        gate: &PolyGate<P>,
+        gate: &PolyGate,
     ) {
         if !wires.contains_key(&gate.gate_id) {
             let input_ids = &gate.input_gates;
@@ -248,18 +249,18 @@ impl<P: Poly> PolyCircuit<P> {
                     let output = left.clone() - right;
                     wires.insert(gate.gate_id, output);
                 }
-                PolyGateType::ScalarMul(scalar) => {
-                    let input =
-                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
-                    let output = input.scalar_mul(params, scalar);
-                    wires.insert(gate.gate_id, output);
-                }
                 PolyGateType::Mul => {
                     let left =
                         wires.get(&input_ids[0]).expect("wire value not exist for target key");
                     let right =
                         wires.get(&input_ids[1]).expect("wire value not exist for target key");
                     let output = left.clone() * right.clone();
+                    wires.insert(gate.gate_id, output);
+                }
+                PolyGateType::Rotate { shift } => {
+                    let input =
+                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
+                    let output = input.rotate(params, *shift);
                     wires.insert(gate.gate_id, output);
                 }
                 PolyGateType::Call { circuit_id, output_id, .. } => {
@@ -306,14 +307,14 @@ mod tests {
         let poly2 = create_random_poly(&params);
 
         // Create a circuit with an Add operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let add_gate = circuit.add_gate(inputs[0], inputs[1]);
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
 
         // Expected result: poly1 + poly2
         let expected = poly1 + poly2;
@@ -333,45 +334,17 @@ mod tests {
         let poly2 = create_random_poly(&params);
 
         // Create a circuit with a Sub operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let sub_gate = circuit.sub_gate(inputs[0], inputs[1]);
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
 
         // Expected result: poly1 - poly2
         let expected = poly1 - poly2;
-
-        // Verify the result
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], expected);
-    }
-
-    #[test]
-    fn test_eval_scalar_mul() {
-        // Create parameters for testing
-        let params = DCRTPolyParams::default();
-
-        // Create input polynomial using UniformSampler
-        let poly = create_random_poly(&params);
-
-        // Create scalar as a random polynomial
-        let scalar = create_random_poly(&params);
-
-        // Create a circuit with a ScalarMul operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
-        let inputs = circuit.input(1);
-        let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], scalar.clone());
-        circuit.output(vec![scalar_mul_gate]);
-
-        // Evaluate the circuit
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &[poly.clone()]);
-
-        // Expected result: poly * scalar
-        let expected = poly * scalar;
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -388,14 +361,14 @@ mod tests {
         let poly2 = create_random_poly(&params);
 
         // Create a circuit with a Mul operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let mul_gate = circuit.mul_gate(inputs[0], inputs[1]);
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
 
         // Expected result: poly1 * poly2
         let expected = poly1 * poly2;
@@ -415,33 +388,27 @@ mod tests {
         let poly2 = create_random_poly(&params);
         let poly3 = create_random_poly(&params);
 
-        // Create scalar as a random polynomial
-        let scalar = create_random_poly(&params);
-
         // Create a complex circuit: ((poly1 + poly2) * scalar) - poly3
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(3);
 
         // poly1 + poly2
         let add_gate = circuit.add_gate(inputs[0], inputs[1]);
 
-        // (poly1 + poly2) * scalar
-        let scalar_mul_gate = circuit.scalar_mul_gate(add_gate, scalar.clone());
-
-        // ((poly1 + poly2) * scalar) - poly3
-        let sub_gate = circuit.sub_gate(scalar_mul_gate, inputs[2]);
+        // (poly1 + poly2) - poly3
+        let sub_gate = circuit.sub_gate(add_gate, inputs[2]);
 
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
         let result = circuit.eval(
-            &(),
+            &params,
             DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone()],
         );
 
-        // Expected result: ((poly1 + poly2) * scalar) - poly3
-        let expected = ((poly1 + poly2) * scalar) - poly3;
+        // Expected result: (poly1 + poly2) - poly3
+        let expected = (poly1 + poly2) - poly3;
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -458,7 +425,7 @@ mod tests {
         let poly2 = create_random_poly(&params);
 
         // Create a circuit with multiple outputs
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
 
         // poly1 + poly2
@@ -474,7 +441,7 @@ mod tests {
 
         // Evaluate the circuit
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
 
         // Expected results
         let expected_add = poly1.clone() + poly2.clone();
@@ -507,9 +474,9 @@ mod tests {
         // Level 1: a = poly1 + poly2, b = poly3 * poly4
         // Level 2: c = a * b, d = poly1 - poly3
         // Level 3: e = c + d
-        // Level 4: f = e * scalar
+        // Level 4: f = e * e
         // Output: f
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(4);
 
         // Level 1
@@ -524,20 +491,21 @@ mod tests {
         let e = circuit.add_gate(c, d); // ((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3)
 
         // Level 4
-        let f = circuit.scalar_mul_gate(e, scalar.clone()); // (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3)) * scalar
+        let f = circuit.mul_gate(e, e); // (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3))^2
 
         circuit.output(vec![f]);
 
         // Evaluate the circuit
         let result = circuit.eval(
-            &(),
+            &params,
             DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone(), poly4.clone()],
         );
 
-        // Expected result: (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3)) * scalar
-        let expected =
-            (((poly1.clone() + poly2) * (poly3.clone() * poly4)) + (poly1 - poly3)) * scalar;
+        // Expected result: (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3))^2
+        let expected = (((poly1.clone() + poly2.clone()) * (poly3.clone() * poly4.clone()))
+            + (poly1.clone() - poly3.clone()))
+            * (((poly1.clone() + poly2) * (poly3.clone() * poly4)) + (poly1 - poly3));
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -547,14 +515,14 @@ mod tests {
     #[test]
     fn test_boolean_gate_and() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let and_result = circuit.and_gate(inputs[0], inputs[1]);
         circuit.output(vec![and_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
         let expected = poly1.clone() * poly2;
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -563,12 +531,12 @@ mod tests {
     #[test]
     fn test_boolean_gate_not() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(1);
         let not_result = circuit.not_gate(inputs[0]);
         circuit.output(vec![not_result]);
         let poly1 = create_bit_random_poly(&params);
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone()]);
+        let result = circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone()]);
         let expected = DCRTPoly::const_one(&params) - poly1.clone();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -577,14 +545,14 @@ mod tests {
     #[test]
     fn test_boolean_gate_or() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let or_result = circuit.or_gate(inputs[0], inputs[1]);
         circuit.output(vec![or_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
         let expected = (poly1.clone() + poly2.clone()) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -593,14 +561,14 @@ mod tests {
     #[test]
     fn test_boolean_gate_nand() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let nand_result = circuit.nand_gate(inputs[0], inputs[1]);
         circuit.output(vec![nand_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
         let expected = DCRTPoly::const_one(&params) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -609,14 +577,14 @@ mod tests {
     #[test]
     fn test_boolean_gate_nor() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let nor_result = circuit.nor_gate(inputs[0], inputs[1]); // poly1 AND poly2
         circuit.output(vec![nor_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
         let expected =
             DCRTPoly::const_one(&params) - ((poly1.clone() + poly2.clone()) - (poly1 * poly2));
         assert_eq!(result.len(), 1);
@@ -626,18 +594,18 @@ mod tests {
     #[test]
     fn test_boolean_gate_xor() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let nor_result = circuit.xor_gate(inputs[0], inputs[1]);
         circuit.output(vec![nor_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = (poly1.clone() + poly2.clone()) -
-            (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                poly1 *
-                poly2);
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+        let expected = (poly1.clone() + poly2.clone())
+            - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                * poly1
+                * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -645,51 +613,27 @@ mod tests {
     #[test]
     fn test_boolean_gate_xnor() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let xnor_result = circuit.xnor_gate(inputs[0], inputs[1]);
         circuit.output(vec![xnor_result]);
         let poly1 = create_bit_random_poly(&params);
         let poly2 = create_bit_random_poly(&params);
         let result =
-            circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_one(&params) -
-            ((poly1.clone() + poly2.clone()) -
-                (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                    poly1 *
-                    poly2));
+            circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+        let expected = DCRTPoly::const_one(&params)
+            - ((poly1.clone() + poly2.clone())
+                - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                    * poly1
+                    * poly2));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
 
     #[test]
-    fn test_mul_poly_bits_by_scalar_circuit() {
-        let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
-        let m = create_random_poly(&params);
-        let decomposed_m = m.decompose(&params);
-        let inputs = circuit.input(decomposed_m.len());
-        assert_eq!(inputs.len(), params.modulus_bits());
-        let k = create_bit_random_poly(&params); // Scalar
-
-        // Output: decomposed_m[0] * k, ..., decomposed_m[modulus_bits - 1] * k
-        let output_ids =
-            inputs.iter().map(|&input_id| circuit.scalar_mul_gate(input_id, k.clone())).collect();
-
-        circuit.output(output_ids);
-
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &decomposed_m);
-
-        assert_eq!(result.len(), params.modulus_bits());
-
-        let recomposed_result = DCRTPoly::from_decomposed(&params, &result);
-        assert_eq!(recomposed_result, m * k);
-    }
-
-    #[test]
     fn test_mul_fhe_poly_bits_mul_by_poly_circuit() {
         let params = DCRTPolyParams::default();
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // encrypt a polynomial m using a RLWE secret key encryption
@@ -725,7 +669,7 @@ mod tests {
 
         // concatenate decomposed_c0 and decomposed_c1 and k
         let input = [c0_bits, c1_bits, vec![k.clone()]].concat();
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &input);
+        let result = circuit.eval(&params, DCRTPoly::const_one(&params), &input);
 
         assert_eq!(result.len(), params.modulus_bits() * 2);
 
@@ -753,7 +697,7 @@ mod tests {
         let poly2 = create_random_poly(&params);
 
         // Create a sub-circuit that performs addition and multiplication
-        let mut sub_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut sub_circuit = PolyCircuit::new();
         let sub_inputs = sub_circuit.input(2);
 
         // Add operation: poly1 + poly2
@@ -766,7 +710,7 @@ mod tests {
         sub_circuit.output(vec![add_gate, mul_gate]);
 
         // Create the main circuit
-        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut main_circuit = PolyCircuit::new();
         let main_inputs = main_circuit.input(2);
 
         // Register the sub-circuit and get its ID
@@ -787,8 +731,11 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result =
-            main_circuit.eval(&(), DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
+        let result = main_circuit.eval(
+            &params,
+            DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+        );
 
         // Expected result: (poly1 + poly2) - (poly1 * poly2)
         let expected = (poly1.clone() + poly2.clone()) - (poly1 * poly2);
@@ -809,13 +756,13 @@ mod tests {
         let poly3 = create_random_poly(&params);
 
         // Create the innermost sub-circuit that performs multiplication
-        let mut inner_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut inner_circuit = PolyCircuit::new();
         let inner_inputs = inner_circuit.input(2);
         let mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_inputs[1]);
         inner_circuit.output(vec![mul_gate]);
 
         // Create a middle sub-circuit that uses the inner sub-circuit
-        let mut middle_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut middle_circuit = PolyCircuit::new();
         let middle_inputs = middle_circuit.input(3);
 
         // Register the inner circuit
@@ -830,7 +777,7 @@ mod tests {
         middle_circuit.output(vec![add_gate]);
 
         // Create the main circuit
-        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut main_circuit = PolyCircuit::new();
         let main_inputs = main_circuit.input(3);
 
         // Register the middle circuit
@@ -840,22 +787,23 @@ mod tests {
         let middle_outputs = main_circuit
             .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
 
-        // Use the output for a scalar multiplication
+        // Use the output for square
         let scalar = create_random_poly(&params);
-        let scalar_mul_gate = main_circuit.scalar_mul_gate(middle_outputs[0], scalar.clone());
+        let scalar_mul_gate = main_circuit.mul_gate(middle_outputs[0], middle_outputs[0]);
 
         // Set the output of the main circuit
         main_circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the main circuit
         let result = main_circuit.eval(
-            &(),
+            &params,
             DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone()],
         );
 
-        // Expected result: ((poly1 * poly2) + poly3) * scalar
-        let expected = ((poly1 * poly2) + poly3) * scalar;
+        // Expected result: ((poly1 * poly2) + poly3)^2
+        let expected =
+            ((poly1.clone() * poly2.clone()) + poly3.clone()) * ((poly1 * poly2) + poly3);
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -868,7 +816,7 @@ mod tests {
         let params = DCRTPolyParams::default();
 
         // Create a circuit with a const_zero_gate
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         // We need to call input() to initialize the circuit
         circuit.input(1);
         let zero_gate = circuit.const_zero_gate();
@@ -876,7 +824,7 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &[dummy_input]);
+        let result = circuit.eval(&params, DCRTPoly::const_one(&params), &[dummy_input]);
 
         // Expected result: 0
         let expected = DCRTPoly::const_zero(&params);
@@ -892,7 +840,7 @@ mod tests {
         let params = DCRTPolyParams::default();
 
         // Create a circuit with a const_one_gate
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         // We need to call input() to initialize the circuit
         circuit.input(1);
         let one_gate = circuit.const_one_gate();
@@ -900,7 +848,7 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &[dummy_input]);
+        let result = circuit.eval(&params, DCRTPoly::const_one(&params), &[dummy_input]);
 
         // Expected result: 1
         let expected = DCRTPoly::const_one(&params);
@@ -916,7 +864,7 @@ mod tests {
         let params = DCRTPolyParams::default();
 
         // Create a circuit with a const_minus_one_gate
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         // We need to call input() to initialize the circuit
         circuit.input(1);
         let minus_one_gate = circuit.const_minus_one_gate();
@@ -924,7 +872,7 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&(), DCRTPoly::const_one(&params), &[dummy_input]);
+        let result = circuit.eval(&params, DCRTPoly::const_one(&params), &[dummy_input]);
 
         // Expected result: -1
         // We can compute -1 as 0 - 1

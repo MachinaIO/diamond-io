@@ -34,7 +34,7 @@ pub struct ObfuscationParams<M: PolyMatrix> {
     pub params: <<M as PolyMatrix>::P as Poly>::Params,
     pub switched_modulus: <<<M as PolyMatrix>::P as Poly>::Params as PolyParams>::Modulus,
     pub input_size: usize,
-    pub public_circuit: PolyCircuit<M::P>,
+    pub public_circuit: PolyCircuit,
     pub d: usize,
     pub encoding_sigma: f64,
     pub hardcoded_key_sigma: f64,
@@ -45,8 +45,8 @@ pub struct ObfuscationParams<M: PolyMatrix> {
 mod test {
     use super::*;
     use crate::{
-        bgg::{circuit::PolyCircuit, ErrorSimulator},
-        io::{obf::obfuscate, utils::build_final_step_circuit, ObfuscationParams},
+        bgg::circuit::PolyCircuit,
+        io::{obf::obfuscate, utils::build_final_bits_circuit, ObfuscationParams},
         poly::{
             dcrt::{
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,

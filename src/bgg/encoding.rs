@@ -1,4 +1,4 @@
-use super::{circuit::Evaluable, BggPublicKey};
+use super::{bit_to_int::BitToInt, circuit::Evaluable, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
@@ -94,22 +94,19 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
     }
 }
 
-impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
+impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
-    fn scalar_mul(&self, params: &<M::P as Poly>::Params, scalar: &M::P) -> Self {
-        let gadget = M::gadget_matrix(params, self.pubkey.matrix.row_size());
-        let scalared = gadget * scalar;
-        let decomposed = scalared.decompose();
-        let vector = self.vector.clone() * decomposed;
-        let pubkey = self.pubkey.scalar_mul(params, scalar);
-        let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
+    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+        let rotate_poly = <M::P>::const_rotate_poly(params, shift);
+        let vector = self.vector.clone() * &rotate_poly;
+        let pubkey = self.pubkey.rotate(params, shift);
+        let plaintext = self.plaintext.clone().map(|plaintext| plaintext * rotate_poly);
         Self { vector, pubkey, plaintext }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
         bgg::{
             circuit::PolyCircuit,
@@ -117,13 +114,12 @@ mod tests {
         },
         poly::dcrt::{
             params::DCRTPolyParams,
-            poly::DCRTPoly,
             sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
-    use std::sync::Arc;
+    use std::{ops::Mul, sync::Arc};
 
     #[test]
     fn test_encoding_add() {
@@ -157,7 +153,7 @@ mod tests {
         let enc2 = encodings[2].clone();
 
         // Create a simple circuit with an Add operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let add_gate = circuit.add_gate(inputs[0], inputs[1]);
         circuit.output(vec![add_gate]);
@@ -207,7 +203,7 @@ mod tests {
         let enc2 = encodings[2].clone();
 
         // Create a simple circuit with a Sub operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let sub_gate = circuit.sub_gate(inputs[0], inputs[1]);
         circuit.output(vec![sub_gate]);
@@ -257,7 +253,7 @@ mod tests {
         let enc2 = encodings[2].clone();
 
         // Create a simple circuit with a Mul operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(2);
         let mul_gate = circuit.mul_gate(inputs[0], inputs[1]);
         circuit.output(vec![mul_gate]);
@@ -267,58 +263,6 @@ mod tests {
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
-
-        // Verify the result
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].vector, expected.vector);
-        assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
-        assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
-    }
-
-    #[test]
-    fn test_encoding_scalar_mul() {
-        // Create parameters for testing
-        let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 1];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![create_random_poly(&params)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
-        let enc_one = encodings[0].clone();
-        let enc = encodings[1].clone();
-
-        // Create scalar
-        let scalar = create_random_poly(&params);
-
-        // Create a simple circuit with a ScalarMul operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
-        let inputs = circuit.input(1);
-        let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], scalar.clone());
-        circuit.output(vec![scalar_mul_gate]);
-
-        // Evaluate the circuit
-        let result = circuit.eval(&params, enc_one.clone(), &[enc.clone()]);
-
-        // Expected result
-        let expected = enc.scalar_mul(&params, &scalar);
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -363,21 +307,18 @@ mod tests {
         let enc2 = encodings[2].clone();
         let enc3 = encodings[3].clone();
 
-        // Create a scalar
-        let scalar = create_random_poly(&params);
-
-        // Create a circuit: ((enc1 + enc2) * scalar) - enc3
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        // Create a circuit: ((enc1 + enc2)^2) - enc3
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(3);
 
         // enc1 + enc2
         let add_gate = circuit.add_gate(inputs[0], inputs[1]);
 
-        // (enc1 + enc2) * scalar
-        let scalar_mul_gate = circuit.scalar_mul_gate(add_gate, scalar.clone());
+        // (enc1 + enc2)^2
+        let square_gate = circuit.mul_gate(add_gate, add_gate);
 
-        // ((enc1 + enc2) * scalar) - enc3
-        let sub_gate = circuit.sub_gate(scalar_mul_gate, inputs[2]);
+        // ((enc1 + enc2)^2) - enc3
+        let sub_gate = circuit.sub_gate(square_gate, inputs[2]);
 
         circuit.output(vec![sub_gate]);
 
@@ -385,8 +326,9 @@ mod tests {
         let result =
             circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
-        // Expected result: ((enc1 + enc2) * scalar) - enc3
-        let expected = ((enc1.clone() + enc2.clone()).scalar_mul(&params, &scalar)) - enc3.clone();
+        // Expected result: ((enc1 + enc2)^2) - enc3
+        let expected =
+            ((enc1.clone() + enc2.clone()) * (enc1.clone() + enc2.clone())) - enc3.clone();
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -433,17 +375,14 @@ mod tests {
         let enc3 = encodings[3].clone();
         let enc4 = encodings[4].clone();
 
-        // Create a scalar
-        let scalar = create_random_poly(&params);
-
         // Create a complex circuit with depth = 4
         // Circuit structure:
         // Level 1: a = enc1 + enc2, b = enc3 * enc4
         // Level 2: c = a * b, d = enc1 - enc3
         // Level 3: e = c + d
-        // Level 4: f = e * scalar
+        // Level 4: f = e * e
         // Output: f
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(4);
 
         // Level 1
@@ -458,7 +397,7 @@ mod tests {
         let e = circuit.add_gate(c, d); // ((enc1 + enc2) * (enc3 * enc4)) + (enc1 - enc3)
 
         // Level 4
-        let f = circuit.scalar_mul_gate(e, scalar.clone()); // (((enc1 + enc2) * (enc3 * enc4)) + (enc1 - enc3)) * scalar
+        let f = circuit.mul_gate(e, e); // (((enc1 + enc2) * (enc3 * enc4)) + (enc1 - enc3))^2
 
         circuit.output(vec![f]);
 
@@ -475,7 +414,7 @@ mod tests {
         let prod2 = sum1.clone() * prod1;
         let diff = enc1.clone() - enc3.clone();
         let sum2 = prod2 + diff;
-        let expected = sum2.scalar_mul(&params, &scalar);
+        let expected = sum2.clone() * sum2;
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -612,7 +551,7 @@ mod tests {
         let enc2 = encodings[2].clone();
 
         // Create a sub-circuit that performs addition and multiplication
-        let mut sub_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut sub_circuit = PolyCircuit::new();
         let sub_inputs = sub_circuit.input(2);
 
         // Add operation: enc1 + enc2
@@ -625,7 +564,7 @@ mod tests {
         sub_circuit.output(vec![add_gate, mul_gate]);
 
         // Create the main circuit
-        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut main_circuit = PolyCircuit::new();
         let main_inputs = main_circuit.input(2);
 
         // Register the sub-circuit and get its ID
@@ -698,13 +637,13 @@ mod tests {
         let scalar = create_random_poly(&params);
 
         // Create the innermost sub-circuit that performs multiplication
-        let mut inner_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut inner_circuit = PolyCircuit::new();
         let inner_inputs = inner_circuit.input(2);
         let mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_inputs[1]);
         inner_circuit.output(vec![mul_gate]);
 
         // Create a middle sub-circuit that uses the inner sub-circuit
-        let mut middle_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut middle_circuit = PolyCircuit::new();
         let middle_inputs = middle_circuit.input(3);
 
         // Register the inner circuit
@@ -719,7 +658,7 @@ mod tests {
         middle_circuit.output(vec![add_gate]);
 
         // Create the main circuit
-        let mut main_circuit = PolyCircuit::<DCRTPoly>::new();
+        let mut main_circuit = PolyCircuit::new();
         let main_inputs = main_circuit.input(3);
 
         // Register the middle circuit
@@ -729,8 +668,8 @@ mod tests {
         let middle_outputs = main_circuit
             .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
 
-        // Use the output for a scalar multiplication
-        let scalar_mul_gate = main_circuit.scalar_mul_gate(middle_outputs[0], scalar.clone());
+        // Use the output for square
+        let scalar_mul_gate = main_circuit.mul_gate(middle_outputs[0], middle_outputs[0]);
 
         // Set the output of the main circuit
         main_circuit.output(vec![scalar_mul_gate]);
@@ -739,8 +678,9 @@ mod tests {
         let result =
             main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
-        // Expected result: ((enc1 * enc2) + enc3) * scalar
-        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()).scalar_mul(&params, &scalar);
+        // Expected result: ((enc1 * enc2) + enc3)^2
+        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone())
+            * ((enc1.clone() * enc2.clone()) + enc3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);

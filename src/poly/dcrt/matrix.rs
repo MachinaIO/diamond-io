@@ -218,16 +218,6 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
     fn concat_diag(&self, others: &[&Self]) -> Self {
-        #[cfg(debug_assertions)]
-        for (idx, other) in others.iter().enumerate() {
-            if self.nrow != other.nrow {
-                panic!(
-                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
-                    self.nrow, self.ncol, idx, other.nrow, other.ncol
-                );
-            }
-        }
-
         let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
         let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
 
