@@ -117,16 +117,27 @@ where
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
         info!("before m_preimage computed");
-        let m_preimage =
-            |a| sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
+        let m_preimage = |a| {
+            info!("🍕 do we get m_preimage");
+            sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a)
+        };
         info!("aft m_preimage computed");
         log_mem();
-        let mp = || join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
+
+        let mp = || {
+            info!("🍕🍕  do we get mp");
+            join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1))
+        };
         info!("aft mp computed");
         log_mem();
         let ub_star = &u_star * b_next_star;
-        let n_preimage = |t, n| sampler_trapdoor.preimage(&params, t, n, &ub_star);
+        // todo: 36gb
+        let n_preimage = |t, n| {
+            info!("🍕🍕🍕🍕 do we get n_preimage?");
+            sampler_trapdoor.preimage(&params, t, n, &ub_star)
+        };
         let np = || {
+            info!("🍕🍕🍕   do we get np?");
             join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
                 b_next_1_trapdoor,
                 b_next_1
@@ -172,7 +183,10 @@ where
             info!("before preimage computed");
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
         };
-        let kp = || join!(|| k_preimage(0), || k_preimage(1));
+        let kp = || {
+            info!("🍕🔥 do we get kp?");
+            join!(|| k_preimage(0), || k_preimage(1))
+        };
         log_mem();
         info!("kp computed");
         let (mp, (np, kp)) = join!(mp, || join!(np, kp));
