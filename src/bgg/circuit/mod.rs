@@ -2,7 +2,6 @@ pub mod eval;
 pub mod gate;
 pub mod serde;
 pub mod utils;
-use crate::poly::Poly;
 pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};
 use itertools::Itertools;
@@ -292,7 +291,7 @@ mod tests {
                 FinRingElem,
             },
             sampler::DistType,
-            PolyParams,
+            Poly, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -466,9 +465,6 @@ mod tests {
         let poly3 = create_random_poly(&params);
         let poly4 = create_random_poly(&params);
 
-        // Create scalar as a random polynomial
-        let scalar = create_random_poly(&params);
-
         // Create a complex circuit with depth = 4
         // Circuit structure:
         // Level 1: a = poly1 + poly2, b = poly3 * poly4
@@ -503,9 +499,9 @@ mod tests {
         );
 
         // Expected result: (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3))^2
-        let expected = (((poly1.clone() + poly2.clone()) * (poly3.clone() * poly4.clone())) +
-            (poly1.clone() - poly3.clone())) *
-            (((poly1.clone() + poly2) * (poly3.clone() * poly4)) + (poly1 - poly3));
+        let expected = (((poly1.clone() + poly2.clone()) * (poly3.clone() * poly4.clone()))
+            + (poly1.clone() - poly3.clone()))
+            * (((poly1.clone() + poly2) * (poly3.clone() * poly4)) + (poly1 - poly3));
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -602,10 +598,10 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = (poly1.clone() + poly2.clone()) -
-            (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                poly1 *
-                poly2);
+        let expected = (poly1.clone() + poly2.clone())
+            - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                * poly1
+                * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -621,11 +617,11 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_one(&params) -
-            ((poly1.clone() + poly2.clone()) -
-                (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                    poly1 *
-                    poly2));
+        let expected = DCRTPoly::const_one(&params)
+            - ((poly1.clone() + poly2.clone())
+                - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                    * poly1
+                    * poly2));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -787,8 +783,6 @@ mod tests {
         let middle_outputs = main_circuit
             .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
 
-        // Use the output for square
-        let scalar = create_random_poly(&params);
         let scalar_mul_gate = main_circuit.mul_gate(middle_outputs[0], middle_outputs[0]);
 
         // Set the output of the main circuit

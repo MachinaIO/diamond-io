@@ -1,4 +1,4 @@
-use super::{bit_to_int::BitToInt, circuit::Evaluable, BggPublicKey};
+use super::{circuit::Evaluable, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
@@ -119,7 +119,7 @@ mod tests {
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
-    use std::{ops::Mul, sync::Arc};
+    use std::sync::Arc;
 
     #[test]
     fn test_encoding_add() {
@@ -633,9 +633,6 @@ mod tests {
         let enc2 = encodings[2].clone();
         let enc3 = encodings[3].clone();
 
-        // Create a scalar
-        let scalar = create_random_poly(&params);
-
         // Create the innermost sub-circuit that performs multiplication
         let mut inner_circuit = PolyCircuit::new();
         let inner_inputs = inner_circuit.input(2);
@@ -679,8 +676,8 @@ mod tests {
             main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 * enc2) + enc3)^2
-        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
-            ((enc1.clone() * enc2.clone()) + enc3.clone());
+        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone())
+            * ((enc1.clone() * enc2.clone()) + enc3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);

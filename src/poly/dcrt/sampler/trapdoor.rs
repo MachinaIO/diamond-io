@@ -226,8 +226,6 @@ mod tests {
 
     #[test]
     fn test_trapdoor_generation() {
-        let base = 2;
-        let sigma = 4.57825;
         let size: usize = 3;
         let sampler = DCRTPolyTrapdoorSampler::new();
         let params = DCRTPolyParams::default();
@@ -260,8 +258,6 @@ mod tests {
     #[test]
     fn test_preimage_generation() {
         let params = DCRTPolyParams::default();
-        let base = 2;
-        let sigma = 4.57825;
         let size = 3;
         let k = params.modulus_bits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
@@ -295,8 +291,6 @@ mod tests {
     #[test]
     fn test_preimage_generation_non_square_target_lt() {
         let params = DCRTPolyParams::default();
-        let base = 2;
-        let sigma = 4.57825;
         let size = 4;
         let target_cols = 2;
         let k = params.modulus_bits();
@@ -336,8 +330,6 @@ mod tests {
     #[test]
     fn test_preimage_generation_non_square_target_gt_multiple() {
         let params = DCRTPolyParams::default();
-        let base = 2;
-        let sigma = 4.57825;
         let size = 4;
         let multiple = 2;
         let target_cols = size * multiple;
@@ -379,8 +371,6 @@ mod tests {
     #[test]
     fn test_preimage_generation_non_square_target_gt_non_multiple() {
         let params = DCRTPolyParams::default();
-        let base = 2;
-        let sigma = 4.57825;
         let size = 4;
         let target_cols = 6;
         let k = params.modulus_bits();

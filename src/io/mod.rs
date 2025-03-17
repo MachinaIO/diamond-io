@@ -46,11 +46,11 @@ mod test {
     use super::*;
     use crate::{
         bgg::circuit::PolyCircuit,
-        io::{obf::obfuscate, utils::build_final_bits_circuit, ObfuscationParams},
+        io::{obf::obfuscate, ObfuscationParams},
         poly::{
             dcrt::{
-                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
-                DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
+                DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
+                DCRTPolyUniformSampler,
             },
             PolyParams,
         },
@@ -59,7 +59,6 @@ mod test {
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
-    use tracing::info;
 
     #[test]
     fn test_io_just_mul_enc_and_bit() {

@@ -1,4 +1,4 @@
-use super::{bit_to_int::BitToInt, circuit::Evaluable};
+use super::circuit::Evaluable;
 use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
 use std::ops::{Add, Mul, Sub};
@@ -80,7 +80,6 @@ mod tests {
     use crate::{
         bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},
         poly::dcrt::{params::DCRTPolyParams, sampler::hash::DCRTPolyHashSampler},
-        utils::create_random_poly,
     };
     use keccak_asm::Keccak256;
     use std::sync::Arc;
@@ -498,8 +497,8 @@ mod tests {
         let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 * pk2) + pk3)^2
-        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()) *
-            ((pk1.clone() * pk2.clone()) + pk3.clone());
+        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone())
+            * ((pk1.clone() * pk2.clone()) + pk3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);

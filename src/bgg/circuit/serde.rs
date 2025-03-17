@@ -18,9 +18,9 @@ impl SerializablePolyGateType {
         match self {
             SerializablePolyGateType::Input => 0,
             SerializablePolyGateType::Rotate { .. } => 1,
-            SerializablePolyGateType::Add |
-            SerializablePolyGateType::Sub |
-            SerializablePolyGateType::Mul => 2,
+            SerializablePolyGateType::Add
+            | SerializablePolyGateType::Sub
+            | SerializablePolyGateType::Mul => 2,
             SerializablePolyGateType::Call { num_input, .. } => *num_input,
         }
     }
@@ -151,10 +151,6 @@ impl SerializablePolyCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        poly::dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
-        utils::create_random_poly,
-    };
 
     #[test]
     fn test_serialization_roundtrip() {
@@ -210,7 +206,6 @@ mod tests {
 
         // Add various gates
         let add_gate = original_circuit.add_gate(inputs[0], inputs[1]);
-        let sub_gate = original_circuit.sub_gate(inputs[0], inputs[2]);
         let mul_gate = original_circuit.mul_gate(inputs[1], inputs[2]);
 
         // Create a sub-circuit

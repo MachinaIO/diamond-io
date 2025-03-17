@@ -1,5 +1,3 @@
-use crate::poly::Poly;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolyGate {
     pub gate_id: usize,

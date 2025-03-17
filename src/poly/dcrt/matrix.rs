@@ -2,7 +2,6 @@ use super::{DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::{
     parallel_iter,
     poly::{Poly, PolyMatrix, PolyParams},
-    utils::log_mem,
 };
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
@@ -11,7 +10,6 @@ use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
-use tracing::info;
 
 #[derive(Clone)]
 pub struct DCRTPolyMatrix {
@@ -547,7 +545,7 @@ mod tests {
     use super::*;
     use crate::poly::{
         dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
-        sampler::{DistType, PolyUniformSampler},
+        sampler::PolyUniformSampler,
     };
 
     #[test]

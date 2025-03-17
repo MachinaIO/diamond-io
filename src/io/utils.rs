@@ -8,7 +8,6 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
-#[cfg(feature = "parallel")]
 use std::{marker::PhantomData, ops::Mul};
 use tracing::info;
 

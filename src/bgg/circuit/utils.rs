@@ -1,4 +1,4 @@
-use crate::{bgg::circuit::Evaluable, poly::Poly};
+use crate::bgg::circuit::Evaluable;
 
 use super::PolyCircuit;
 
@@ -98,10 +98,10 @@ mod tests {
     use super::*;
     use crate::{
         poly::{
-            dcrt::{params::DCRTPolyParams, poly::DCRTPoly, FinRingElem},
-            params::PolyParams,
+            dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
+            Poly,
         },
-        utils::{create_bit_poly, create_random_poly},
+        utils::create_random_poly,
     };
 
     #[test]
