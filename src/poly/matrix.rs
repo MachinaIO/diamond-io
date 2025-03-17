@@ -92,4 +92,7 @@ pub trait PolyMatrix:
     ) -> Self;
     /// Performs the operation S * (identity ⊗ other)
     fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self;
+    /// Performs the operation S * (identity ⊗ G^-1(other)),
+    /// where G^-1(other) is bit decomposition of other matrix
+    fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
 }
