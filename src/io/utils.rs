@@ -248,7 +248,7 @@ mod test {
     #[test]
     fn test_final_bits_circuit_to_json_for_norm() {
         // 1. Set up parameters
-        let params = DCRTPolyParams::default();
+        let params = DCRTPolyParams::new(4096, 12, 51);
         let log_q = params.modulus_bits();
 
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
@@ -271,7 +271,9 @@ mod test {
 
         let serde_circuit = SerializablePolyCircuit::from_circuit(&final_circuit);
         let json = serde_json::to_string(&serde_circuit).unwrap();
-        println!("{}", json);
+        use std::{fs::File, io::Write};
+        let mut file = File::create("final_bits_circuit.json").unwrap();
+        file.write_all(json.as_bytes()).unwrap();
     }
 
     // #[test]
