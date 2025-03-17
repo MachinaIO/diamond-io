@@ -125,13 +125,13 @@ where
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
-
+        info!("before m_preimage computed");
         let m_preimage =
             |a| sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
-        let mp =
-            || join!(|| m_preimage(u_0.clone() * b_next_0), || m_preimage(u_1.clone() * b_next_1));
+        info!("aft m_preimage computed");
+        let mp = || join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
 
-        let ub_star = u_star.clone() * b_next_star;
+        let ub_star = &u_star * b_next_star;
         let n_preimage = |t, n| sampler_trapdoor.preimage(&params, t, n, &ub_star);
         let np = || {
             join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
@@ -174,6 +174,7 @@ where
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
+            info!("before preimage computed");
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
         };
         info!("before kp computed");
