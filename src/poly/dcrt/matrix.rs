@@ -549,7 +549,7 @@ mod tests {
             dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
             sampler::PolyUniformSampler,
         },
-        utils::log_mem,
+        utils::{init_tracing, log_mem},
     };
 
     #[test]
@@ -761,7 +761,6 @@ mod tests {
 
     #[test]
     fn test_mul_tensor_identity_decompose_naive() {
-        tracing_subscriber::fmt::init();
         info!("before naive");
         log_mem();
         let params = DCRTPolyParams::default();
@@ -802,7 +801,6 @@ mod tests {
 
     #[test]
     fn test_mul_tensor_identity_decompose_optimal() {
-        tracing_subscriber::fmt::init();
         info!("before optimal");
         log_mem();
         let params = DCRTPolyParams::default();

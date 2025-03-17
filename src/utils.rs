@@ -83,6 +83,10 @@ pub fn log_mem() {
     }
 }
 
+pub fn init_tracing() {
+    tracing_subscriber::fmt::init();
+}
+
 #[macro_export]
 macro_rules! parallel_iter {
     ($i: expr) => {{

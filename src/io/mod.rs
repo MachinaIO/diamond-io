@@ -50,14 +50,11 @@ mod test {
             },
             PolyParams,
         },
+        utils::init_tracing,
     };
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
-
-    fn init_tracing() {
-        tracing_subscriber::fmt::init();
-    }
 
     #[test]
     fn test_io_just_mul_enc_and_bit() {
