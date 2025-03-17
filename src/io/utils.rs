@@ -86,8 +86,9 @@ where
         info!("pubkeys computed");
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
+        // todo: note this is not decomposed
         let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(&r_0 * &gadget_2).decompose(), (&r_1 * &gadget_2).decompose()];
+            [(&r_0 * &gadget_2), (&r_1 * &gadget_2)];
 
         let a_prf_raw = hash_sampler.sample_hash(
             params,
