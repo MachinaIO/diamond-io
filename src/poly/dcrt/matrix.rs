@@ -760,8 +760,6 @@ mod tests {
 
     #[test]
     fn test_mul_tensor_identity_decompose_naive() {
-        info!("before naive");
-        log_mem();
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
@@ -773,16 +771,11 @@ mod tests {
         let other =
             sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
 
-        info!("before operation naive");
-        log_mem();
-
         // Decompose 'other' matrix
         let other_decompose = other.decompose();
 
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
-        info!("after operation naive");
-        log_mem();
 
         // Check dimensions
         assert_eq!(result.row_size(), 2);
@@ -800,8 +793,6 @@ mod tests {
 
     #[test]
     fn test_mul_tensor_identity_decompose_optimal() {
-        info!("before optimal");
-        log_mem();
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
@@ -814,11 +805,7 @@ mod tests {
             sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
 
         // Perform S * (I_37 ⊗ G^-1(other))
-        info!("before operation optimal");
-        log_mem();
         let result: DCRTPolyMatrix = s.mul_tensor_identity_decompose(&other, 37);
-        info!("after operation optimal");
-        log_mem();
 
         // // Check dimensions
         assert_eq!(result.row_size(), 2);

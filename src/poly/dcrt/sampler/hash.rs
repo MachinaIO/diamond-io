@@ -49,7 +49,6 @@ where
 
         // From field elements to nrow * ncol polynomials
         let total_poly = nrow * ncol;
-        info!("total_poly {} {} {}", total_poly, ncol, nrow);
         DCRTPolyMatrix::from_poly_vec(
             params,
             parallel_iter!(0..nrow)
@@ -98,7 +97,6 @@ where
                 let mut og_hasher: H = H::new();
                 og_hasher.update(self.key);
                 og_hasher.update(tag.as_ref());
-                info!("before loop {}, {}", index, bit_length);
                 for i in 0..index {
                     let mut hasher = og_hasher.clone();
                     //  H ( key || tag || i )
@@ -109,7 +107,6 @@ where
                         }
                     }
                 }
-                info!(?bit_length, "finished hasher, bv length {}", bv.len());
                 let num_chunks = bv.len() / bit_length;
                 let ring_elems: Vec<FinRingElem> = parallel_iter!(0..num_chunks)
                     .map(|i| {
@@ -127,7 +124,6 @@ where
                         FinRingElem::new(value, q.clone())
                     })
                     .collect();
-                info!("finished ring_elems");
                 debug_assert_eq!(ring_elems.len(), (index * hash_output_size) / bit_length);
                 ring_elems
             }

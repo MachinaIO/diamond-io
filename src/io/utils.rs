@@ -44,9 +44,7 @@ where
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
-        info!("r_0_bar computed");
         let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, 1, 1, DistType::BitDist);
-        info!("r_1_bar computed");
         let one = S::M::identity(params, 1, None);
         let r_0 = r_0_bar.concat_diag(&[&one]);
         let r_1 = r_1_bar.concat_diag(&[&one]);
@@ -57,7 +55,6 @@ where
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
-        info!("a_rlwe_bar computed");
         // let reveal_plaintexts_fhe_key = vec![true; 2];
         #[cfg(test)]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
@@ -65,7 +62,6 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
-                info!("try pubkey 1 computed");
                 bgg_pubkey_sampler.sample(
                     params,
                     &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
@@ -83,7 +79,6 @@ where
         //     })
         //     .collect_vec();
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
-        info!("pubkeys computed");
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
         let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
@@ -96,9 +91,7 @@ where
             packed_output_size,
             DistType::FinRingDist,
         );
-        info!("a_prf_raw computed");
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        info!("modulus_switch");
         Self {
             r_0,
             r_1,
@@ -379,9 +372,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec *
-                (outputs_encodings[0].pubkey.matrix.clone() -
-                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+            bgg_encoding_sampler.secret_vec
+                * (outputs_encodings[0].pubkey.matrix.clone()
+                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }
