@@ -1,4 +1,3 @@
-use bytes::Bytes;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -106,28 +105,6 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
-    fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes) -> Self {
-        let ring_dimension = params.ring_dimension() as usize;
-        let modulus = params.modulus();
-        let byte_size = bytes.len() / ring_dimension;
-
-        let mut coeffs = Vec::with_capacity(ring_dimension);
-
-        for i in 0..ring_dimension {
-            let start = i * byte_size;
-            let end = start + byte_size;
-            let value_bytes = &bytes[start..end];
-
-            let value = BigUint::from_bytes_le(value_bytes);
-
-            let coeff = FinRingElem::new(value, modulus.clone());
-
-            coeffs.push(coeff);
-        }
-
-        Self::from_coeffs(params, &coeffs)
-    }
-
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
@@ -172,39 +149,6 @@ impl Poly for DCRTPoly {
                 DCRTPoly::from_coeffs(params, &bit_coeffs)
             })
             .collect()
-    }
-
-    fn to_compact_bytes(&self, byte_size: usize) -> Bytes {
-        let modulus = self.ptr_poly.GetModulus();
-        let modulus_bytes = modulus.as_bytes();
-
-        assert!(
-            byte_size <= modulus_bytes.len(),
-            "byte_size must not be greater than modulus_bytes: {} > {}",
-            byte_size,
-            modulus_bytes.len()
-        );
-
-        let coeffs = self.coeffs();
-        let mut bytes_data = Vec::new();
-        for coeff in coeffs {
-            let value = coeff.value();
-            let value_bytes = value.to_bytes_le();
-            assert!(
-                value_bytes.len() <= byte_size,
-                "value_bytes exceeds the specified byte_size: {} > {}",
-                value_bytes.len(),
-                byte_size
-            );
-
-            if value_bytes.len() == byte_size {
-                bytes_data.extend_from_slice(&value_bytes[0..byte_size]);
-            } else {
-                bytes_data.extend_from_slice(&value_bytes);
-                bytes_data.extend(vec![0; byte_size - value_bytes.len()]);
-            }
-        }
-        Bytes::from(bytes_data)
     }
 }
 
