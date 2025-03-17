@@ -143,7 +143,9 @@ where
         let k_preimage = |bit: usize| {
             let rg = &public_data.rgs[bit];
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
+            info!("lhs computed");
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
+            info!("top computed");
             let inserted_poly_index = 1 + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
@@ -167,17 +169,18 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
+                &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
         };
+        info!("before kp computed");
         let kp = || join!(|| k_preimage(0), || k_preimage(1));
-
+        info!("kp computed");
         let (mp, (np, kp)) = join!(mp, || join!(np, kp));
-
+        info!("mp computed");
         m_preimages.push(mp);
         n_preimages.push(np);
         k_preimages.push(kp);
