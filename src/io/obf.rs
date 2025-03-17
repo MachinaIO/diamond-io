@@ -144,10 +144,11 @@ where
             ))
         };
         info!("aft np computed");
-        log_mem();
 
         let k_preimage = |bit: usize| {
+            info!("🟢 :{} | {}", public_data.pubkeys.len(), public_data.pubkeys[0].len());
             let rg = &public_data.rgs[bit];
+            log_mem();
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
             info!("lhs computed");
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -185,6 +186,7 @@ where
         };
         let kp = || {
             info!("🍕🔥 do we get kp?");
+            log_mem();
             join!(|| k_preimage(0), || k_preimage(1))
         };
         log_mem();
