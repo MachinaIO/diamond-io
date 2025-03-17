@@ -119,14 +119,20 @@ where
         info!("before m_preimage computed");
         let m_preimage = |a| {
             info!("🍕 do we get m_preimage");
-            sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a)
+            log_mem();
+            let r = sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
+            log_mem();
+            r
         };
         info!("aft m_preimage computed");
         log_mem();
 
         let mp = || {
             info!("🍕🍕  do we get mp");
-            join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1))
+            log_mem();
+            let r = join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
+            log_mem();
+            r
         };
         info!("aft mp computed");
         log_mem();
@@ -134,14 +140,20 @@ where
         // todo: 36gb
         let n_preimage = |t, n| {
             info!("🍕🍕🍕🍕 do we get n_preimage?");
-            sampler_trapdoor.preimage(&params, t, n, &ub_star)
+            log_mem();
+            let r = sampler_trapdoor.preimage(&params, t, n, &ub_star);
+            log_mem();
+            r
         };
         let np = || {
             info!("🍕🍕🍕   do we get np?");
-            join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
+            log_mem();
+            let r = join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
                 b_next_1_trapdoor,
                 b_next_1
-            ))
+            ));
+            log_mem();
+            r
         };
         info!("aft np computed");
 
@@ -187,7 +199,9 @@ where
         let kp = || {
             info!("🍕🔥 do we get kp?");
             log_mem();
-            join!(|| k_preimage(0), || k_preimage(1))
+            let r = join!(|| k_preimage(0), || k_preimage(1));
+            log_mem();
+            r
         };
         log_mem();
         info!("kp computed");
