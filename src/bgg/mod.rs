@@ -3,7 +3,7 @@ pub mod circuit;
 pub mod encoding;
 pub mod public_key;
 pub mod sampler;
-pub mod serde;
+// pub mod serde;
 
 pub use bit_to_int::BitToInt;
 pub use encoding::BggEncoding;

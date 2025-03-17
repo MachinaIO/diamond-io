@@ -12,7 +12,6 @@ use num_bigint::BigUint;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::marker::PhantomData;
-use tracing::info;
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     key: [u8; 32],
@@ -47,8 +46,6 @@ where
             panic!("Not enough ring elements to sample hash")
         }
         // From field elements to nrow * ncol polynomials
-        let total_poly = nrow * ncol;
-        info!("total_poly {} {} {}", total_poly, ncol, nrow);
         DCRTPolyMatrix::from_poly_vec(
             params,
             parallel_iter!(0..nrow)
@@ -93,22 +90,20 @@ where
                 let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
-                let mut bv = bitvec![u8, Msb0;];
+                let mut bv = bitvec![u8, Lsb0;];
                 let mut og_hasher: H = H::new();
-                og_hasher.update(&self.key);
+                og_hasher.update(self.key);
                 og_hasher.update(tag.as_ref());
-                info!("before loop {}, {}", index, bit_length);
                 for i in 0..index {
                     let mut hasher = og_hasher.clone();
                     //  H ( key || tag || i )
-                    hasher.update(&i.to_be_bytes());
+                    hasher.update(i.to_le_bytes());
                     for &byte in hasher.finalize().iter() {
-                        for bit_index in (0..8).rev() {
+                        for bit_index in 0..8 {
                             bv.push((byte >> bit_index) & 1 != 0);
                         }
                     }
                 }
-                info!(?bit_length, "finished hasher, bv length {}", bv.len());
                 let num_chunks = bv.len() / bit_length;
                 let ring_elems: Vec<FinRingElem> = parallel_iter!(0..num_chunks)
                     .map(|i| {
@@ -126,7 +121,6 @@ where
                         FinRingElem::new(value, q.clone())
                     })
                     .collect();
-                info!("finished ring_elems");
                 debug_assert_eq!(ring_elems.len(), (index * hash_output_size) / bit_length);
                 ring_elems
             }

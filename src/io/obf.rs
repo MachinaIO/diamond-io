@@ -10,7 +10,6 @@ use crate::{
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use std::{ops::Mul, sync::Arc};
-use tracing::info;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -28,7 +27,6 @@ where
     for<'a> &'a M: Mul<&'a <M as PolyMatrix>::P, Output = M>,
     for<'a> &'a M: Mul<&'a M, Output = M>,
 {
-    info!("gm");
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
@@ -46,7 +44,6 @@ where
     let packed_output_size = public_data.packed_output_size;
     let s_bars =
         sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0).clone();
-    info!("s_bar computed");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
@@ -55,7 +52,6 @@ where
     );
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-    info!("t_bar computed");
     let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     let enc_hardcoded_key = {
         let e = sampler_uniform.sample_uniform(
@@ -69,29 +65,24 @@ where
     };
 
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
-    info!("enc_hardcoded_key computed");
     let t_bar = t_bar_matrix.entry(0, 0).clone();
     #[cfg(test)]
     let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
 
-    let mut plaintexts = vec![];
-    let zero_plaintexts: Vec<M::P> = (0..obf_params.input_size.div_ceil(dim))
+    let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
-        .collect();
-    plaintexts.extend(zero_plaintexts);
+        .collect_vec();
     plaintexts.push(t_bar.clone());
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
-    info!("encodings_init computed");
 
-    let mut bs = vec![];
-    let mut b_trapdoors = vec![];
+    let mut bs = Vec::with_capacity(obf_params.input_size);
+    let mut b_trapdoors = Vec::with_capacity(obf_params.input_size);
     for _ in 0..=obf_params.input_size {
         let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params, 2 * d1);
         let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params, 2 * d1);
         let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 2 * d1);
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
-        info!("bs computed");
     }
     let m_b = (2 * d1) * (2 + log_q);
     let p_init = {
@@ -105,7 +96,6 @@ where
         );
         s_b + error
     };
-    info!("p_init computed");
     let identity_d1 = M::identity(params.as_ref(), d1, None);
     let u_0 = identity_d1.concat_diag(&[&public_data.r_0]);
     let u_1 = identity_d1.concat_diag(&[&public_data.r_1]);
@@ -116,19 +106,24 @@ where
     };
     let gadget_d1 = M::gadget_matrix(params.as_ref(), d1);
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (vec![], vec![], vec![]);
+    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
+        Vec::with_capacity(obf_params.input_size),
+        Vec::with_capacity(obf_params.input_size),
+        Vec::with_capacity(obf_params.input_size),
+    );
     for idx in 0..obf_params.input_size {
         let (_, _, b_cur_star) = &bs[idx];
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
+        let m_preimage = |a| {
+            let r = sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
+            r
+        };
 
-        let m_preimage =
-            |a| sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
-        let mp =
-            || join!(|| m_preimage(u_0.clone() * b_next_0), || m_preimage(u_1.clone() * b_next_1));
-
-        let ub_star = u_star.clone() * b_next_star;
+        let mp = || join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
+        let ub_star = &u_star * b_next_star;
+        // todo: 36gb
         let n_preimage = |t, n| sampler_trapdoor.preimage(&params, t, n, &ub_star);
         let np = || {
             join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
@@ -138,17 +133,15 @@ where
         };
 
         let k_preimage = |bit: usize| {
-            let rg_decomposed = &public_data.rgs_decomposed[bit];
+            let rg = &public_data.rgs[bit];
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
-            let top = lhs.mul_tensor_identity(rg_decomposed, 1 + packed_input_size);
+            let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             let inserted_poly_index = 1 + idx / dim;
             let inserted_coeff_index = idx % dim;
             let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
             let mut coeffs = vec![zero_coeff; dim];
-            coeffs[inserted_coeff_index] = if bit == 0 {
-                <M::P as Poly>::Elem::zero(&params.modulus())
-            } else {
-                <M::P as Poly>::Elem::one(&params.modulus())
+            if bit != 0 {
+                coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
             };
             let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             let inserted_poly_gadget = {
@@ -164,8 +157,8 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
+                &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
@@ -178,7 +171,6 @@ where
         m_preimages.push(mp);
         n_preimages.push(np);
         k_preimages.push(kp);
-        info!("m_preimages, n_preimages, k_preimages computed");
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
@@ -192,18 +184,15 @@ where
         let one = public_data.pubkeys[obf_params.input_size][0].clone();
         let input = &public_data.pubkeys[obf_params.input_size][1..];
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
-        info!("eval_outputs computed");
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs
             .chunks(log_q)
             .map(|bits| BggPublicKey::bits_to_int(bits, &params))
             .collect_vec();
-        info!("output_ints computed");
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         // let unit_vector = identity_d1.slice_columns(d, d1);
         // eval_outputs_matrix = eval_outputs_matrix * unit_vector.decompose();
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        info!("eval_outputs_matrix computed");
         (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             d1,
@@ -214,7 +203,6 @@ where
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
-    info!("final_preimage computed");
     Obfuscation {
         hash_key,
         enc_hardcoded_key,

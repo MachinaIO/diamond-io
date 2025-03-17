@@ -38,8 +38,8 @@ pub fn build_circuit_ip_priv_and_pub_outputs<E: Evaluable>(
     circuit
 }
 
-// /// Build a circuit that takes as input `num_bits` bits and outputs the integer represented by the
-// /// bits.
+// /// Build a circuit that takes as input `num_bits` bits and outputs the integer represented by
+// the /// bits.
 // pub fn build_circuit_bits_to_int<P: Poly, E: Evaluable<P>>(
 //     params: &P::Params,
 //     num_bits: usize,
@@ -77,8 +77,8 @@ pub fn build_circuit_ip_priv_and_pub_outputs<E: Evaluable>(
 //     let num_input = num_pub_input + num_priv_input;
 //     let mut circuit = PolyCircuit::<P>::new();
 //     let inputs = circuit.input(num_input);
-//     let ip_circuit = build_circuit_ip_priv_and_pub_outputs::<P, E>(public_circuit, num_priv_input);
-//     let ip_circuit_id = circuit.register_sub_circuit(ip_circuit);
+//     let ip_circuit = build_circuit_ip_priv_and_pub_outputs::<P, E>(public_circuit,
+// num_priv_input);     let ip_circuit_id = circuit.register_sub_circuit(ip_circuit);
 //     let ip_outputs = circuit.call_sub_circuit(ip_circuit_id, &inputs);
 //     let num_ints = num_ip_outputs / num_bits;
 //     let b2i_circuit = build_circuit_bits_to_int::<P, E>(params, num_bits);

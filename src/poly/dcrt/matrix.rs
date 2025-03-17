@@ -4,7 +4,6 @@ use crate::{
     poly::{Poly, PolyMatrix, PolyParams},
     utils::log_mem,
 };
-use bytes::Bytes;
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -49,6 +48,12 @@ impl DCRTPolyMatrix {
     pub fn params(&self) -> &DCRTPolyParams {
         &self.params
     }
+
+    pub fn get_column_matrix(&self, j: usize) -> DCRTPolyMatrix {
+        let polys = self.get_column(j);
+        let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
+        DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
+    }
 }
 
 impl PolyMatrix for DCRTPolyMatrix {
@@ -68,7 +73,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         self.inner[i].clone()
     }
 
-    fn get_column(&self, j: usize) -> Vec<DCRTPoly> {
+    fn get_column(&self, j: usize) -> Vec<Self::P> {
         self.inner.iter().map(|row| row[j].clone()).collect()
     }
 
@@ -343,73 +348,21 @@ impl PolyMatrix for DCRTPolyMatrix {
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
-    /// Create a matrix from a `Vec<Bytes>` object created by `to_compact_bytes`.
-    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self {
-        let metadata = &bytes[0];
+    fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
+        assert_eq!(self.ncol, other.nrow * identity_size * self.params.modulus_bits());
+        let slice_width = other.ncol;
+        let mut output = vec![DCRTPolyMatrix::zero(&self.params, 0, 0); other.ncol * identity_size];
 
-        let ring_dimension =
-            u32::from_le_bytes([metadata[0], metadata[1], metadata[2], metadata[3]]);
-        let nrow =
-            u32::from_le_bytes([metadata[4], metadata[5], metadata[6], metadata[7]]) as usize;
-        let ncol =
-            u32::from_le_bytes([metadata[8], metadata[9], metadata[10], metadata[11]]) as usize;
+        for j in 0..other.ncol {
+            let jth_col_m = other.get_column_matrix(j);
+            let jth_col_m_decompose = jth_col_m.decompose();
+            for i in 0..identity_size {
+                let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+                output[i * other.ncol + j] = slice * &jth_col_m_decompose;
+            }
+        }
 
-        assert_eq!(
-            ring_dimension,
-            params.ring_dimension(),
-            "Ring dimension mismatch: {} != {}",
-            ring_dimension,
-            params.ring_dimension()
-        );
-
-        let inner: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
-            .map(|i| {
-                parallel_iter!(0..ncol)
-                    .map(|j| {
-                        let idx = 1 + i * ncol + j; // 1 + (row index * number of columns + column index)
-                        let poly_bytes = &bytes[idx];
-                        DCRTPoly::from_compact_bytes(params, poly_bytes)
-                    })
-                    .collect()
-            })
-            .collect();
-
-        Self { inner, params: params.clone(), nrow, ncol }
-    }
-
-    /// Converts the matrix to a `Vec<Bytes>` object.
-    /// The first element of the vector contains metadata about the matrix:
-    /// - ring_dimension (4 bytes)
-    /// - nrow (4 bytes)
-    /// - ncol (4 bytes)
-    /// The remaining elements are the compact byte representations of each polynomial in the
-    /// matrix.
-    fn to_compact_bytes(&self) -> Vec<Bytes> {
-        let mut result = Vec::new();
-
-        let ring_dimension: u32 = self.params.ring_dimension();
-        let nrow = self.nrow;
-        let ncol = self.ncol;
-
-        let mut metadata = Vec::new();
-        metadata.extend_from_slice(&(ring_dimension).to_le_bytes());
-        metadata.extend_from_slice(&(nrow as u32).to_le_bytes());
-        metadata.extend_from_slice(&(ncol as u32).to_le_bytes());
-        result.push(Bytes::from(metadata));
-
-        let element_bytes: Vec<Bytes> = parallel_iter!(0..self.nrow)
-            .flat_map(|i| {
-                parallel_iter!(0..self.ncol)
-                    .map(|j| {
-                        let poly = &self.inner[i][j];
-                        poly.to_compact_bytes()
-                    })
-                    .collect::<Vec<Bytes>>()
-            })
-            .collect();
-
-        result.extend(element_bytes);
-        result
+        output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 }
 
@@ -805,85 +758,71 @@ mod tests {
     }
 
     #[test]
-    fn test_to_compact_bytes() {
+    fn test_mul_tensor_identity_decompose_naive() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
-        let ring_dimension = params.ring_dimension();
 
-        let nrow = 2;
-        let ncol = 12;
+        // Create matrix S (2x2516)
+        let s =
+            sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
 
-        // Create matrix (2x12)
-        let mat =
-            sampler.sample_uniform(&params, nrow, ncol, crate::poly::sampler::DistType::BitDist);
+        // Create 'other' matrix (2x68)
+        let other =
+            sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
 
-        let bytes = mat.to_compact_bytes();
+        // Decompose 'other' matrix
+        let other_decompose = other.decompose();
 
-        let mut byte_size_compact = 0;
+        // Perform S * (I_37 ⊗ G^-1(other))
+        let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
 
-        // the first element of the vector containing the metadata should be 12 bytes
-        assert_eq!(bytes[0].len(), 12);
+        // Check dimensions
+        assert_eq!(result.row_size(), 2);
+        assert_eq!(result.col_size(), 2516);
 
-        byte_size_compact += bytes[0].len();
+        let identity = DCRTPolyMatrix::identity(&params, 37, None);
 
-        for i in 1..bytes.len() {
-            // each element should be 1 byte for metadata + ring_dimension / 8 bytes for the bit
-            // vector + ring_dimension * byte_size (=1) for the coefficients
-            assert_eq!(
-                bytes[i].len(),
-                1 + (ring_dimension as usize / 8) + (ring_dimension as usize * 1)
-            );
-            byte_size_compact += bytes[i].len();
-        }
+        // Check result
+        let expected_result = s * (identity.tensor(&other_decompose));
 
-        // calculate the byte necessary to store the original matrix
-        // for each polynomial we need log2(params.modulus) * params.ring_dimension / 8 bytes
-        let byte_size_original =
-            ((params.modulus_bits() * params.ring_dimension() as usize) / 8) * nrow * ncol;
-
-        println!(
-            "Byte size (original): {}, Byte size (compact): {}",
-            byte_size_original, byte_size_compact
-        );
+        assert_eq!(expected_result.row_size(), 2);
+        assert_eq!(expected_result.col_size(), 2516);
+        assert_eq!(result, expected_result)
     }
 
     #[test]
-    fn test_from_compact_bytes() {
+    fn test_mul_tensor_identity_decompose_optimal() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
-        // Test with BitDist (binary coefficients)
-        let original_mat = sampler.sample_uniform(&params, 2, 12, DistType::BitDist);
-        let bytes = original_mat.to_compact_bytes();
-        let reconstructed_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+        // Create matrix S (2x2516)
+        let s =
+            sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
 
-        // The original and reconstructed matrices should be equal
-        assert_eq!(
-            original_mat, reconstructed_mat,
-            "Reconstructed matrix does not match original (BitDist)"
-        );
+        // Create 'other' matrix (2x68)
+        let other =
+            sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
 
-        // Test with FinRingDist (random coefficients in the ring)
-        let original_mat = sampler.sample_uniform(&params, 2, 12, DistType::FinRingDist);
-        let bytes = original_mat.to_compact_bytes();
-        let reconstructed_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+        // Perform S * (I_37 ⊗ G^-1(other))
+        let result: DCRTPolyMatrix = s.mul_tensor_identity_decompose(&other, 37);
 
-        // The original and reconstructed matrices should be equal
-        assert_eq!(
-            original_mat, reconstructed_mat,
-            "Reconstructed matrix does not match original (FinRingDist)"
-        );
+        // // Check dimensions
+        assert_eq!(result.row_size(), 2);
+        assert_eq!(result.col_size(), 2516);
 
-        // Test with GaussDist (Gaussian distribution)
-        let original_mat =
-            sampler.sample_uniform(&params, 2, 12, DistType::GaussDist { sigma: 3.0 });
-        let bytes = original_mat.to_compact_bytes();
-        let reconstructed_mat = DCRTPolyMatrix::from_compact_bytes(&params, bytes);
+        let identity = DCRTPolyMatrix::identity(&params, 37, None);
 
-        // The original and reconstructed matrices should be equal
-        assert_eq!(
-            original_mat, reconstructed_mat,
-            "Reconstructed matrix does not match original (GaussDist)"
-        );
+        // Check result
+        let expected_result = s.clone() * (identity.tensor(&other.decompose()));
+        let expected_result_2 = s.mul_tensor_identity(&other.decompose(), 37);
+
+        assert_eq!(expected_result.row_size(), 2);
+        assert_eq!(expected_result.col_size(), 2516);
+
+        assert_eq!(expected_result_2.row_size(), 2);
+        assert_eq!(expected_result_2.col_size(), 2516);
+
+        assert_eq!(result, expected_result);
+        assert_eq!(result, expected_result_2);
     }
 }

@@ -89,13 +89,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
-
-        let matrix_inner: Vec<Vec<_>> = parallel_iter!(0..nrow)
-            .map(|i| {
-                parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
-            })
-            .collect();
-        let public_matrix = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
+        let public_matrix = DCRTPolyMatrix::from_poly_vec(
+            params,
+            parallel_iter!(0..nrow)
+                .map(|i| {
+                    parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
+                })
+                .collect(),
+        );
         (rlwe_trapdoor, public_matrix)
     }
 

@@ -1,11 +1,10 @@
-use bytes::Bytes;
 use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
-    parallel_iter,
+    impl_binop_with_refs, parallel_iter,
     poly::{Poly, PolyElem, PolyParams},
 };
 use num_bigint::BigUint;
@@ -108,53 +107,6 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
-    /// Create a polynomial from a `Bytes` object created by `to_compact_bytes`.
-    fn from_compact_bytes(params: &DCRTPolyParams, bytes: &Bytes) -> Self {
-        let ring_dimension = params.ring_dimension() as usize;
-        let modulus: BigUint = params.modulus().as_ref().clone();
-
-        assert!(
-            ring_dimension % 8 == 0,
-            "Ring dimension must be divisible by 8, got: {}",
-            ring_dimension
-        );
-
-        // First byte contains the byte size per coefficient
-        let byte_size = bytes[0] as usize;
-
-        // Next n/8 bytes contain the bit vector
-        let bit_vector_size = ring_dimension / 8;
-        let bit_vector = &bytes[1..1 + bit_vector_size];
-
-        // Remaining bytes contain coefficient values
-        let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
-            .map(|i| {
-                let start = 1 + bit_vector_size + (i * byte_size);
-                let end = start + byte_size;
-                let value_bytes = &bytes[start..end];
-
-                let value = BigUint::from_bytes_le(value_bytes);
-
-                let byte_idx = i / 8;
-                let bit_idx = i % 8;
-                let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
-
-                // Convert back from centered representation
-                let final_value = if is_negative {
-                    // If negative flag is set, compute q - value
-                    &modulus - &value
-                } else {
-                    // Otherwise, use value as is
-                    value
-                };
-
-                FinRingElem::new(final_value, modulus.clone().into())
-            })
-            .collect();
-
-        Self::from_coeffs(params, &coeffs)
-    }
-
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
@@ -203,71 +155,6 @@ impl Poly for DCRTPoly {
             })
             .collect()
     }
-
-    /// Convert the polynomial to a `Bytes` object
-    /// The returned bytes have the following format:
-    /// - First byte: metadata about the byte size per coefficient
-    /// - Next n/8 bytes: bit vector (1 bit per coefficient, indicating if coeff is negative)
-    /// - Remaining bytes: coefficient values (centered around 0)
-    fn to_compact_bytes(&self) -> Bytes {
-        let modulus = self.ptr_poly.GetModulus();
-        let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
-        let q_half = modulus_big.clone() / 2u8;
-
-        let coeffs = self.coeffs();
-        let ring_dimension = coeffs.len();
-
-        assert!(
-            ring_dimension % 8 == 0,
-            "Ring dimension must be divisible by 8, got: {}",
-            ring_dimension
-        );
-
-        // Create a bit vector to store flags for negative coefficients
-        let bit_vector_size = ring_dimension / 8;
-        let mut bit_vector = vec![0u8; bit_vector_size];
-
-        let mut max_byte_size = 0;
-        let mut processed_values = Vec::with_capacity(ring_dimension);
-
-        for (i, coeff) in coeffs.iter().enumerate() {
-            // Center coefficients around 0
-            let value = if coeff.value() > &q_half {
-                let byte_idx = i / 8;
-                let bit_idx = i % 8;
-                bit_vector[byte_idx] |= 1 << bit_idx; // Set flag for negative coefficient
-                &modulus_big - coeff.value() // Convert to absolute value: q - a
-            } else if coeff.value() == &BigUint::from(0u32) {
-                BigUint::from(0u32)
-            } else {
-                coeff.value().clone()
-            };
-
-            processed_values.push(value.clone());
-
-            let value_bytes = value.to_bytes_le();
-            max_byte_size = std::cmp::max(max_byte_size, value_bytes.len());
-        }
-
-        let total_size = 1 + bit_vector_size + (ring_dimension * max_byte_size);
-        let mut result = vec![0u8; total_size];
-
-        // Store max_byte_size in the first byte
-        result[0] = max_byte_size as u8;
-
-        // Store bit vector
-        result[1..1 + bit_vector_size].copy_from_slice(&bit_vector);
-
-        // Store coefficient values using the pre-calculated values
-        for (i, value) in processed_values.iter().enumerate() {
-            let value_bytes = value.to_bytes_le();
-            let start_pos = 1 + bit_vector_size + (i * max_byte_size);
-
-            result[start_pos..start_pos + value_bytes.len()].copy_from_slice(&value_bytes);
-        }
-
-        Bytes::from(result)
-    }
 }
 
 impl PartialEq for DCRTPoly {
@@ -280,45 +167,6 @@ impl PartialEq for DCRTPoly {
 }
 
 impl Eq for DCRTPoly {}
-
-/// Implements $tr for all combinations of T and &T by delegating to the &T/&T implementation.
-macro_rules! impl_binop_with_refs {
-    ($T:ty => $tr:ident::$f:ident $($t:tt)*) => {
-        impl $tr<$T> for $T {
-            type Output = $T;
-
-            #[inline]
-            fn $f(self, rhs: $T) -> Self::Output {
-                <&$T as $tr<&$T>>::$f(&self, &rhs)
-            }
-        }
-
-        impl $tr<&$T> for $T {
-            type Output = $T;
-
-            #[inline]
-            fn $f(self, rhs: &$T) -> Self::Output {
-                <&$T as $tr<&$T>>::$f(&self, rhs)
-            }
-        }
-
-        impl $tr<$T> for &$T {
-            type Output = $T;
-
-            #[inline]
-            fn $f(self, rhs: $T) -> Self::Output {
-                <&$T as $tr<&$T>>::$f(self, &rhs)
-            }
-        }
-
-        impl $tr<&$T> for &$T {
-            type Output = $T;
-
-            #[inline]
-            fn $f $($t)*
-        }
-    };
-}
 
 impl_binop_with_refs!(DCRTPoly => Add::add(self, rhs: &DCRTPoly) -> DCRTPoly {
     DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))
@@ -490,86 +338,5 @@ mod tests {
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
         let decomposed = poly.decompose(&params);
         assert_eq!(decomposed.len(), params.modulus_bits());
-    }
-
-    #[test]
-    fn test_dcrtpoly_to_compact_bytes() {
-        let params = DCRTPolyParams::default();
-        let sampler = DCRTPolyUniformSampler::new();
-        let poly = sampler.sample_poly(&params, &DistType::BitDist);
-        let bytes = poly.to_compact_bytes();
-
-        let ring_dimension = params.ring_dimension() as usize;
-
-        // First byte is metadata about byte size per coefficient
-        // Since we're using BitDist, we expect byte_size to be 1
-        assert_eq!(bytes[0], 1, "Byte size should be 1 for BitDist");
-
-        // Next n/8 bytes are the bit vector (1 bit per coefficient)
-        let bit_vector_size = ring_dimension / 8;
-
-        // Calculate expected total size:
-        // 1 byte for metadata + bit_vector_size + (ring_dimension * byte_size)
-        let expected_total_size = 1 + bit_vector_size + (ring_dimension * 1);
-        assert_eq!(bytes.len(), expected_total_size, "Incorrect total byte size");
-
-        // Check that the structure is as expected
-        // Verify bit vector section exists
-        let bit_vector = &bytes[1..1 + bit_vector_size];
-        assert_eq!(bit_vector.len(), bit_vector_size, "Bit vector size is incorrect");
-
-        // Verify coefficient values section exists
-        let coeffs_section = &bytes[1 + bit_vector_size..];
-        assert_eq!(coeffs_section.len(), ring_dimension, "Coefficient section size is incorrect");
-
-        // Since we're using BitDist, each coefficient should be either 0 or 1
-        // This means each byte in the coefficient section should be 0 or 1
-        for (i, &coeff_byte) in coeffs_section.iter().enumerate() {
-            assert!(
-                coeff_byte == 0 || coeff_byte == 1,
-                "Coefficient at position {} should be 0 or 1, got {}",
-                i,
-                coeff_byte
-            );
-        }
-    }
-
-    #[test]
-    fn test_dcrtpoly_from_compact_bytes() {
-        let params = DCRTPolyParams::default();
-        let sampler = DCRTPolyUniformSampler::new();
-
-        // Test with BitDist (binary coefficients)
-        let original_poly = sampler.sample_poly(&params, &DistType::BitDist);
-        let bytes = original_poly.to_compact_bytes();
-        let reconstructed_poly = DCRTPoly::from_compact_bytes(&params, &bytes);
-
-        // The original and reconstructed polynomials should be equal
-        assert_eq!(
-            original_poly, reconstructed_poly,
-            "Reconstructed polynomial does not match original (BitDist)"
-        );
-
-        // Test with FinRingDist (random coefficients in the ring)
-        let original_poly = sampler.sample_poly(&params, &DistType::FinRingDist);
-        let bytes = original_poly.to_compact_bytes();
-        let reconstructed_poly = DCRTPoly::from_compact_bytes(&params, &bytes);
-
-        // The original and reconstructed polynomials should be equal
-        assert_eq!(
-            original_poly, reconstructed_poly,
-            "Reconstructed polynomial does not match original (FinRingDist)"
-        );
-
-        // Test with GaussDist (Gaussian distribution)
-        let original_poly = sampler.sample_poly(&params, &DistType::GaussDist { sigma: 3.2 });
-        let bytes = original_poly.to_compact_bytes();
-        let reconstructed_poly = DCRTPoly::from_compact_bytes(&params, &bytes);
-
-        // The original and reconstructed polynomials should be equal
-        assert_eq!(
-            original_poly, reconstructed_poly,
-            "Reconstructed polynomial does not match original (GaussDist)"
-        );
     }
 }

@@ -5,12 +5,10 @@ use crate::{
         sampler::*,
         BggPublicKey,
     },
-    parallel_iter,
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
 #[cfg(feature = "parallel")]
-use rayon::prelude::*;
 use std::{marker::PhantomData, ops::Mul};
 use tracing::info;
 
@@ -28,7 +26,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub a_rlwe_bar: S::M,
     pub pubkeys: Vec<Vec<BggPublicKey<S::M>>>,
     // pub pubkeys_fhe_key: Vec<Vec<BggPublicKey<S::M>>>,
-    pub rgs_decomposed: [S::M; 2],
+    pub rgs: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
     pub packed_output_size: usize,
@@ -47,6 +45,11 @@ where
         let params = &obf_params.params;
         let d = obf_params.d;
 
+        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, d, d, DistType::BitDist);
+        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, d, d, DistType::BitDist);
+        let one = S::M::identity(params, 1, None);
+        let r_0 = r_0_bar.concat_diag(&[&one]);
+        let r_1 = r_1_bar.concat_diag(&[&one]);
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
@@ -79,28 +82,11 @@ where
         //     })
         //     .collect_vec();
         // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
-        info!("pubkeys computed");
         let gadget_d1 = S::M::gadget_matrix(params, d + 1);
-        info!("gadget_d1 computed");
-        let one = S::M::identity(params, 1, None);
-        let r_0 =
-            hash_sampler.sample_hash(params, TAG_R_0, d, d, DistType::BitDist).concat_diag(&[&one]);
-        let r_1 =
-            hash_sampler.sample_hash(params, TAG_R_1, d, d, DistType::BitDist).concat_diag(&[&one]);
-        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] = {
-            parallel_iter!(0..2)
-                .map(|i| {
-                    if i == 0 {
-                        (&r_0 * &gadget_d1).decompose()
-                    } else {
-                        (&r_1 * &gadget_d1).decompose()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap()
-        };
-        info!("rgs_decomposed computed");
+        // let identity_2 = S::M::identity(params, 2, None);
+        let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
+            [(&r_0 * &gadget_d1), (&r_1 * &gadget_d1)];
+
         let a_prf_raw = hash_sampler.sample_hash(
             params,
             TAG_A_PRF,
@@ -116,7 +102,7 @@ where
             r_1,
             a_rlwe_bar,
             pubkeys,
-            rgs_decomposed,
+            rgs,
             a_prf,
             packed_input_size,
             packed_output_size,
@@ -246,7 +232,6 @@ mod test {
         let mut inputs = vec![one.clone()];
         inputs.push(t_bar.entry(0, 0).clone());
         let circuit_outputs = final_circuit.eval(&params, one, &inputs);
-        println!("circuit_outputs {:?}", circuit_outputs);
         // 9. Extract the hardcoded key bits
         let hardcoded_key_bits = hardcoded_key
             .entry(0, 0)
@@ -331,7 +316,8 @@ mod test {
 
     //     // 6. Generate RLWE ciphertext for the hardcoded key
     //     let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-    //     let e = uniform_sampler.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0 });
+    //     let e = uniform_sampler.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0
+    // });
 
     //     // Create a scale value (half of q)
     //     let modulus = params.modulus();
@@ -345,8 +331,8 @@ mod test {
 
     //     // 8. Build the final step circuit with BggEncoding as the Evaluable type
     //     let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
-    //     let final_circuit_pubkey = build_final_step_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
-    //         &params,
+    //     let final_circuit_pubkey = build_final_step_circuit::<DCRTPoly,
+    // BggPublicKey<DCRTPolyMatrix>>(         &params,
     //         &a_decomposed_polys,
     //         &enc_hardcoded_key_polys,
     //         public_circuit.clone(),
@@ -376,12 +362,12 @@ mod test {
     //     plaintexts.push(t_bar.entry(0, 0).clone());
 
     //     // Create encoding sampler and encodings
-    //     let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-    //     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+    //     let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler,
+    // 0.0);     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
 
     //     // 10. Evaluate the circuit with the BggPublicKey/BggEncoding inputs
-    //     let outputs_pubkeys = final_circuit_pubkey.eval(&params, pubkeys[0].clone(), &pubkeys[1..]);
-    //     let outputs_encodings =
+    //     let outputs_pubkeys = final_circuit_pubkey.eval(&params, pubkeys[0].clone(),
+    // &pubkeys[1..]);     let outputs_encodings =
     //         final_circuit_encoding.eval(&params, encodings[0].clone(), &encodings[1..]);
     //     assert_eq!(
     //         outputs_pubkeys[0].concat_matrix(&outputs_pubkeys[1..]),

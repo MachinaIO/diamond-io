@@ -136,7 +136,6 @@ where
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
-
         let all_public_key_matrix: S::M = public_keys[0]
             .matrix
             .concat_columns(&public_keys[1..].iter().map(|pk| &pk.matrix).collect_vec());
@@ -145,7 +144,6 @@ where
         let gadget = S::M::gadget_matrix(params, secret_vec_size);
         let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
         let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
-
         let all_vector = first_term - second_term + error;
 
         let m = secret_vec_size * log_q;
@@ -266,15 +264,15 @@ mod tests {
         assert_eq!(bgg_encodings.len(), packed_input_size + 1);
         assert_eq!(
             bgg_encodings[0].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone()
-                - bgg_sampler.secret_vec.clone()
-                    * (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone() -
+                bgg_sampler.secret_vec.clone() *
+                    (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
         );
         assert_eq!(
             bgg_encodings[1].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone()
-                - bgg_sampler.secret_vec.clone()
-                    * (g * bgg_encodings[1].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone() -
+                bgg_sampler.secret_vec.clone() *
+                    (g * bgg_encodings[1].plaintext.clone().unwrap())
         )
     }
 
@@ -309,8 +307,8 @@ mod tests {
                 assert_eq!(addition.vector, a.clone().vector + b.clone().vector);
                 assert_eq!(
                     addition.vector,
-                    bgg_sampler.secret_vec.clone()
-                        * (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
+                    bgg_sampler.secret_vec.clone() *
+                        (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
                 )
             }
         }
@@ -345,8 +343,8 @@ mod tests {
                 let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
                 assert_eq!(
                     multiplication.vector,
-                    (bgg_sampler.secret_vec.clone()
-                        * (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
+                    (bgg_sampler.secret_vec.clone() *
+                        (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
                 )
             }
         }
@@ -368,8 +366,9 @@ mod tests {
     //     let secrets = vec![create_bit_random_poly(&params); d];
     //     let plaintexts = vec![create_random_poly(&params); packed_input_size];
     //     // TODO: set the standard deviation to a non-zero value
-    //     let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
-    //     let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
+    //     let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(),
+    // 0.0);     let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys,
+    // &plaintexts);
 
     //     // Create a scalar (polynomial) for scalar multiplication
     //     let scalar = create_random_poly(&params);
@@ -393,11 +392,12 @@ mod tests {
     //         let gadget_scalar = g.clone() * &scalar;
     //         let decomposed_gadget_scalar = gadget_scalar.decompose();
 
-    //         // The vector should be the original vector multiplied by the decomposed gadget scalar
-    //         assert_eq!(scalar_mul.vector, encoding.vector.clone() * decomposed_gadget_scalar);
+    //         // The vector should be the original vector multiplied by the decomposed gadget
+    // scalar         assert_eq!(scalar_mul.vector, encoding.vector.clone() *
+    // decomposed_gadget_scalar);
 
-    //         // Alternative verification: check that the vector satisfies the BGG encoding relation
-    //         assert_eq!(
+    //         // Alternative verification: check that the vector satisfies the BGG encoding
+    // relation         assert_eq!(
     //             scalar_mul.vector,
     //             bgg_sampler.secret_vec.clone() *
     //                 (scalar_mul.pubkey.matrix.clone() -

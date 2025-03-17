@@ -74,11 +74,17 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
 
 pub fn log_mem() {
     if let Some(usage) = memory_stats() {
-        info!("Current physical memory usage: {}", usage.physical_mem);
-        info!("Current virtual memory usage: {}", usage.virtual_mem);
+        info!(
+            "Current physical/virtural memory usage: {} / {}",
+            usage.physical_mem, usage.virtual_mem
+        );
     } else {
         info!("Couldn't get the current memory usage :(");
     }
+}
+
+pub fn init_tracing() {
+    tracing_subscriber::fmt::init();
 }
 
 #[macro_export]
@@ -107,4 +113,44 @@ macro_rules! join {
             rayon::join($a, $b)
         }
     }};
+}
+
+/// Implements $tr for all combinations of T and &T by delegating to the &T/&T implementation.
+#[macro_export]
+macro_rules! impl_binop_with_refs {
+    ($T:ty => $tr:ident::$f:ident $($t:tt)*) => {
+        impl $tr<$T> for $T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: $T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(&self, &rhs)
+            }
+        }
+
+        impl $tr<&$T> for $T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: &$T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(&self, rhs)
+            }
+        }
+
+        impl $tr<$T> for &$T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: $T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(self, &rhs)
+            }
+        }
+
+        impl $tr<&$T> for &$T {
+            type Output = $T;
+
+            #[inline]
+            fn $f $($t)*
+        }
+    };
 }
