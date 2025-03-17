@@ -183,23 +183,17 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 mod test {
     use super::*;
     use crate::{
-        bgg::{
-            sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-            BggEncoding, BitToInt,
-        },
+        bgg::{circuit::serde::SerializablePolyCircuit, BitToInt},
         poly::{
             dcrt::{
-                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
-                DCRTPolyUniformSampler, FinRingElem,
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
             element::PolyElem,
             sampler::DistType,
         },
-        utils::create_bit_random_poly,
     };
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
-    use std::sync::Arc;
 
     #[test]
     fn test_build_final_step_circuit() {
@@ -275,6 +269,36 @@ mod test {
         {
             assert_eq!(output_bit, key_bit, "Bit mismatch at position {}", i);
         }
+    }
+
+    #[test]
+    fn test_final_bits_circuit_to_json_for_norm() {
+        // 1. Set up parameters
+        let params = DCRTPolyParams::default();
+        let log_q = params.modulus_bits();
+
+        // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
+        let mut public_circuit = PolyCircuit::new();
+        {
+            let inputs = public_circuit.input(log_q + 1);
+            public_circuit.output(inputs[0..log_q].to_vec());
+        }
+
+        let a_rlwe_bar = DCRTPoly::const_max(&params);
+        let enc_hardcoded_key = DCRTPoly::const_max(&params);
+
+        let a_decomposed_polys = a_rlwe_bar.decompose(&params);
+        let b_decomposed_polys = enc_hardcoded_key.decompose(&params);
+        let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
+            &params,
+            &a_decomposed_polys,
+            &b_decomposed_polys,
+            public_circuit,
+        );
+
+        let serde_circuit = SerializablePolyCircuit::from_circuit(&final_circuit);
+        let json = serde_json::to_string(&serde_circuit).unwrap();
+        println!("{}", json);
     }
 
     // #[test]
