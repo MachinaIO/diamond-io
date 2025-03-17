@@ -186,8 +186,10 @@ impl Poly for DCRTPoly {
     /// Return a vector of polynomials, where the h-th polynomial is defined as
     /// b_{0, h} + b_{1, h} * x + b_{2, h} * x^2 + ... + b_{n-1, h} * x^{n-1}.
     fn decompose(&self, params: &Self::Params) -> Vec<Self> {
+        info!("before decompose:");
+        log_mem();
         let decomposed = self.ptr_poly.Decompose();
-        info!("after decompose");
+        info!("after decompose:");
         log_mem();
 
         let mut vec = Vec::with_capacity(params.modulus_bits());
@@ -196,7 +198,7 @@ impl Poly for DCRTPoly {
             vec.push(DCRTPoly::new(poly));
         }
 
-        info!("after conversion");
+        info!("after conversion:");
         log_mem();
 
         vec
