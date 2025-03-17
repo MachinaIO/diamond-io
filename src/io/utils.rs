@@ -26,7 +26,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub a_rlwe_bar: S::M,
     pub pubkeys: Vec<Vec<BggPublicKey<S::M>>>,
     // pub pubkeys_fhe_key: Vec<Vec<BggPublicKey<S::M>>>,
-    pub rgs_decomposed: [S::M; 2],
+    pub rgs: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
     pub packed_output_size: usize,
@@ -86,8 +86,7 @@ where
         info!("pubkeys computed");
         let gadget_2 = S::M::gadget_matrix(params, 2);
         // let identity_2 = S::M::identity(params, 2, None);
-        // todo: note this is not decomposed
-        let rgs_decomposed: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
+        let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
             [(&r_0 * &gadget_2), (&r_1 * &gadget_2)];
 
         let a_prf_raw = hash_sampler.sample_hash(
@@ -105,7 +104,7 @@ where
             r_1,
             a_rlwe_bar,
             pubkeys,
-            rgs_decomposed,
+            rgs,
             a_prf,
             packed_input_size,
             packed_output_size,
@@ -380,9 +379,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec *
-                (outputs_encodings[0].pubkey.matrix.clone() -
-                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+            bgg_encoding_sampler.secret_vec
+                * (outputs_encodings[0].pubkey.matrix.clone()
+                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }

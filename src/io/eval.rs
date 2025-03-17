@@ -50,9 +50,9 @@ where
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
-            let expected_encoding_init = &self.s_init *
-                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
-                    inserted_poly_gadget);
+            let expected_encoding_init = &self.s_init
+                * &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
+                    - inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -79,11 +79,7 @@ where
             //     2 * log_q * (packed_input_size + 3),
             // );
             let new_encode_vec = {
-                let t = if *input {
-                    &public_data.rgs_decomposed[1]
-                } else {
-                    &public_data.rgs_decomposed[0]
-                };
+                let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
                 let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
                 encode_vec.mul_tensor_identity_decompose(t, packed_input_size + 1) + v
@@ -213,10 +209,10 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s *
-                    (output_encodings[0].pubkey.matrix.clone() -
-                        M::gadget_matrix(&params, 2) *
-                            output_encodings[0].plaintext.clone().unwrap());
+                let expcted = last_s
+                    * (output_encodings[0].pubkey.matrix.clone()
+                        - M::gadget_matrix(&params, 2)
+                            * output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
 
