@@ -27,7 +27,6 @@ where
     for<'a> &'a M: Mul<&'a <M as PolyMatrix>::P, Output = M>,
     for<'a> &'a M: Mul<&'a M, Output = M>,
 {
-    info!("gm");
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();

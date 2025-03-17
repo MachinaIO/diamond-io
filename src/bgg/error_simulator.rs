@@ -1,5 +1,8 @@
 use super::{circuit::PolyCircuit, Evaluable};
-use crate::poly::{Poly, PolyElem};
+use crate::{
+    impl_binop_with_refs,
+    poly::{Poly, PolyElem},
+};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
@@ -33,65 +36,31 @@ impl ErrorSimulator {
     }
 }
 
-impl Add<Self> for ErrorSimulator {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        self + &rhs
+impl_binop_with_refs!(ErrorSimulator => Add::add(self, rhs: &ErrorSimulator) -> ErrorSimulator {
+    ErrorSimulator {
+        h_norm: &self.h_norm + &rhs.h_norm,
+        plaintext_norm: &self.plaintext_norm + &rhs.plaintext_norm,
+        dim: self.dim,
     }
-}
+});
 
-impl Add<&Self> for ErrorSimulator {
-    type Output = Self;
-
-    fn add(self, rhs: &Self) -> Self {
-        Self {
-            h_norm: self.h_norm + &rhs.h_norm,
-            plaintext_norm: self.plaintext_norm + &rhs.plaintext_norm,
-            dim: self.dim,
-        }
+// Note: norm of the subtraction result is bounded by a sum of the norms of the input matrices,
+// i.e., |A-B| < |A| + |B|
+impl_binop_with_refs!(ErrorSimulator => Sub::sub(self, rhs: &ErrorSimulator) -> ErrorSimulator {
+    ErrorSimulator {
+        h_norm: &self.h_norm + &rhs.h_norm,
+        plaintext_norm: &self.plaintext_norm + &rhs.plaintext_norm,
+        dim: self.dim,
     }
-}
+});
 
-impl Sub<Self> for ErrorSimulator {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        self - &rhs
+impl_binop_with_refs!(ErrorSimulator => Mul::mul(self, rhs: &ErrorSimulator) -> ErrorSimulator {
+    ErrorSimulator {
+        h_norm: self.h_norm.right_rotate(self.dim) + &rhs.h_norm * &self.plaintext_norm,
+        plaintext_norm: &self.plaintext_norm * &rhs.plaintext_norm,
+        dim: self.dim,
     }
-}
-
-impl Sub<&Self> for ErrorSimulator {
-    type Output = Self;
-
-    fn sub(self, rhs: &Self) -> Self {
-        Self {
-            h_norm: self.h_norm + &rhs.h_norm,
-            plaintext_norm: self.plaintext_norm + &rhs.plaintext_norm,
-            dim: self.dim,
-        }
-    }
-}
-
-impl Mul<Self> for ErrorSimulator {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self {
-        self * &rhs
-    }
-}
-
-impl Mul<&Self> for ErrorSimulator {
-    type Output = Self;
-
-    fn mul(self, rhs: &Self) -> Self {
-        Self {
-            h_norm: self.h_norm.right_rotate(self.dim) + rhs.h_norm.clone() * &self.plaintext_norm,
-            plaintext_norm: self.plaintext_norm * &rhs.plaintext_norm,
-            dim: self.dim,
-        }
-    }
-}
+});
 
 impl<P: Poly> Evaluable<P> for ErrorSimulator {
     type Params = ();
@@ -101,7 +70,7 @@ impl<P: Poly> Evaluable<P> for ErrorSimulator {
             scalar.coeffs().iter().fold(BigUint::zero(), |acc, x| acc + x.to_biguint());
         Self {
             h_norm: self.h_norm.right_rotate(dim),
-            plaintext_norm: self.plaintext_norm.clone() * scalar_norm,
+            plaintext_norm: &self.plaintext_norm * scalar_norm,
             dim,
         }
     }
@@ -117,37 +86,26 @@ impl MPolyCoeffs {
 
     pub fn right_rotate(&self, scale: u32) -> Self {
         let mut coeffs = vec![BigUint::zero()];
-        coeffs.extend(self.0.iter().map(|coeff| coeff.clone() * scale).collect_vec());
+        coeffs.extend(self.0.iter().map(|coeff| coeff * scale).collect_vec());
         Self(coeffs)
     }
 }
 
-impl Add<Self> for MPolyCoeffs {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        self + &rhs
+impl_binop_with_refs!(MPolyCoeffs => Add::add(self, rhs: &MPolyCoeffs) -> MPolyCoeffs {
+    let self_len = self.0.len();
+    let rhs_len = rhs.0.len();
+    let max_len = self_len.max(rhs_len);
+
+    let mut result = Vec::with_capacity(max_len);
+
+    for i in 0..max_len {
+        let a = if i < self_len { self.0[i].clone() } else { BigUint::zero() };
+        let b = if i < rhs_len { rhs.0[i].clone() } else { BigUint::zero() };
+        result.push(a + b);
     }
-}
 
-impl Add<&Self> for MPolyCoeffs {
-    type Output = Self;
-
-    fn add(self, rhs: &Self) -> Self::Output {
-        let self_len = self.0.len();
-        let rhs_len = rhs.0.len();
-        let max_len = self_len.max(rhs_len);
-
-        let mut result = Vec::with_capacity(max_len);
-
-        for i in 0..max_len {
-            let a = if i < self_len { self.0[i].clone() } else { BigUint::zero() };
-            let b = if i < rhs_len { rhs.0[i].clone() } else { BigUint::zero() };
-            result.push(a + b);
-        }
-
-        Self(result)
-    }
-}
+    MPolyCoeffs(result)
+});
 
 impl Mul<BigUint> for MPolyCoeffs {
     type Output = Self;
@@ -159,7 +117,14 @@ impl Mul<BigUint> for MPolyCoeffs {
 impl Mul<&BigUint> for MPolyCoeffs {
     type Output = Self;
     fn mul(self, rhs: &BigUint) -> Self {
-        Self(self.0.iter().map(|a| a.clone() * rhs).collect())
+        &self * rhs
+    }
+}
+
+impl Mul<&BigUint> for &MPolyCoeffs {
+    type Output = MPolyCoeffs;
+    fn mul(self, rhs: &BigUint) -> MPolyCoeffs {
+        MPolyCoeffs(self.0.iter().map(|a| a * rhs).collect())
     }
 }
 
@@ -190,7 +155,7 @@ mod tests {
         let sim2 = create_test_error_simulator(8, vec![20u32], 7);
 
         // Test addition
-        let result = sim1.clone() + sim2.clone();
+        let result = sim1 + sim2;
 
         // Verify the result
         assert_eq!(result.h_norm.0[0], BigUint::from(30u32)); // 10 + 20
@@ -205,7 +170,7 @@ mod tests {
         let sim2 = create_test_error_simulator(8, vec![20u32], 7);
 
         // Test subtraction (which is actually addition in this implementation)
-        let result = sim1.clone() - sim2.clone();
+        let result = sim1 - sim2;
 
         // Verify the result (should be the same as addition)
         assert_eq!(result.h_norm.0[0], BigUint::from(30u32)); // 10 + 20
@@ -220,7 +185,7 @@ mod tests {
         let sim2 = create_test_error_simulator(8, vec![20u32], 7);
 
         // Test multiplication
-        let result = sim1.clone() * sim2.clone();
+        let result = sim1 * sim2;
 
         // Verify the result
         // h_norm should be sim1.h_norm.right_rotate(8) + sim2.h_norm * sim1.plaintext_norm
@@ -298,7 +263,7 @@ mod tests {
         let poly1 = MPolyCoeffs::new(vec![BigUint::from(1u32), BigUint::from(2u32)]);
         let poly2 = MPolyCoeffs::new(vec![BigUint::from(3u32), BigUint::from(4u32)]);
 
-        let result = poly1.clone() + poly2.clone();
+        let result = poly1 + poly2;
         assert_eq!(result.0[0], BigUint::from(4u32)); // 1 + 3
         assert_eq!(result.0[1], BigUint::from(6u32)); // 2 + 4
 

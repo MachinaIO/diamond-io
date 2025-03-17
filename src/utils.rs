@@ -97,3 +97,43 @@ macro_rules! join {
         }
     }};
 }
+
+/// Implements $tr for all combinations of T and &T by delegating to the &T/&T implementation.
+#[macro_export]
+macro_rules! impl_binop_with_refs {
+    ($T:ty => $tr:ident::$f:ident $($t:tt)*) => {
+        impl $tr<$T> for $T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: $T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(&self, &rhs)
+            }
+        }
+
+        impl $tr<&$T> for $T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: &$T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(&self, rhs)
+            }
+        }
+
+        impl $tr<$T> for &$T {
+            type Output = $T;
+
+            #[inline]
+            fn $f(self, rhs: $T) -> Self::Output {
+                <&$T as $tr<&$T>>::$f(self, &rhs)
+            }
+        }
+
+        impl $tr<&$T> for &$T {
+            type Output = $T;
+
+            #[inline]
+            fn $f $($t)*
+        }
+    };
+}

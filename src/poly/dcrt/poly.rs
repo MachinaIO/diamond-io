@@ -3,7 +3,7 @@ use rayon::prelude::*;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
-    parallel_iter,
+    impl_binop_with_refs, parallel_iter,
     poly::{Poly, PolyElem, PolyParams},
 };
 use num_bigint::BigUint;
@@ -162,45 +162,6 @@ impl PartialEq for DCRTPoly {
 }
 
 impl Eq for DCRTPoly {}
-
-/// Implements $tr for all combinations of T and &T by delegating to the &T/&T implementation.
-macro_rules! impl_binop_with_refs {
-    ($T:ty => $tr:ident::$f:ident $($t:tt)*) => {
-        impl $tr<$T> for $T {
-            type Output = $T;
-
-            #[inline]
-            fn $f(self, rhs: $T) -> Self::Output {
-                <&$T as $tr<&$T>>::$f(&self, &rhs)
-            }
-        }
-
-        impl $tr<&$T> for $T {
-            type Output = $T;
-
-            #[inline]
-            fn $f(self, rhs: &$T) -> Self::Output {
-                <&$T as $tr<&$T>>::$f(&self, rhs)
-            }
-        }
-
-        impl $tr<$T> for &$T {
-            type Output = $T;
-
-            #[inline]
-            fn $f(self, rhs: $T) -> Self::Output {
-                <&$T as $tr<&$T>>::$f(self, &rhs)
-            }
-        }
-
-        impl $tr<&$T> for &$T {
-            type Output = $T;
-
-            #[inline]
-            fn $f $($t)*
-        }
-    };
-}
 
 impl_binop_with_refs!(DCRTPoly => Add::add(self, rhs: &DCRTPoly) -> DCRTPoly {
     DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))

@@ -54,7 +54,6 @@ mod test {
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
-    use tracing::info;
 
     fn init_tracing() {
         tracing_subscriber::fmt::init();

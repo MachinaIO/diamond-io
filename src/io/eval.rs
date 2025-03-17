@@ -142,8 +142,7 @@ where
                     let dim = params.ring_dimension() as usize;
                     let one = <M::P as Poly>::const_one(&params);
                     let gadget_2 = M::gadget_matrix(&params, 2);
-                    let enc_hardcoded_key_decomposed =
-                        self.enc_hardcoded_key.decompose().get_column(0);
+
                     let inserted_poly_gadget = {
                         let mut polys = vec![];
                         polys.push(one.clone());
@@ -175,11 +174,12 @@ where
             // cs_input.push(c_input);
             // cs_fhe_key.push(c_fhe_key);
         }
+        let enc_hardcoded_key_decomposed = &self.enc_hardcoded_key.decompose().get_column(0);
         let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
         let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
             &params,
             &a_decomposed_polys,
-            &self.enc_hardcoded_key.decompose().get_column(0),
+            enc_hardcoded_key_decomposed,
             obf_params.public_circuit.clone(),
         );
         let last_input_encodings = encodings.last().unwrap();
