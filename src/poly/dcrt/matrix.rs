@@ -540,15 +540,11 @@ mod tests {
     use std::sync::Arc;
 
     use num_bigint::BigUint;
-    use tracing::info;
 
     use super::*;
-    use crate::{
-        poly::{
-            dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
-            sampler::PolyUniformSampler,
-        },
-        utils::{init_tracing, log_mem},
+    use crate::poly::{
+        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+        sampler::PolyUniformSampler,
     };
 
     #[test]

@@ -12,7 +12,6 @@ use num_bigint::BigUint;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::marker::PhantomData;
-use tracing::info;
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     key: [u8; 32],
@@ -48,7 +47,6 @@ where
         }
 
         // From field elements to nrow * ncol polynomials
-        let total_poly = nrow * ncol;
         DCRTPolyMatrix::from_poly_vec(
             params,
             parallel_iter!(0..nrow)

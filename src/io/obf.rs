@@ -6,11 +6,9 @@ use crate::{
     },
     join,
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
-    utils::log_mem,
 };
 use rand::{Rng, RngCore};
 use std::{ops::Mul, sync::Arc};
-use tracing::info;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -115,22 +113,15 @@ where
             r
         };
 
-        let mp = || {
-            let r = join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
-            r
-        };
+        let mp = || join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
         let ub_star = &u_star * b_next_star;
         // todo: 36gb
-        let n_preimage = |t, n| {
-            let r = sampler_trapdoor.preimage(&params, t, n, &ub_star);
-            r
-        };
+        let n_preimage = |t, n| sampler_trapdoor.preimage(&params, t, n, &ub_star);
         let np = || {
-            let r = join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
+            join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
                 b_next_1_trapdoor,
                 b_next_1
-            ));
-            r
+            ))
         };
 
         let k_preimage = |bit: usize| {
@@ -158,17 +149,14 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
+                &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
             sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
         };
-        let kp = || {
-            let r = join!(|| k_preimage(0), || k_preimage(1));
-            r
-        };
+        let kp = || join!(|| k_preimage(0), || k_preimage(1));
 
         let (mp, (np, kp)) = join!(mp, || join!(np, kp));
 
@@ -233,10 +221,4 @@ where
         #[cfg(test)]
         final_preimage_target,
     }
-}
-
-pub fn m_preimage<M>(a: M)
-where
-    M: PolyMatrix,
-{
 }

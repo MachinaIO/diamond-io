@@ -2,11 +2,9 @@ use super::{utils::*, Obfuscation, ObfuscationParams};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding},
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
-    utils::log_mem,
 };
 use itertools::Itertools;
 use std::{ops::Mul, sync::Arc};
-use tracing::info;
 
 impl<M> Obfuscation<M>
 where
@@ -52,9 +50,9 @@ where
                 let gadget_2 = M::gadget_matrix(&params, 2);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_2)
             };
-            let expected_encoding_init = &self.s_init
-                * &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
-                    - inserted_poly_gadget);
+            let expected_encoding_init = &self.s_init *
+                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
+                    inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -211,10 +209,10 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s
-                    * (output_encodings[0].pubkey.matrix.clone()
-                        - M::gadget_matrix(&params, 2)
-                            * output_encodings[0].plaintext.clone().unwrap());
+                let expcted = last_s *
+                    (output_encodings[0].pubkey.matrix.clone() -
+                        M::gadget_matrix(&params, 2) *
+                            output_encodings[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encodings[0].vector, expcted);
             }
 
