@@ -112,13 +112,11 @@ where
 }
 
 pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
-    params: &P::Params,
     a_decomposed_polys: &[P],
     b_decomposed_polys: &[P],
     public_circuit: PolyCircuit,
 ) -> PolyCircuit {
-    let log_q = params.modulus_bits();
-    debug_assert_eq!(a_decomposed_polys.len(), log_q);
+    let log_q = a_decomposed_polys.len();
     debug_assert_eq!(b_decomposed_polys.len(), log_q);
     let packed_eval_input_size = public_circuit.num_input() - log_q;
 
@@ -129,22 +127,15 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
         let circuit_id = ct_output_circuit.register_sub_circuit(public_circuit);
         let mut public_circuit_inputs = vec![];
         for poly in b_decomposed_polys.iter() {
-            let bits = poly
-                .coeffs()
-                .iter()
-                .map(|elem| elem != &P::Elem::zero(&params.modulus()))
-                .collect_vec();
+            let bits = poly.coeffs().iter().map(|elem| elem.to_bit()).collect_vec();
             public_circuit_inputs.push(ct_output_circuit.const_bit_poly(&bits));
         }
         public_circuit_inputs.extend(inputs);
         let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &public_circuit_inputs);
         let mut outputs = Vec::with_capacity(pc_outputs.len() * 2);
         for (idx, b_bit) in pc_outputs.into_iter().enumerate() {
-            let bits = a_decomposed_polys[idx]
-                .coeffs()
-                .iter()
-                .map(|elem| elem != &P::Elem::zero(&params.modulus()))
-                .collect_vec();
+            let bits =
+                a_decomposed_polys[idx].coeffs().iter().map(|elem| elem.to_bit()).collect_vec();
             outputs.push(ct_output_circuit.const_bit_poly(&bits));
             outputs.push(b_bit);
         }
@@ -221,7 +212,6 @@ mod test {
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
         let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &params,
             &a_decomposed_polys,
             &enc_hardcoded_key_polys,
             public_circuit,
@@ -275,7 +265,6 @@ mod test {
         let a_decomposed_polys = a_rlwe_bar.decompose(&params);
         let b_decomposed_polys = enc_hardcoded_key.decompose(&params);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &params,
             &a_decomposed_polys,
             &b_decomposed_polys,
             public_circuit,

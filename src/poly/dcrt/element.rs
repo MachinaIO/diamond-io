@@ -65,6 +65,16 @@ impl PolyElem for FinRingElem {
         Self::new(value, modulus.clone())
     }
 
+    fn to_bit(&self) -> bool {
+        if self.value == BigUint::ZERO {
+            false
+        } else if self.value == BigUint::from(1u8) {
+            true
+        } else {
+            panic!("Cannot convert non-zero or non-one value to bit");
+        }
+    }
+
     fn half_q(modulus: &Self::Modulus) -> Self {
         let bits = modulus.bits();
         let value = BigUint::from(1u8) << (bits - 1);

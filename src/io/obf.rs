@@ -157,8 +157,8 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
-                &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
+                - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
@@ -175,7 +175,6 @@ where
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
     let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
-        &params,
         &a_decomposed_polys,
         &enc_hardcoded_key_polys,
         public_circuit.clone(),
