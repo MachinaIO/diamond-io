@@ -14,6 +14,7 @@ impl PolyGate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolyGateType {
     Input,
+    Const { bits: Vec<bool> },
     Add,
     Sub,
     Mul,
@@ -24,7 +25,7 @@ pub enum PolyGateType {
 impl PolyGateType {
     pub fn num_input(&self) -> usize {
         match self {
-            PolyGateType::Input => 0,
+            PolyGateType::Input | PolyGateType::Const { .. } => 0,
             PolyGateType::Rotate { .. } => 1,
             PolyGateType::Add | PolyGateType::Sub | PolyGateType::Mul => 2,
             PolyGateType::Call { num_input, .. } => *num_input,

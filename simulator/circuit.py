@@ -16,6 +16,7 @@ class SerializablePolyGateType:
     """Python equivalent of the Rust SerializablePolyGateType enum."""
 
     INPUT = "Input"
+    CONST = "Const"
     ADD = "Add"
     SUB = "Sub"
     MUL = "Mul"
@@ -37,6 +38,7 @@ class SerializablePolyGate:
         gate_id: int,
         gate_type: str,
         input_gates: List[int],
+        const_data: Optional[List[bool]] = None,
         rotate_data: Optional[int] = None,
         call_data: Optional[CallData] = None,
     ):
@@ -47,12 +49,14 @@ class SerializablePolyGate:
             gate_id: The ID of the gate
             gate_type: The type of the gate (one of the SerializablePolyGateType constants)
             input_gates: List of input gate IDs
+            const_data: List of boolean values for Const gates
             rotate_data: Shift amount for Rotate gates
             call_data: Dictionary with circuit_id, num_input, and output_id for Call gates
         """
         self.gate_id = gate_id
         self.gate_type = gate_type
         self.input_gates = input_gates
+        self.const_data = const_data
         self.rotate_data = rotate_data
         self.call_data = call_data
 
@@ -71,9 +75,16 @@ class SerializablePolyGate:
         # Handle different gate types
         if isinstance(gate_type_data, dict):
             # Complex gate types are represented as objects
-            if "Rotate" in gate_type_data:
+            if "Const" in gate_type_data:
+                bits = gate_type_data["Const"]["bits"]
+                return cls(
+                    gate_id,
+                    SerializablePolyGateType.CONST,
+                    input_gates,
+                    const_data=bits,
+                )
+            elif "Rotate" in gate_type_data:
                 shift = gate_type_data["Rotate"]["shift"]
-
                 return cls(
                     gate_id,
                     SerializablePolyGateType.ROTATE,
@@ -215,6 +226,10 @@ class SerializablePolyCircuit:
             gate = self.gates[gate_id]
             if gate.gate_type == SerializablePolyGateType.INPUT:
                 continue
+            elif gate.gate_type == SerializablePolyGateType.CONST:
+                h_norm = n
+                plaintext_norm = n
+                norms[gate_id] = NormBoundsPerGate(h_norm, plaintext_norm)
             elif gate.gate_type == SerializablePolyGateType.ADD:
                 left = norms[gate.input_gates[0]]
                 right = norms[gate.input_gates[1]]
@@ -259,7 +274,7 @@ class TestCircuit(unittest.TestCase):
 
         # Get the path to circuit_test.json
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        circuit_test_path = os.path.join(current_dir, "circuit_test.json")
+        circuit_test_path = os.path.join(current_dir, "final_bits_circuit.json")
 
         # Load the circuit from the JSON file
         circuit = SerializablePolyCircuit.load_from_file(

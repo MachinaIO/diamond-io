@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SerializablePolyGateType {
     Input,
+    Const { bits: Vec<bool> },
     Add,
     Sub,
     Mul,
@@ -16,7 +17,7 @@ pub enum SerializablePolyGateType {
 impl SerializablePolyGateType {
     pub fn num_input(&self) -> usize {
         match self {
-            SerializablePolyGateType::Input => 0,
+            SerializablePolyGateType::Input | SerializablePolyGateType::Const { .. } => 0,
             SerializablePolyGateType::Rotate { .. } => 1,
             SerializablePolyGateType::Add |
             SerializablePolyGateType::Sub |
@@ -64,14 +65,23 @@ impl SerializablePolyCircuit {
     pub fn from_circuit(circuit: &PolyCircuit) -> Self {
         let mut gates = BTreeMap::new();
         for (gate_id, gate) in circuit.gates.iter() {
-            let gate_type = match gate.gate_type {
+            let gate_type = match &gate.gate_type {
                 PolyGateType::Input => SerializablePolyGateType::Input,
+                PolyGateType::Const { bits } => {
+                    SerializablePolyGateType::Const { bits: bits.clone() }
+                }
                 PolyGateType::Add => SerializablePolyGateType::Add,
                 PolyGateType::Sub => SerializablePolyGateType::Sub,
                 PolyGateType::Mul => SerializablePolyGateType::Mul,
-                PolyGateType::Rotate { shift } => SerializablePolyGateType::Rotate { shift },
+                PolyGateType::Rotate { shift } => {
+                    SerializablePolyGateType::Rotate { shift: *shift }
+                }
                 PolyGateType::Call { circuit_id, num_input, output_id } => {
-                    SerializablePolyGateType::Call { circuit_id, num_input, output_id }
+                    SerializablePolyGateType::Call {
+                        circuit_id: *circuit_id,
+                        num_input: *num_input,
+                        output_id: *output_id,
+                    }
                 }
             };
             let serializable_gate =
@@ -101,6 +111,10 @@ impl SerializablePolyCircuit {
             let serializable_gate = &self.gates[&gate_idx];
             match &serializable_gate.gate_type {
                 SerializablePolyGateType::Input => {
+                    gate_idx += 1;
+                }
+                SerializablePolyGateType::Const { bits } => {
+                    circuit.const_bit_poly(&bits);
                     gate_idx += 1;
                 }
                 SerializablePolyGateType::Add => {

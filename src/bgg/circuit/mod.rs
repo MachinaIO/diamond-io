@@ -77,18 +77,6 @@ impl PolyCircuit {
         self.sub_gate(zero, 0)
     }
 
-    pub fn const_bit_poly(&mut self, coeffs: &[bool]) -> usize {
-        let zero = self.const_zero_gate();
-        let one = self.const_one_gate();
-        let mut sum = zero.clone();
-        for (idx, bit_coeff) in coeffs.iter().enumerate() {
-            let bit = if *bit_coeff { one } else { zero };
-            let rotated = self.rotate_gate(bit, idx);
-            sum = self.add_gate(sum, rotated);
-        }
-        sum
-    }
-
     pub fn and_gate(&mut self, left: usize, right: usize) -> usize {
         self.mul_gate(left, right)
     }
@@ -176,6 +164,19 @@ impl PolyCircuit {
         self.new_gate_generic(vec![input], PolyGateType::Rotate { shift })
     }
 
+    pub fn const_bit_poly(&mut self, bits: &[bool]) -> usize {
+        // let zero = self.const_zero_gate();
+        // let one = self.const_one_gate();
+        // let mut sum = zero.clone();
+        // for (idx, bit_coeff) in coeffs.iter().enumerate() {
+        //     let bit = if *bit_coeff { one } else { zero };
+        //     let rotated = self.rotate_gate(bit, idx);
+        //     sum = self.add_gate(sum, rotated);
+        // }
+        // sum
+        self.new_gate_generic(vec![], PolyGateType::Const { bits: bits.to_vec() })
+    }
+
     fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType) -> usize {
         #[cfg(debug_assertions)]
         {
@@ -231,6 +232,10 @@ impl PolyCircuit {
             match &gate.gate_type {
                 PolyGateType::Input => {
                     panic!("The wire for the input gate {:?} should be already inserted", gate);
+                }
+                PolyGateType::Const { bits } => {
+                    let output = E::from_bits(params, one, bits);
+                    wires.insert(gate.gate_id, output);
                 }
                 PolyGateType::Add => {
                     let left =
@@ -295,6 +300,7 @@ mod tests {
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
+    use num_bigint::BigUint;
 
     #[test]
     fn test_eval_add() {
@@ -375,6 +381,62 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_const_bit_poly() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a circuit with a const_bit_poly gate
+        let mut circuit = PolyCircuit::new();
+        // We need to call input() to initialize the circuit
+        circuit.input(1);
+
+        // Define a specific bit pattern
+        // This will create a polynomial with coefficients:
+        // [1, 0, 1, 1, 0, 0, 1, 0, ...0]
+        // (where 1 is at positions 0, 2, 3, and 6)
+        let bits = vec![true, false, true, true, false, false, true];
+        let bit_poly_gate = circuit.const_bit_poly(&bits);
+        circuit.output(vec![bit_poly_gate]);
+
+        // Evaluate the circuit with any input (it won't be used)
+        let dummy_input = create_random_poly(&params);
+        let result = circuit.eval(&params, DCRTPoly::const_one(&params), &[dummy_input]);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+
+        // Check that the coefficients match the bit pattern
+        let coeffs = result[0].coeffs();
+        for (i, bit) in bits.iter().enumerate() {
+            if *bit {
+                assert_eq!(
+                    coeffs[i].value(),
+                    &BigUint::from(1u8),
+                    "Coefficient at position {} should be 1",
+                    i
+                );
+            } else {
+                assert_eq!(
+                    coeffs[i].value(),
+                    &BigUint::from(0u8),
+                    "Coefficient at position {} should be 0",
+                    i
+                );
+            }
+        }
+
+        // Check that remaining coefficients are 0
+        for i in bits.len()..coeffs.len() {
+            assert_eq!(
+                coeffs[i].value(),
+                &BigUint::from(0u8),
+                "Coefficient at position {} should be 0",
+                i
+            );
+        }
     }
 
     #[test]

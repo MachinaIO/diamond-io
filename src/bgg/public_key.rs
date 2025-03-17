@@ -73,6 +73,12 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         let matrix = self.matrix.clone() * rotate_poly;
         Self { matrix, reveal_plaintext: self.reveal_plaintext }
     }
+
+    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
+        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
+        let matrix = one.matrix.clone() * const_poly;
+        Self { matrix, reveal_plaintext: one.reveal_plaintext }
+    }
 }
 
 #[cfg(test)]
