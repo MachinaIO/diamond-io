@@ -94,7 +94,7 @@ where
                 let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
-                let mut bv = bitvec![u8, Msb0;];
+                let mut bv = bitvec![u8, Lsb0;];
                 let mut og_hasher: H = H::new();
                 og_hasher.update(self.key);
                 og_hasher.update(tag.as_ref());
@@ -102,9 +102,9 @@ where
                 for i in 0..index {
                     let mut hasher = og_hasher.clone();
                     //  H ( key || tag || i )
-                    hasher.update(i.to_be_bytes());
+                    hasher.update(i.to_le_bytes());
                     for &byte in hasher.finalize().iter() {
-                        for bit_index in (0..8).rev() {
+                        for bit_index in 0..8 {
                             bv.push((byte >> bit_index) & 1 != 0);
                         }
                     }
