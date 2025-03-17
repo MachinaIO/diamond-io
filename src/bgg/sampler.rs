@@ -130,7 +130,6 @@ where
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
-
         let all_public_key_matrix: S::M = public_keys[0]
             .matrix
             .concat_columns(&public_keys[1..].iter().map(|pk| &pk.matrix).collect_vec());
@@ -139,7 +138,6 @@ where
         let gadget = S::M::gadget_matrix(params, 2);
         let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
         let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
-
         let all_vector = first_term - second_term + error;
 
         parallel_iter!(plaintexts)
