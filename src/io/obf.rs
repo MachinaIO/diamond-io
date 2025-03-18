@@ -36,12 +36,20 @@ where
     let log_q = obf_params.params.modulus_bits();
     debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
     let hash_key = rng.random::<[u8; 32]>();
+    info!("Gen hash key");
+    log_mem();
     sampler_hash.set_key(hash_key);
-    info!("Sampled hash key");
+    info!("Set hash key");
     log_mem();
     let sampler_uniform = Arc::new(sampler_uniform);
+    info!("Created sampler_uniform");
+    log_mem();
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
+    info!("Created sampler_trapdoor");
+    log_mem();
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash));
+    info!("Created bgg_pubkey_sampler");
+    log_mem();
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     info!("Sampled public data");
     log_mem();
@@ -58,6 +66,8 @@ where
         sampler_uniform.clone(),
         obf_params.error_gauss_sigma,
     );
+    info!("Created bgg_encode_sampler");
+    log_mem();
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     info!("Sampled t_bar_matrix");
@@ -81,6 +91,8 @@ where
     log_mem();
 
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+    info!("Decomposed enc_hardcoded_key");
+    log_mem();
     let t_bar = t_bar_matrix.entry(0, 0).clone();
     #[cfg(test)]
     let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
@@ -151,6 +163,8 @@ where
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
         let m_preimage = |a, m_i| {
+            info!("Computing m_preimage for input {} bit {}", idx + 1, m_i);
+            log_mem();
             let m: M =
                 sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
             info!("Computed m_preimage for input {} bit {}", idx + 1, m_i);
@@ -165,8 +179,12 @@ where
 
         let mp = || join!(|| m_preimage(&u_0 * b_next_0, 0), || m_preimage(&u_1 * b_next_1, 1));
         let ub_star = &u_star * b_next_star;
+        info!("Computed ub_star for input {}", idx + 1);
+        log_mem();
 
         let n_preimage = |t, n, n_idx| {
+            info!("Computing n_preimage for input {} bit {}", idx + 1, n_idx);
+            log_mem();
             let matrix_n = sampler_trapdoor.preimage(&params, t, n, &ub_star);
             info!("Computed n_preimage for input {} bit {}", idx + 1, n_idx);
             log_mem();
@@ -229,8 +247,8 @@ where
             log_mem();
 
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
-                &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
+                - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
 
             info!("Computed k_target for k_preimage input {} bit {}", idx + 1, bit);

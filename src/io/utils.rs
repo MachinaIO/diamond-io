@@ -42,6 +42,8 @@ where
         obf_params: &ObfuscationParams<S::M>,
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
     ) -> Self {
+        info!("Sampling public data");
+        log_mem();
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
@@ -55,6 +57,8 @@ where
         info!("Concatenated R_0");
         log_mem();
         let r_1 = r_1_bar.concat_diag(&[&one]);
+        info!("Concatenated R_1");
+        log_mem();
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
         // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
@@ -67,6 +71,8 @@ where
         // let reveal_plaintexts_fhe_key = vec![true; 2];
         #[cfg(test)]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
+        info!("concatenated reveal_plaintexts");
+        log_mem();
         #[cfg(not(test))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
@@ -391,9 +397,9 @@ mod test {
                 &params,
                 vec![outputs_encodings[0].plaintext.clone().unwrap()],
             );
-            bgg_encoding_sampler.secret_vec *
-                (outputs_encodings[0].pubkey.matrix.clone() -
-                    plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
+            bgg_encoding_sampler.secret_vec
+                * (outputs_encodings[0].pubkey.matrix.clone()
+                    - plaintext.tensor(&DCRTPolyMatrix::gadget_matrix(&params, 2)))
         };
         assert_eq!(outputs_encodings[0].vector, expected_vector);
     }
