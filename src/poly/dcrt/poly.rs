@@ -1,5 +1,6 @@
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
@@ -66,6 +67,17 @@ impl DCRTPoly {
             params.crt_bits(),
             &value,
         ))
+    }
+
+    pub fn deserialize_with_params<'de, D>(
+        deserializer: D,
+        params: &DCRTPolyParams,
+    ) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let coeffs = Vec::<FinRingElem>::deserialize(deserializer)?;
+        Ok(Self::from_coeffs(params, &coeffs))
     }
 }
 
@@ -234,6 +246,16 @@ impl SubAssign for DCRTPoly {
 impl SubAssign<&DCRTPoly> for DCRTPoly {
     fn sub_assign(&mut self, rhs: &Self) {
         *self += -rhs;
+    }
+}
+
+impl Serialize for DCRTPoly {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let coeffs = self.coeffs();
+        coeffs.serialize(serializer)
     }
 }
 

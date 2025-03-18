@@ -229,8 +229,8 @@ where
             log_mem();
 
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
+                &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
 
             info!("Computed k_target for k_preimage input {} bit {}", idx + 1, bit);

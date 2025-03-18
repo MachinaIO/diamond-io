@@ -2,9 +2,10 @@ use crate::poly::params::PolyParams;
 use num_bigint::BigUint;
 use num_traits::Num;
 use openfhe::ffi;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DCRTPolyParams {
     /// polynomial ring dimension
     ring_dimension: u32,

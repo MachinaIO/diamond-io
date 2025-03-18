@@ -6,13 +6,14 @@ use crate::{
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
     path::Path,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct DCRTPolyMatrix {
     inner: Vec<Vec<DCRTPoly>>,
     params: DCRTPolyParams,
@@ -52,6 +53,27 @@ impl DCRTPolyMatrix {
         let polys = self.get_column(j);
         let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
         DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
+    }
+
+    pub fn deserialize_with_params<'de, D>(
+        deserializer: D,
+        params: &DCRTPolyParams,
+    ) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (serialized_data, nrow, ncol): (Vec<Vec<Vec<FinRingElem>>>, usize, usize) =
+            Deserialize::deserialize(deserializer)?;
+        let mut inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = DCRTPoly::from_coeffs(params, &serialized_data[i][j]);
+                row.push(poly);
+            }
+            inner.push(row);
+        }
+        Ok(Self { inner, params: params.clone(), nrow, ncol })
     }
 }
 

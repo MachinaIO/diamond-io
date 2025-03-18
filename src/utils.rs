@@ -104,13 +104,8 @@ macro_rules! parallel_iter {
 #[macro_export]
 macro_rules! join {
     ($a:expr, $b:expr $(,)?) => {{
-        #[cfg(not(feature = "parallel"))]
         {
             ($a(), $b())
-        }
-        #[cfg(feature = "parallel")]
-        {
-            rayon::join($a, $b)
         }
     }};
 }
