@@ -163,7 +163,7 @@ where
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
         let m_preimage = |a, m_i| {
-            info!("Computing m_preimage for input {} bit {}", idx + 1, m_i);
+            info!("Before computing m_preimage for input {} bit {}", idx + 1, m_i);
             log_mem();
             let m: M =
                 sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
@@ -183,7 +183,7 @@ where
         log_mem();
 
         let n_preimage = |t, n, n_idx| {
-            info!("Computing n_preimage for input {} bit {}", idx + 1, n_idx);
+            info!("Before computing n_preimage for input {} bit {}", idx + 1, n_idx);
             log_mem();
             let matrix_n = sampler_trapdoor.preimage(&params, t, n, &ub_star);
             info!("Computed n_preimage for input {} bit {}", idx + 1, n_idx);
@@ -204,7 +204,7 @@ where
             ))
         };
         let k_preimage = |bit: usize| {
-            info!("Computing k_preimage for input {} bit {}", idx + 1, bit);
+            info!("Before computing k_preimage for input {} bit {}", idx + 1, bit);
             log_mem();
 
             let rg = &public_data.rgs[bit];
@@ -268,8 +268,6 @@ where
         };
 
         let kp = || join!(|| k_preimage(0), || k_preimage(1));
-        info!("Joined k_preimages for input {}", idx + 1);
-        log_mem();
 
         let (mp, (np, kp)) = join!(mp, || join!(np, kp));
 

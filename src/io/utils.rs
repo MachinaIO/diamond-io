@@ -46,6 +46,8 @@ where
         log_mem();
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
+        info!("Before sampling R_0");
+        log_mem();
         let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, 1, 1, DistType::BitDist);
         info!("Sampled R_0");
         log_mem();
@@ -75,6 +77,8 @@ where
         log_mem();
         #[cfg(not(test))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+        info!("before sampling public keys");
+        log_mem();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
                 bgg_pubkey_sampler.sample(
