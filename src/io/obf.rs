@@ -122,21 +122,27 @@ where
     for _i in 0..=obf_params.input_size {
         let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params, 4);
         info!("Sampled b_0 trapdoor for input size {}", _i);
+        log_mem();
         let b_0_matrix_path = fs_dir_path.join(format!("b_0_{}", _i));
         b_0.store(&b_0_matrix_path);
         drop(b_0);
+        info!("Drop b_0 for input size {}", _i);
         log_mem();
         let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params, 4);
         info!("Sampled b_1 trapdoor for input size {}", _i);
+        log_mem();
         let b_1_matrix_path = fs_dir_path.join(format!("b_1_{}", _i));
         b_1.store(&b_1_matrix_path);
         drop(b_1);
+        info!("Dropped b_1 for input size {}", _i);
         log_mem();
         let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 4);
         info!("Sampled b_star trapdoor for input size {}", _i);
+        log_mem();
         let b_star_matrix_path = fs_dir_path.join(format!("b_star_{}", _i));
         b_star.store(&b_star_matrix_path);
         drop(b_star);
+        info!("Dropped b_star for input size {}", _i);
         log_mem();
         bs_path.push((b_0_matrix_path, b_1_matrix_path, b_star_matrix_path));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
@@ -258,8 +264,8 @@ where
             log_mem();
 
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
-                &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
+                - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
 
             info!("Computed k_target for k_preimage input {} bit {}", idx + 1, bit);
