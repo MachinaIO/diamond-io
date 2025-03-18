@@ -210,48 +210,6 @@ mod tests {
         assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
-    // #[test]
-    // fn test_pubkey_scalar_mul() {
-    //     // Create parameters for testing
-    //     let params = DCRTPolyParams::default();
-
-    //     // Create a hash sampler and BGGPublicKeySampler to be reused
-    //     let key: [u8; 32] = rand::random();
-    //     let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-    //     let d = 3;
-    //     let bgg_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-
-    //     // Generate random tag for sampling
-    //     let tag: u64 = rand::random();
-    //     let tag_bytes = tag.to_le_bytes();
-
-    //     // Create random public key
-    //     let reveal_plaintexts = [true; 1];
-    //     let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-    //     let pk_one = pubkeys[0].clone();
-    //     let pk1 = pubkeys[1].clone();
-
-    //     // Create scalar
-    //     let scalar = create_random_poly(&params);
-
-    //     // Create a simple circuit with a ScalarMul operation
-    //     let mut circuit = PolyCircuit::<DCRTPoly>::new();
-    //     let inputs = circuit.input(1);
-    //     let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], scalar.clone());
-    //     circuit.output(vec![scalar_mul_gate]);
-
-    //     // Evaluate the circuit
-    //     let result = circuit.eval(&params, pk_one, &[pk1.clone()]);
-
-    //     // Expected result
-    //     let expected = pk1.scalar_mul(&params, &scalar);
-
-    //     // Verify the result
-    //     assert_eq!(result.len(), 1);
-    //     assert_eq!(result[0].matrix, expected.matrix);
-    //     assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
-    // }
-
     #[test]
     fn test_pubkey_circuit_operations() {
         // Create parameters for testing
@@ -503,8 +461,8 @@ mod tests {
         let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 * pk2) + pk3)^2
-        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()) *
-            ((pk1.clone() * pk2.clone()) + pk3.clone());
+        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone())
+            * ((pk1.clone() * pk2.clone()) + pk3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);

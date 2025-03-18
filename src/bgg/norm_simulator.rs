@@ -246,32 +246,4 @@ mod tests {
         assert_eq!(norms.h_norms.len(), 1);
         assert_eq!(norms, expected);
     }
-
-    // #[test]
-    // fn test_mpoly_coeffs_operations() {
-    //     // Test MPolyCoeffs addition
-    //     let poly1 = MPolyCoeffs::new(vec![BigUint::from(1u32), BigUint::from(2u32)]);
-    //     let poly2 = MPolyCoeffs::new(vec![BigUint::from(3u32), BigUint::from(4u32)]);
-
-    //     let result = poly1 + poly2;
-    //     assert_eq!(result.0[0], BigUint::from(4u32)); // 1 + 3
-    //     assert_eq!(result.0[1], BigUint::from(6u32)); // 2 + 4
-
-    //     // Test MPolyCoeffs right_rotate
-    //     let poly = MPolyCoeffs::new(vec![BigUint::from(5u32), BigUint::from(6u32)]);
-    //     let scale = 3u32;
-
-    //     let result = poly.right_rotate(scale);
-    //     assert_eq!(result.0[0], BigUint::zero()); // First element is always 0
-    //     assert_eq!(result.0[1], BigUint::from(15u32)); // 5 * 3
-    //     assert_eq!(result.0[2], BigUint::from(18u32)); // 6 * 3
-
-    //     // Test MPolyCoeffs multiplication by BigUint
-    //     let poly = MPolyCoeffs::new(vec![BigUint::from(7u32), BigUint::from(8u32)]);
-    //     let scalar = BigUint::from(2u32);
-
-    //     let result = poly * scalar;
-    //     assert_eq!(result.0[0], BigUint::from(14u32)); // 7 * 2
-    //     assert_eq!(result.0[1], BigUint::from(16u32)); // 8 * 2
-    // }
 }

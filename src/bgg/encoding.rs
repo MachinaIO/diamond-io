@@ -431,102 +431,6 @@ mod tests {
         assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
     }
 
-    // #[test]
-    // fn test_encoding_fhe_poly_bits_mul_by_poly_circuit() {
-    //     // Create parameters for testing
-    //     let params = DCRTPolyParams::new(4, 5, 7);
-
-    //     // Create samplers
-    //     let key: [u8; 32] = rand::random();
-    //     let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-    //     let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler);
-    //     let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
-
-    //     // Generate random tag for sampling
-    //     let tag: u64 = rand::random();
-    //     let tag_bytes = tag.to_le_bytes();
-
-    //     // Create random public keys
-    //     let pubkeys =
-    //         bgg_pubkey_sampler.sample(&params, &tag_bytes, (params.modulus_bits() * 2) + 2);
-
-    //     // Create secret
-    //     let secret = create_random_poly(&params);
-
-    //     // Create plaintexts
-    //     // encrypt a polynomial m using a RLWE secret key encryption
-    //     // c0 = a*s + e + m (where m is the plaintext polynomial)
-    //     // c1 = -a
-    //     let m = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-    //     let s = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-    //     let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 }); //
-    // todo: set error     let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
-    //     let c0 = -a.clone();
-    //     let c1 = a * s.clone() + e + m.clone();
-
-    //     // k is a polynomial from bit distribution
-    //     let k = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-
-    //     let c0_bits = c0.decompose(&params);
-    //     let c1_bits = c1.decompose(&params);
-
-    //     // plaintexts is the concatenation of 1, c0_bits, c1_bits, k
-    //     let plaintexts =
-    //         [vec![DCRTPoly::const_one(&params)], c0_bits.clone(), c1_bits.clone(),
-    // vec![k.clone()]]             .concat();
-
-    //     assert_eq!(plaintexts.len(), (params.modulus_bits() * 2) + 2);
-
-    //     // Create encoding sampler and encodings
-    //     let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secret, uniform_sampler,
-    // 0.0);     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts,
-    // true);     let enc_one = encodings[0].clone();
-
-    //     assert_eq!(encodings.len(), plaintexts.len());
-
-    //     // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ...,
-    // c1_bits[modulus_bits - 1], k     // Output: c0_bits[0] * k, ..., c0_bits[modulus_bits -
-    // 1] * k, c1_bits[0] * k, ..., c1_bits[modulus_bits - 1] * k     let mut circuit =
-    // PolyCircuit::<DCRTPoly>::new();     let inputs = circuit.input((params.modulus_bits() *
-    // 2) + 1);
-
-    //     let k_id = inputs[inputs.len() - 1];
-    //     let output_ids = inputs
-    //         .iter()
-    //         .take(inputs.len() - 1)
-    //         .map(|&input_id| circuit.mul_gate(input_id, k_id))
-    //         .collect();
-
-    //     circuit.output(output_ids);
-
-    //     // Evaluate the circuit
-    //     let result = circuit.eval(&params, enc_one.clone(), &encodings[1..]);
-
-    //     // Expected result: c0_bits_eval * k, c1_bits_eval * k
-    //     let c0_bits_eval_bgg = result[..params.modulus_bits()].to_vec();
-    //     let c1_bits_eval_bgg = result[params.modulus_bits()..].to_vec();
-
-    //     let mut c0_bits_eval = Vec::with_capacity(params.modulus_bits());
-    //     let mut c1_bits_eval = Vec::with_capacity(params.modulus_bits());
-
-    //     for i in 0..params.modulus_bits() {
-    //         c0_bits_eval.push(c0_bits_eval_bgg[i].plaintext.as_ref().unwrap().clone());
-    //         c1_bits_eval.push(c1_bits_eval_bgg[i].plaintext.as_ref().unwrap().clone());
-    //     }
-
-    //     let c0_eval = DCRTPoly::from_decomposed(&params, &c0_bits_eval);
-    //     let c1_eval = DCRTPoly::from_decomposed(&params, &c1_bits_eval);
-
-    //     // Verify the result
-    //     assert_eq!(result.len(), params.modulus_bits() * 2);
-    //     assert_eq!(c0_eval, c0.clone() * k.clone());
-    //     assert_eq!(c1_eval, c1.clone() * k.clone());
-
-    //     // Decrypt the result
-    //     let plaintext = c1_eval + c0_eval * s;
-    //     assert_eq!(plaintext, m * k);
-    // }
-
     #[test]
     fn test_encoding_register_and_call_sub_circuit() {
         // Create parameters for testing
@@ -684,8 +588,8 @@ mod tests {
             main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 * enc2) + enc3)^2
-        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
-            ((enc1.clone() * enc2.clone()) + enc3.clone());
+        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone())
+            * ((enc1.clone() * enc2.clone()) + enc3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);
