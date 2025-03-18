@@ -588,8 +588,8 @@ mod tests {
             main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 * enc2) + enc3)^2
-        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone())
-            * ((enc1.clone() * enc2.clone()) + enc3.clone());
+        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
+            ((enc1.clone() * enc2.clone()) + enc3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);

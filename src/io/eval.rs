@@ -33,6 +33,9 @@ where
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
         #[cfg(test)]
+        if obf_params.encoding_sigma == 0.0 &&
+            obf_params.hardcoded_key_sigma == 0.0 &&
+            obf_params.p_sigma == 0.0
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
@@ -100,6 +103,9 @@ where
             ps.push(p.clone());
             encodings.push(new_encodings);
             #[cfg(test)]
+            if obf_params.encoding_sigma == 0.0 &&
+                obf_params.hardcoded_key_sigma == 0.0 &&
+                obf_params.p_sigma == 0.0
             {
                 let mut cur_s = self.s_init.clone();
                 for bit in inputs[0..idx].iter() {
@@ -172,6 +178,9 @@ where
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(test)]
+        if obf_params.encoding_sigma == 0.0 &&
+            obf_params.hardcoded_key_sigma == 0.0 &&
+            obf_params.p_sigma == 0.0
         {
             let mut last_s = self.s_init.clone();
             for bit in inputs.iter() {

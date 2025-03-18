@@ -461,8 +461,8 @@ mod tests {
         let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 * pk2) + pk3)^2
-        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone())
-            * ((pk1.clone() * pk2.clone()) + pk3.clone());
+        let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()) *
+            ((pk1.clone() * pk2.clone()) + pk3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);
