@@ -8,6 +8,7 @@ import math
 import datetime
 import os
 from decimal import Decimal, getcontext
+from norms import CircuitNorms
 
 getcontext().prec = 100
 
@@ -18,7 +19,7 @@ def log_params_to_file(
     d: int,
     alpha: int,
     input_size: int,
-    m_polys: list[list[int]],
+    norms_path: str,
     q: int,
     stddev_e: int,
     p: int,
@@ -36,7 +37,7 @@ def log_params_to_file(
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Format m_polys as a string
-    m_polys_str = str(m_polys).replace(" ", "")
+    # m_polys_str = str(m_polys).replace(" ", "")
 
     # Create log entry with key information
     log_entry = (
@@ -46,7 +47,7 @@ def log_params_to_file(
         f"d={d}, "
         f"alpha={alpha}, "
         f"input_size={input_size}, "
-        f"m_polys={m_polys_str}, "
+        f"norms_path={norms_path}, "
         f"q={q}, "
         f"log_q={log_q}, "
         f"stddev_e={stddev_e}, "
@@ -67,16 +68,17 @@ def find_params(
     target_secpar: int,
     n: int,
     d: int,
+    max_log_q: int,
     input_size: int,
-    m_polys: list[list[int]],
+    norms_path: str,
 ):
 
     min_alpha_k = -2000
     max_alpha_k = -1
     min_q_k = target_secpar + 2
-    max_q_k = 1024
+    max_q_k = max_log_q
     middle_q_k = math.floor((min_q_k + max_q_k) // 2)
-
+    circuit_norms = CircuitNorms.load_from_file(norms_path, max_log_q)
     found_alphas = []
     # Binary search for alpha
     while min_alpha_k + 1 < max_alpha_k:
@@ -124,7 +126,7 @@ def find_params(
             max_q_k = q_k
             continue
         try:
-            p = find_p(target_secpar, n, q, d, stddev_e, input_size, m_polys)
+            p = find_p(target_secpar, n, q, d, stddev_e, input_size, circuit_norms)
             print(f"found p: {p}")
             max_q_k = q_k
             found_params.append((q, stddev_e, p, estimated_secpar))
@@ -155,13 +157,13 @@ def find_p(
     d: int,
     stddev_e: int,
     input_size: int,
-    m_polys: list[list[int]],
+    circuit_norms: CircuitNorms,
 ):
     log_q = math.ceil(math.log2(q))
     stddev_b = compute_stddev_b(n, log_q, d)
 
     final_err = bound_final_error(
-        secpar, n, log_q, d, stddev_e, stddev_b, input_size, m_polys
+        secpar, n, log_q, d, stddev_e, stddev_b, input_size, circuit_norms
     )
 
     # Convert final_err to Decimal for high precision
@@ -216,7 +218,7 @@ def compute_stddev_b(
     log_q: int,
     d: int,
 ):
-    c_0 = 1.3
+    c_0 = 1.8
     c_1 = 4.7
     sigma = 4.578
     return (
@@ -244,7 +246,7 @@ def bound_final_error(
     stddev_e: int,
     stddev_b: int,
     input_size: int,
-    m_polys: list[list[int]],
+    circuit_norms: CircuitNorms,
 ):
     # Convert all inputs to Decimal for high precision
     # secpar_d = Decimal(secpar)
@@ -253,7 +255,8 @@ def bound_final_error(
     d_d = Decimal(d)
     stddev_e_d = Decimal(stddev_e)
     stddev_b_d = Decimal(stddev_b)
-
+    # [TODO] support multiple outputs
+    h_norm_d = Decimal(circuit_norms.compute_norms((d + 1) * log_q)[0])
     # Calculate intermediate values with Decimal
     m_d = (d_d + Decimal(1)) * log_q_d
     m_b_d = Decimal(2) * (d_d + Decimal(1)) * (log_q_d + Decimal(2))
@@ -270,21 +273,21 @@ def bound_final_error(
         bound_p_d = bound_v_d
 
     # Evaluate each polynomial in m_polys at the value of m using Decimal
-    evaluated_polys_d = []
-    for poly in m_polys:
-        # Evaluate polynomial: sum(coeff * m^i for i, coeff in enumerate(poly))
-        result_d = Decimal(0)
-        for i, coeff in enumerate(poly):
-            result_d += Decimal(coeff) * (m_d ** Decimal(i))
-        evaluated_polys_d.append(result_d)
+    # evaluated_polys_d = []
+    # for poly in m_polys:
+    #     # Evaluate polynomial: sum(coeff * m^i for i, coeff in enumerate(poly))
+    #     result_d = Decimal(0)
+    #     for i, coeff in enumerate(poly):
+    #         result_d += Decimal(coeff) * (m_d ** Decimal(i))
+    #     evaluated_polys_d.append(result_d)
 
-    # Find max value using Decimal
-    if evaluated_polys_d:
-        max_evaluated_poly_d = max(evaluated_polys_d)
-    else:
-        max_evaluated_poly_d = Decimal(1)  # Default if no polynomials
+    # # Find max value using Decimal
+    # if evaluated_polys_d:
+    #     max_evaluated_poly_d = max(evaluated_polys_d)
+    # else:
+    #     max_evaluated_poly_d = Decimal(1)  # Default if no polynomials
 
-    bound_c_final_d = bound_c_d * max_evaluated_poly_d + stddev_b_d * sqrt_secpar_d
+    bound_c_final_d = bound_c_d * h_norm_d + stddev_b_d * sqrt_secpar_d
     bound_v_final_d = bound_p_d * scale_coeff_d
 
     # Return the final result as a Decimal
@@ -331,232 +334,19 @@ def sqrt_ceil(x):
     return math.ceil(math.sqrt(x))
 
 
-# def bound_from_stddev(stddev: int, secpar: int):
-#     return math.ceil(stddev * math.ceil(math.sqrt(secpar)))
-
-
-# def derive_auto_params(
-#     n: int, n_t: int, q: int, sigma_e: int, t: int = 2, target_secpar: int = 80
-# ):
-#     log_q = math.ceil(math.log2(q))
-#     print("log_q:", log_q)
-#     m = 2 * log_q
-#     m_t = (n_t + 1) * log_q
-#     m_b = 2 + math.ceil(log_q / math.log2(t))
-#     # log_p = math.ceil(math.log2(p))
-#     # m_b = n_b * log_p
-#     # sigma_b = math.ceil(2 * math.sqrt(n * log_p))
-#     secpar_s = math.ceil(output_secpar(n, q, Binary, sigma_e))
-#     print("secpar_n:", secpar_s)
-#     secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
-#     print("secpar_t", secpar_t)
-#     secpar = min(target_secpar, secpar_s, secpar_t)
-#     print("secpar:", secpar)
-#     sigma_b = math.ceil(math.sqrt(math.log(2 * n * 2 ** (80)) / 3.14))
-#     print("sigma_b:", sigma_b)
-#     print("sigma_b**2", sigma_b**2)
-#     print("n * math.ceil(log_q / math.log2(t)))", n * math.ceil(log_q / math.log2(t)))
-#     print("math.sqrt(2 * n)", math.sqrt(2 * n))
-#     sigma_b = math.ceil(
-#         1.3
-#         * (t + 1)
-#         * sigma_b**2
-#         * (math.sqrt(n * math.ceil(log_q / math.log2(t))) + math.sqrt(2 * n) + 4.7)
-#     )
-#     print("sigma_b:", sigma_b)
-#     # secpar_t = math.ceil(output_secpar(n_t, q, Binary, sigma_e))
-#     # print("secpar_t", secpar_t)
-
-#     # secpar_n_s = math.ceil(output_secpar(n_s, m_s, q, sigma_e))
-#     # print("secpar_n_s:", secpar_n_s)
-#     # secpar_b = math.ceil(output_secpar(n_b, q, UniformMod(q), sigma_b))
-#     # print("secpar_b:", secpar_b)
-#     bound_e = bound_from_stddev(sigma_e, secpar)
-#     print("bound_e:", bound_e)
-#     if bound_e <= 1:
-#         raise ValueError("bound_e should be larger than 1")
-#     bound_b = bound_from_stddev(sigma_b, secpar)
-#     print("bound_b:", bound_b)
-#     if bound_b <= 1:
-#         raise ValueError("bound_b should be larger than 1")
-#     b_c_frac = math.ceil(
-#         (
-#             Decimal(sigma_e)
-#             * math.ceil((math.sqrt(n * m_b) * sigma_b) ** 2)
-#             * math.ceil(secpar**2)
-#             * math.ceil(math.sqrt(secpar))
-#         )
-#         / Decimal(math.ceil((math.sqrt(n * m_b) * sigma_b) ** 2) * secpar - n * m)
-#     )
-#     # b_c_frac = sigma_e * math.ceil(math.sqrt(secpar))
-#     return {
-#         "q": q,
-#         "log_q": log_q,
-#         "n": n,
-#         "m": m,
-#         "n_t": n_t,
-#         "m_t": m_t,
-#         "m_b": m_b,
-#         "secpar": secpar,
-#         "sigma_e": sigma_e,
-#         "sigma_b": sigma_b,
-#         "bound_e": bound_e,
-#         "bound_b": bound_b,
-#         "b_c_frac": b_c_frac,
-#         # "p": p,
-#     }
-
-
-# def estimate_noise_norm(params, input: int, output: int, depth: int, scale: int = 0):
-#     q = params["q"]
-#     log_q = params["log_q"]
-#     n = params["n"]
-#     m = params["m"]
-#     n_t = params["n_t"]
-#     m_t = params["m_t"]
-#     m_b = params["m_b"]
-#     secpar = params["secpar"]
-#     sigma_e = params["sigma_e"]
-#     sigma_b = params["sigma_b"]
-#     bound_e = params["bound_e"]
-#     bound_b = params["bound_b"]
-#     b_c_frac = params["b_c_frac"]
-#     print("log b_c_frac", math.log2(b_c_frac))
-#     print("log m", math.log2(m))
-#     print(
-#         "log (sigma_b * sigma_b * secpar)",
-#         math.log2((n * m_b * sigma_b * sigma_b * secpar)),
-#     )
-#     print(
-#         "log (sigma_b * sigma_b * secpar) ** input",
-#         math.ceil(math.log2((n * m_b * sigma_b * sigma_b * secpar) ** input)),
-#     )
-#     b_c = (bound_e - b_c_frac) * (m**input) + b_c_frac * math.ceil(
-#         (n * m_b * sigma_b * sigma_b * secpar) ** input
-#     )
-#     # print("b_c", b_c)
-#     print("log b_c", math.log2(b_c) if b_c > 0 else 0)
-#     input_ext = 1 + input + 256
-#     # 1 + input + m * (256 + 2 * secpar) * (n + 1) * log_q
-#     # b_f_exp1 = math.ceil(
-#     #     depth * math.ceil(math.log2(m_s)) * math.ceil(math.log2(log_q))
-#     #     + (math.ceil(math.log2(log_q)) ** 2)
-#     #     + 2
-#     # )
-#     b_f_exp1 = depth
-#     print("b_f_exp1", b_f_exp1)
-#     # print("log (input_ext + n + 2)", math.log2((input_ext + n + 2)))
-#     # print("log ((n + 1) * log_q)", math.log2((n + 1) * log_q))
-#     # print(
-#     #     "log math.ceil((m_s + 2) ** b_f_exp1)",
-#     #     math.log2(math.ceil((m_s + 2) ** b_f_exp1)),
-#     # )
-#     b_f_term1 = (
-#         b_c
-#         * math.sqrt(input_ext + 2)
-#         * ((n_t + 1) * log_q)
-#         * math.ceil((n * m + 2) ** b_f_exp1)
-#     )
-#     print("log b_f_term1", math.log2(b_f_term1))
-#     b_f_term2 = bound_e * log_q * ((m_t + 2) ** (depth + 1))
-#     print("log b_f_term2", math.log2(b_f_term2))
-#     b_f = b_f_term1 + b_f_term2
-#     print("log b_f", math.log2(b_f))
-#     print(
-#         "log (n * m_b * sigma_b) ** (2 * input + 1)",
-#         math.log2((n * m_b * sigma_b) ** (2 * input + 1)),
-#     )
-#     print("log secpar ** (input + 1)", math.log2(secpar ** (input + 1)))
-#     b_z = b_f + sigma_e * ((math.sqrt(n * m_b) * sigma_b) ** (2 * input + 1)) * (
-#         secpar ** (input + 1)
-#     )
-#     print("log b_z", math.log2(b_z))
-#     # print("b_z", b_z)
-#     # print("log2_b_z", math.log2(b_z))
-#     # print("b_z + 2^**(2*secpar)", b_z * (2 ** (2 * secpar)))
-#     return b_z
-#     # b_f =
-#     # b_c = (params.bound_b - )
-
-
-# def estimate_obf_size(params, input: int, output: int, depth: int):
-#     q = params["q"]
-#     log_q = params["log_q"]
-#     n = params["n"]
-#     m = params["m"]
-#     n_t = params["n_t"]
-#     m_t = params["m_t"]
-#     m_b = params["m_b"]
-#     secpar = params["secpar"]
-#     sigma_e = params["sigma_e"]
-#     sigma_b = params["sigma_b"]
-#     bound_e = params["bound_e"]
-#     bound_b = params["bound_b"]
-
-#     # bits
-#     size = 0
-#     # h (R and A matrixes are generated by a random oracle)
-#     size += 256
-#     # FHE encryption
-#     # size += m * (256 + 2 * secpar) * (n + 1) * log_q
-#     # print("FHE size", (m * (256 + 2 * secpar) * (n + 1) * log_q) / 8 / 10**9)
-
-#     # input_ext = 1 + input + m * (256) * (n + 1) * log_q
-#     input_ext = 1 + input + 256
-#     # 2252 + 6000
-#     # c_att
-#     print("poly size", log_q * n / 8 / 10**6)
-#     c_att_size = log_q * n * input_ext * m
-#     size += c_att_size
-#     print("c_att", c_att_size / 8 / 10**9)
-#     # c_t
-#     c_t_size = log_q * n * (1) * m
-#     size += c_t_size
-#     print("c_t", c_t_size / 8 / 10**9)
-
-#     # p
-#     p_size = log_q * n * m_b
-#     size += p_size
-#     print("p", p_size / 8 / 10**9)
-#     # M/N size
-#     m_n_size = math.log(bound_b) * n * m_b * m_b
-#     print("m_n_size", m_n_size / 8 / 10**9)
-#     print("m_n_size total", m_n_size * 4 / 8 / 10**9)
-#     size += 2 * 2 * m_n_size
-#     # K size
-#     # k_size = math.log(bound_b) * m_b * (input_ext + n + 1) * m_s
-#     # print("log_q", log_q)
-#     # print("(2 + log_q)", m_b)
-#     # print("(input_ext + n + 1)", (input_ext + n + 1))
-#     # print("n_s", n_s)
-#     print("log bound_b", math.log(bound_b))
-#     print("n", n)
-#     print("m_b", m_b)
-#     print("input_ext", input_ext)
-#     # print("(2 * input_ext + log_q)", (2 * input_ext + log_q))
-#     k_size = math.log(bound_b) * n * m_b * (input_ext + 1) * m
-#     # (input_ext + 1) * m
-#     # log_q * (2 + log_q) * 2 * (input_ext + n + 1) * log_q * n_s
-#     print("k_size", k_size / 8 / 10**9)
-#     print("k_size total", k_size * 2 * input / 8 / 10**9)
-#     size += input * 2 * k_size
-#     # K_f
-#     k_f_size = math.log(bound_b) * n * m_b * output
-#     size += k_f_size
-#     print("K_f", k_f_size / 8 / 10**9)
-#     return size / 8 / (10**9)
-
-
 if __name__ == "__main__":
     secpar = 80
     n = 2**13
-    d = 3
+    d = 2
+    max_log_q = 612
     # alpha = 2 ** (-320)
-    input_size = 2
-    m_polys = [[0, 100, 200, 2000]]
+    input_size = 1
+    # m_polys = [[0, 100, 200, 2000]]
+    norms_path = "final_bits_norm_n_13_q_612.json"
     q, stddev_e, p, estimated_secpar, alpha, size = find_params(
-        secpar, n, d, input_size, m_polys
+        secpar, n, d, max_log_q, input_size, norms_path
     )
+
     print(f"q: {q}, log_2 q: {math.log2(q)}")
     print(f"stddev_e: {stddev_e}")
     print(f"p: {p}, log_2 p: {math.log2(p)}")
@@ -565,7 +355,17 @@ if __name__ == "__main__":
     print(f"size: {size} [GB]")
     # Log parameters to params.log file
     log_params_to_file(
-        secpar, n, d, alpha, input_size, m_polys, q, stddev_e, p, estimated_secpar, size
+        secpar,
+        n,
+        d,
+        alpha,
+        input_size,
+        norms_path,
+        q,
+        stddev_e,
+        p,
+        estimated_secpar,
+        size,
     )
     # output_secpar(586, 2**32, 2 ** (-24.8) * 2**32)
     # q = 2**1024

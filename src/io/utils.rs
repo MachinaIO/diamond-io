@@ -159,7 +159,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 mod test {
     use super::*;
     use crate::{
-        bgg::{circuit::serde::SerializablePolyCircuit, BitToInt},
+        bgg::BitToInt,
         poly::{
             dcrt::{
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
@@ -246,7 +246,7 @@ mod test {
     }
 
     #[test]
-    fn test_final_bits_circuit_to_json_for_norm() {
+    fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
         let params = DCRTPolyParams::new(4096, 12, 51);
         let log_q = params.modulus_bits();
@@ -269,11 +269,13 @@ mod test {
             public_circuit,
         );
 
-        let serde_circuit = SerializablePolyCircuit::from_circuit(&final_circuit);
-        let json = serde_json::to_string(&serde_circuit).unwrap();
+        let norms = final_circuit
+            .simulate_bgg_norm(params.ring_dimension(), params.ring_dimension() as usize + 1);
+        let norm_json = serde_json::to_string(&norms).unwrap();
+        println!("norms: {}", norm_json);
         use std::{fs::File, io::Write};
-        let mut file = File::create("final_bits_circuit.json").unwrap();
-        file.write_all(json.as_bytes()).unwrap();
+        let mut file = File::create("final_bits_norm.json").unwrap();
+        file.write_all(norm_json.as_bytes()).unwrap();
     }
 
     // #[test]
