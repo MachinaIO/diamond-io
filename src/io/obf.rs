@@ -194,7 +194,6 @@ where
             info!("Sampled m_preimage for input {} bit {}", idx + 1, m_i);
             log_mem();
 
-            // Clean up
             drop(b_cur_star);
             drop(b_cur_star_trapdoor_first);
             drop(b_cur_star_trapdoor_second);
@@ -452,7 +451,7 @@ where
         #[cfg(test)]
         bs_path,
         #[cfg(test)]
-        hardcoded_key: hardcoded_key.clone(),
+        hardcoded_key,
         #[cfg(test)]
         final_preimage_target,
     }
