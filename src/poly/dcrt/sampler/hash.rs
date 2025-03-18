@@ -147,8 +147,6 @@ where
                     hasher.update(&combined);
                     for &byte in hasher.finalize().iter() {
                         for bit_index in 0..8 {
-                            info!("Sampling bit {}", bit_index);
-                            log_mem();
                             let bit = (byte >> bit_index) & 1;
                             ring_elems.push(FinRingElem::new(bit as u64, q.clone()));
                         }
