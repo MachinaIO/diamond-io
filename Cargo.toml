@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 parallel = ["rayon"]
 
 [dependencies]
-openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "refactor2" }
+openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "feat/split_trapdoor_output" }
 digest = "0.10"
 num-bigint = { version = "0.4", features = ["serde"] }
 num-traits = "0.2"

@@ -5,6 +5,7 @@ use crate::{
         sampler::{DistType, PolyHashSampler},
         Poly, PolyMatrix, PolyParams,
     },
+    utils::log_mem,
 };
 use bitvec::prelude::*;
 use digest::OutputSizeUser;
@@ -12,6 +13,7 @@ use num_bigint::BigUint;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::marker::PhantomData;
+use tracing::info;
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     key: [u8; 32],
@@ -46,6 +48,8 @@ where
             panic!("Not enough ring elements to sample hash")
         }
 
+        info!("Begin ring_elems_to_matrix");
+        log_mem();
         // From field elements to nrow * ncol polynomials
         DCRTPolyMatrix::from_poly_vec(
             params,
@@ -129,6 +133,8 @@ where
                 // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) /
                 // hash_output_size) field_elements = number of field elements
                 // sampled = (bits / ceil(log2(q)))
+                info!("Sampling bit distribution");
+                log_mem();
                 let index = (nrow * ncol * n).div_ceil(hash_output_size);
                 let mut ring_elems = Vec::with_capacity(hash_output_size * index);
                 for i in 0..index {
@@ -141,6 +147,8 @@ where
                     hasher.update(&combined);
                     for &byte in hasher.finalize().iter() {
                         for bit_index in 0..8 {
+                            info!("Sampling bit {}", bit_index);
+                            log_mem();
                             let bit = (byte >> bit_index) & 1;
                             ring_elems.push(FinRingElem::new(bit as u64, q.clone()));
                         }
