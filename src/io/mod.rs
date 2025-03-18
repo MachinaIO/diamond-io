@@ -142,9 +142,11 @@ mod test {
         {
             let dummy_a_decomposed_polys =
                 DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
+                    .get_column_matrix(0)
                     .decompose();
             let dummy_b_decomposed_polys =
                 DCRTPolyMatrix::from_poly_vec_column(&params, vec![DCRTPoly::const_max(&params)])
+                    .get_column_matrix(0)
                     .decompose();
             let final_circuit = build_final_step_circuit::<_, ErrorSimulator>(
                 &params,

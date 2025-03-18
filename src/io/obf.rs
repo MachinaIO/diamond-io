@@ -90,7 +90,7 @@ where
     info!("Computed enc_hardcoded_key");
     log_mem();
 
-    let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+    let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
     info!("Decomposed enc_hardcoded_key");
     log_mem();
     let t_bar = t_bar_matrix.entry(0, 0).clone();
@@ -264,8 +264,8 @@ where
             log_mem();
 
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
+                &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
 
             info!("Computed k_target for k_preimage input {} bit {}", idx + 1, bit);
@@ -296,7 +296,7 @@ where
     info!("Finished all preimage calculations");
     log_mem();
 
-    let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
+    let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
 
     info!("Decomposed a_rlwe_bar");
     log_mem();

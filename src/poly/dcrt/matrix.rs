@@ -49,12 +49,6 @@ impl DCRTPolyMatrix {
         &self.params
     }
 
-    pub fn get_column_matrix(&self, j: usize) -> DCRTPolyMatrix {
-        let polys = self.get_column(j);
-        let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
-        DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
-    }
-
     pub fn deserialize_with_params<'de, D>(
         deserializer: D,
         params: &DCRTPolyParams,
@@ -214,6 +208,12 @@ impl PolyMatrix for DCRTPolyMatrix {
             .collect();
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
+    }
+
+    fn get_column_matrix(&self, j: usize) -> DCRTPolyMatrix {
+        let polys = self.get_column(j);
+        let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
+        DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
     }
 
     // (m1 * n), (m2 * n) -> ((m1 + m2) * n)

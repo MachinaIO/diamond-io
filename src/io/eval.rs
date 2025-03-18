@@ -194,8 +194,10 @@ where
             // cs_input.push(c_input);
             // cs_fhe_key.push(c_fhe_key);
         }
-        let enc_hardcoded_key_decomposed = &self.enc_hardcoded_key.decompose().get_column(0);
-        let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
+        let enc_hardcoded_key_decomposed =
+            &self.enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
+        let a_decomposed_polys =
+            public_data.a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
         let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
             &params,
             &a_decomposed_polys,

@@ -72,6 +72,8 @@ pub trait PolyMatrix:
     fn transpose(&self) -> Self;
     /// (m * n1), (m * n2) -> (m * (n1 + n2))
     fn concat_columns(&self, others: &[&Self]) -> Self;
+    /// j is column
+    fn get_column_matrix(&self, j: usize) -> Self;
     /// (m1 * n), (m2 * n) -> ((m1 + m2) * n)
     fn concat_rows(&self, others: &[&Self]) -> Self;
     /// (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))

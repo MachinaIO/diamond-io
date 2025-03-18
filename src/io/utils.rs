@@ -246,10 +246,11 @@ mod test {
             t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
 
         // 6. Decompose the ciphertext
-        let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+        let enc_hardcoded_key_polys =
+            enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
 
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
+        let a_decomposed_polys = a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
         let final_circuit = build_final_step_circuit::<DCRTPoly, DCRTPoly>(
             &params,
             &a_decomposed_polys,
@@ -322,10 +323,11 @@ mod test {
             t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
 
         // 7. Decompose the ciphertext
-        let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+        let enc_hardcoded_key_polys =
+            enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
 
         // 8. Build the final step circuit with BggEncoding as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
+        let a_decomposed_polys = a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
         let final_circuit_pubkey = build_final_step_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
             &params,
             &a_decomposed_polys,
