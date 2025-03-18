@@ -1,7 +1,10 @@
+use bytes::Bytes;
+
 use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
 pub trait PolyMatrix:
@@ -37,6 +40,8 @@ pub trait PolyMatrix:
         let wrapped_vec = vec.into_iter().map(|elem| vec![elem]).collect();
         Self::from_poly_vec(params, wrapped_vec)
     }
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<Bytes>) -> Self;
+    fn to_compact_bytes(&self) -> Vec<Bytes>;
     fn entry(&self, i: usize, j: usize) -> &Self::P;
     fn get_row(&self, i: usize) -> Vec<Self::P>;
     fn get_column(&self, j: usize) -> Vec<Self::P>;
@@ -67,6 +72,8 @@ pub trait PolyMatrix:
     fn transpose(&self) -> Self;
     /// (m * n1), (m * n2) -> (m * (n1 + n2))
     fn concat_columns(&self, others: &[&Self]) -> Self;
+    /// j is column
+    fn get_column_matrix(&self, j: usize) -> Self;
     /// (m1 * n), (m2 * n) -> ((m1 + m2) * n)
     fn concat_rows(&self, others: &[&Self]) -> Self;
     /// (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
@@ -95,4 +102,6 @@ pub trait PolyMatrix:
     /// Performs the operation S * (identity ⊗ G^-1(other)),
     /// where G^-1(other) is bit decomposition of other matrix
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
+    fn load(path: &Path) -> Self;
+    fn store(&self, path: &Path);
 }

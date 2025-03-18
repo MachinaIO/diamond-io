@@ -1,5 +1,6 @@
 use super::PolyElem;
 use crate::poly::params::PolyParams;
+use bytes::Bytes;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -29,6 +30,8 @@ pub trait Poly:
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self;
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_decomposed(params: &Self::Params, decomposed: &[Self]) -> Self;
+    fn from_compact_bytes(params: &Self::Params, bytes: &Bytes) -> Self;
+    fn to_compact_bytes(&self) -> Bytes;
     fn coeffs(&self) -> Vec<Self::Elem>;
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;

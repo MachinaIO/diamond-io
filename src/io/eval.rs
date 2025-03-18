@@ -28,15 +28,17 @@ where
         let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
         let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
-        ps.push(self.p_init.clone());
+        let p_init = M::load(&self.p_init_path);
+        ps.push(p_init.clone());
         encodings.push(self.encodings_init.clone());
         #[cfg(test)]
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
-                s_connect * &self.bs[0].2
+                let bs_0_2 = M::load(&self.bs_path[0].2);
+                s_connect * &bs_0_2
             };
-            debug_assert_eq!(self.p_init, expected_p_init);
+            debug_assert_eq!(p_init, expected_p_init);
 
             let zero = <M::P as Poly>::const_zero(&params);
             let one = <M::P as Poly>::const_one(&params);
@@ -67,12 +69,29 @@ where
         let log_q = params.as_ref().modulus_bits();
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
-            let m = if *input { &self.m_preimages[idx].1 } else { &self.m_preimages[idx].0 };
-            let q = &ps[idx] * m;
-            let n = if *input { &self.n_preimages[idx].1 } else { &self.n_preimages[idx].0 };
-            let p = &q * n;
-            let k = if *input { &self.k_preimages[idx].1 } else { &self.k_preimages[idx].0 };
-            let v = &q * k;
+            let m_path = if *input {
+                &self.m_preimages_paths[idx].1
+            } else {
+                &self.m_preimages_paths[idx].0
+            };
+            let m = M::load(m_path);
+            let q = ps[idx].clone() * &m;
+
+            let n_path = if *input {
+                &self.n_preimages_paths[idx].1
+            } else {
+                &self.n_preimages_paths[idx].0
+            };
+            let n = M::load(n_path);
+            let p = q.clone() * &n;
+
+            let k_path = if *input {
+                &self.k_preimages_paths[idx].1
+            } else {
+                &self.k_preimages_paths[idx].0
+            };
+            let k = M::load(k_path);
+            let v = &q * &k;
             // let v_input = v.slice_columns(0, 2 * log_q * (packed_input_size + 1));
             // let v_fhe_key = v.slice_columns(
             //     2 * log_q * (packed_input_size + 1),
@@ -128,11 +147,16 @@ where
                 }
                 let new_s =
                     if *input { &cur_s * &public_data.r_1 } else { &cur_s * &public_data.r_0 };
-                let b_next_bit =
-                    if *input { self.bs[idx + 1].1.clone() } else { self.bs[idx + 1].0.clone() };
+
+                let b_next_bit = if *input {
+                    M::load(&self.bs_path[idx + 1].1)
+                } else {
+                    M::load(&self.bs_path[idx + 1].0)
+                };
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 debug_assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1].2;
+                let bs_2 = M::load(&self.bs_path[idx + 1].2);
+                let expected_p = new_s.concat_columns(&[&new_s]) * &bs_2;
                 debug_assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
@@ -170,8 +194,10 @@ where
             // cs_input.push(c_input);
             // cs_fhe_key.push(c_fhe_key);
         }
-        let enc_hardcoded_key_decomposed = &self.enc_hardcoded_key.decompose().get_column(0);
-        let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
+        let enc_hardcoded_key_decomposed =
+            &self.enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
+        let a_decomposed_polys =
+            public_data.a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
         let final_circuit = build_final_step_circuit::<_, BggEncoding<M>>(
             &params,
             &a_decomposed_polys,
@@ -188,7 +214,8 @@ where
         let unit_vector = identity_2.slice_columns(1, 2);
         let output_encodings_vec =
             output_encodings[0].concat_vector(&output_encodings[1..]) * unit_vector.decompose();
-        let final_v = ps.last().unwrap() * &self.final_preimage;
+        let final_preimage = M::load(&self.final_preimage_path);
+        let final_v = ps.last().unwrap() * &final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(test)]

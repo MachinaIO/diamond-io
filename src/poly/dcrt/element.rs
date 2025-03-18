@@ -1,13 +1,14 @@
 use crate::poly::PolyElem;
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt};
 use num_traits::Signed;
+use serde::{Deserialize, Serialize};
 use std::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     str::FromStr,
     sync::Arc,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct FinRingElem {
     value: BigUint,
     modulus: Arc<BigUint>,

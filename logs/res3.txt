@@ -1,0 +1,63 @@
+Step Description                                                       Memory Usage    Absolute Increase    % Increase     
+------------------------------------------------------------------------------------------------------------------------
+Obfuscating circuit                                                    5.73 MB         0.0 B                0.00%
+Sampled hash key                                                       5.75 MB         16.00 KB             0.27%
+Sampled R_0                                                            6.69 MB         960.00 KB            16.30%
+Sampled R_1                                                            6.69 MB         0.0 B                0.00%
+Concatenated R_0                                                       6.70 MB         16.00 KB             0.23%
+Sampled A_RLWE_BAR                                                     6.78 MB         80.00 KB             1.17%
+Sampled public keys                                                    8.83 MB         2.05 MB              30.18%
+Sampled gadget matrix                                                  8.94 MB         112.00 KB            1.24%
+Computed RGS                                                           9.00 MB         64.00 KB             0.70%
+Sampled A_PRF                                                          9.00 MB         0.0 B                0.00%
+Modulus switched A_PRF                                                 9.25 MB         256.00 KB            2.78%
+Sampled public data                                                    9.25 MB         0.0 B                0.00%
+Sampled s_bar                                                          9.25 MB         0.0 B                0.00%
+Sampled t_bar_matrix                                                   9.25 MB         0.0 B                0.00%
+Sampled hardcoded_key_matrix                                           9.25 MB         0.0 B                0.00%
+Sampled enc_hardcoded_key                                              9.25 MB         0.0 B                0.00%
+Computed enc_hardcoded_key                                             9.25 MB         0.0 B                0.00%
+Generated plaintexts                                                   9.31 MB         64.00 KB             0.68%
+Sampled encodings_init                                                 9.67 MB         368.00 KB            3.86%
+Sampled b_0 trapdoor for input size 0                                  11.78 MB        2.11 MB              21.81%
+Sampled b_1 trapdoor for input size 0                                  13.31 MB        1.53 MB              13.00%
+Sampled b_star trapdoor for input size 0                               14.36 MB        1.05 MB              7.86%
+Sampled b_0 trapdoor for input size 1                                  14.92 MB        576.00 KB            3.92%
+Sampled b_1 trapdoor for input size 1                                  16.02 MB        1.09 MB              7.33%
+Sampled b_star trapdoor for input size 1                               17.22 MB        1.20 MB              7.51%
+Generate identity_2                                                    17.22 MB        0.0 B                0.00%
+Generated u_0, u_1, u_star by concatenations                           17.22 MB        0.0 B                0.00%
+Starting preimage calculations                                         17.22 MB        0.0 B                0.00%
+Processing preimage for input 1/1                                      17.22 MB        0.0 B                0.00%
+Joined k_preimages for input 1                                         17.27 MB        48.00 KB             0.27%
+Computing k_preimage for input 1 bit 1                                 17.27 MB        0.0 B                0.00%
+Computing k_preimage for input 1 bit 0                                 17.27 MB        0.0 B                0.00%
+Performed lhs computation for k_preimage input 1 bit 1                 23.78 MB        6.52 MB              37.74%
+Performed lhs computation for k_preimage input 1 bit 0                 23.81 MB        32.00 KB             0.13%
+Computed n_preimage for input 1 bit 1                                  53.36 MB        29.55 MB             124.08%
+Computed n_preimage for input 1 bit 0                                  53.39 MB        32.00 KB             0.06%
+Computed top matrix for k_preimage input 1 bit 1                       54.31 MB        944.00 KB            1.73%
+Created inserted_poly for k_preimage input 1 bit 1                     54.31 MB        0.0 B                0.00%
+Computed top matrix for k_preimage input 1 bit 0                       54.45 MB        144.00 KB            0.26%
+Created inserted_poly for k_preimage input 1 bit 0                     54.45 MB        0.0 B                0.00%
+Created inserted_poly_gadget for k_preimage input 1 bit 1              54.45 MB        0.0 B                0.00%
+Computed k_target for k_preimage input 1 bit 1                         54.47 MB        16.00 KB             0.03%
+Created inserted_poly_gadget for k_preimage input 1 bit 0              54.47 MB        0.0 B                0.00%
+Computed k_target for k_preimage input 1 bit 0                         56.17 MB        1.70 MB              3.13%
+Computed m_preimage for input 1 bit 0                                  93.38 MB        37.20 MB             66.23%
+Computed m_preimage for input 1 bit 1                                  93.38 MB        0.0 B                0.00%
+Computed k_matrix for k_preimage input 1 bit 0                         93.38 MB        0.0 B                0.00%
+Computed k_matrix for k_preimage input 1 bit 1                         93.38 MB        0.0 B                0.00%
+Dropped n_preimage for input 1 bit 1                                   93.39 MB        16.00 KB             0.02%
+Dropped n_preimage for input 1 bit 0                                   93.33 MB        -65536.0 B           0.00%
+Dropped m_preimage for input 1 bit 1                                   93.33 MB        0.0 B                0.00%
+Dropped m_preimage for input 1 bit 0                                   92.33 MB        -1048576.0 B         0.00%
+Dropped k_matrix for k_preimage input 1 bit 1                          91.11 MB        -1277952.0 B         0.00%
+Dropped k_matrix for k_preimage input 1 bit 0                          66.17 MB        -26148864.0 B        0.00%
+Finished all preimage calculations                                     57.17 MB        -9437184.0 B         0.00%
+Decomposed a_rlwe_bar                                                  57.17 MB        0.0 B                0.00%
+Built final step circuit                                               57.17 MB        0.0 B                0.00%
+Evaluated final circuit                                                57.39 MB        224.00 KB            0.38%
+Computed eval_outputs_matrix                                           57.39 MB        0.0 B                0.00%
+Computed final preimage                                                57.39 MB        0.0 B                0.00%
+Computed p_init                                                        57.39 MB        0.0 B                0.00%

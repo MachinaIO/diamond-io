@@ -6,12 +6,14 @@ use crate::{
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct DCRTPolyMatrix {
     inner: Vec<Vec<DCRTPoly>>,
     params: DCRTPolyParams,
@@ -47,10 +49,25 @@ impl DCRTPolyMatrix {
         &self.params
     }
 
-    pub fn get_column_matrix(&self, j: usize) -> DCRTPolyMatrix {
-        let polys = self.get_column(j);
-        let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
-        DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
+    pub fn deserialize_with_params<'de, D>(
+        deserializer: D,
+        params: &DCRTPolyParams,
+    ) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (serialized_data, nrow, ncol): (Vec<Vec<Vec<FinRingElem>>>, usize, usize) =
+            Deserialize::deserialize(deserializer)?;
+        let mut inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = DCRTPoly::from_coeffs(params, &serialized_data[i][j]);
+                row.push(poly);
+            }
+            inner.push(row);
+        }
+        Ok(Self { inner, params: params.clone(), nrow, ncol })
     }
 }
 
@@ -61,6 +78,14 @@ impl PolyMatrix for DCRTPolyMatrix {
         let nrow = vec.len();
         let ncol = vec[0].len();
         DCRTPolyMatrix { inner: vec, params: params.clone(), nrow, ncol }
+    }
+
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<bytes::Bytes>) -> Self {
+        todo!()
+    }
+
+    fn to_compact_bytes(&self) -> Vec<bytes::Bytes> {
+        todo!()
     }
 
     fn entry(&self, i: usize, j: usize) -> &Self::P {
@@ -183,6 +208,12 @@ impl PolyMatrix for DCRTPolyMatrix {
             .collect();
 
         DCRTPolyMatrix { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
+    }
+
+    fn get_column_matrix(&self, j: usize) -> DCRTPolyMatrix {
+        let polys = self.get_column(j);
+        let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
+        DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
     }
 
     // (m1 * n), (m2 * n) -> ((m1 + m2) * n)
@@ -363,6 +394,59 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
 
         output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
+    }
+
+    fn store(&self, path: &Path) {
+        let mut serializable_data = Vec::with_capacity(self.nrow);
+        for i in 0..self.nrow {
+            let mut row = Vec::with_capacity(self.ncol);
+            for j in 0..self.ncol {
+                let coeffs = self.inner[i][j]
+                    .coeffs()
+                    .iter()
+                    .map(|c| c.value().to_string())
+                    .collect::<Vec<String>>();
+                row.push(coeffs);
+            }
+            serializable_data.push(row);
+        }
+
+        let params_data =
+            (self.params.ring_dimension(), self.params.crt_depth(), self.params.crt_bits());
+
+        let data = (serializable_data, params_data, self.nrow, self.ncol);
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        let file = std::fs::File::create(path).unwrap();
+        serde_json::to_writer(file, &data).unwrap();
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn load(path: &Path) -> Self {
+        let file = std::fs::File::open(path).unwrap();
+        let data: (Vec<Vec<Vec<String>>>, (u32, usize, usize), usize, usize) =
+            serde_json::from_reader(file).unwrap();
+
+        let (serialized_data, params_data, nrow, ncol) = data;
+        let (ring_dim, crt_depth, crt_bits) = params_data;
+
+        let params = DCRTPolyParams::new(ring_dim, crt_depth, crt_bits);
+
+        let mut inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = DCRTPoly::poly_gen_from_vec(&params, serialized_data[i][j].clone());
+                row.push(poly);
+            }
+            inner.push(row);
+        }
+
+        DCRTPolyMatrix { inner, params, nrow, ncol }
     }
 }
 

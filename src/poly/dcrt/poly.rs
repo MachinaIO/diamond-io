@@ -1,5 +1,6 @@
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
@@ -50,7 +51,7 @@ impl DCRTPoly {
         DCRTPoly::from_coeffs(params, &new_coeffs)
     }
 
-    fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
+    pub fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
         DCRTPoly::new(ffi::DCRTPolyGenFromVec(
             params.ring_dimension(),
             params.crt_depth(),
@@ -66,6 +67,17 @@ impl DCRTPoly {
             params.crt_bits(),
             &value,
         ))
+    }
+
+    pub fn deserialize_with_params<'de, D>(
+        deserializer: D,
+        params: &DCRTPolyParams,
+    ) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let coeffs = Vec::<FinRingElem>::deserialize(deserializer)?;
+        Ok(Self::from_coeffs(params, &coeffs))
     }
 }
 
@@ -103,6 +115,14 @@ impl Poly for DCRTPoly {
             reconstructed += bit_poly * &const_poly_power_of_two;
         }
         reconstructed
+    }
+
+    fn from_compact_bytes(params: &Self::Params, bytes: &bytes::Bytes) -> Self {
+        todo!()
+    }
+
+    fn to_compact_bytes(&self) -> bytes::Bytes {
+        todo!()
     }
 
     fn const_zero(params: &Self::Params) -> Self {
@@ -226,6 +246,16 @@ impl SubAssign for DCRTPoly {
 impl SubAssign<&DCRTPoly> for DCRTPoly {
     fn sub_assign(&mut self, rhs: &Self) {
         *self += -rhs;
+    }
+}
+
+impl Serialize for DCRTPoly {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let coeffs = self.coeffs();
+        coeffs.serialize(serializer)
     }
 }
 
