@@ -17,11 +17,12 @@ def log_params_to_file(
     secpar: int,
     n: int,
     d: int,
-    alpha: int,
     input_size: int,
     norms_path: str,
     q: int,
-    stddev_e: int,
+    stddev_e_encoding: int,
+    stddev_e_hardcode: int,
+    stddev_e_p: int,
     p: int,
     estimated_secpar: float,
     size: int,
@@ -45,12 +46,13 @@ def log_params_to_file(
         f"secpar={secpar}, "
         f"n={n}, "
         f"d={d}, "
-        f"alpha={alpha}, "
         f"input_size={input_size}, "
         f"norms_path={norms_path}, "
         f"q={q}, "
         f"log_q={log_q}, "
-        f"stddev_e={stddev_e}, "
+        f"stddev_e_encoding={stddev_e_encoding}, "
+        f"stddev_e_hardcode={stddev_e_hardcode}, "
+        f"stddev_e_p={stddev_e_p}, "
         f"p={p}, "
         f"log_p={log_p}, "
         f"estimated_secpar={estimated_secpar}, "
@@ -73,37 +75,57 @@ def find_params(
     norms_path: str,
 ):
 
-    min_alpha_k = -2000
-    max_alpha_k = -1
+    min_alpha_ks = [-2000 for _ in range(3)]
+    max_alpha_ks = [-1 for _ in range(3)]
     min_q_k = target_secpar + 2
     max_q_k = max_log_q
     middle_q_k = math.floor((min_q_k + max_q_k) // 2)
     circuit_norms = CircuitNorms.load_from_file(norms_path, max_log_q)
-    found_alphas = []
-    # Binary search for alpha
-    while min_alpha_k + 1 < max_alpha_k:
-        alpha_k = (min_alpha_k + max_alpha_k) / 2
-        print(f"min_alpha_k: {min_alpha_k}")
-        print(f"max_alpha_k: {max_alpha_k}")
-        print(f"alpha_k: {alpha_k}")
+    found_alphas = [[] for _ in range(3)]
+    # Binary search for alphas
+    for i in range(3):
         q = 2 ** (middle_q_k)
-        stddev_e = 2 ** (middle_q_k + alpha_k)
-        estimated_secpar = estimate_secpar(d * n, q, Binary, stddev_e)
-        print("target_secpar:", target_secpar)
-        print("estimated_secpar:", estimated_secpar)
-        if target_secpar > estimated_secpar:
-            print(
-                f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
-            )
-            min_alpha_k = alpha_k
+        total_n = 0
+        dist = Binary
+        if i == 0:
+            # encoding sigma
+            total_n = n * (d + 1)
+        elif i == 1:
+            # hardcoded key sigma
+            total_n = n
+            dist = UniformMod(q)
         else:
-            found_alphas.append(alpha_k)
-            print(f"found alpha_k: {alpha_k}")
-            max_alpha_k = alpha_k
-    if found_alphas == []:
-        raise ValueError("alpha is not found after binary search")
-    alpha = 2 ** min(found_alphas)
-    print(f"found alpha: {alpha}")
+            # p sigma
+            total_n = 2 * (n * (d + 1))
+        while min_alpha_ks[i] + 1 < max_alpha_ks[i]:
+            min_alpha_k = min_alpha_ks[i]
+            max_alpha_k = max_alpha_ks[i]
+            alpha_k = (min_alpha_k + max_alpha_k) / 2
+            print(f"min_alpha_k: {min_alpha_k}")
+            print(f"max_alpha_k: {max_alpha_k}")
+            print(f"alpha_k: {alpha_k}")
+            stddev_e = 2 ** (middle_q_k + alpha_k)
+            estimated_secpar = estimate_secpar(total_n, q, dist, stddev_e)
+            print("target_secpar:", target_secpar)
+            print("estimated_secpar:", estimated_secpar)
+            if target_secpar > estimated_secpar:
+                print(
+                    f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
+                )
+                min_alpha_ks[i] = alpha_k
+            else:
+                found_alphas[i].append(alpha_k)
+                print(f"found alpha_k: {alpha_k}")
+                max_alpha_ks[i] = alpha_k
+        if len(found_alphas[i]) == 0:
+            raise ValueError(f"the {i}-th alpha is not found after binary search")
+    alpha_encoding = 2 ** min(found_alphas[0])
+    alpha_hardcode = 2 ** min(found_alphas[1])
+    alpha_p = 2 ** min(found_alphas[2])
+    # print(f"found alpha: {alpha}")
+    print(f"found alpha_encoding: {alpha_encoding}")
+    print(f"found alpha_hardcode: {alpha_hardcode}")
+    print(f"found alpha_p: {alpha_p}")
 
     found_params = []
     iters = 0
@@ -115,28 +137,60 @@ def find_params(
         print(f"q_k: {q_k}")
         q = 2**q_k
         print(f"q: {q}")
-        stddev_e = alpha * q
-        estimated_secpar = estimate_secpar(d * n, q, Binary, stddev_e)
+        stddev_e_encoding = alpha_encoding * q
+        stddev_e_hardcode = alpha_hardcode * q
+        stddev_e_p = alpha_p * q
+        estimated_secpar_encoding = estimate_secpar(
+            (d + 1) * n, q, Binary, stddev_e_encoding
+        )
+        estimated_secpar_hardcode = estimate_secpar(
+            n, q, UniformMod(q), stddev_e_hardcode
+        )
+        estimated_secpar_p = estimate_secpar(2 * ((d + 1) * n), q, Binary, stddev_e_p)
+        min_estimated_secpar = min(
+            estimated_secpar_encoding, estimated_secpar_hardcode, estimated_secpar_p
+        )
         print("target_secpar:", target_secpar)
-        print("estimated_secpar:", estimated_secpar)
-        if target_secpar > estimated_secpar:
+        print("estimated_secpar:", min_estimated_secpar)
+        if target_secpar > min_estimated_secpar:
             print(
-                f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
+                f"target_secpar {target_secpar} > estimated_secpar {min_estimated_secpar}"
             )
             max_q_k = q_k
             continue
         try:
-            p = find_p(target_secpar, n, q, d, stddev_e, input_size, circuit_norms)
+            p = find_p(
+                target_secpar,
+                n,
+                q,
+                d,
+                stddev_e_encoding,
+                stddev_e_hardcode,
+                stddev_e_p,
+                input_size,
+                circuit_norms,
+            )
             print(f"found p: {p}")
             max_q_k = q_k
-            found_params.append((q, stddev_e, p, estimated_secpar))
+            found_params.append(
+                (
+                    q,
+                    stddev_e_encoding,
+                    stddev_e_hardcode,
+                    stddev_e_p,
+                    p,
+                    min_estimated_secpar,
+                )
+            )
         except ValueError as e:
             print(f"ValueError: {e}")
             min_q_k = q_k
     if found_params == []:
         raise ValueError("p is not found after binary search")
     # minimum q in found_params
-    (q, stddev_e, p, estimated_secpar) = min(found_params, key=lambda x: x[0])
+    (q, stddev_e_encoding, stddev_e_hardcode, stddev_e_p, p, estimated_secpar) = min(
+        found_params, key=lambda x: x[0]
+    )
     log_q = math.ceil(math.log2(q))
     size = compute_obf_size(
         n,
@@ -147,7 +201,15 @@ def find_params(
         input_size,
         1,
     )
-    return (q, stddev_e, p, estimated_secpar, alpha, size)
+    return (
+        q,
+        stddev_e_encoding,
+        stddev_e_hardcode,
+        stddev_e_p,
+        p,
+        estimated_secpar,
+        size,
+    )
 
 
 def find_p(
@@ -155,7 +217,9 @@ def find_p(
     n: int,
     q: int,
     d: int,
-    stddev_e: int,
+    stddev_e_encoding: int,
+    stddev_e_hardcode: int,
+    stddev_e_p: int,
     input_size: int,
     circuit_norms: CircuitNorms,
 ):
@@ -163,7 +227,16 @@ def find_p(
     stddev_b = compute_stddev_b(n, log_q, d)
 
     final_err = bound_final_error(
-        secpar, n, log_q, d, stddev_e, stddev_b, input_size, circuit_norms
+        secpar,
+        n,
+        log_q,
+        d,
+        stddev_e_encoding,
+        stddev_e_hardcode,
+        stddev_e_p,
+        stddev_b,
+        input_size,
+        circuit_norms,
     )
 
     # Convert final_err to Decimal for high precision
@@ -243,7 +316,9 @@ def bound_final_error(
     n: int,
     log_q: int,
     d: int,
-    stddev_e: int,
+    stddev_e_encoding: int,
+    stddev_e_hardcode: int,
+    stddev_e_p: int,
     stddev_b: int,
     input_size: int,
     circuit_norms: CircuitNorms,
@@ -253,7 +328,9 @@ def bound_final_error(
     n_d = Decimal(n)
     log_q_d = Decimal(log_q)
     d_d = Decimal(d)
-    stddev_e_d = Decimal(stddev_e)
+    stddev_e_encoding_d = Decimal(stddev_e_encoding)
+    stddev_e_hardcode_d = Decimal(stddev_e_hardcode)
+    stddev_e_p_d = Decimal(stddev_e_p)
     stddev_b_d = Decimal(stddev_b)
     # [TODO] support multiple outputs
     h_norm_d = Decimal(circuit_norms.compute_norms((d + 1) * log_q)[0])
@@ -264,8 +341,8 @@ def bound_final_error(
 
     # Use Decimal for all calculations to maintain precision
     scale_coeff_d = (n_d * m_b_d * stddev_b_d) ** Decimal(2) * sqrt_secpar_d
-    bound_p_d = stddev_e_d * sqrt_secpar_d
-    bound_c_d = stddev_e_d * sqrt_secpar_d
+    bound_p_d = stddev_e_p_d * sqrt_secpar_d
+    bound_c_d = stddev_e_encoding_d * sqrt_secpar_d
 
     for _ in range(input_size):
         bound_v_d = (scale_coeff_d ** Decimal(2)) * bound_p_d
@@ -291,7 +368,7 @@ def bound_final_error(
     bound_v_final_d = bound_p_d * scale_coeff_d
 
     # Return the final result as a Decimal
-    return bound_c_final_d + bound_v_final_d
+    return bound_c_final_d + bound_v_final_d + stddev_e_hardcode_d * sqrt_secpar_d
 
 
 def compute_obf_size(
@@ -343,26 +420,34 @@ if __name__ == "__main__":
     input_size = 1
     # m_polys = [[0, 100, 200, 2000]]
     norms_path = "final_bits_norm_n_13_q_612.json"
-    q, stddev_e, p, estimated_secpar, alpha, size = find_params(
-        secpar, n, d, max_log_q, input_size, norms_path
-    )
+    (
+        q,
+        stddev_e_encoding,
+        stddev_e_hardcode,
+        stddev_e_p,
+        p,
+        estimated_secpar,
+        size,
+    ) = find_params(secpar, n, d, max_log_q, input_size, norms_path)
 
     print(f"q: {q}, log_2 q: {math.log2(q)}")
-    print(f"stddev_e: {stddev_e}")
+    print(f"stddev_e_encoding: {stddev_e_encoding}")
+    print(f"stddev_e_hardcode: {stddev_e_hardcode}")
+    print(f"stddev_e_p: {stddev_e_p}")
     print(f"p: {p}, log_2 p: {math.log2(p)}")
     print(f"estimated_secpar: {estimated_secpar}")
-    print(f"alpha: {alpha}")
     print(f"size: {size} [GB]")
     # Log parameters to params.log file
     log_params_to_file(
         secpar,
         n,
         d,
-        alpha,
         input_size,
         norms_path,
         q,
-        stddev_e,
+        stddev_e_encoding,
+        stddev_e_hardcode,
+        stddev_e_p,
         p,
         estimated_secpar,
         size,
