@@ -177,10 +177,12 @@ where
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
         let m_preimage = |a, m_i| {
+            info!("Computed m_preimage for input {} bit {}", idx + 1, m_i);
             let b_cur_star = M::load(b_cur_star_path);
             let m: M =
                 sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, &b_cur_star, &a);
-            info!("Computed m_preimage for input {} bit {}", idx + 1, m_i);
+            drop(b_cur_star);
+            drop(a);
             log_mem();
             let m_path = fs_dir_path.join(format!("m_preimage_{}_{}", m_i, idx));
             m.store(&m_path);
