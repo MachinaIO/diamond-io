@@ -117,19 +117,28 @@ where
     info!("Sampled encodings_init");
     log_mem();
 
-    let mut bs = Vec::with_capacity(obf_params.input_size);
+    let mut bs_path = Vec::with_capacity(obf_params.input_size);
     let mut b_trapdoors = Vec::with_capacity(obf_params.input_size);
     for _i in 0..=obf_params.input_size {
         let (b_0_trapdoor, b_0) = sampler_trapdoor.trapdoor(&params, 4);
         info!("Sampled b_0 trapdoor for input size {}", _i);
+        let b_0_matrix_path = fs_dir_path.join(format!("b_0_{}", _i));
+        b_0.store(&b_0_matrix_path);
+        drop(b_0);
         log_mem();
         let (b_1_trapdoor, b_1) = sampler_trapdoor.trapdoor(&params, 4);
         info!("Sampled b_1 trapdoor for input size {}", _i);
+        let b_1_matrix_path = fs_dir_path.join(format!("b_1_{}", _i));
+        b_1.store(&b_1_matrix_path);
+        drop(b_1);
         log_mem();
         let (b_star_trapdoor, b_star) = sampler_trapdoor.trapdoor(&params, 4);
         info!("Sampled b_star trapdoor for input size {}", _i);
+        let b_star_matrix_path = fs_dir_path.join(format!("b_star_{}", _i));
+        b_star.store(&b_star_matrix_path);
+        drop(b_star);
         log_mem();
-        bs.push((b_0, b_1, b_star));
+        bs_path.push((b_0_matrix_path, b_1_matrix_path, b_star_matrix_path));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
     }
     let m_b = 4 * (2 + log_q);
@@ -157,16 +166,14 @@ where
     for idx in 0..obf_params.input_size {
         info!("Processing preimage for input {}/{}", idx + 1, obf_params.input_size);
         log_mem();
-
-        let (_, _, b_cur_star) = &bs[idx];
-        let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
+        let (_, _, b_cur_star_path) = &bs_path[idx];
+        let (b_next_0_path, b_next_1_path, b_next_star_path) = &bs_path[idx + 1];
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
         let m_preimage = |a, m_i| {
-            info!("Before computing m_preimage for input {} bit {}", idx + 1, m_i);
-            log_mem();
+            let b_cur_star = M::load(b_cur_star_path);
             let m: M =
-                sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
+                sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, &b_cur_star, &a);
             info!("Computed m_preimage for input {} bit {}", idx + 1, m_i);
             log_mem();
             let m_path = fs_dir_path.join(format!("m_preimage_{}_{}", m_i, idx));
@@ -176,9 +183,13 @@ where
             log_mem();
             m_path
         };
-
-        let mp = || join!(|| m_preimage(&u_0 * b_next_0, 0), || m_preimage(&u_1 * b_next_1, 1));
-        let ub_star = &u_star * b_next_star;
+        info!("Computed ub_star for input {}", idx + 1);
+        log_mem();
+        let b_next_0 = M::load(b_next_0_path);
+        let b_next_1 = M::load(b_next_1_path);
+        let mp = || join!(|| m_preimage(&u_0 * &b_next_0, 0), || m_preimage(&u_1 * &b_next_1, 1));
+        let b_next_star = M::load(b_next_star_path);
+        let ub_star = &u_star * &b_next_star;
         info!("Computed ub_star for input {}", idx + 1);
         log_mem();
 
@@ -197,9 +208,9 @@ where
         };
 
         let np = || {
-            join!(|| n_preimage(b_next_0_trapdoor, b_next_0, 0), || n_preimage(
+            join!(|| n_preimage(b_next_0_trapdoor, &b_next_0, 0), || n_preimage(
                 b_next_1_trapdoor,
-                b_next_1,
+                &b_next_1,
                 1
             ))
         };
@@ -247,16 +258,16 @@ where
             log_mem();
 
             let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..]) -
+                &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
 
             info!("Computed k_target for k_preimage input {} bit {}", idx + 1, bit);
             log_mem();
 
-            let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
+            let b_matrix = if bit == 0 { b_next_0.clone() } else { b_next_1.clone() };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
-            let k_matrix = sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target);
+            let k_matrix = sampler_trapdoor.preimage(&params, trapdoor, &b_matrix, &k_target);
             info!("Computed k_matrix for k_preimage input {} bit {}", idx + 1, bit);
             log_mem();
             let k_path = fs_dir_path.join(format!("k_preimage_{}_{}", bit, idx));
@@ -312,10 +323,11 @@ where
             packed_output_size,
         )])
     };
-    let (_, _, b_final) = &bs[obf_params.input_size];
+    let (_, _, b_final_path) = &bs_path[obf_params.input_size];
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
+    let b_final = M::load(b_final_path);
     let final_preimage =
-        sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
+        sampler_trapdoor.preimage(&params, b_final_trapdoor, &b_final, &final_preimage_target);
     let final_preimage_path = fs_dir_path.join("final_preimage");
     final_preimage.store(&final_preimage_path);
     drop(final_preimage);
@@ -324,7 +336,8 @@ where
 
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init]);
-        let s_b = s_connect * &bs[0].2;
+        let bs_0_2 = M::load(&bs_path[0].2);
+        let s_b = s_connect * &bs_0_2;
         let error = sampler_uniform.sample_uniform(
             &params,
             1,
@@ -354,7 +367,7 @@ where
         #[cfg(test)]
         t_bar: t_bar.clone(),
         #[cfg(test)]
-        bs,
+        bs_path,
         #[cfg(test)]
         hardcoded_key: hardcoded_key.clone(),
         #[cfg(test)]

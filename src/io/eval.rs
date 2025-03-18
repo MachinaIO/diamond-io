@@ -35,7 +35,8 @@ where
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
-                s_connect * &self.bs[0].2
+                let bs_0_2 = M::load(&self.bs_path[0].2);
+                s_connect * &bs_0_2
             };
             debug_assert_eq!(p_init, expected_p_init);
 
@@ -146,11 +147,16 @@ where
                 }
                 let new_s =
                     if *input { &cur_s * &public_data.r_1 } else { &cur_s * &public_data.r_0 };
-                let b_next_bit =
-                    if *input { self.bs[idx + 1].1.clone() } else { self.bs[idx + 1].0.clone() };
+
+                let b_next_bit = if *input {
+                    M::load(&self.bs_path[idx + 1].1)
+                } else {
+                    M::load(&self.bs_path[idx + 1].0)
+                };
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 debug_assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1].2;
+                let bs_2 = M::load(&self.bs_path[idx + 1].2);
+                let expected_p = new_s.concat_columns(&[&new_s]) * &bs_2;
                 debug_assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;

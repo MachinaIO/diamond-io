@@ -22,7 +22,7 @@ pub struct Obfuscation<M: PolyMatrix> {
     #[cfg(test)]
     pub t_bar: <M as PolyMatrix>::P,
     #[cfg(test)]
-    pub bs: Vec<(M, M, M)>,
+    pub bs_path: Vec<(PathBuf, PathBuf, PathBuf)>,
     #[cfg(test)]
     pub hardcoded_key: <M as PolyMatrix>::P,
     #[cfg(test)]

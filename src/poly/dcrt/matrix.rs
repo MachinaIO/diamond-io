@@ -6,7 +6,7 @@ use crate::{
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
