@@ -63,6 +63,14 @@ impl PolyMatrix for DCRTPolyMatrix {
         DCRTPolyMatrix { inner: vec, params: params.clone(), nrow, ncol }
     }
 
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: Vec<bytes::Bytes>) -> Self {
+        todo!()
+    }
+
+    fn to_compact_bytes(&self) -> Vec<bytes::Bytes> {
+        todo!()
+    }
+
     fn entry(&self, i: usize, j: usize) -> &Self::P {
         &self.inner[i][j]
     }

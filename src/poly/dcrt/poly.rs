@@ -105,6 +105,14 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
+    fn from_compact_bytes(params: &Self::Params, bytes: &bytes::Bytes) -> Self {
+        todo!()
+    }
+
+    fn to_compact_bytes(&self) -> bytes::Bytes {
+        todo!()
+    }
+
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
