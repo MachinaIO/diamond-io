@@ -65,21 +65,6 @@ where
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
 
-    let enc_hardcoded_key = {
-        let e = sampler_uniform.sample_uniform(
-            &params,
-            1,
-            1,
-            DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
-        );
-        let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        let result =
-            &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale);
-        drop(e);
-        result
-    };
-
-    let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
     let t_bar = t_bar_matrix.entry(0, 0).clone();
 
     #[cfg(test)]
@@ -90,7 +75,6 @@ where
         plaintexts.push(M::P::const_zero(params.as_ref()));
     }
     plaintexts.push(t_bar.clone());
-    let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
 
     let mut bs_path = Vec::with_capacity(obf_params.input_size + 1);
     let mut b_trapdoors = Vec::with_capacity(obf_params.input_size + 1);
@@ -103,29 +87,38 @@ where
         let (b_0, b_0_trapdoor_first, b_0_trapdoor_second) = sampler_trapdoor.trapdoor(&params, 4);
         let b_0_trapdoor_first_path = fs_dir_path.join(format!("b_0_trapdoor_first_{}", i));
         b_0_trapdoor_first.store(&b_0_trapdoor_first_path);
+        drop(b_0_trapdoor_first);
         let b_0_trapdoor_second_path = fs_dir_path.join(format!("b_0_trapdoor_second_{}", i));
         b_0_trapdoor_second.store(&b_0_trapdoor_second_path);
+        drop(b_0_trapdoor_second);
         let b_0_matrix_path = fs_dir_path.join(format!("b_0_{}", i));
         b_0.store(&b_0_matrix_path);
+        drop(b_0);
 
         // Generate b_1 and its trapdoor
         let (b_1, b_1_trapdoor_first, b_1_trapdoor_second) = sampler_trapdoor.trapdoor(&params, 4);
         let b_1_trapdoor_first_path = fs_dir_path.join(format!("b_1_trapdoor_first_{}", i));
         b_1_trapdoor_first.store(&b_1_trapdoor_first_path);
+        drop(b_1_trapdoor_first);
         let b_1_trapdoor_second_path = fs_dir_path.join(format!("b_1_trapdoor_second_{}", i));
         b_1_trapdoor_second.store(&b_1_trapdoor_second_path);
+        drop(b_1_trapdoor_second);
         let b_1_matrix_path = fs_dir_path.join(format!("b_1_{}", i));
         b_1.store(&b_1_matrix_path);
+        drop(b_1);
 
         // Generate b_star and its trapdoor
         let (b_star, b_star_trapdoor_first, b_star_trapdoor_second) =
             sampler_trapdoor.trapdoor(&params, 4);
         let b_star_trapdoor_first_path = fs_dir_path.join(format!("b_star_trapdoor_first_{}", i));
         b_star_trapdoor_first.store(&b_star_trapdoor_first_path);
+        drop(b_star_trapdoor_first);
         let b_star_trapdoor_second_path = fs_dir_path.join(format!("b_star_trapdoor_second_{}", i));
         b_star_trapdoor_second.store(&b_star_trapdoor_second_path);
+        drop(b_star_trapdoor_second);
         let b_star_matrix_path = fs_dir_path.join(format!("b_star_{}", i));
         b_star.store(&b_star_matrix_path);
+        drop(b_star);
 
         // Store paths
         bs_path.push((b_0_matrix_path, b_1_matrix_path, b_star_matrix_path));
@@ -355,7 +348,20 @@ where
     log_mem();
 
     let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
-
+    let enc_hardcoded_key = {
+        let e = sampler_uniform.sample_uniform(
+            &params,
+            1,
+            1,
+            DistType::GaussDist { sigma: obf_params.error_gauss_sigma },
+        );
+        let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
+        let result =
+            &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale);
+        drop(e);
+        result
+    };
+    let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
     let final_circuit = build_final_step_circuit::<_, BggPublicKey<M>>(
         &params,
         &a_decomposed_polys,
@@ -426,6 +432,7 @@ where
     let p_init_path = fs_dir_path.join("p_init");
     p_init.store(&p_init_path);
     drop(p_init);
+    let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
 
     info!("OBFUSCATION COMPLETED");
 
