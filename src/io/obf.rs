@@ -8,7 +8,7 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use rand::{Rng, RngCore};
-use std::{ops::Mul, sync::Arc};
+use std::{ops::Mul, path::Path, sync::Arc};
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -16,6 +16,7 @@ pub fn obfuscate<M, SU, SH, ST, R>(
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
     rng: &mut R,
+    fs_dir_path: &Path,
 ) -> Obfuscation<M>
 where
     M: PolyMatrix,
@@ -89,6 +90,7 @@ where
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
     }
     let m_b = 4 * (2 + log_q);
+
     let identity_2 = M::identity(params.as_ref(), 2, None);
     let u_0 = identity_2.concat_diag(&[&public_data.r_0]);
     let u_1 = identity_2.concat_diag(&[&public_data.r_1]);
@@ -98,7 +100,7 @@ where
         zeros.concat_rows(&[&identities])
     };
     let gadget_2 = M::gadget_matrix(params.as_ref(), 2);
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
+    let (mut m_preimages_paths, mut n_preimages_paths, mut k_preimages_paths) = (
         Vec::with_capacity(obf_params.input_size),
         Vec::with_capacity(obf_params.input_size),
         Vec::with_capacity(obf_params.input_size),
@@ -108,22 +110,33 @@ where
         let (b_next_0, b_next_1, b_next_star) = &bs[idx + 1];
         let (_, _, b_cur_star_trapdoor) = &b_trapdoors[idx];
         let (b_next_0_trapdoor, b_next_1_trapdoor, _) = &b_trapdoors[idx + 1];
-        let m_preimage = |a| {
-            let r = sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
-            r
+        let m_preimage = |a, m_i| {
+            let m: M =
+                sampler_trapdoor.preimage(params.as_ref(), b_cur_star_trapdoor, b_cur_star, &a);
+            let m_path = fs_dir_path.join(format!("m_preimage_{}_{}", m_i, idx));
+            m.store(&m_path);
+            drop(m);
+            m_path
         };
 
-        let mp = || join!(|| m_preimage(&u_0 * b_next_0), || m_preimage(&u_1 * b_next_1));
+        let mp = || join!(|| m_preimage(&u_0 * b_next_0, 0), || m_preimage(&u_1 * b_next_1, 1));
         let ub_star = &u_star * b_next_star;
-        // todo: 36gb
-        let n_preimage = |t, n| sampler_trapdoor.preimage(&params, t, n, &ub_star);
+
+        let n_preimage = |t, n, n_idx| {
+            let matrix_n = sampler_trapdoor.preimage(&params, t, n, &ub_star);
+            let n_path = fs_dir_path.join(format!("n_preimage_{}_{}", n_idx, idx));
+            matrix_n.store(&n_path);
+            drop(matrix_n);
+            n_path
+        };
+
         let np = || {
-            join!(|| n_preimage(b_next_0_trapdoor, b_next_0), || n_preimage(
+            join!(|| n_preimage(b_next_0_trapdoor, b_next_0, 0), || n_preimage(
                 b_next_1_trapdoor,
-                b_next_1
+                b_next_1,
+                1
             ))
         };
-
         let k_preimage = |bit: usize| {
             let rg = &public_data.rgs[bit];
             let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
@@ -154,15 +167,19 @@ where
             let k_target = top.concat_rows(&[&bottom]);
             let b_matrix = if bit == 0 { b_next_0 } else { b_next_1 };
             let trapdoor = if bit == 0 { b_next_0_trapdoor } else { b_next_1_trapdoor };
-            sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target)
+            let k_matrix = sampler_trapdoor.preimage(&params, trapdoor, b_matrix, &k_target);
+            let k_path = fs_dir_path.join(format!("k_preimage_{}_{}", bit, idx));
+            k_matrix.store(&k_path);
+            drop(k_matrix);
+            k_path
         };
         let kp = || join!(|| k_preimage(0), || k_preimage(1));
 
         let (mp, (np, kp)) = join!(mp, || join!(np, kp));
 
-        m_preimages.push(mp);
-        n_preimages.push(np);
-        k_preimages.push(kp);
+        n_preimages_paths.push(np);
+        m_preimages_paths.push(mp);
+        k_preimages_paths.push(kp);
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.decompose().get_column(0);
@@ -190,6 +207,9 @@ where
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
+    let final_preimage_path = fs_dir_path.join("final_preimage");
+    final_preimage.store(&final_preimage_path);
+    drop(final_preimage);
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &bs[0].2;
@@ -201,15 +221,18 @@ where
         );
         s_b + error
     };
+    let p_init_path = fs_dir_path.join("p_init");
+    p_init.store(&p_init_path);
+    drop(p_init);
     Obfuscation {
         hash_key,
         enc_hardcoded_key,
         encodings_init,
-        p_init,
-        m_preimages,
-        n_preimages,
-        k_preimages,
-        final_preimage,
+        p_init_path,
+        m_preimages_paths,
+        n_preimages_paths,
+        k_preimages_paths,
+        final_preimage_path,
         #[cfg(test)]
         s_init: s_init.clone(),
         #[cfg(test)]

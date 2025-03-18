@@ -4,6 +4,7 @@ use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
 pub trait PolyMatrix:
@@ -99,4 +100,6 @@ pub trait PolyMatrix:
     /// Performs the operation S * (identity ⊗ G^-1(other)),
     /// where G^-1(other) is bit decomposition of other matrix
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
+    fn load(path: &Path) -> Self;
+    fn store(&self, path: &Path);
 }

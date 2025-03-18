@@ -50,7 +50,7 @@ impl DCRTPoly {
         DCRTPoly::from_coeffs(params, &new_coeffs)
     }
 
-    fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
+    pub fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
         DCRTPoly::new(ffi::DCRTPolyGenFromVec(
             params.ring_dimension(),
             params.crt_depth(),

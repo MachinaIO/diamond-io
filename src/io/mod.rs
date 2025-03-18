@@ -5,17 +5,18 @@ use crate::{
     bgg::{circuit::PolyCircuit, BggEncoding},
     poly::{Poly, PolyMatrix, PolyParams},
 };
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
     pub enc_hardcoded_key: M,
     pub encodings_init: Vec<BggEncoding<M>>,
-    pub p_init: M,
-    pub m_preimages: Vec<(M, M)>,
-    pub n_preimages: Vec<(M, M)>,
-    pub k_preimages: Vec<(M, M)>,
-    pub final_preimage: M,
+    pub p_init_path: PathBuf,
+    pub m_preimages_paths: Vec<(PathBuf, PathBuf)>,
+    pub n_preimages_paths: Vec<(PathBuf, PathBuf)>,
+    pub k_preimages_paths: Vec<(PathBuf, PathBuf)>,
+    pub final_preimage_path: PathBuf,
     #[cfg(test)]
     pub s_init: M,
     #[cfg(test)]
@@ -56,6 +57,8 @@ mod test {
     use num_bigint::BigUint;
     use std::sync::Arc;
 
+    const FS_PATH: &str = "src/io/test_data";
+
     #[test]
     fn test_io_just_mul_enc_and_bit() {
         init_tracing();
@@ -87,12 +90,14 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0);
         let mut rng = rand::rng();
+        let fs_dir_path = PathBuf::from(FS_PATH);
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
             &mut rng,
+            &fs_dir_path,
         );
         let obfuscation_time = start_time.elapsed();
         println!("Time to obfuscate: {:?}", obfuscation_time);
@@ -163,12 +168,14 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(2, 0.0);
         let mut rng = rand::rng();
+        let fs_dir_path = PathBuf::from(FS_PATH);
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
             &mut rng,
+            &fs_dir_path,
         );
         let obfuscation_time = start_time.elapsed();
         println!("Time to obfuscate: {:?}", obfuscation_time);
