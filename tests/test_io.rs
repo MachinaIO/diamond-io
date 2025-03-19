@@ -9,7 +9,7 @@ mod test {
                 DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
                 DCRTPolyUniformSampler,
             },
-            Poly, PolyParams,
+            PolyParams,
         },
         utils::init_tracing,
     };

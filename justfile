@@ -21,6 +21,9 @@ docs:
 test:
    cargo test --features="parallel"
 
+test-io:
+   cargo test --test test_io --no-default-features --features parallel
+
 # Run the entire CI pipeline including format, clippy, docs, and test checks
-ci: format clippy docs test
+ci: format clippy docs test test-io
     @echo "CI flow completed"
