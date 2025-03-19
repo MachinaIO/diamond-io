@@ -1,4 +1,3 @@
-use super::ObfuscationParams;
 use crate::{
     bgg::{
         circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
@@ -10,6 +9,8 @@ use crate::{
 use itertools::Itertools;
 use std::{marker::PhantomData, ops::Mul};
 use tracing::info;
+
+use super::obfuscate::params::ObfuscationParams;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -156,6 +157,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod test {
     use super::*;
     use crate::{

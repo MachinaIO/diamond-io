@@ -287,6 +287,7 @@ impl PolyCircuit {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::{

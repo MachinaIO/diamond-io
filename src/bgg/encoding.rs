@@ -114,6 +114,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use crate::{
         bgg::{

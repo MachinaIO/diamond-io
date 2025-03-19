@@ -531,6 +531,7 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use std::sync::Arc;
 

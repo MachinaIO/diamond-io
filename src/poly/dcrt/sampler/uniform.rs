@@ -76,6 +76,7 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use super::*;
     #[cfg(not(feature = "parallel"))]

@@ -48,6 +48,7 @@ impl<M: PolyMatrix> BitToInt<M::P> for BggEncoding<M> {
     }
 }
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::{

@@ -1,4 +1,4 @@
-use super::{utils::*, Obfuscation, ObfuscationParams};
+use super::{obfuscate::params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -66,7 +66,7 @@ where
 
     let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
     let t_bar = t_bar_matrix.entry(0, 0).clone();
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
@@ -211,15 +211,15 @@ where
         n_preimages,
         k_preimages,
         final_preimage,
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         s_init: s_init.clone(),
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         t_bar: t_bar.clone(),
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         bs,
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         hardcoded_key: hardcoded_key.clone(),
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         final_preimage_target,
     }
 }

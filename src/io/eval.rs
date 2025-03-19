@@ -1,4 +1,4 @@
-use super::{utils::*, Obfuscation, ObfuscationParams};
+use super::{obfuscate::params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, BitToInt},
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
@@ -32,7 +32,7 @@ where
         let (mut ps, mut encodings) = (vec![], vec![]);
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
@@ -102,7 +102,7 @@ where
             }
             ps.push(p.clone());
             encodings.push(new_encodings);
-            #[cfg(test)]
+            #[cfg(feature = "test")]
             if obf_params.encoding_sigma == 0.0 &&
                 obf_params.hardcoded_key_sigma == 0.0 &&
                 obf_params.p_sigma == 0.0
@@ -177,7 +177,7 @@ where
         let final_v = ps.last().unwrap() * &self.final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
