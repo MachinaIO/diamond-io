@@ -1,5 +1,4 @@
 #[cfg(test)]
-#[cfg(not(feature = "test"))]
 mod test {
     use diamond_io::{
         bgg::circuit::PolyCircuit,
@@ -9,7 +8,7 @@ mod test {
                 DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
                 DCRTPolyUniformSampler,
             },
-            PolyParams,
+            Poly, PolyParams,
         },
         utils::init_tracing,
     };
@@ -65,19 +64,20 @@ mod test {
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
 
-        // let hardcoded_key = obfuscation
-        //     .hardcoded_key
-        //     .coeffs()
-        //     .iter()
-        //     .map(|elem| elem.value() != &BigUint::from(0u8))
-        //     .collect::<Vec<_>>();
+        #[cfg(feature = "test")]
+        let hardcoded_key = obfuscation
+            .hardcoded_key
+            .coeffs()
+            .iter()
+            .map(|elem| elem.value() != &BigUint::from(0u8))
+            .collect::<Vec<_>>();
         let output = obfuscation.eval(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
         println!("{:?}", output);
         println!("Time for evaluation: {:?}", total_time - obfuscation_time);
         println!("Total time: {:?}", total_time);
-        // #[cfg(feature = "test")]
-        // assert_eq!(output, hardcoded_key);
+        #[cfg(feature = "test")]
+        assert_eq!(output, hardcoded_key);
     }
 
     #[test]
@@ -127,19 +127,19 @@ mod test {
 
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        // #[cfg(feature = "test")]
-        // let hardcoded_key = obfuscation
-        //     .hardcoded_key
-        //     .coeffs()
-        //     .iter()
-        //     .map(|elem| elem.value() != &BigUint::from(0u8))
-        //     .collect::<Vec<_>>();
+        #[cfg(feature = "test")]
+        let hardcoded_key = obfuscation
+            .hardcoded_key
+            .coeffs()
+            .iter()
+            .map(|elem| elem.value() != &BigUint::from(0u8))
+            .collect::<Vec<_>>();
         let output = obfuscation.eval(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
         println!("{:?}", output);
         println!("Time for evaluation: {:?}", total_time - obfuscation_time);
         println!("Total time: {:?}", total_time);
-        // #[cfg(feature = "test")]
-        // assert_eq!(output, hardcoded_key);
+        #[cfg(feature = "test")]
+        assert_eq!(output, hardcoded_key);
     }
 }
