@@ -54,7 +54,6 @@ where
         let secret_vec_size = self.d + 1;
         let columns = secret_vec_size * log_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
-        info!("before all_matrix");
         let all_matrix = self.sampler.sample_hash(
             params,
             tag,
@@ -62,7 +61,6 @@ where
             columns * packed_input_size,
             DistType::FinRingDist,
         );
-        info!("all_matrix");
 
         parallel_iter!(0..packed_input_size)
             .map(|idx| {
@@ -264,15 +262,15 @@ mod tests {
         assert_eq!(bgg_encodings.len(), packed_input_size + 1);
         assert_eq!(
             bgg_encodings[0].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone() -
-                bgg_sampler.secret_vec.clone() *
-                    (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[0].pubkey.matrix.clone()
+                - bgg_sampler.secret_vec.clone()
+                    * (g.clone() * bgg_encodings[0].plaintext.clone().unwrap())
         );
         assert_eq!(
             bgg_encodings[1].vector,
-            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone() -
-                bgg_sampler.secret_vec.clone() *
-                    (g * bgg_encodings[1].plaintext.clone().unwrap())
+            bgg_sampler.secret_vec.clone() * bgg_encodings[1].pubkey.matrix.clone()
+                - bgg_sampler.secret_vec.clone()
+                    * (g * bgg_encodings[1].plaintext.clone().unwrap())
         )
     }
 
@@ -307,8 +305,8 @@ mod tests {
                 assert_eq!(addition.vector, a.clone().vector + b.clone().vector);
                 assert_eq!(
                     addition.vector,
-                    bgg_sampler.secret_vec.clone() *
-                        (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
+                    bgg_sampler.secret_vec.clone()
+                        * (addition.pubkey.matrix - (g * addition.plaintext.unwrap()))
                 )
             }
         }
@@ -343,8 +341,8 @@ mod tests {
                 let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
                 assert_eq!(
                     multiplication.vector,
-                    (bgg_sampler.secret_vec.clone() *
-                        (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
+                    (bgg_sampler.secret_vec.clone()
+                        * (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
                 )
             }
         }
