@@ -2,11 +2,19 @@
 
 Implementation of [Diamond iO](https://eprint.iacr.org/2025/236)
 
-#### Test
+#### Test (with test feature)
 
 ```
 cargo test  --features="parallel"
 ```
+
+#### Test (without test feature) 
+- io test
+
+```
+cargo test --test test_io --no-default-features --features parallel
+```
+
 
 
 run io in parallel
