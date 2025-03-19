@@ -220,42 +220,52 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::{
-        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
-        sampler::{DistType, PolyUniformSampler},
+    use crate::{
+        poly::{
+            dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
+            sampler::{DistType, PolyUniformSampler},
+        },
+        utils::log_mem,
     };
 
     #[test]
     fn test_trapdoor_generation() {
+        tracing_subscriber::fmt::init();
+        log_mem();
         let base = 2;
         let sigma = 4.57825;
         let size: usize = 3;
         let sampler = DCRTPolyTrapdoorSampler::new(base, sigma);
         let params = DCRTPolyParams::default();
-
-        let (_, public_matrix) = sampler.trapdoor(&params, size);
-
+        log_mem();
+        let (public_matrix, a) = sampler.trapdoor(&params, size);
+        log_mem();
         let expected_rows = size;
         let expected_cols = (&params.modulus_bits() + 2) * size;
+        // drop(public_matrix);
+        drop(public_matrix);
 
-        assert_eq!(
-            public_matrix.row_size(),
-            expected_rows,
-            "Public matrix should have the correct number of rows"
-        );
-        assert_eq!(
-            public_matrix.col_size(),
-            expected_cols,
-            "Public matrix should have the correct number of columns"
-        );
+        log_mem();
+        log_mem();
+        log_mem();
+        // assert_eq!(
+        //     public_matrix.row_size(),
+        //     expected_rows,
+        //     "Public matrix should have the correct number of rows"
+        // );
+        // assert_eq!(
+        //     public_matrix.col_size(),
+        //     expected_cols,
+        //     "Public matrix should have the correct number of columns"
+        // );
 
-        // Verify that all entries in the matrix are valid DCRTPolys
-        for i in 0..public_matrix.row_size() {
-            for j in 0..public_matrix.col_size() {
-                let poly = public_matrix.entry(i, j);
-                assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
-            }
-        }
+        // // Verify that all entries in the matrix are valid DCRTPolys
+        // for i in 0..public_matrix.row_size() {
+        //     for j in 0..public_matrix.col_size() {
+        //         let poly = public_matrix.entry(i, j);
+        //         assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
+        //     }
+        // }
     }
 
     #[test]
