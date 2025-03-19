@@ -1,4 +1,4 @@
-use super::{obfuscate::params::ObfuscationParams, utils::*, Obfuscation};
+use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, BitToInt},
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},

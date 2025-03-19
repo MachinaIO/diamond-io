@@ -1,6 +1,6 @@
 pub mod eval;
 pub mod obf;
-pub mod obfuscate;
+pub mod params;
 pub mod utils;
 use crate::{bgg::BggEncoding, poly::PolyMatrix};
 

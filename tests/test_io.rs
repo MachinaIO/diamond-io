@@ -2,7 +2,7 @@
 mod test {
     use diamond_io::{
         bgg::circuit::PolyCircuit,
-        io::{obf::obfuscate, obfuscate::params::ObfuscationParams},
+        io::{obf::obfuscate, params::ObfuscationParams},
         poly::{
             dcrt::{
                 DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,

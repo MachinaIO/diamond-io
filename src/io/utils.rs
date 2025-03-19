@@ -10,7 +10,7 @@ use itertools::Itertools;
 use std::{marker::PhantomData, ops::Mul};
 use tracing::info;
 
-use super::obfuscate::params::ObfuscationParams;
+use super::params::ObfuscationParams;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
