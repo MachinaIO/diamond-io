@@ -5,10 +5,12 @@ use crate::{
         BggPublicKey, BitToInt,
     },
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    utils::log_mem,
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use std::{ops::Mul, sync::Arc};
+use tracing::info;
 
 const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 
@@ -39,6 +41,8 @@ where
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+    info!("Public data sampled");
+    log_mem();
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
@@ -79,13 +83,22 @@ where
         &reveal_plaintexts,
     );
 
+    info!("Public keys sampled");
+    log_mem();
+
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
     plaintexts.push(t_bar.clone());
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_keys_init, &plaintexts);
 
+    info!("Encodings sampled");
+    log_mem();
+
     let (b_star_trapdoor_init, b_star_init) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+
+    info!("Trapdoors init sampled");
+    log_mem();
 
     let m_b = (2 * (d + 1)) * (2 + log_q);
     let p_init = {
@@ -133,10 +146,15 @@ where
         let lhs = -pub_keys_cur[0].concat_matrix(&pub_keys_cur[1..]);
         let inserted_poly_index = 1 + idx / dim;
         let inserted_coeff_index = idx % dim;
+        let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
+        let mut coeffs = vec![zero_coeff; dim];
 
         let mut mp = Vec::with_capacity(2);
         let mut np = Vec::with_capacity(2);
         let mut kp = Vec::with_capacity(2);
+
+        #[cfg(test)]
+        let bs = vec![];
 
         for bit in 0..=1 {
             let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -147,6 +165,9 @@ where
                 &(&u_bits[bit] * &b_bit_idx),
             );
 
+            info!("M preimage bit sampled");
+            log_mem();
+
             mp.push(m_preimage_bit);
 
             let n_preimage_bit = sampler_trapdoor.preimage(
@@ -156,6 +177,9 @@ where
                 &(&u_star * &b_star_idx.clone()),
             );
 
+            info!("N preimage bit sampled");
+            log_mem();
+
             np.push(n_preimage_bit);
 
             // compute k_preimage
@@ -163,8 +187,6 @@ where
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
 
             // TO DO: how is the following part bit dependent?
-            let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
-            let mut coeffs = vec![zero_coeff; dim];
             if bit != 0 {
                 coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
             };
@@ -186,7 +208,11 @@ where
             let k_preimage_bit =
                 sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
 
+            info!("K preimage bit sampled");
+            log_mem();
             kp.push(k_preimage_bit);
+
+            #[cfg(test)]
         }
 
         m_preimages.push(mp);
@@ -221,12 +247,16 @@ where
             packed_output_size,
         )])
     };
+    info!("Final preimage target computed");
+    log_mem();
     let final_preimage = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target,
     );
+    info!("Final preimage sampled");
+    log_mem();
     Obfuscation {
         hash_key,
         enc_hardcoded_key,
