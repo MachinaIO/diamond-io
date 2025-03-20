@@ -6,10 +6,12 @@ use crate::{
     },
     join,
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    utils::log_mem,
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use std::{ops::Mul, sync::Arc};
+use tracing::info;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -39,11 +41,13 @@ where
     let sampler_trapdoor = Arc::new(sampler_trapdoor);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+    log_mem("Sampled public data");
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
     let s_bars =
         sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0).clone();
+    log_mem("Sampled s_bars");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
@@ -63,8 +67,9 @@ where
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
         &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale)
     };
-
+    log_mem("Sampled enc_hardcoded_key");
     let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
+
     let t_bar = t_bar_matrix.entry(0, 0).clone();
     #[cfg(feature = "test")]
     let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
@@ -73,6 +78,7 @@ where
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
     plaintexts.push(t_bar.clone());
+    log_mem("Sampled plaintexts");
     let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
 
     let mut bs = Vec::with_capacity(obf_params.input_size);
@@ -84,6 +90,7 @@ where
         bs.push((b_0, b_1, b_star));
         b_trapdoors.push((b_0_trapdoor, b_1_trapdoor, b_star_trapdoor));
     }
+    log_mem("Sampled b_trapdoors,bs ");
     let m_b = (2 * d1) * (2 + log_q);
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init]);
@@ -167,7 +174,7 @@ where
         let kp = || join!(|| k_preimage(0), || k_preimage(1));
 
         let (mp, (np, kp)) = join!(mp, || join!(np, kp));
-
+        log_mem("Sampled mp,np,kp");
         m_preimages.push(mp);
         n_preimages.push(np);
         k_preimages.push(kp);
@@ -202,6 +209,7 @@ where
     let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage =
         sampler_trapdoor.preimage(&params, b_final_trapdoor, b_final, &final_preimage_target);
+    log_mem("Sampled final_preimage");
     Obfuscation {
         hash_key,
         enc_hardcoded_key,

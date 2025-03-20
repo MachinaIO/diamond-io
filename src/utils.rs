@@ -72,11 +72,13 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
     }
 }
 
-pub fn log_mem() {
+pub fn log_mem<T: Into<String>>(tag: T) {
     if let Some(usage) = memory_stats() {
         info!(
-            "Current physical/virtural memory usage: {} / {}",
-            usage.physical_mem, usage.virtual_mem
+            "{} || Current physical/virtural memory usage: {} | {}",
+            tag.into(),
+            usage.physical_mem,
+            usage.virtual_mem
         );
     } else {
         info!("Couldn't get the current memory usage :(");
