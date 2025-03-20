@@ -46,12 +46,6 @@ impl DCRTPolyMatrix {
     pub fn params(&self) -> &DCRTPolyParams {
         &self.params
     }
-
-    pub fn get_column_matrix(&self, j: usize) -> DCRTPolyMatrix {
-        let polys = self.get_column(j);
-        let column_vec: Vec<Vec<DCRTPoly>> = polys.into_iter().map(|poly| vec![poly]).collect();
-        DCRTPolyMatrix::from_poly_vec(&self.params, column_vec)
-    }
 }
 
 impl PolyMatrix for DCRTPolyMatrix {
@@ -346,8 +340,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let mut output = vec![DCRTPolyMatrix::zero(&self.params, 0, 0); other.ncol * identity_size];
 
         for j in 0..other.ncol {
-            let jth_col_m = other.get_column_matrix(j);
-            let jth_col_m_decompose = jth_col_m.decompose();
+            let jth_col_m_decompose = other.get_column_matrix_decompose(j);
             for i in 0..identity_size {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
                 output[i * other.ncol + j] = slice * &jth_col_m_decompose;
@@ -357,13 +350,12 @@ impl PolyMatrix for DCRTPolyMatrix {
         output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
-    fn get_column_matrix_decompose(&self, j: usize) -> Vec<DCRTPoly> {
+    fn get_column_matrix_decompose(&self, j: usize) -> Self {
         DCRTPolyMatrix::from_poly_vec(
             &self.params,
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
         .decompose()
-        .get_column(0)
     }
 }
 

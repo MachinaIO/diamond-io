@@ -153,8 +153,10 @@ where
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
-        let enc_hardcoded_key_decomposed = &self.enc_hardcoded_key.get_column_matrix_decompose(0);
-        let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix_decompose(0);
+        let enc_hardcoded_key_decomposed =
+            &self.enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
+        let a_decomposed_polys =
+            public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
         let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed_polys,
             enc_hardcoded_key_decomposed,
