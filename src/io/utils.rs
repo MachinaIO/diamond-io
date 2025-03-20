@@ -64,7 +64,6 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
-                info!("try pubkey 1 computed");
                 bgg_pubkey_sampler.sample(
                     params,
                     &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
@@ -94,9 +93,7 @@ where
             packed_output_size,
             DistType::FinRingDist,
         );
-        info!("a_prf_raw computed");
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        info!("modulus_switch");
         Self {
             r_0,
             r_1,
@@ -207,11 +204,12 @@ mod test {
             t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
 
         // 6. Decompose the ciphertext
-        let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+        let enc_hardcoded_key_polys =
+            enc_hardcoded_key.get_column_matrix(0).decompose().get_column(0);
         // println!("enc_hardcoded_key_polys {}", enc_hardcoded_key_polys);
 
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
+        let a_decomposed_polys = a_rlwe_bar.get_column_matrix(0).decompose().get_column(0);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &enc_hardcoded_key_polys,

@@ -356,6 +356,15 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
+
+    fn get_column_matrix_decompose(&self, j: usize) -> Vec<DCRTPoly> {
+        DCRTPolyMatrix::from_poly_vec(
+            &self.params,
+            self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
+        )
+        .decompose()
+        .get_column(0)
+    }
 }
 
 // ====== Arithmetic ======

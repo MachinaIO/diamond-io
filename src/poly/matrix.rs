@@ -100,4 +100,6 @@ pub trait PolyMatrix:
     /// Performs the operation S * (identity ⊗ G^-1(other)),
     /// where G^-1(other) is bit decomposition of other matrix
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
+    /// j is column and return decomposed column matrix
+    fn get_column_matrix_decompose(&self, j: usize) -> Vec<Self::P>;
 }
