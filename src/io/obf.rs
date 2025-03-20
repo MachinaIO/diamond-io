@@ -118,12 +118,6 @@ where
     let mut n_preimages = Vec::<Vec<M>>::with_capacity(obf_params.input_size);
     let mut k_preimages = Vec::<Vec<M>>::with_capacity(obf_params.input_size);
 
-    let mut bs = Vec::<Vec<M>>::with_capacity(obf_params.input_size);
-
-    // create 2 empty matrices
-    let zero = M::zero(params.as_ref(), d + 1, packed_output_size);
-    bs.push(vec![zero.clone(), zero.clone(), b_star_cur.clone()]);
-
     for idx in 0..obf_params.input_size {
         // Sample pub keys
         let pub_keys_idx = bgg_pubkey_sampler.sample(
@@ -131,8 +125,6 @@ where
             &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(idx as u64).to_le_bytes()].concat(),
             &reveal_plaintexts,
         );
-
-        let mut bs_idx = <Vec<M>>::with_capacity(3);
 
         // Sample B and B trapdoor
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -148,12 +140,11 @@ where
 
         for bit in 0..=1 {
             let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-            bs_idx.push(b_bit_idx.clone());
             let m_preimage_bit = sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
-                &(u_bits[bit].clone() * b_bit_idx.clone()), // TODO: do not clone everything!
+                &(&u_bits[bit] * &b_bit_idx),
             );
 
             mp.push(m_preimage_bit);
@@ -162,7 +153,7 @@ where
                 &params,
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
-                &(u_star.clone() * b_star_idx.clone()),
+                &(&u_star * &b_star_idx.clone()),
             );
 
             np.push(n_preimage_bit);
@@ -202,8 +193,6 @@ where
         n_preimages.push(np);
         k_preimages.push(kp);
 
-        bs_idx.push(b_star_idx.clone());
-
         b_star_trapdoor_cur = b_star_trapdoor_idx;
         b_star_cur = b_star_idx;
         pub_keys_cur = pub_keys_idx;
@@ -232,8 +221,6 @@ where
             packed_output_size,
         )])
     };
-    // let (_, _, b_final) = &bs[obf_params.input_size];
-    // let (_, _, b_final_trapdoor) = &b_trapdoors[obf_params.input_size];
     let final_preimage = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
@@ -253,8 +240,8 @@ where
         s_init: s_init.clone(),
         #[cfg(test)]
         t_bar: t_bar.clone(),
-        #[cfg(test)]
-        bs,
+        // #[cfg(test)]
+        // bs,
         #[cfg(test)]
         hardcoded_key: hardcoded_key.clone(),
         #[cfg(test)]
