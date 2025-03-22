@@ -30,10 +30,27 @@ where
         debug_assert_eq!(inputs.len(), obf_params.input_size);
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
         let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+        let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
+
+        // Sample public keys
+        #[cfg(feature = "test")]
+        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
+        #[cfg(not(feature = "test"))]
+        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+        let pubkeys = (0..obf_params.input_size + 1)
+            .map(|idx| {
+                bgg_pubkey_sampler.sample(
+                    &obf_params.params,
+                    &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
+                    &reveal_plaintexts,
+                )
+            })
+            .collect_vec();
+
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0
             && obf_params.hardcoded_key_sigma == 0.0
@@ -58,8 +75,7 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let expected_encoding_init = &self.s_init
-                * &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..])
-                    - inserted_poly_gadget);
+                * &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -97,7 +113,7 @@ where
                 } else {
                     encode.plaintext.clone()
                 };
-                let new_pubkey = public_data.pubkeys[idx + 1][j].clone();
+                let new_pubkey = pubkeys[idx + 1][j].clone();
                 let new_encode: BggEncoding<M> =
                     BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
                 new_encodings.push(new_encode);
@@ -148,8 +164,7 @@ where
                         polys.push(self.t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
-                    let pubkey = public_data.pubkeys[idx + 1][0]
-                        .concat_matrix(&public_data.pubkeys[idx + 1][1..]);
+                    let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)
                 };
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
