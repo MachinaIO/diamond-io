@@ -12,5 +12,5 @@ cargo test -r  --features="parallel"
 this will remove helper logic + helper fields for test which is not require for iO security.
 
 ```
-/usr/bin/time -l cargo test --test test_io --no-default-features --features parallel
+cargo test --test test_io --no-default-features --features parallel -- --nocapture
 ```
