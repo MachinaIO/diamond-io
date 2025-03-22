@@ -1,21 +1,21 @@
 use crate::{
     bgg::{
         circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
-        sampler::*,
-        BggPublicKey,
+        sampler::BGGPublicKeySampler,
     },
-    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    poly::{
+        sampler::{DistType, PolyHashSampler},
+        Poly, PolyElem, PolyMatrix, PolyParams,
+    },
 };
 use itertools::Itertools;
 use std::{marker::PhantomData, ops::Mul};
-use tracing::info;
 
 use super::params::ObfuscationParams;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
-const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
 
@@ -24,8 +24,6 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub r_0: S::M,
     pub r_1: S::M,
     pub a_rlwe_bar: S::M,
-    pub pubkeys: Vec<Vec<BggPublicKey<S::M>>>,
-    // pub pubkeys_fhe_key: Vec<Vec<BggPublicKey<S::M>>>,
     pub rgs: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
@@ -52,39 +50,14 @@ where
         let r_1 = r_1_bar.concat_diag(&[&one]);
         let log_q = params.modulus_bits();
         let dim = params.ring_dimension() as usize;
-        // (bits of encrypted hardcoded key, input bits, poly of the FHE key)
+        // input bits, poly of the RLWE key
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
-        // let reveal_plaintexts_fhe_key = vec![true; 2];
-        #[cfg(feature = "test")]
-        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-        #[cfg(not(feature = "test"))]
-        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
-        let pubkeys = (0..obf_params.input_size + 1)
-            .map(|idx| {
-                bgg_pubkey_sampler.sample(
-                    params,
-                    &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
-                    &reveal_plaintexts,
-                )
-            })
-            .collect_vec();
-        // let pubkeys_fhe_key = (0..obf_params.input_size + 1)
-        //     .map(|idx| {
-        //         bgg_pubkey_sampler.sample(
-        //             params,
-        //             &[TAG_BGG_PUBKEY_FHEKEY_PREFIX, &idx.to_le_bytes()].concat(),
-        //             2,
-        //         )
-        //     })
-        //     .collect_vec();
-        // let identity_input = S::M::identity(params, 1 + packed_input_size, None);
-        let gadget_d1 = S::M::gadget_matrix(params, d + 1);
-        // let identity_2 = S::M::identity(params, 2, None);
+        let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
         let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(&r_0 * &gadget_d1), (&r_1 * &gadget_d1)];
+            [(&r_0 * &gadget_d_plus_1), (&r_1 * &gadget_d_plus_1)];
 
         let a_prf_raw = hash_sampler.sample_hash(
             params,
@@ -98,7 +71,6 @@ where
             r_0,
             r_1,
             a_rlwe_bar,
-            pubkeys,
             rgs,
             a_prf,
             packed_input_size,
@@ -164,7 +136,7 @@ mod test {
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
             element::PolyElem,
-            sampler::DistType,
+            sampler::{DistType, PolyUniformSampler},
         },
     };
     use keccak_asm::Keccak256;
