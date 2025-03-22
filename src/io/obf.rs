@@ -131,6 +131,16 @@ where
     let mut n_preimages = Vec::<Vec<M>>::with_capacity(obf_params.input_size);
     let mut k_preimages = Vec::<Vec<M>>::with_capacity(obf_params.input_size);
 
+    let mut pubkeys = Vec::with_capacity(obf_params.input_size);
+    pubkeys.push(pub_keys_cur.clone());
+
+    let mut bs = Vec::with_capacity(obf_params.input_size);
+    let mut cur_vec = vec![];
+    cur_vec.push(M::zero(&params, 0, 0));
+    cur_vec.push(M::zero(&params, 0, 0));
+    cur_vec.push(b_star_cur.clone());
+    bs.push(cur_vec);
+
     for idx in 0..obf_params.input_size {
         // Sample pub keys
         let pub_keys_idx = bgg_pubkey_sampler.sample(
@@ -138,6 +148,8 @@ where
             &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(idx as u64).to_le_bytes()].concat(),
             &reveal_plaintexts,
         );
+
+        pubkeys.push(pub_keys_idx.clone());
 
         // Sample B and B trapdoor
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -153,8 +165,7 @@ where
         let mut np = Vec::with_capacity(2);
         let mut kp = Vec::with_capacity(2);
 
-        #[cfg(test)]
-        let bs = vec![];
+        let mut cur_vec = vec![];
 
         for bit in 0..=1 {
             let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -167,6 +178,8 @@ where
 
             info!("M preimage bit sampled");
             log_mem();
+
+            cur_vec.push(b_bit_idx.clone());
 
             mp.push(m_preimage_bit);
 
@@ -211,13 +224,14 @@ where
             info!("K preimage bit sampled");
             log_mem();
             kp.push(k_preimage_bit);
-
-            #[cfg(test)]
         }
 
         m_preimages.push(mp);
         n_preimages.push(np);
         k_preimages.push(kp);
+
+        cur_vec.push(b_star_idx.clone());
+        bs.push(cur_vec);
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
         b_star_cur = b_star_idx;
@@ -266,12 +280,13 @@ where
         n_preimages,
         k_preimages,
         final_preimage,
+        pubkeys,
         #[cfg(test)]
         s_init: s_init.clone(),
         #[cfg(test)]
         t_bar: t_bar.clone(),
-        // #[cfg(test)]
-        // bs,
+        #[cfg(test)]
+        bs,
         #[cfg(test)]
         hardcoded_key: hardcoded_key.clone(),
         #[cfg(test)]

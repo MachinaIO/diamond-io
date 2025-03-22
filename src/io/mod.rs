@@ -1,9 +1,9 @@
-// pub mod eval;
+pub mod eval;
 pub mod obf;
 // pub mod serde;
 pub mod utils;
 use crate::{
-    bgg::{circuit::PolyCircuit, BggEncoding},
+    bgg::{circuit::PolyCircuit, BggEncoding, BggPublicKey},
     poly::{Poly, PolyMatrix, PolyParams},
 };
 
@@ -17,12 +17,13 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub n_preimages: Vec<Vec<M>>,
     pub k_preimages: Vec<Vec<M>>,
     pub final_preimage: M,
+    pub pubkeys: Vec<Vec<BggPublicKey<M>>>,
     #[cfg(test)]
     pub s_init: M,
     #[cfg(test)]
     pub t_bar: <M as PolyMatrix>::P,
-    // #[cfg(test)]
-    // pub bs: Vec<Vec<M>>,
+    #[cfg(test)]
+    pub bs: Vec<Vec<M>>,
     #[cfg(test)]
     pub hardcoded_key: <M as PolyMatrix>::P,
     #[cfg(test)]
@@ -105,20 +106,20 @@ mod test {
         let obfuscation_time = start_time.elapsed();
         println!("Time to obfuscate: {:?}", obfuscation_time);
 
-        // let input = [true];
-        // let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        // let hardcoded_key = obfuscation
-        //     .hardcoded_key
-        //     .coeffs()
-        //     .iter()
-        //     .map(|elem| elem.value() != &BigUint::from(0u8))
-        //     .collect::<Vec<_>>();
-        // let output = obfuscation.eval(obf_params, sampler_hash, &input);
-        // let total_time = start_time.elapsed();
-        // println!("{:?}", output);
-        // println!("Time for evaluation: {:?}", total_time - obfuscation_time);
-        // println!("Total time: {:?}", total_time);
-        // assert_eq!(output, hardcoded_key);
+        let input = [true];
+        let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        let hardcoded_key = obfuscation
+            .hardcoded_key
+            .coeffs()
+            .iter()
+            .map(|elem| elem.value() != &BigUint::from(0u8))
+            .collect::<Vec<_>>();
+        let output = obfuscation.eval(obf_params, sampler_hash, &input);
+        let total_time = start_time.elapsed();
+        println!("{:?}", output);
+        println!("Time for evaluation: {:?}", total_time - obfuscation_time);
+        println!("Total time: {:?}", total_time);
+        assert_eq!(output, hardcoded_key);
     }
 
     // #[test]

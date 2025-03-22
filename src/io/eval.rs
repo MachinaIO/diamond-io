@@ -32,14 +32,17 @@ where
         let (mut ps, mut encodings) = (vec![], vec![]);
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
+
+        let pubkeys = &self.pubkeys;
+
         #[cfg(test)]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
+        if obf_params.encoding_sigma == 0.0
+            && obf_params.hardcoded_key_sigma == 0.0
+            && obf_params.p_sigma == 0.0
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
-                s_connect * &self.bs[0].2
+                s_connect * &self.bs[0][2]
             };
             debug_assert_eq!(self.p_init, expected_p_init);
 
@@ -55,9 +58,8 @@ where
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = &self.s_init *
-                &(public_data.pubkeys[0][0].concat_matrix(&public_data.pubkeys[0][1..]) -
-                    inserted_poly_gadget);
+            let expected_encoding_init = &self.s_init
+                * &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
                 expected_encoding_init
@@ -66,11 +68,11 @@ where
         let log_q = params.as_ref().modulus_bits();
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
-            let m = if *input { &self.m_preimages[idx].1 } else { &self.m_preimages[idx].0 };
+            let m = if *input { &self.m_preimages[idx][1] } else { &self.m_preimages[idx][0] };
             let q = &ps[idx] * m;
-            let n = if *input { &self.n_preimages[idx].1 } else { &self.n_preimages[idx].0 };
+            let n = if *input { &self.n_preimages[idx][1] } else { &self.n_preimages[idx][0] };
             let p = &q * n;
-            let k = if *input { &self.k_preimages[idx].1 } else { &self.k_preimages[idx].0 };
+            let k = if *input { &self.k_preimages[idx][1] } else { &self.k_preimages[idx][0] };
             let v = &q * k;
             let new_encode_vec = {
                 let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
@@ -95,7 +97,7 @@ where
                 } else {
                     encode.plaintext.clone()
                 };
-                let new_pubkey = public_data.pubkeys[idx + 1][j].clone();
+                let new_pubkey = pubkeys[idx + 1][j].clone();
                 let new_encode: BggEncoding<M> =
                     BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
                 new_encodings.push(new_encode);
@@ -103,9 +105,9 @@ where
             ps.push(p.clone());
             encodings.push(new_encodings);
             #[cfg(test)]
-            if obf_params.encoding_sigma == 0.0 &&
-                obf_params.hardcoded_key_sigma == 0.0 &&
-                obf_params.p_sigma == 0.0
+            if obf_params.encoding_sigma == 0.0
+                && obf_params.hardcoded_key_sigma == 0.0
+                && obf_params.p_sigma == 0.0
             {
                 let mut cur_s = self.s_init.clone();
                 for bit in inputs[0..idx].iter() {
@@ -115,10 +117,10 @@ where
                 let new_s =
                     if *input { &cur_s * &public_data.r_1 } else { &cur_s * &public_data.r_0 };
                 let b_next_bit =
-                    if *input { self.bs[idx + 1].1.clone() } else { self.bs[idx + 1].0.clone() };
+                    if *input { self.bs[idx + 1][1].clone() } else { self.bs[idx + 1][0].clone() };
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 debug_assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1].2;
+                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1][2];
                 debug_assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
@@ -146,8 +148,7 @@ where
                         polys.push(self.t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
-                    let pubkey = public_data.pubkeys[idx + 1][0]
-                        .concat_matrix(&public_data.pubkeys[idx + 1][1..]);
+                    let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)
                 };
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
@@ -178,9 +179,9 @@ where
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(test)]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
+        if obf_params.encoding_sigma == 0.0
+            && obf_params.hardcoded_key_sigma == 0.0
+            && obf_params.p_sigma == 0.0
         {
             let mut last_s = self.s_init.clone();
             for bit in inputs.iter() {
@@ -198,10 +199,10 @@ where
                 .collect::<Vec<_>>();
             debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s *
-                    (output_encoding_ints[0].pubkey.matrix.clone() -
-                        M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
-                            output_encoding_ints[0].plaintext.clone().unwrap());
+                let expcted = last_s
+                    * (output_encoding_ints[0].pubkey.matrix.clone()
+                        - M::unit_column_vector(params.as_ref(), d1, d1 - 1)
+                            * output_encoding_ints[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encoding_ints[0].vector, expcted);
             }
         }
