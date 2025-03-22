@@ -6,6 +6,8 @@ use crate::{
 use itertools::Itertools;
 use std::{ops::Mul, sync::Arc};
 
+const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
+
 impl<M> Obfuscation<M>
 where
     M: PolyMatrix,

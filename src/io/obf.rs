@@ -41,6 +41,19 @@ where
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     log_mem("Sampled public data");
+
+    let packed_input_size = public_data.packed_input_size;
+    #[cfg(feature = "test")]
+    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
+    #[cfg(not(feature = "test"))]
+    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+
+    let pub_key_init = bgg_pubkey_sampler.sample(
+        &obf_params.params,
+        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(0 as u64).to_le_bytes()].concat(),
+        &reveal_plaintexts,
+    );
+
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
@@ -79,7 +92,7 @@ where
     plaintexts.push(t_bar.clone());
     log_mem("Sampled plaintexts");
 
-    let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
+    let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
 
     let (b_star_trapdoor_init, b_star_init) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
