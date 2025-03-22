@@ -134,6 +134,13 @@ where
 
     let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
 
+    let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); 3]; obf_params.input_size];
+
+    #[cfg(feature = "test")]
+    {
+        bs[0][2] = b_star_cur.clone();
+    }
+
     for idx in 0..obf_params.input_size {
         let pub_keys_idx = bgg_pubkey_sampler.sample(
             &params,
@@ -144,6 +151,11 @@ where
         log_mem("Sampled pub_keys for idx");
 
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+
+        #[cfg(feature = "test")]
+        {
+            bs[idx][2] = b_star_idx.clone();
+        }
 
         log_mem("Sampled b_star trapdoor for idx");
 
@@ -157,6 +169,11 @@ where
         for bit in 0..=1 {
             let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for idx and bit");
+
+            #[cfg(feature = "test")]
+            {
+                bs[idx][bit] = b_bit_idx.clone();
+            }
 
             let m_preimage_bit = sampler_trapdoor.preimage(
                 &params,
@@ -255,8 +272,8 @@ where
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
         t_bar: t_bar.clone(),
-        // #[cfg(feature = "test")]
-        // bs,
+        #[cfg(feature = "test")]
+        bs,
         #[cfg(feature = "test")]
         hardcoded_key: hardcoded_key.clone(),
         #[cfg(feature = "test")]

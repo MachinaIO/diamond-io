@@ -18,8 +18,8 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub s_init: M,
     #[cfg(feature = "test")]
     pub t_bar: <M as PolyMatrix>::P,
-    // #[cfg(feature = "test")]
-    // pub bs: Vec<(M, M, M)>,
+    #[cfg(feature = "test")]
+    pub bs: Vec<Vec<M>>,
     #[cfg(feature = "test")]
     pub hardcoded_key: <M as PolyMatrix>::P,
     #[cfg(feature = "test")]
