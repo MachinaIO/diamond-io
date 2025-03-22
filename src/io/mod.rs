@@ -1,4 +1,4 @@
-// pub mod eval;
+pub mod eval;
 pub mod obf;
 pub mod params;
 pub mod utils;

@@ -73,25 +73,13 @@ where
     #[cfg(feature = "test")]
     let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
 
-    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-    #[cfg(not(test))]
-    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
-
-    let pub_keys_init = bgg_pubkey_sampler.sample(
-        &params,
-        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(0 as u64).to_le_bytes()].concat(),
-        &reveal_plaintexts,
-    );
-
-    log_mem("Sampled initial public keys");
-
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
     plaintexts.push(t_bar.clone());
     log_mem("Sampled plaintexts");
 
-    let encodings_init = bgg_encode_sampler.sample(&params, &pub_keys_init, &plaintexts);
+    let encodings_init = bgg_encode_sampler.sample(&params, &public_data.pubkeys[0], &plaintexts);
     log_mem("Sampled initial encodings");
 
     let (b_star_trapdoor_init, b_star_init) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -128,13 +116,13 @@ where
         vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
     );
 
-    let mut pub_keys_cur = pub_keys_init;
     let mut b_star_trapdoor_cur = b_star_trapdoor_init;
     let mut b_star_cur = b_star_init;
 
     let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
 
-    let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); 3]; obf_params.input_size];
+    let mut bs: Vec<Vec<M>> =
+        vec![vec![M::zero(params.as_ref(), 0, 0); 3]; obf_params.input_size + 1];
 
     #[cfg(feature = "test")]
     {
@@ -142,25 +130,17 @@ where
     }
 
     for idx in 0..obf_params.input_size {
-        let pub_keys_idx = bgg_pubkey_sampler.sample(
-            &params,
-            &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(idx as u64).to_le_bytes()].concat(),
-            &reveal_plaintexts,
-        );
-
-        log_mem("Sampled pub_keys for idx");
-
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
 
         #[cfg(feature = "test")]
         {
-            bs[idx][2] = b_star_idx.clone();
+            bs[idx + 1][2] = b_star_idx.clone();
         }
 
         log_mem("Sampled b_star trapdoor for idx");
 
         // Precomputation for k_preimage that are not bit dependent
-        let lhs = -pub_keys_cur[0].concat_matrix(&pub_keys_cur[1..]);
+        let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
         let inserted_poly_index = 1 + idx / dim;
         let inserted_coeff_index = idx % dim;
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
@@ -172,7 +152,7 @@ where
 
             #[cfg(feature = "test")]
             {
-                bs[idx][bit] = b_bit_idx.clone();
+                bs[idx + 1][bit] = b_bit_idx.clone();
             }
 
             let m_preimage_bit = sampler_trapdoor.preimage(
@@ -213,7 +193,9 @@ where
                 }
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
-            let bottom = pub_keys_idx[0].concat_matrix(&pub_keys_idx[1..]) - &inserted_poly_gadget;
+            let bottom = public_data.pubkeys[idx + 1][0]
+                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
+                - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let k_preimage_bit =
                 sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
@@ -224,7 +206,6 @@ where
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
         b_star_cur = b_star_idx;
-        pub_keys_cur = pub_keys_idx;
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
@@ -234,8 +215,8 @@ where
         public_circuit.clone(),
     );
     let final_preimage_target = {
-        let one = pub_keys_cur[0].clone();
-        let input = &pub_keys_cur[1..];
+        let one = public_data.pubkeys[obf_params.input_size][0].clone();
+        let input = &public_data.pubkeys[obf_params.input_size][1..];
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs

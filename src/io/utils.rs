@@ -1,12 +1,10 @@
 use crate::{
     bgg::{
         circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
-        sampler::BGGPublicKeySampler,
+        sampler::*,
+        BggPublicKey,
     },
-    poly::{
-        sampler::{DistType, PolyHashSampler},
-        Poly, PolyElem, PolyMatrix, PolyParams,
-    },
+    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
 use std::{marker::PhantomData, ops::Mul};
@@ -16,6 +14,7 @@ use super::params::ObfuscationParams;
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
+const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
 
@@ -24,6 +23,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub r_0: S::M,
     pub r_1: S::M,
     pub a_rlwe_bar: S::M,
+    pub pubkeys: Vec<Vec<BggPublicKey<S::M>>>,
     pub rgs: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
@@ -55,6 +55,17 @@ where
         let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
+        #[cfg(not(feature = "test"))]
+        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+        let pubkeys = (0..obf_params.input_size + 1)
+            .map(|idx| {
+                bgg_pubkey_sampler.sample(
+                    params,
+                    &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
+                    &reveal_plaintexts,
+                )
+            })
+            .collect_vec();
         let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
         let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
             [(&r_0 * &gadget_d_plus_1), (&r_1 * &gadget_d_plus_1)];
@@ -71,6 +82,7 @@ where
             r_0,
             r_1,
             a_rlwe_bar,
+            pubkeys,
             rgs,
             a_prf,
             packed_input_size,
@@ -136,7 +148,7 @@ mod test {
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
             element::PolyElem,
-            sampler::{DistType, PolyUniformSampler},
+            sampler::DistType,
         },
     };
     use keccak_asm::Keccak256;
