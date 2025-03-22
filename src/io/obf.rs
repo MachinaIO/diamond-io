@@ -142,8 +142,15 @@ where
         bs[0][2] = b_star_cur.clone();
     }
 
+    let mut pub_key_cur = pub_key_init;
+
     for idx in 0..obf_params.input_size {
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+        let pub_key_idx = bgg_pubkey_sampler.sample(
+            &params,
+            &[TAG_BGG_PUBKEY_INPUT_PREFIX, &((idx + 1) as u64).to_le_bytes()].concat(),
+            &reveal_plaintexts,
+        );
 
         #[cfg(feature = "test")]
         {
@@ -153,7 +160,7 @@ where
         log_mem("Sampled b_star trapdoor for idx");
 
         // Precomputation for k_preimage that are not bit dependent
-        let lhs = -public_data.pubkeys[idx][0].concat_matrix(&public_data.pubkeys[idx][1..]);
+        let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
         let inserted_poly_index = 1 + idx / dim;
         let inserted_coeff_index = idx % dim;
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
@@ -206,9 +213,7 @@ where
                 }
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
-            let bottom = public_data.pubkeys[idx + 1][0]
-                .concat_matrix(&public_data.pubkeys[idx + 1][1..])
-                - &inserted_poly_gadget;
+            let bottom = pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let k_preimage_bit =
                 sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
@@ -219,6 +224,7 @@ where
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
         b_star_cur = b_star_idx;
+        pub_key_cur = pub_key_idx;
     }
 
     let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
@@ -228,8 +234,8 @@ where
         public_circuit.clone(),
     );
     let final_preimage_target = {
-        let one = public_data.pubkeys[obf_params.input_size][0].clone();
-        let input = &public_data.pubkeys[obf_params.input_size][1..];
+        let one = pub_key_cur[0].clone();
+        let input = &pub_key_cur[1..];
         let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs
