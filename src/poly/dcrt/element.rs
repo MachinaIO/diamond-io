@@ -95,6 +95,15 @@ impl PolyElem for FinRingElem {
         &self.modulus
     }
 
+    fn from_bytes(modulus: &Self::Modulus, bytes: &[u8]) -> Self {
+        let value = BigUint::from_bytes_le(bytes);
+        Self::new(value, modulus.clone())
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        self.value.to_bytes_le()
+    }
+
     fn to_biguint(&self) -> &num_bigint::BigUint {
         &self.value
     }
