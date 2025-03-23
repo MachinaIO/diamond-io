@@ -5,12 +5,12 @@ use memmap2::RemapOptions;
 use memmap2::{Advice, Mmap, MmapMut, MmapOptions};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-use std::fs::{File, OpenOptions};
-use std::path::{Path, PathBuf};
 use std::{
     fmt::Debug,
+    fs::{File, OpenOptions},
     marker::PhantomData,
     ops::{Deref, DerefMut, Index, IndexMut, Range},
+    path::{Path, PathBuf},
 };
 use tempfile::tempfile;
 
