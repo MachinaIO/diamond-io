@@ -19,9 +19,9 @@ impl SerializablePolyGateType {
         match self {
             SerializablePolyGateType::Input | SerializablePolyGateType::Const { .. } => 0,
             SerializablePolyGateType::Rotate { .. } => 1,
-            SerializablePolyGateType::Add |
-            SerializablePolyGateType::Sub |
-            SerializablePolyGateType::Mul => 2,
+            SerializablePolyGateType::Add
+            | SerializablePolyGateType::Sub
+            | SerializablePolyGateType::Mul => 2,
             SerializablePolyGateType::Call { num_input, .. } => *num_input,
         }
     }

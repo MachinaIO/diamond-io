@@ -562,9 +562,9 @@ mod tests {
         );
 
         // Expected result: (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3))^2
-        let expected = (((poly1.clone() + poly2.clone()) * (poly3.clone() * poly4.clone())) +
-            (poly1.clone() - poly3.clone())) *
-            (((poly1.clone() + poly2) * (poly3.clone() * poly4)) + (poly1 - poly3));
+        let expected = (((poly1.clone() + poly2.clone()) * (poly3.clone() * poly4.clone()))
+            + (poly1.clone() - poly3.clone()))
+            * (((poly1.clone() + poly2) * (poly3.clone() * poly4)) + (poly1 - poly3));
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -661,10 +661,10 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = (poly1.clone() + poly2.clone()) -
-            (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                poly1 *
-                poly2);
+        let expected = (poly1.clone() + poly2.clone())
+            - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                * poly1
+                * poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
@@ -680,11 +680,11 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_one(&params) -
-            ((poly1.clone() + poly2.clone()) -
-                (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                    poly1 *
-                    poly2));
+        let expected = DCRTPoly::const_one(&params)
+            - ((poly1.clone() + poly2.clone())
+                - (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus()))
+                    * poly1
+                    * poly2));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }

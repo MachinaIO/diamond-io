@@ -189,8 +189,6 @@ where
             .chunks(log_q)
             .map(|bits| BggEncoding::bits_to_int(bits, &params))
             .collect_vec();
-        // let identity_d1 = M::identity(&params, d1, None);
-        // let unit_vector = identity_d1.slice_columns(d, d1);
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
         let final_v = ps.last().unwrap() * &self.final_preimage;

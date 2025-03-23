@@ -4,7 +4,10 @@ use crate::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         BggPublicKey, BitToInt,
     },
-    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    poly::{
+        sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
+        Poly, PolyElem, PolyMatrix, PolyParams,
+    },
     utils::log_mem,
 };
 use itertools::Itertools;
@@ -53,6 +56,7 @@ where
         &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(0 as u64).to_le_bytes()].concat(),
         &reveal_plaintexts,
     );
+    log_mem("Sampled pub key init");
 
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
@@ -68,7 +72,11 @@ where
     );
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+    log_mem("Sampled t_bar_matrix");
+
     let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+    log_mem("Sampled hardcoded_key_matrix");
+
     let enc_hardcoded_key = {
         let e = sampler_uniform.sample_uniform(
             &params,
@@ -79,8 +87,8 @@ where
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
         &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale)
     };
-    log_mem("Sampled enc_hardcoded_key");
     let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
+    log_mem("Sampled enc_hardcoded_key_polys");
 
     let t_bar = t_bar_matrix.entry(0, 0).clone();
     #[cfg(feature = "test")]
@@ -90,7 +98,6 @@ where
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
     plaintexts.push(t_bar.clone());
-    log_mem("Sampled plaintexts");
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
@@ -146,11 +153,14 @@ where
 
     for idx in 0..obf_params.input_size {
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+        log_mem("Sampled b_star trapdoor for idx");
+
         let pub_key_idx = bgg_pubkey_sampler.sample(
             &params,
             &[TAG_BGG_PUBKEY_INPUT_PREFIX, &((idx + 1) as u64).to_le_bytes()].concat(),
             &reveal_plaintexts,
         );
+        log_mem("Sampled pub key idx");
 
         #[cfg(feature = "test")]
         {
@@ -259,6 +269,7 @@ where
         &final_preimage_target,
     );
     log_mem("Sampled final_preimage");
+
     Obfuscation {
         hash_key,
         enc_hardcoded_key,
