@@ -2,14 +2,15 @@
 
 Implementation of [Diamond iO](https://eprint.iacr.org/2025/236)
 
-#### Test
+#### Full Test (with test feature)
 
 ```
-cargo test  --features="parallel"
+cargo test -r  --features="parallel"
 ```
 
+#### Test iO (without test feature) 
+this will remove helper logic + helper fields for test which is not require for iO security.
 
-run io in parallel
 ```
-cargo test -r --package diamond-io --lib --features="parallel" -- io::test::test_io_just_mul_enc_and_bit --exact --show-output
+/usr/bin/time -l cargo test --test test_io --no-default-features --features parallel
 ```

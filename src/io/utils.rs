@@ -1,4 +1,3 @@
-use super::ObfuscationParams;
 use crate::{
     bgg::{
         circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
@@ -10,6 +9,8 @@ use crate::{
 use itertools::Itertools;
 use std::{marker::PhantomData, ops::Mul};
 use tracing::info;
+
+use super::params::ObfuscationParams;
 
 const TAG_R_0: &[u8] = b"R_0";
 const TAG_R_1: &[u8] = b"R_1";
@@ -57,13 +58,12 @@ where
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         // let reveal_plaintexts_fhe_key = vec![true; 2];
-        #[cfg(test)]
+        #[cfg(feature = "test")]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-        #[cfg(not(test))]
+        #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
-                info!("try pubkey 1 computed");
                 bgg_pubkey_sampler.sample(
                     params,
                     &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
@@ -93,9 +93,7 @@ where
             packed_output_size,
             DistType::FinRingDist,
         );
-        info!("a_prf_raw computed");
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        info!("modulus_switch");
         Self {
             r_0,
             r_1,
@@ -156,6 +154,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod test {
     use super::*;
     use crate::{
@@ -205,11 +204,12 @@ mod test {
             t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
 
         // 6. Decompose the ciphertext
-        let enc_hardcoded_key_polys = enc_hardcoded_key.decompose().get_column(0);
+        let enc_hardcoded_key_polys =
+            enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
         // println!("enc_hardcoded_key_polys {}", enc_hardcoded_key_polys);
 
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.decompose().get_column(0);
+        let a_decomposed_polys = a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &enc_hardcoded_key_polys,

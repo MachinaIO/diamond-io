@@ -39,6 +39,7 @@ pub fn build_circuit_ip_priv_and_pub_outputs<E: Evaluable>(
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::{

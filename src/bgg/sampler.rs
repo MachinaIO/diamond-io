@@ -54,7 +54,6 @@ where
         let secret_vec_size = self.d + 1;
         let columns = secret_vec_size * log_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
-        info!("before all_matrix");
         let all_matrix = self.sampler.sample_hash(
             params,
             tag,
@@ -62,8 +61,6 @@ where
             columns * packed_input_size,
             DistType::FinRingDist,
         );
-        info!("all_matrix");
-
         parallel_iter!(0..packed_input_size)
             .map(|idx| {
                 let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
@@ -166,6 +163,7 @@ where
 }
 
 #[cfg(test)]
+#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::{

@@ -6,6 +6,8 @@ rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 
 [features]
+default = ["test"]
+test = []
 parallel = ["rayon"]
 
 [dependencies]
