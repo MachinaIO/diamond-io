@@ -60,7 +60,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 );
                             }
                         }
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             storage.replace_block_entries(
                                 *cur_block_col_idx..*next_block_row_idx,
@@ -111,7 +112,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -152,7 +154,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 }
                             }
                         }
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -187,7 +190,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 new_entries[j].push(cur_entries[i][j].clone());
                             }
                         }
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_col_idx..*next_block_row_idx,
@@ -228,7 +232,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -249,7 +254,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
                             );
-                            // This is secure because the modified entries are not overlapped among threads
+                            // This is secure because the modified entries are not overlapped among
+                            // threads
                             unsafe {
                                 new_matrix.replace_block_entries(
                                     *cur_block_row_idx..*next_block_row_idx,
@@ -293,7 +299,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -314,7 +321,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
                             );
-                            // This is secure because the modified entries are not overlapped among threads
+                            // This is secure because the modified entries are not overlapped among
+                            // threads
                             unsafe {
                                 new_matrix.replace_block_entries(
                                     row_acc + cur_block_row_idx..row_acc + next_block_row_idx,
@@ -349,7 +357,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -378,7 +387,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
                             );
-                            // This is secure because the modified entries are not overlapped among threads
+                            // This is secure because the modified entries are not overlapped among
+                            // threads
                             unsafe {
                                 new_matrix.replace_block_entries(
                                     row_acc + cur_block_row_idx..row_acc + next_block_row_idx,
@@ -395,6 +405,46 @@ impl PolyMatrix for DCRTPolyMatrix {
         }
 
         new_matrix
+    }
+
+    fn tensor(&self, other: &Self) -> Self {
+        let mut new_matrix =
+            Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
+        // for i in 0..self.nrow {
+        //     for j in 0..self.ncol {
+        //         let scalar = self.entry(i, j);
+        //         let sub_matrix = other.clone() * scalar;
+
+        //     }
+        // }
+        new_matrix
+    }
+
+    fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self {
+        todo!();
+    }
+
+    fn decompose(&self) -> Self {
+        todo!();
+    }
+
+    fn modulus_switch(
+        &self,
+        new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
+    ) -> Self {
+        todo!();
+    }
+
+    fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self {
+        todo!();
+    }
+
+    fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
+        todo!();
+    }
+
+    fn get_column_matrix_decompose(&self, j: usize) -> Self {
+        todo!();
     }
 }
 
@@ -421,7 +471,8 @@ impl Clone for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -497,7 +548,6 @@ impl DCRTPolyMatrix {
         rows: Range<usize>,
         cols: Range<usize>,
     ) -> Vec<Vec<<Self as PolyMatrix>::P>> {
-        let mut entries = Vec::with_capacity(rows.end - rows.start);
         let entry_size = self.entry_size();
         parallel_iter!(rows)
             .map(|i| {
@@ -582,8 +632,8 @@ impl DCRTPolyMatrix {
     //     parallel_iter!(0..self.nrow).for_each(|i| {
     //         let offset = self.entry_size * i * self.ncol;
     //         let self_mmap = map_file(&self.file, offset, self.entry_size * self.ncol);
-    //         let mut new_mmap = map_file_mut(&new_matrix.file, offset, self.entry_size * self.ncol);
-    //         new_mmap.copy_from_slice(&self_mmap);
+    //         let mut new_mmap = map_file_mut(&new_matrix.file, offset, self.entry_size *
+    // self.ncol);         new_mmap.copy_from_slice(&self_mmap);
     //         drop(self_mmap);
     //         drop(new_mmap);
     //     });
@@ -649,106 +699,230 @@ impl Drop for DCRTPolyMatrix {
     }
 }
 
-impl_binop_with_refs!(DCRTPolyMatrix => Add::add(self, rhs: &DCRTPolyMatrix) -> DCRTPolyMatrix {
-    debug_assert!(self.nrow == rhs.nrow && self.ncol == rhs.ncol,  "Addition requires matrices of same dimensions: self({}, {}) != rhs({}, {})", self.nrow, self.ncol, rhs.nrow, rhs.ncol);
-    let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, self.ncol);
-    let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-    parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_block_row_idx, next_block_row_idx)| {
-        parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_block_col_idx, next_block_col_idx)| {
-            let mut self_block_polys = self.block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx);
-            let rhs_block_polys = rhs.block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx);
-            let block_row_len = next_block_row_idx - cur_block_row_idx;
-            let block_col_len = next_block_col_idx - cur_block_col_idx;
-            for i in 0..block_row_len {
-                for j in 0..block_col_len {
-                    self_block_polys[i][j] += &rhs_block_polys[i][j];
-                }
-            }
-            // This is secure because the modified entries are not overlapped among threads
-            unsafe {
-                new_matrix.replace_block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx, self_block_polys);
-            }
-        });
-    });
-    new_matrix
-});
+impl Add for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
 
-impl_binop_with_refs!(DCRTPolyMatrix => Sub::sub(self, rhs: &DCRTPolyMatrix) -> DCRTPolyMatrix {
-    debug_assert!(self.nrow == rhs.nrow && self.ncol == rhs.ncol,  "Addition requires matrices of same dimensions: self({}, {}) != rhs({}, {})", self.nrow, self.ncol, rhs.nrow, rhs.ncol);
-    let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, self.ncol);
-    let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-    parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_block_row_idx, next_block_row_idx)| {
-        parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_block_col_idx, next_block_col_idx)| {
-            let mut self_block_polys = self.block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx);
-            let rhs_block_polys = rhs.block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx);
-            let block_row_len = next_block_row_idx - cur_block_row_idx;
-            let block_col_len = next_block_col_idx - cur_block_col_idx;
-            for i in 0..block_row_len {
-                for j in 0..block_col_len {
-                    self_block_polys[i][j] -= &rhs_block_polys[i][j];
-                }
-            }
-            // This is secure because the modified entries are not overlapped among threads
-            unsafe {
-                new_matrix.replace_block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx, self_block_polys);
-            }
-        });
-    });
-    new_matrix
-});
+    fn add(self, rhs: Self) -> Self::Output {
+        self + &rhs
+    }
+}
 
-impl_binop_with_refs!(DCRTPolyMatrix => Mul::mul(self, rhs: &DCRTPolyMatrix) -> DCRTPolyMatrix {
-    debug_assert!(self.ncol == rhs.nrow, "Multiplication condition failed: self.ncol ({}) must equal rhs.nrow ({})", self.ncol, rhs.nrow);
-    let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
-    let (_, self_col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-    let (rhs_row_offsets, _) = block_offsets(0..rhs.nrow, 0..rhs.ncol);
-    debug_assert_eq!(self_col_offsets, rhs_row_offsets);
-    let (new_row_offsets, new_col_offsets) = block_offsets(0..self.nrow, 0..rhs.ncol);
-    parallel_iter!(new_row_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_new_block_row_idx, next_new_block_row_idx)| {
-        parallel_iter!(new_col_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_new_block_col_idx, next_new_block_col_idx)| {
-            for ip_block_idx in 0..self_col_offsets.len()-1 {
-                let mut ip_sum = new_matrix.block_entries(*cur_new_block_row_idx..*next_new_block_row_idx, *cur_new_block_col_idx..*next_new_block_col_idx);
-                let self_block_polys = self.block_entries(*cur_new_block_row_idx..*next_new_block_row_idx, self_col_offsets[ip_block_idx]..self_col_offsets[ip_block_idx + 1]);
-                let other_block_polys = rhs.block_entries(rhs_row_offsets[ip_block_idx]..rhs_row_offsets[ip_block_idx + 1], *cur_new_block_col_idx..*next_new_block_col_idx);
-                for i in 0..(next_new_block_row_idx - cur_new_block_row_idx) {
-                    for j in 0..(next_new_block_col_idx - cur_new_block_col_idx) {
-                        let mut sum = DCRTPoly::const_zero(&self.params);
-                        for k in 0..(self_col_offsets[ip_block_idx+1] - self_col_offsets[ip_block_idx]) {
-                            sum += &self_block_polys[i][k] * &other_block_polys[k][j];
+impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn add(self, rhs: &DCRTPolyMatrix) -> Self::Output {
+        debug_assert!(
+            self.nrow == rhs.nrow && self.ncol == rhs.ncol,
+            "Addition requires matrices of same dimensions: self({}, {}) != rhs({}, {})",
+            self.nrow,
+            self.ncol,
+            rhs.nrow,
+            rhs.ncol
+        );
+        let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let mut self_block_polys = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let rhs_block_polys = rhs.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let block_row_len = next_block_row_idx - cur_block_row_idx;
+                        let block_col_len = next_block_col_idx - cur_block_col_idx;
+                        for i in 0..block_row_len {
+                            for j in 0..block_col_len {
+                                self_block_polys[i][j] += &rhs_block_polys[i][j];
+                            }
                         }
-                        ip_sum[i][j] += sum;
-                    }
-                }
-                // This is secure because the modified entries are not overlapped among threads
-                unsafe {new_matrix.replace_block_entries(*cur_new_block_row_idx..*next_new_block_row_idx, *cur_new_block_col_idx..*next_new_block_col_idx, ip_sum);}
-            }
-        });
-    });
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            new_matrix.replace_block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                self_block_polys,
+                            );
+                        }
+                    },
+                );
+            },
+        );
+        new_matrix
+    }
+}
 
-    new_matrix
-});
+impl Sub for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
 
-impl_binop_with_refs!(DCRTPolyMatrix => Mul::mul(self, rhs: &DCRTPoly) -> DCRTPolyMatrix {
-    let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, self.ncol);
-    let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-    parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_block_row_idx, next_block_row_idx)| {
-        parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(|(cur_block_col_idx, next_block_col_idx)| {
-            let mut self_block_polys = self.block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx);
-            let block_row_len = next_block_row_idx - cur_block_row_idx;
-            let block_col_len = next_block_col_idx - cur_block_col_idx;
-            for i in 0..block_row_len {
-                for j in 0..block_col_len {
-                    self_block_polys[i][j] *= rhs;
-                }
-            }
-            // This is secure because the modified entries are not overlapped among threads
-            unsafe {
-                new_matrix.replace_block_entries(*cur_block_row_idx..*next_block_row_idx, *cur_block_col_idx..*next_block_col_idx, self_block_polys);
-            }
-        });
-    });
-    new_matrix
-});
+    fn sub(self, rhs: Self) -> Self::Output {
+        self - &rhs
+    }
+}
+
+impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn sub(self, rhs: &DCRTPolyMatrix) -> Self::Output {
+        debug_assert!(
+            self.nrow == rhs.nrow && self.ncol == rhs.ncol,
+            "Addition requires matrices of same dimensions: self({}, {}) != rhs({}, {})",
+            self.nrow,
+            self.ncol,
+            rhs.nrow,
+            rhs.ncol
+        );
+        let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let mut self_block_polys = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let rhs_block_polys = rhs.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let block_row_len = next_block_row_idx - cur_block_row_idx;
+                        let block_col_len = next_block_col_idx - cur_block_col_idx;
+                        for i in 0..block_row_len {
+                            for j in 0..block_col_len {
+                                self_block_polys[i][j] -= &rhs_block_polys[i][j];
+                            }
+                        }
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            new_matrix.replace_block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                self_block_polys,
+                            );
+                        }
+                    },
+                );
+            },
+        );
+        new_matrix
+    }
+}
+
+impl Mul for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self * &rhs
+    }
+}
+
+impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn mul(self, rhs: &DCRTPolyMatrix) -> Self::Output {
+        debug_assert!(
+            self.ncol == rhs.nrow,
+            "Multiplication condition failed: self.ncol ({}) must equal rhs.nrow ({})",
+            self.ncol,
+            rhs.nrow
+        );
+        let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..rhs.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        for ip_block_idx in 0..self.ncol {
+                            let mut ip_sum = new_matrix.block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                            );
+                            let self_block_polys = self.block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                ip_block_idx..ip_block_idx + 1,
+                            );
+                            let other_block_polys = rhs.block_entries(
+                                ip_block_idx..ip_block_idx + 1,
+                                *cur_block_col_idx..*next_block_col_idx,
+                            );
+                            for i in 0..(next_block_row_idx - cur_block_row_idx) {
+                                for j in 0..(next_block_col_idx - cur_block_col_idx) {
+                                    let mut sum = DCRTPoly::const_zero(&self.params);
+                                    for k in 0..(self.ncol) {
+                                        sum += &self_block_polys[i][0] * &other_block_polys[0][j];
+                                    }
+                                    ip_sum[i][j] += sum;
+                                }
+                            }
+                            // This is secure because the modified entries are not overlapped among
+                            // threads
+                            unsafe {
+                                new_matrix.replace_block_entries(
+                                    *cur_block_row_idx..*next_block_row_idx,
+                                    *cur_block_col_idx..*next_block_col_idx,
+                                    ip_sum,
+                                );
+                            }
+                        }
+                    },
+                );
+            },
+        );
+        new_matrix
+    }
+}
+
+impl Mul<DCRTPoly> for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+    fn mul(self, rhs: DCRTPoly) -> Self::Output {
+        self * &rhs
+    }
+}
+
+impl Mul<&DCRTPoly> for DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
+
+    fn mul(self, rhs: &DCRTPoly) -> Self::Output {
+        let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let mut self_block_polys = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let block_row_len = next_block_row_idx - cur_block_row_idx;
+                        let block_col_len = next_block_col_idx - cur_block_col_idx;
+                        for i in 0..block_row_len {
+                            for j in 0..block_col_len {
+                                self_block_polys[i][j] *= rhs;
+                            }
+                        }
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            new_matrix.replace_block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                self_block_polys,
+                            );
+                        }
+                    },
+                );
+            },
+        );
+        new_matrix
+    }
+}
 
 impl Neg for DCRTPolyMatrix {
     type Output = Self;
@@ -771,7 +945,8 @@ impl Neg for DCRTPolyMatrix {
                                 self_block_polys[i][j] = -self_block_polys[i][j].clone();
                             }
                         }
-                        // This is secure because the modified entries are not overlapped among threads
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
