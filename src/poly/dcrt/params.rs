@@ -4,7 +4,7 @@ use num_traits::Num;
 use openfhe::ffi;
 use std::{fmt::Debug, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DCRTPolyParams {
     /// polynomial ring dimension
     ring_dimension: u32,

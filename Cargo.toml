@@ -28,6 +28,8 @@ tokio = "1.44.1"
 # mmap-storage = "0.10.0"
 memmap2 = "0.9.5"
 tempfile = "3.19.1"
+sysinfo = "0.33.1"
+once_cell = "1.21.1"
 # for now we put in test
 
 

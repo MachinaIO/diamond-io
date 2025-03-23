@@ -37,7 +37,7 @@ pub trait PolyMatrix:
         let wrapped_vec = vec.into_iter().map(|elem| vec![elem]).collect();
         Self::from_poly_vec(params, wrapped_vec)
     }
-    fn entry(&self, i: usize, j: usize) -> &Self::P;
+    fn entry(&self, i: usize, j: usize) -> Self::P;
     fn get_row(&self, i: usize) -> Vec<Self::P>;
     fn get_column(&self, j: usize) -> Vec<Self::P>;
     fn size(&self) -> (usize, usize);
@@ -62,7 +62,7 @@ pub trait PolyMatrix:
         let (rows, _) = self.size();
         self.slice(0, rows, start, end)
     }
-    fn zero(params: &<Self::P as Poly>::Params, rows: usize, columns: usize) -> Self;
+    fn zero(params: &<Self::P as Poly>::Params, nrow: usize, ncol: usize) -> Self;
     fn identity(params: &<Self::P as Poly>::Params, size: usize, scalar: Option<Self::P>) -> Self;
     fn transpose(&self) -> Self;
     /// (m * n1), (m * n2) -> (m * (n1 + n2))

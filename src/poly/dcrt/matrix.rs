@@ -57,8 +57,8 @@ impl PolyMatrix for DCRTPolyMatrix {
         DCRTPolyMatrix { inner: vec, params: params.clone(), nrow, ncol }
     }
 
-    fn entry(&self, i: usize, j: usize) -> &Self::P {
-        &self.inner[i][j]
+    fn entry(&self, i: usize, j: usize) -> Self::P {
+        self.inner[i][j].clone()
     }
 
     fn get_row(&self, i: usize) -> Vec<Self::P> {

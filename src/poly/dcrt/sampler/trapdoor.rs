@@ -163,7 +163,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         for i in 0..size {
             for j in 0..(k + 2) * size {
-                let poly = public_matrix.entry(i, j).get_poly();
+                let entry = public_matrix.entry(i, j);
+                let poly = entry.get_poly();
                 SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
         }
@@ -173,7 +174,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         for i in 0..size {
             for j in 0..target_cols {
-                let poly = target.entry(i, j).get_poly();
+                let entry = target.entry(i, j);
+                let poly = entry.get_poly();
                 SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
             }
 
