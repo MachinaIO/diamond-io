@@ -2,6 +2,7 @@ use crate::{
     bgg::{
         circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
         sampler::*,
+        BggPublicKey,
     },
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
@@ -15,6 +16,24 @@ const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
 const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
+pub const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
+
+pub fn sample_public_key_by_idx<K: AsRef<[u8]>, S>(
+    sampler: &BGGPublicKeySampler<K, S>,
+    params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
+    idx: usize,
+    reveal_plaintexts: &[bool],
+) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>>
+where
+    S: PolyHashSampler<K>,
+    <S as PolyHashSampler<K>>::M: Send + Sync,
+{
+    sampler.sample(
+        params,
+        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(idx as u64).to_le_bytes()].concat(),
+        reveal_plaintexts,
+    )
+}
 
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {

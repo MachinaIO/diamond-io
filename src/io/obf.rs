@@ -1,9 +1,10 @@
-use super::{params::ObfuscationParams, utils::*, Obfuscation};
+use super::{params::ObfuscationParams, utils::sample_public_key_by_idx, Obfuscation};
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         BggPublicKey, BitToInt,
     },
+    io::utils::{build_final_bits_circuit, PublicSampledData},
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
@@ -13,8 +14,6 @@ use crate::{
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use std::{ops::Mul, sync::Arc};
-
-const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -51,11 +50,8 @@ where
     #[cfg(not(feature = "test"))]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
-    let pub_key_init = bgg_pubkey_sampler.sample(
-        &obf_params.params,
-        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(0 as u64).to_le_bytes()].concat(),
-        &reveal_plaintexts,
-    );
+    let pub_key_init =
+        sample_public_key_by_idx(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
 
     let params = Arc::new(obf_params.params);
@@ -155,11 +151,8 @@ where
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
         log_mem("Sampled b_star trapdoor for idx");
 
-        let pub_key_idx = bgg_pubkey_sampler.sample(
-            &params,
-            &[TAG_BGG_PUBKEY_INPUT_PREFIX, &((idx + 1) as u64).to_le_bytes()].concat(),
-            &reveal_plaintexts,
-        );
+        let pub_key_idx =
+            sample_public_key_by_idx(&bgg_pubkey_sampler, &params, idx + 1, &reveal_plaintexts);
         log_mem("Sampled pub key idx");
 
         #[cfg(feature = "test")]
