@@ -78,12 +78,9 @@ impl Poly for DCRTPoly {
     fn coeffs(&self) -> Vec<Self::Elem> {
         let poly_encoding = self.ptr_poly.GetCoefficientsBytes();
         let parsed_values = parse_coefficients_bytes(&poly_encoding);
-        let coeffs = &parsed_values[..parsed_values.len() - 1];
-        let modulus = &parsed_values[parsed_values.len() - 1];
-        // TODO: avoid cloning
-        parallel_iter!(coeffs)
-            .map(|s| FinRingElem::new(s.clone(), Arc::new(modulus.clone())))
-            .collect()
+        let coeffs = parsed_values.coefficients;
+        let modulus = parsed_values.modulus;
+        parallel_iter!(coeffs).map(|s| FinRingElem::new(s, Arc::new(modulus.clone()))).collect()
     }
 
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
