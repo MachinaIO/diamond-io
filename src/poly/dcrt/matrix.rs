@@ -44,8 +44,6 @@ impl PolyMatrix for DCRTPolyMatrix {
         let ncol = vec[0].len();
         let storage = Self::new_empty(params, nrow, ncol);
         let (row_offsets, col_offsets) = block_offsets(0..nrow, 0..ncol);
-        println!("row_offsets: {:?}", row_offsets);
-        println!("col_offsets: {:?}", col_offsets);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
                 let block_row_len = next_block_row_idx - cur_block_row_idx;
@@ -136,38 +134,24 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     fn identity(params: &<Self::P as Poly>::Params, size: usize, scalar: Option<Self::P>) -> Self {
         let new_matrix = Self::new_empty(params, size, size);
-        let (row_offsets, col_offsets) = block_offsets(0..size, 0..size);
-        debug_assert_eq!(row_offsets, col_offsets);
+        let (offsets, _) = block_offsets(0..size, 0..0);
         let scalar = scalar.unwrap_or_else(|| DCRTPoly::const_one(params));
-        let zero_elem = DCRTPoly::const_zero(params);
-        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
-            |(cur_block_row_idx, next_block_row_idx)| {
-                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
-                    |(cur_block_col_idx, next_block_col_idx)| {
-                        let mut new_entries =
-                            Vec::with_capacity(next_block_row_idx - cur_block_row_idx);
-                        for i in 0..(next_block_row_idx - cur_block_row_idx) {
-                            new_entries
-                                .push(Vec::with_capacity(next_block_col_idx - cur_block_col_idx));
-                            for j in 0..(next_block_col_idx - cur_block_col_idx) {
-                                if i == j {
-                                    new_entries[i].push(scalar.clone());
-                                } else {
-                                    new_entries[i].push(zero_elem.clone());
-                                }
-                            }
-                        }
-                        // This is secure because the modified entries are not overlapped among
-                        // threads
-                        unsafe {
-                            new_matrix.replace_block_entries(
-                                *cur_block_row_idx..*next_block_row_idx,
-                                *cur_block_col_idx..*next_block_col_idx,
-                                new_entries,
-                            );
-                        }
-                    },
-                );
+        let zero_poly = DCRTPoly::const_zero(params);
+        parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_idx, next_block_idx)| {
+                let block_len = next_block_idx - cur_block_idx;
+                let mut new_entries = vec![vec![zero_poly.clone(); block_len]; block_len];
+                for i in 0..block_len {
+                    new_entries[i][i] = scalar.clone();
+                }
+                // This is secure because the modified entries are not overlapped among threads
+                unsafe {
+                    new_matrix.replace_block_entries(
+                        *cur_block_idx..*next_block_idx,
+                        *cur_block_idx..*next_block_idx,
+                        new_entries,
+                    );
+                }
             },
         );
         new_matrix
@@ -224,7 +208,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
         let (row_offsets, self_col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
         let others_col_offsets =
-            others.iter().map(|other| block_offsets(0..0, 0..other.ncol).1).collect_vec();
+            others.iter().map(|other| block_offsets(0..other.nrow, 0..other.ncol).1).collect_vec();
 
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
@@ -412,20 +396,16 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn tensor(&self, other: &Self) -> Self {
         let new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
         parallel_iter!(0..self.nrow).for_each(|i| {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
                 let sub_matrix = other.clone() * scalar;
-                let (row_offsets, col_offsets) =
-                    block_offsets(0..sub_matrix.nrow, 0..sub_matrix.ncol);
+
                 parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_row_idx, next_block_row_idx)| {
                         parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                             |(cur_block_col_idx, next_block_col_idx)| {
-                                println!(
-                                    "i {}, j {}, cur_block_row_idx {}, cur_block_col_idx {}",
-                                    i, j, cur_block_row_idx, cur_block_col_idx
-                                );
                                 let sub_block_polys = sub_matrix.block_entries(
                                     *cur_block_row_idx..*next_block_row_idx,
                                     *cur_block_col_idx..*next_block_col_idx,
@@ -578,8 +558,11 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn get_column_matrix_decompose(&self, j: usize) -> Self {
-        let column = self.slice_columns(j, j + 1);
-        column.decompose()
+        Self::from_poly_vec(
+            &self.params,
+            self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
+        )
+        .decompose()
     }
 }
 
@@ -794,7 +777,7 @@ impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_col_idx, next_block_col_idx)| {
                         // parallel_iter!()
-                        let mut ip_sum = self.block_entries(
+                        let mut ip_sum = new_matrix.block_entries(
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
@@ -805,18 +788,15 @@ impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_ip_idx..*next_block_ip_idx,
                             );
-                            println!("self_block_polys read");
                             let other_block_polys = rhs.block_entries(
                                 *cur_block_ip_idx..*next_block_ip_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
                             );
-                            println!("other_block_polys read");
                             let muled = mul_block_matrices(
                                 &self.params,
-                                self_block_polys,
-                                other_block_polys,
+                                self_block_polys.clone(),
+                                other_block_polys.clone(),
                             );
-                            println!("muled done");
                             ip_sum = add_block_matrices(muled, &ip_sum);
                         }
                         // This is secure because the modified entries are not overlapped among
@@ -828,7 +808,6 @@ impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
                                 ip_sum,
                             );
                         }
-                        println!("block done");
                     },
                 );
             },
@@ -1081,7 +1060,7 @@ fn mul_block_matrices(
     parallel_iter!(0..nrow)
         .map(|i| {
             parallel_iter!(0..ncol)
-                .map(|j| {
+                .map(|j: usize| {
                     let mut sum = DCRTPoly::const_zero(params);
                     for k in 0..n_inner {
                         sum += &lhs[i][k] * &rhs[k][j];
@@ -1369,38 +1348,34 @@ mod tests {
     }
 
     #[test]
-    fn test_matrix_mul_tensor_identity() {
+    fn test_matrix_mul_tensor_identity_simple() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
-        // Create matrix S (2x12)
-        let s = sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
-
-        // Create 'other' matrix (3x5)
+        // Create matrix S (2x20)
+        let s = sampler.sample_uniform(&params, 2, 20, crate::poly::sampler::DistType::FinRingDist);
+        // Create 'other' matrix (5x7)
         let other =
-            sampler.sample_uniform(&params, 3, 5, crate::poly::sampler::DistType::FinRingDist);
-
+            sampler.sample_uniform(&params, 5, 7, crate::poly::sampler::DistType::FinRingDist);
         // Perform S * (I_4 ⊗ other)
         let result = s.mul_tensor_identity(&other, 4);
 
         // Check dimensions
         assert_eq!(result.size().0, 2);
-        assert_eq!(result.size().1, 20);
+        assert_eq!(result.size().1, 28);
 
         let identity = DCRTPolyMatrix::identity(&params, 4, None);
-
         // Check result
         let expected_result = s * (identity.tensor(&other));
 
         assert_eq!(expected_result.size().0, 2);
-        assert_eq!(expected_result.size().1, 20);
+        assert_eq!(expected_result.size().1, 28);
         assert_eq!(result, expected_result)
     }
 
     #[test]
     fn test_matrix_mul_tensor_identity_decompose_naive() {
         let params = DCRTPolyParams::default();
-        println!("log_q: {}", params.modulus_bits());
         let sampler = DCRTPolyUniformSampler::new();
 
         // Create matrix S (2x2516)
@@ -1450,13 +1425,9 @@ mod tests {
 
         // Check result
         let decomposed = other.decompose();
-        println!("decomposed");
         let tensor = identity_tensor_matrix(37, &decomposed);
-        println!("tensor");
         let expected_result_1 = s.clone() * tensor;
-        println!("expected_result_1");
         let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);
-        println!("expected_result_2");
         assert_eq!(expected_result_1, expected_result_2);
 
         assert_eq!(expected_result_1.size().0, 2);
