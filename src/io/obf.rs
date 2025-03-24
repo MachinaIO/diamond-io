@@ -136,6 +136,7 @@ where
 
     let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
 
+    #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> =
         vec![vec![M::zero(params.as_ref(), 0, 0); 3]; obf_params.input_size + 1];
 
