@@ -101,7 +101,10 @@ impl PolyElem for FinRingElem {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        self.value.to_bytes_le()
+        let log_q_bytes = self.modulus.bits().div_ceil(8) as usize;
+        let mut bytes = self.value.to_bytes_le();
+        bytes.resize(log_q_bytes, 0);
+        bytes
     }
 
     fn to_biguint(&self) -> &num_bigint::BigUint {

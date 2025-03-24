@@ -42,7 +42,6 @@ impl PolyMatrix for DCRTPolyMatrix {
         let nrow = vec.len();
         let ncol = vec[0].len();
         let storage = Self::new_empty(params, nrow, ncol);
-
         let (row_offsets, col_offsets) = block_offsets(0..nrow, 0..ncol);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
@@ -115,8 +114,9 @@ impl PolyMatrix for DCRTPolyMatrix {
                         // threads
                         unsafe {
                             new_matrix.replace_block_entries(
-                                *cur_block_row_idx..*next_block_row_idx,
-                                *cur_block_col_idx..*next_block_col_idx,
+                                *cur_block_row_idx - row_start..*next_block_row_idx - row_start,
+                                *cur_block_col_idx - column_start
+                                    ..*next_block_col_idx - column_start,
                                 new_entries,
                             );
                         }
@@ -134,6 +134,7 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn identity(params: &<Self::P as Poly>::Params, size: usize, scalar: Option<Self::P>) -> Self {
         let new_matrix = Self::new_empty(params, size, size);
         let (row_offsets, col_offsets) = block_offsets(0..size, 0..size);
+        debug_assert_eq!(row_offsets, col_offsets);
         let scalar = scalar.unwrap_or_else(|| DCRTPoly::const_one(params));
         let zero_elem = DCRTPoly::const_zero(params);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -217,7 +218,6 @@ impl PolyMatrix for DCRTPolyMatrix {
             }
         }
         let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
-
         let new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
         let (row_offsets, self_col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
         let others_col_offsets =
@@ -685,7 +685,7 @@ impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_col_idx, next_block_col_idx)| {
-                        let mut self_block_polys = self.block_entries(
+                        let self_block_polys = self.block_entries(
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
@@ -693,20 +693,14 @@ impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        let block_row_len = next_block_row_idx - cur_block_row_idx;
-                        let block_col_len = next_block_col_idx - cur_block_col_idx;
-                        for i in 0..block_row_len {
-                            for j in 0..block_col_len {
-                                self_block_polys[i][j] += &rhs_block_polys[i][j];
-                            }
-                        }
+                        let new_block_polys = add_block_matrices(self_block_polys, rhs_block_polys);
                         // This is secure because the modified entries are not overlapped among
                         // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
-                                self_block_polys,
+                                new_block_polys,
                             );
                         }
                     },
@@ -751,20 +745,14 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        let block_row_len = next_block_row_idx - cur_block_row_idx;
-                        let block_col_len = next_block_col_idx - cur_block_col_idx;
-                        for i in 0..block_row_len {
-                            for j in 0..block_col_len {
-                                self_block_polys[i][j] -= &rhs_block_polys[i][j];
-                            }
-                        }
+                        let new_block_polys = sub_block_matrices(self_block_polys, rhs_block_polys);
                         // This is secure because the modified entries are not overlapped among
                         // threads
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
-                                self_block_polys,
+                                new_block_polys,
                             );
                         }
                     },
@@ -795,42 +783,43 @@ impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
         );
         let new_matrix = DCRTPolyMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
         let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..rhs.ncol);
+        let (_, ip_offsets) = block_offsets(0..0, 0..self.ncol);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_col_idx, next_block_col_idx)| {
-                        for ip_block_idx in 0..self.ncol {
-                            let mut ip_sum = new_matrix.block_entries(
-                                *cur_block_row_idx..*next_block_row_idx,
-                                *cur_block_col_idx..*next_block_col_idx,
-                            );
-                            let self_block_polys = self.block_entries(
-                                *cur_block_row_idx..*next_block_row_idx,
-                                ip_block_idx..ip_block_idx + 1,
-                            );
-                            let other_block_polys = rhs.block_entries(
-                                ip_block_idx..ip_block_idx + 1,
-                                *cur_block_col_idx..*next_block_col_idx,
-                            );
-                            for i in 0..(next_block_row_idx - cur_block_row_idx) {
-                                for j in 0..(next_block_col_idx - cur_block_col_idx) {
-                                    let mut sum = DCRTPoly::const_zero(&self.params);
-                                    for _k in 0..(self.ncol) {
-                                        sum += &self_block_polys[i][0] * &other_block_polys[0][j];
-                                    }
-                                    ip_sum[i][j] += sum;
-                                }
-                            }
-                            // This is secure because the modified entries are not overlapped among
-                            // threads
-                            unsafe {
-                                new_matrix.replace_block_entries(
+                        // parallel_iter!()
+                        parallel_iter!(ip_offsets.iter().tuple_windows().collect_vec()).for_each(
+                            |(cur_block_ip_idx, next_block_ip_idx)| {
+                                let ip_sum = new_matrix.block_entries(
                                     *cur_block_row_idx..*next_block_row_idx,
                                     *cur_block_col_idx..*next_block_col_idx,
-                                    ip_sum,
                                 );
-                            }
-                        }
+                                let self_block_polys = self.block_entries(
+                                    *cur_block_row_idx..*next_block_row_idx,
+                                    *cur_block_ip_idx..*next_block_ip_idx,
+                                );
+                                let other_block_polys = rhs.block_entries(
+                                    *cur_block_ip_idx..*next_block_ip_idx,
+                                    *cur_block_col_idx..*next_block_col_idx,
+                                );
+                                let muled = mul_block_matrices(
+                                    &self.params,
+                                    self_block_polys,
+                                    other_block_polys,
+                                );
+                                let added = add_block_matrices(ip_sum, muled);
+                                // This is secure because the modified entries are not overlapped among
+                                // threads
+                                unsafe {
+                                    new_matrix.replace_block_entries(
+                                        *cur_block_row_idx..*next_block_row_idx,
+                                        *cur_block_col_idx..*next_block_col_idx,
+                                        added,
+                                    );
+                                }
+                            },
+                        );
                     },
                 );
             },
@@ -924,12 +913,14 @@ impl Neg for DCRTPolyMatrix {
 
 impl DCRTPolyMatrix {
     fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
-        let entry_size = params.modulus_bits().div_ceil(8);
+        let dim = params.ring_dimension() as usize;
+        let log_q_bytes = params.modulus_bits().div_ceil(8);
+        let entry_size = dim * log_q_bytes;
         let len = entry_size * nrow * ncol;
         let file = tempfile().expect("failed to open file");
         file.set_len(len as u64).expect("failed to set file length");
         if BLOCK_SIZE.get().is_none() {
-            let system = System::new();
+            let system = System::new_all();
             let mem_size = system.total_memory() * 2 / 3;
             #[cfg(feature = "parallel")]
             let num_threads = rayon::current_num_threads();
@@ -943,7 +934,9 @@ impl DCRTPolyMatrix {
     }
 
     fn entry_size(&self) -> usize {
-        self.params.modulus_bits().div_ceil(8)
+        let log_q_bytes = self.params.modulus_bits().div_ceil(8);
+        let dim = self.params.ring_dimension() as usize;
+        dim * log_q_bytes
     }
 
     fn block_entries(
@@ -1009,204 +1002,442 @@ fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usi
     let block_size = *BLOCK_SIZE.get().unwrap();
     let nrow = rows.end - rows.start;
     let ncol = cols.end - cols.start;
-    let num_blocks_row = rows.len().div_ceil(block_size);
-    let num_blocks_col = cols.len().div_ceil(block_size);
-    let row_offsets = (0..num_blocks_row)
-        .map(|i| if i == num_blocks_row - 1 { nrow - i * block_size } else { block_size })
-        .scan(0, |state, len| {
-            let offset = rows.start + *state;
-            *state += len;
-            Some(offset)
-        })
-        .collect();
-    let col_offsets = (0..num_blocks_col)
-        .map(|i| if i == num_blocks_col - 1 { ncol - i * block_size } else { block_size })
-        .scan(0, |state, len| {
-            let offset = cols.start + *state;
-            *state += len;
-            Some(offset)
-        })
-        .collect();
+    let num_blocks_row = nrow.div_ceil(block_size);
+    let num_blocks_col = ncol.div_ceil(block_size);
+    let mut row_offsets = vec![rows.start];
+    for _ in 0..num_blocks_row {
+        let last_row_offset = row_offsets.last().unwrap();
+        let sub = rows.end - last_row_offset;
+        let len = if sub < block_size { sub } else { block_size };
+        row_offsets.push(last_row_offset + len);
+    }
+    let mut col_offsets = vec![cols.start];
+    for _ in 0..num_blocks_col {
+        let last_col_offset = col_offsets.last().unwrap();
+        let sub = cols.end - last_col_offset;
+        let len = if sub < block_size { sub } else { block_size };
+        col_offsets.push(last_col_offset + len);
+    }
     (row_offsets, col_offsets)
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
+    let nrow = lhs.len();
+    let ncol = lhs[0].len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            parallel_iter!(0..ncol)
+                .map(|j| lhs[i][j].clone() + &rhs[i][j])
+                .collect::<Vec<DCRTPoly>>()
+        })
+        .collect::<Vec<Vec<DCRTPoly>>>()
+}
 
-//     // Helper function to create a test matrix with specified dimensions
-//     fn create_test_matrix(nrow: usize, ncol: usize) -> MatrixStorage {
-//         let mut entries = Vec::with_capacity(nrow);
-//         for i in 0..nrow {
-//             let mut row = Vec::with_capacity(ncol);
-//             for j in 0..ncol {
-//                 // Create a unique value for each cell based on its position
-//                 let value = ((i * ncol + j) as u8) % 255;
-//                 row.push(vec![value, value + 1, value + 2, value + 3]);
-//             }
-//             entries.push(row);
-//         }
-//         MatrixStorage::new(entries)
-//     }
+fn sub_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
+    let nrow = lhs.len();
+    let ncol = lhs[0].len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            parallel_iter!(0..ncol)
+                .map(|j| lhs[i][j].clone() - &rhs[i][j])
+                .collect::<Vec<DCRTPoly>>()
+        })
+        .collect::<Vec<Vec<DCRTPoly>>>()
+}
 
-//     #[test]
-//     fn test_matrix_storage_new_and_entries() {
-//         // Create a 3x4 matrix
-//         let nrow = 3;
-//         let ncol = 4;
-//         let entry_size = 4; // Each entry is 4 bytes
+fn mul_block_matrices(
+    params: &DCRTPolyParams,
+    lhs: Vec<Vec<DCRTPoly>>,
+    rhs: Vec<Vec<DCRTPoly>>,
+) -> Vec<Vec<DCRTPoly>> {
+    let nrow = lhs.len();
+    let ncol = rhs[0].len();
+    let n_inner = lhs[0].len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            parallel_iter!(0..ncol)
+                .map(|j| {
+                    let mut sum = DCRTPoly::const_zero(params);
+                    for k in 0..n_inner {
+                        sum += &lhs[i][k] * &rhs[k][j];
+                    }
+                    sum
+                })
+                .collect::<Vec<DCRTPoly>>()
+        })
+        .collect::<Vec<Vec<DCRTPoly>>>()
+}
 
-//         // Create test data
-//         let mut entries = Vec::with_capacity(nrow);
-//         for i in 0..nrow {
-//             let mut row = Vec::with_capacity(ncol);
-//             for j in 0..ncol {
-//                 let value = ((i * ncol + j) as u8) % 255;
-//                 row.push(vec![value, value + 1, value + 2, value + 3]);
-//             }
-//             entries.push(row);
-//         }
+#[cfg(test)]
+#[cfg(feature = "test")]
+mod tests {
+    use std::sync::Arc;
 
-//         // Create matrix
-//         let matrix = MatrixStorage::new(entries.clone());
+    use num_bigint::BigUint;
 
-//         // Verify dimensions
-//         assert_eq!(matrix.nrow, nrow);
-//         assert_eq!(matrix.ncol, ncol);
-//         assert_eq!(matrix.entry_size, entry_size);
+    use super::*;
+    use crate::poly::{
+        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+        sampler::PolyUniformSampler,
+    };
 
-//         // Retrieve all entries and verify they match the original data
-//         let retrieved_entries = matrix.entries(0..nrow, 0..ncol);
-//         assert_eq!(retrieved_entries, entries);
-//     }
+    #[test]
+    fn test_matrix_gadget_matrix() {
+        let params = DCRTPolyParams::default();
+        let size = 3;
+        let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, size);
+        assert_eq!(gadget_matrix.size().0, size);
+        assert_eq!(gadget_matrix.size().1, size * params.modulus_bits());
+    }
 
-//     #[test]
-//     fn test_matrix_storage_replace_entries() {
-//         // Create a 3x4 matrix
-//         let matrix = create_test_matrix(3, 4);
+    #[test]
+    fn test_matrix_decompose() {
+        let params = DCRTPolyParams::default();
+        let bit_length = params.modulus_bits();
 
-//         // Create new entries for a 2x2 submatrix
-//         let new_entries = vec![
-//             vec![vec![100, 101, 102, 103], vec![110, 111, 112, 113]],
-//             vec![vec![120, 121, 122, 123], vec![130, 131, 132, 133]],
-//         ];
+        // Create a simple 2x8 matrix with some non-zero values
+        let mut matrix_vec = Vec::with_capacity(2);
+        let value = FinRingElem::new(5u32, params.modulus());
 
-//         // Replace a 2x2 submatrix starting at position (1, 1)
-//         let mut modified_matrix = matrix.clone();
-//         modified_matrix.replace_entries(1..3, 1..3, new_entries.clone());
+        // Create first row
+        let mut row1 = Vec::with_capacity(8);
+        row1.push(DCRTPoly::from_const(&params, &value));
+        for _ in 1..8 {
+            row1.push(DCRTPoly::const_zero(&params));
+        }
 
-//         // Retrieve the modified submatrix and verify it matches the new entries
-//         let retrieved_entries = modified_matrix.entries(1..3, 1..3);
-//         assert_eq!(retrieved_entries, new_entries);
+        // Create second row
+        let mut row2 = Vec::with_capacity(8);
+        row2.push(DCRTPoly::const_zero(&params));
+        row2.push(DCRTPoly::from_const(&params, &value));
+        for _ in 2..8 {
+            row2.push(DCRTPoly::const_zero(&params));
+        }
 
-//         // Verify that the rest of the matrix is unchanged
-//         let top_left = modified_matrix.entries(0..1, 0..1);
-//         assert_eq!(top_left, matrix.entries(0..1, 0..1));
+        matrix_vec.push(row1);
+        matrix_vec.push(row2);
 
-//         let top_right = modified_matrix.entries(0..1, 3..4);
-//         assert_eq!(top_right, matrix.entries(0..1, 3..4));
+        let matrix = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
+        assert_eq!(matrix.size().0, 2);
+        assert_eq!(matrix.size().1, 8);
 
-//         let bottom_left = modified_matrix.entries(2..3, 0..1);
-//         assert_eq!(bottom_left, matrix.entries(2..3, 0..1));
-//     }
+        let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, 2);
+        assert_eq!(gadget_matrix.size().0, 2);
+        assert_eq!(gadget_matrix.size().1, 2 * bit_length);
 
-//     #[test]
-//     fn test_matrix_storage_concat_columns() {
-//         // Create two matrices with the same number of rows
-//         let matrix1 = create_test_matrix(3, 2);
-//         let matrix2 = create_test_matrix(3, 3);
+        let decomposed = matrix.decompose();
+        assert_eq!(decomposed.size().0, 2 * bit_length);
+        assert_eq!(decomposed.size().1, 8);
 
-//         // Concatenate the matrices horizontally
-//         let result = matrix1.concat_columns(&matrix2);
+        let expected_matrix = gadget_matrix * decomposed;
+        assert_eq!(expected_matrix.size().0, 2);
+        assert_eq!(expected_matrix.size().1, 8);
+        assert_eq!(matrix, expected_matrix);
+    }
 
-//         // Verify dimensions
-//         assert_eq!(result.nrow, 3);
-//         assert_eq!(result.ncol, 5);
-//         assert_eq!(result.entry_size, 4);
+    #[test]
+    fn test_matrix_basic_operations() {
+        let params = DCRTPolyParams::default();
 
-//         // Verify the left part matches matrix1
-//         let left_part = result.entries(0..3, 0..2);
-//         assert_eq!(left_part, matrix1.entries(0..3, 0..2));
+        // Test zero and identity matrices
+        let zero = DCRTPolyMatrix::zero(&params, 2, 2);
+        let identity = DCRTPolyMatrix::identity(&params, 2, None);
 
-//         // Verify the right part matches matrix2
-//         let right_part = result.entries(0..3, 2..5);
-//         assert_eq!(right_part, matrix2.entries(0..3, 0..3));
-//     }
+        // Test matrix creation and equality
+        let value = FinRingElem::new(5u32, params.modulus());
 
-//     #[test]
-//     fn test_matrix_storage_concat_rows() {
-//         // Create two matrices with the same number of columns
-//         let matrix1 = create_test_matrix(2, 3);
-//         let matrix2 = create_test_matrix(3, 3);
+        // Create a 2x2 matrix with values at (0,0) and (1,1)
+        let mut matrix_vec = Vec::with_capacity(2);
+        let mut row1 = Vec::with_capacity(2);
+        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::const_zero(&params));
 
-//         // Concatenate the matrices vertically
-//         let result = matrix1.concat_rows(&matrix2);
+        let mut row2 = Vec::with_capacity(2);
+        row2.push(DCRTPoly::const_zero(&params));
+        row2.push(DCRTPoly::from_const(&params, &value));
 
-//         // Verify dimensions
-//         assert_eq!(result.nrow, 5);
-//         assert_eq!(result.ncol, 3);
-//         assert_eq!(result.entry_size, 4);
+        matrix_vec.push(row1);
+        matrix_vec.push(row2);
 
-//         // Verify the top part matches matrix1
-//         let top_part = result.entries(0..2, 0..3);
-//         assert_eq!(top_part, matrix1.entries(0..2, 0..3));
+        let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
+        assert_eq!(matrix1.entry(0, 0).coeffs()[0], value);
+        let matrix2 = matrix1.clone();
+        assert_eq!(matrix1, matrix2);
 
-//         // Verify the bottom part matches matrix2
-//         let bottom_part = result.entries(2..5, 0..3);
-//         assert_eq!(bottom_part, matrix2.entries(0..3, 0..3));
-//     }
+        // Test addition
+        let sum = matrix1.clone() + &matrix2;
+        let value_10 = FinRingElem::new(10u32, params.modulus());
+        assert_eq!(sum.entry(0, 0).coeffs()[0], value_10);
 
-//     #[test]
-//     fn test_matrix_storage_concat_diag() {
-//         // Create two matrices
-//         let matrix1 = create_test_matrix(2, 3);
-//         let matrix2 = create_test_matrix(3, 2);
+        // Test subtraction
+        let diff = matrix1.clone() - &matrix2;
+        assert_eq!(diff, zero);
 
-//         // Concatenate the matrices diagonally
-//         let result = matrix1.concat_diag(&matrix2);
+        // Test multiplication
+        let prod = matrix1 * &identity;
+        assert_eq!(prod.size(), (2, 2));
+        // Check that the product has the same values as the original matrix
+        assert_eq!(prod.entry(0, 0).coeffs()[0], value);
+        assert_eq!(prod.entry(1, 1).coeffs()[0], value);
+    }
 
-//         // Verify dimensions
-//         assert_eq!(result.nrow, 5);
-//         assert_eq!(result.ncol, 5);
-//         assert_eq!(result.entry_size, 4);
+    #[test]
+    fn test_matrix_concatenation() {
+        let params = DCRTPolyParams::default();
+        let value = FinRingElem::new(5u32, params.modulus());
 
-//         // Verify the top-left part matches matrix1
-//         let top_left = result.entries(0..2, 0..3);
-//         assert_eq!(top_left, matrix1.entries(0..2, 0..3));
+        // Create first matrix with value at (0,0)
+        let mut matrix1_vec = Vec::with_capacity(2);
+        let mut row1 = Vec::with_capacity(2);
+        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::const_zero(&params));
 
-//         // Verify the bottom-right part matches matrix2
-//         let bottom_right = result.entries(2..5, 3..5);
-//         assert_eq!(bottom_right, matrix2.entries(0..3, 0..2));
+        let mut row2 = Vec::with_capacity(2);
+        row2.push(DCRTPoly::const_zero(&params));
+        row2.push(DCRTPoly::const_zero(&params));
 
-//         // Verify the top-right part is zeros (or empty)
-//         let top_right = result.entries(0..2, 3..5);
-//         for row in top_right {
-//             for entry in row {
-//                 assert_eq!(entry, vec![0, 0, 0, 0]);
-//             }
-//         }
+        matrix1_vec.push(row1);
+        matrix1_vec.push(row2);
 
-//         // Verify the bottom-left part is zeros (or empty)
-//         let bottom_left = result.entries(2..5, 0..3);
-//         for row in bottom_left {
-//             for entry in row {
-//                 assert_eq!(entry, vec![0, 0, 0, 0]);
-//             }
-//         }
-//     }
+        let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix1_vec);
 
-//     // #[test]
-//     // fn test_matrix_storage_volatility() {
-//     //     // Create a matrix with default transient volatility
-//     //     let mut matrix = create_test_matrix(2, 2);
-//     //     assert_eq!(matrix.volatile, Volatility::Transient);
+        // Create second matrix with value at (1,1)
+        let mut matrix2_vec = Vec::with_capacity(2);
+        let mut row1 = Vec::with_capacity(2);
+        row1.push(DCRTPoly::const_zero(&params));
+        row1.push(DCRTPoly::const_zero(&params));
 
-//     //     // Change to persistent
-//     //     matrix.to_persistent();
-//     //     assert_eq!(matrix.volatile, Volatility::Persistent);
+        let mut row2 = Vec::with_capacity(2);
+        row2.push(DCRTPoly::const_zero(&params));
+        row2.push(DCRTPoly::from_const(&params, &value));
 
-//     //     // Change back to transient
-//     //     matrix.to_transient();
-//     //     assert_eq!(matrix.volatile, Volatility::Transient);
-//     // }
-// }
+        matrix2_vec.push(row1);
+        matrix2_vec.push(row2);
+
+        let matrix2 = DCRTPolyMatrix::from_poly_vec(&params, matrix2_vec);
+
+        // Test column concatenation
+        let col_concat = matrix1.concat_columns(&[&matrix2]);
+        assert_eq!(col_concat.size().0, 2);
+        assert_eq!(col_concat.size().1, 4);
+        assert_eq!(col_concat.entry(0, 0).coeffs()[0], value);
+        assert_eq!(col_concat.entry(1, 3).coeffs()[0], value);
+
+        // Test row concatenation
+        let row_concat = matrix1.concat_rows(&[&matrix2]);
+        assert_eq!(row_concat.size().0, 4);
+        assert_eq!(row_concat.size().1, 2);
+        assert_eq!(row_concat.entry(0, 0).coeffs()[0], value);
+        assert_eq!(row_concat.entry(3, 1).coeffs()[0], value);
+
+        // Test diagonal concatenation
+        let diag_concat = matrix1.concat_diag(&[&matrix2]);
+        assert_eq!(diag_concat.size().0, 4);
+        assert_eq!(diag_concat.size().1, 4);
+        assert_eq!(diag_concat.entry(0, 0).coeffs()[0], value);
+        assert_eq!(diag_concat.entry(3, 3).coeffs()[0], value);
+    }
+
+    #[test]
+    fn test_matrix_tensor_product() {
+        let params = DCRTPolyParams::default();
+        let value = FinRingElem::new(5u32, params.modulus());
+
+        // Create first matrix with value at (0,0)
+        let mut matrix1_vec = Vec::with_capacity(2);
+        let mut row1 = Vec::with_capacity(2);
+        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::const_zero(&params));
+
+        let mut row2 = Vec::with_capacity(2);
+        row2.push(DCRTPoly::const_zero(&params));
+        row2.push(DCRTPoly::const_zero(&params));
+
+        matrix1_vec.push(row1);
+        matrix1_vec.push(row2);
+
+        let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix1_vec);
+
+        // Create second matrix with value at (0,0)
+        let mut matrix2_vec = Vec::with_capacity(2);
+        let mut row1 = Vec::with_capacity(2);
+        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::const_zero(&params));
+
+        let mut row2 = Vec::with_capacity(2);
+        row2.push(DCRTPoly::const_zero(&params));
+        row2.push(DCRTPoly::const_zero(&params));
+
+        matrix2_vec.push(row1);
+        matrix2_vec.push(row2);
+
+        let matrix2 = DCRTPolyMatrix::from_poly_vec(&params, matrix2_vec);
+
+        let tensor = matrix1.tensor(&matrix2);
+        assert_eq!(tensor.size().0, 4);
+        assert_eq!(tensor.size().1, 4);
+
+        // Check that the (0,0) element is the product of the (0,0) elements
+        let value_25 = FinRingElem::new(25u32, params.modulus());
+        assert_eq!(tensor.entry(0, 0).coeffs()[0], value_25);
+    }
+
+    #[test]
+    fn test_matrix_modulus_switch() {
+        let params = DCRTPolyParams::default();
+
+        let value00 = FinRingElem::new(1023782870921908217643761278891282178u128, params.modulus());
+        let value01 = FinRingElem::new(8179012198875468938912873783289218738u128, params.modulus());
+        let value10 = FinRingElem::new(2034903202902173762872163465127672178u128, params.modulus());
+        let value11 = FinRingElem::new(1990091289902891278121564387120912660u128, params.modulus());
+
+        let matrix_vec = vec![
+            vec![DCRTPoly::from_const(&params, &value00), DCRTPoly::from_const(&params, &value01)],
+            vec![DCRTPoly::from_const(&params, &value10), DCRTPoly::from_const(&params, &value11)],
+        ];
+
+        let matrix = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
+        let new_modulus = Arc::new(BigUint::from(2u32));
+        let switched = matrix.modulus_switch(&new_modulus);
+
+        // Although the value becomes less than the new modulus, the set modulus is still the same
+        assert_eq!(switched.params.modulus(), params.modulus());
+
+        let new_value00 = value00.modulus_switch(new_modulus.clone());
+        let new_value01 = value01.modulus_switch(new_modulus.clone());
+        let new_value10 = value10.modulus_switch(new_modulus.clone());
+        let new_value11 = value11.modulus_switch(new_modulus.clone());
+
+        let expected_vec = vec![
+            vec![
+                DCRTPoly::from_const(&params, &new_value00),
+                DCRTPoly::from_const(&params, &new_value01),
+            ],
+            vec![
+                DCRTPoly::from_const(&params, &new_value10),
+                DCRTPoly::from_const(&params, &new_value11),
+            ],
+        ];
+
+        let expected = DCRTPolyMatrix::from_poly_vec(&params, expected_vec);
+        assert_eq!(switched, expected);
+    }
+
+    #[test]
+    #[should_panic(expected = "Addition requires matrices of same dimensions")]
+    #[cfg(debug_assertions)]
+    fn test_matrix_addition_mismatch() {
+        let params = DCRTPolyParams::default();
+        let matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
+        let matrix2 = DCRTPolyMatrix::zero(&params, 2, 3);
+        let _sum = matrix1 + matrix2;
+    }
+
+    #[test]
+    #[should_panic(expected = "Multiplication condition failed")]
+    #[cfg(debug_assertions)]
+    fn test_matrix_multiplication_mismatch() {
+        let params = DCRTPolyParams::default();
+        let matrix1 = DCRTPolyMatrix::zero(&params, 2, 2);
+        let matrix2 = DCRTPolyMatrix::zero(&params, 3, 2);
+        let _prod = matrix1 * matrix2;
+    }
+
+    #[test]
+    fn test_mul_tensor_identity() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix S (2x12)
+        let s = sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
+
+        // Create 'other' matrix (3x3)
+        let other =
+            sampler.sample_uniform(&params, 3, 3, crate::poly::sampler::DistType::FinRingDist);
+
+        // Perform S * (I_4 ⊗ other)
+        let result = s.mul_tensor_identity(&other, 4);
+
+        // Check dimensions
+        assert_eq!(result.size().0, 2);
+        assert_eq!(result.size().1, 12);
+
+        let identity = DCRTPolyMatrix::identity(&params, 4, None);
+
+        // Check result
+        let expected_result = s * (identity.tensor(&other));
+
+        assert_eq!(expected_result.size().0, 2);
+        assert_eq!(expected_result.size().1, 12);
+        assert_eq!(result, expected_result)
+    }
+
+    #[test]
+    fn test_matrix_mul_tensor_identity_decompose_naive() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix S (2x2516)
+        let s =
+            sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
+
+        // Create 'other' matrix (2x68)
+        let other =
+            sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
+
+        // Decompose 'other' matrix
+        let other_decompose = other.decompose();
+
+        // Perform S * (I_37 ⊗ G^-1(other))
+        let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
+
+        // Check dimensions
+        assert_eq!(result.size().0, 2);
+        assert_eq!(result.size().1, 2516);
+
+        let identity = DCRTPolyMatrix::identity(&params, 37, None);
+
+        // Check result
+        let expected_result = s * (identity.tensor(&other_decompose));
+
+        assert_eq!(expected_result.size().0, 2);
+        assert_eq!(expected_result.size().1, 2516);
+        assert_eq!(result, expected_result)
+    }
+
+    #[test]
+    fn test_matrix_mul_tensor_identity_decompose_optimal() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Create matrix S (2x2516)
+        let s =
+            sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
+
+        // Create 'other' matrix (2x68)
+        let other =
+            sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
+
+        // Perform S * (I_37 ⊗ G^-1(other))
+        let result: DCRTPolyMatrix = s.mul_tensor_identity_decompose(&other, 37);
+
+        // Check dimensions
+        assert_eq!(result.size().0, 2);
+        assert_eq!(result.size().1, 2516);
+
+        let identity = DCRTPolyMatrix::identity(&params, 37, None);
+
+        // Check result
+        let expected_result = s.clone() * (identity.tensor(&other.decompose()));
+        let expected_result_2 = s.mul_tensor_identity(&other.decompose(), 37);
+
+        assert_eq!(expected_result.size().0, 2);
+        assert_eq!(expected_result.size().1, 2516);
+
+        assert_eq!(expected_result_2.size().0, 2);
+        assert_eq!(expected_result_2.size().1, 2516);
+
+        assert_eq!(result, expected_result);
+        assert_eq!(result, expected_result_2);
+    }
+}

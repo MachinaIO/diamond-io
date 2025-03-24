@@ -31,7 +31,7 @@ pub trait Poly:
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_decomposed(params: &Self::Params, decomposed: &[Self]) -> Self;
     fn from_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
-        let log_q_bytes = params.modulus_bits() / 8;
+        let log_q_bytes = params.modulus_bits().div_ceil(8);
         let dim = params.ring_dimension() as usize;
         debug_assert_eq!(bytes.len(), log_q_bytes * dim);
         let coeffs = bytes
