@@ -14,10 +14,10 @@ this will remove helper logic + helper fields for test which is not require for 
 
 - dummy params
 ```
-cargo test --test test_io_dummy_param --no-default-features --features parallel -- --nocapture
+cargo test -r --test test_io_dummy_param --no-default-features --features parallel -- --nocapture
 ```
 
 - real params (by default ignored)
 ```
-cargo test --test test_io_real_param --no-default-features --features parallel -- --nocapture
+cargo test -r --test test_io_real_param --no-default-features --features parallel -- --nocapture
 ```

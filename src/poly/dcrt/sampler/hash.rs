@@ -66,7 +66,7 @@ where
 
 impl<H> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H>
 where
-    H: OutputSizeUser + digest::Digest + Clone,
+    H: OutputSizeUser + digest::Digest + Clone + Send + Sync,
 {
     type M = DCRTPolyMatrix;
 
@@ -90,20 +90,25 @@ where
                 let bit_length = params.modulus_bits();
                 let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
                 // bits = number of resulting bits from hashing ops = hash_output_size * index
-                let mut bv = bitvec![u8, Lsb0;];
                 let mut og_hasher: H = H::new();
                 og_hasher.update(self.key);
                 og_hasher.update(tag.as_ref());
-                for i in 0..index {
-                    let mut hasher = og_hasher.clone();
-                    //  H ( key || tag || i )
-                    hasher.update(i.to_le_bytes());
-                    for &byte in hasher.finalize().iter() {
-                        for bit_index in 0..8 {
-                            bv.push((byte >> bit_index) & 1 != 0);
+                let collected_bits: Vec<BitVec<u8, Lsb0>> = parallel_iter!(0..index)
+                    .map(|i| {
+                        let mut hasher = og_hasher.clone();
+                        hasher.update(i.to_le_bytes());
+                        let mut local_bits = bitvec![u8, Lsb0;];
+                        for &byte in hasher.finalize().iter() {
+                            for bit_index in 0..8 {
+                                local_bits.push((byte >> bit_index) & 1 != 0);
+                            }
                         }
-                    }
-                }
+                        local_bits
+                    })
+                    .collect();
+
+                // Flatten into a single `BitVec`
+                let bv: BitVec<u8, Lsb0> = collected_bits.into_iter().flatten().collect();
                 let num_chunks = bv.len() / bit_length;
                 let ring_elems: Vec<FinRingElem> = parallel_iter!(0..num_chunks)
                     .map(|i| {
