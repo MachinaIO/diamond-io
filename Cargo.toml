@@ -51,7 +51,6 @@ codegen-units = 16
 inherits = "release"
 debug = "full"
 strip = "none"
-panic = "unwind"
 
 [[bench]]
 name = "dcrtpoly"
