@@ -115,8 +115,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx - row_start..*next_block_row_idx - row_start,
-                                *cur_block_col_idx - column_start
-                                    ..*next_block_col_idx - column_start,
+                                *cur_block_col_idx - column_start..
+                                    *next_block_col_idx - column_start,
                                 new_entries,
                             );
                         }
@@ -427,10 +427,10 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 // among threads
                                 unsafe {
                                     new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx
-                                            ..i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx
-                                            ..j * sub_matrix.ncol + *next_block_col_idx,
+                                        i * sub_matrix.nrow + *cur_block_row_idx..
+                                            i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx..
+                                            j * sub_matrix.ncol + *next_block_col_idx,
                                         sub_block_polys,
                                     );
                                 }
@@ -809,8 +809,8 @@ impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
                                     other_block_polys,
                                 );
                                 let added = add_block_matrices(ip_sum, muled);
-                                // This is secure because the modified entries are not overlapped among
-                                // threads
+                                // This is secure because the modified entries are not overlapped
+                                // among threads
                                 unsafe {
                                     new_matrix.replace_block_entries(
                                         *cur_block_row_idx..*next_block_row_idx,
@@ -1390,7 +1390,7 @@ mod tests {
 
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
-
+        println!("mul_tensor_identity computed");
         // Check dimensions
         assert_eq!(result.size().0, 2);
         assert_eq!(result.size().1, 2516);

@@ -79,8 +79,8 @@ where
             DistType::GaussDist { sigma: obf_params.hardcoded_key_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        t_bar_matrix.clone() * &public_data.a_rlwe_bar + &e
-            - &(hardcoded_key_matrix.clone() * &scale)
+        t_bar_matrix.clone() * &public_data.a_rlwe_bar + &e -
+            &(hardcoded_key_matrix.clone() * &scale)
     };
     let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
     log_mem("Sampled enc_hardcoded_key_polys");
