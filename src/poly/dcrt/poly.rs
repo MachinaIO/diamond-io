@@ -113,17 +113,17 @@ impl Poly for DCRTPoly {
         let ring_dimension = params.ring_dimension() as usize;
         let modulus = params.modulus();
 
-        // First byte contains the byte size per coefficient
-        let max_byte_size = bytes[0] as usize;
+        // First four bytes contain the byte size per coefficient
+        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
 
         // Next n/8 bytes contain the bit vector
         let bit_vector_byte_size = ring_dimension.div_ceil(8);
-        let bit_vector = &bytes[1..1 + bit_vector_byte_size];
+        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
 
         // Remaining bytes contain coefficient values
         let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
             .map(|i| {
-                let start = 1 + bit_vector_byte_size + (i * max_byte_size);
+                let start = 4 + bit_vector_byte_size + (i * max_byte_size);
                 let end = start + max_byte_size;
                 let value_bytes = &bytes[start..end];
 
@@ -200,7 +200,7 @@ impl Poly for DCRTPoly {
 
     /// Convert the polynomial to a compact byte representation
     /// The returned bytes vector is encoded as follows:
-    /// 1. The first byte contains the `max_byte_size`, namely the maximum byte size of any
+    /// 1. The first four bytes contain the `max_byte_size`, namely the maximum byte size of any
     ///    coefficient in the poly
     /// 2. The next `ceil(n/8)` bytes contain a bit vector, where each bit indicates if the
     ///    corresponding coefficient is negative and `n` is the ring dimension
@@ -240,20 +240,21 @@ impl Poly for DCRTPoly {
             max_byte_size = std::cmp::max(max_byte_size, value_bytes.len());
         }
 
-        let total_byte_size = 1 + bit_vector_byte_size + (ring_dimension * max_byte_size);
+        let total_byte_size = 4 + bit_vector_byte_size + (ring_dimension * max_byte_size);
         let mut result = vec![0u8; total_byte_size];
 
-        // Store max_byte_size in the first byte
-        result[0] = max_byte_size as u8;
+        // Store max_byte_size in the first four bytes (little-endian)
+        let max_byte_size_bytes = (max_byte_size as u32).to_le_bytes();
+        result[0..4].copy_from_slice(&max_byte_size_bytes);
 
         // Store bit vector
-        result[1..1 + bit_vector_byte_size].copy_from_slice(&bit_vector);
+        result[4..4 + bit_vector_byte_size].copy_from_slice(&bit_vector);
 
         // Second pass: Store preprocessed coefficient values s.t. each coefficient is max_byte_size
         // bytes long
         for (i, value) in processed_values.iter().enumerate() {
             let value_bytes = value.to_bytes_le();
-            let start_pos = 1 + bit_vector_byte_size + (i * max_byte_size);
+            let start_pos = 4 + bit_vector_byte_size + (i * max_byte_size);
 
             result[start_pos..start_pos + value_bytes.len()].copy_from_slice(&value_bytes);
         }
@@ -455,27 +456,27 @@ mod tests {
 
         let ring_dimension = params.ring_dimension() as usize;
 
-        // First byte containts `max_byte_size` (maximum byte size of any coefficient)
-        // Since we're using BitDist, we expect byte_size to be 1
-        let max_byte_size = bytes[0];
+        // First four bytes contain `max_byte_size` (maximum byte size of any coefficient)
+        // Since we're using BitDist, we expect max_byte_size to be equal to 1
+        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         assert_eq!(max_byte_size, 1, "Max byte size size should be 1 for BitDist");
 
         // Next ceil(n/8) bytes are the bit vector (1 bit per coefficient)
         let bit_vector_byte_size = ring_dimension.div_ceil(8);
 
         // Expected total size
-        // 1 byte for `max_byte_size` + bit_vector_byte_size + (ring_dimension * max_byte_size)
+        // 4 bytes for `max_byte_size` + bit_vector_byte_size + (ring_dimension * max_byte_size)
         let expected_total_size =
-            1 + bit_vector_byte_size + (ring_dimension * max_byte_size as usize);
+            4 + bit_vector_byte_size + (ring_dimension * max_byte_size as usize);
         assert_eq!(bytes.len(), expected_total_size, "Incorrect total byte size");
 
         // Check that the structure is as expected
         // Verify bit vector section exists
-        let bit_vector = &bytes[1..1 + bit_vector_byte_size];
+        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
         assert_eq!(bit_vector.len(), bit_vector_byte_size, "Bit vector size is incorrect");
 
         // Verify coefficient values section exists
-        let coeffs_section = &bytes[1 + bit_vector_byte_size..];
+        let coeffs_section = &bytes[4 + bit_vector_byte_size..];
         assert_eq!(coeffs_section.len(), ring_dimension, "Coefficient section size is incorrect");
 
         // Since we're using BitDist, each coefficient should be either 0 or 1
