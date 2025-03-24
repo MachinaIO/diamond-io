@@ -12,6 +12,7 @@ use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{
+    env,
     fmt::Debug,
     fs::File,
     ops::{Add, Mul, Neg, Range, Sub},
@@ -115,8 +116,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx - row_start..*next_block_row_idx - row_start,
-                                *cur_block_col_idx - column_start..
-                                    *next_block_col_idx - column_start,
+                                *cur_block_col_idx - column_start
+                                    ..*next_block_col_idx - column_start,
                                 new_entries,
                             );
                         }
@@ -409,8 +410,8 @@ impl PolyMatrix for DCRTPolyMatrix {
     fn tensor(&self, other: &Self) -> Self {
         let new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
-        for i in 0..self.nrow {
-            for j in 0..self.ncol {
+        parallel_iter!(0..self.nrow).for_each(|i| {
+            parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
                 let sub_matrix = other.clone() * scalar;
                 let (row_offsets, col_offsets) =
@@ -419,6 +420,10 @@ impl PolyMatrix for DCRTPolyMatrix {
                     |(cur_block_row_idx, next_block_row_idx)| {
                         parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                             |(cur_block_col_idx, next_block_col_idx)| {
+                                println!(
+                                    "i {}, j {}, cur_block_row_idx {}, cur_block_col_idx {}",
+                                    i, j, cur_block_row_idx, cur_block_col_idx
+                                );
                                 let sub_block_polys = sub_matrix.block_entries(
                                     *cur_block_row_idx..*next_block_row_idx,
                                     *cur_block_col_idx..*next_block_col_idx,
@@ -427,10 +432,10 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 // among threads
                                 unsafe {
                                     new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx..
-                                            i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx..
-                                            j * sub_matrix.ncol + *next_block_col_idx,
+                                        i * sub_matrix.nrow + *cur_block_row_idx
+                                            ..i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx
+                                            ..j * sub_matrix.ncol + *next_block_col_idx,
                                         sub_block_polys,
                                     );
                                 }
@@ -438,8 +443,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                         );
                     },
                 );
-            }
-        }
+            });
+        });
         new_matrix
     }
 
@@ -693,7 +698,8 @@ impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        let new_block_polys = add_block_matrices(self_block_polys, rhs_block_polys);
+                        let new_block_polys =
+                            add_block_matrices(self_block_polys, &rhs_block_polys);
                         // This is secure because the modified entries are not overlapped among
                         // threads
                         unsafe {
@@ -745,7 +751,8 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        let new_block_polys = sub_block_matrices(self_block_polys, rhs_block_polys);
+                        let new_block_polys =
+                            sub_block_matrices(self_block_polys, &rhs_block_polys);
                         // This is secure because the modified entries are not overlapped among
                         // threads
                         unsafe {
@@ -789,37 +796,41 @@ impl Mul<&DCRTPolyMatrix> for DCRTPolyMatrix {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_col_idx, next_block_col_idx)| {
                         // parallel_iter!()
-                        parallel_iter!(ip_offsets.iter().tuple_windows().collect_vec()).for_each(
-                            |(cur_block_ip_idx, next_block_ip_idx)| {
-                                let ip_sum = new_matrix.block_entries(
-                                    *cur_block_row_idx..*next_block_row_idx,
-                                    *cur_block_col_idx..*next_block_col_idx,
-                                );
-                                let self_block_polys = self.block_entries(
-                                    *cur_block_row_idx..*next_block_row_idx,
-                                    *cur_block_ip_idx..*next_block_ip_idx,
-                                );
-                                let other_block_polys = rhs.block_entries(
-                                    *cur_block_ip_idx..*next_block_ip_idx,
-                                    *cur_block_col_idx..*next_block_col_idx,
-                                );
-                                let muled = mul_block_matrices(
-                                    &self.params,
-                                    self_block_polys,
-                                    other_block_polys,
-                                );
-                                let added = add_block_matrices(ip_sum, muled);
-                                // This is secure because the modified entries are not overlapped
-                                // among threads
-                                unsafe {
-                                    new_matrix.replace_block_entries(
-                                        *cur_block_row_idx..*next_block_row_idx,
-                                        *cur_block_col_idx..*next_block_col_idx,
-                                        added,
-                                    );
-                                }
-                            },
+                        let mut ip_sum = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
                         );
+                        for (cur_block_ip_idx, next_block_ip_idx) in
+                            ip_offsets.iter().tuple_windows()
+                        {
+                            let self_block_polys = self.block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_ip_idx..*next_block_ip_idx,
+                            );
+                            println!("self_block_polys read");
+                            let other_block_polys = rhs.block_entries(
+                                *cur_block_ip_idx..*next_block_ip_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                            );
+                            println!("other_block_polys read");
+                            let muled = mul_block_matrices(
+                                &self.params,
+                                self_block_polys,
+                                other_block_polys,
+                            );
+                            println!("muled done");
+                            ip_sum = add_block_matrices(muled, &ip_sum);
+                        }
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            new_matrix.replace_block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                ip_sum,
+                            );
+                        }
+                        println!("block done");
                     },
                 );
             },
@@ -920,15 +931,21 @@ impl DCRTPolyMatrix {
         let file = tempfile().expect("failed to open file");
         file.set_len(len as u64).expect("failed to set file length");
         if BLOCK_SIZE.get().is_none() {
-            let system = System::new_all();
-            let mem_size = system.total_memory() * 2 / 3;
-            #[cfg(feature = "parallel")]
-            let num_threads = rayon::current_num_threads();
-            #[cfg(not(feature = "parallel"))]
-            let num_threads = 1;
-            let num_polys = mem_size as usize / num_threads / entry_size;
-            let block_size = (num_polys as f64).sqrt() as usize;
-            BLOCK_SIZE.set(block_size).unwrap();
+            if let Ok(block_size_str) = env::var("BLOCK_SIZE") {
+                let block_size =
+                    block_size_str.parse::<usize>().expect("failed to parse BLOCK_SIZE");
+                BLOCK_SIZE.set(block_size).unwrap();
+            } else {
+                let system = System::new_all();
+                let mem_size = system.total_memory() * 2 / 3;
+                #[cfg(feature = "parallel")]
+                let num_threads = rayon::current_num_threads();
+                #[cfg(not(feature = "parallel"))]
+                let num_threads = 1;
+                let num_polys = mem_size as usize / num_threads / entry_size;
+                let block_size = (num_polys as f64).sqrt() as usize;
+                BLOCK_SIZE.set(block_size).unwrap();
+            }
         }
         Self { params: params.clone(), file, nrow, ncol, volatile: Volatility::Transient }
     }
@@ -988,13 +1005,23 @@ impl DCRTPolyMatrix {
 
 fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     unsafe {
-        MmapOptions::new().offset(offset as u64).len(len).map(file).expect("failed to map file")
+        MmapOptions::new()
+            .offset(offset as u64)
+            .len(len)
+            .populate()
+            .map(file)
+            .expect("failed to map file")
     }
 }
 
 unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
     unsafe {
-        MmapOptions::new().offset(offset as u64).len(len).map_mut(file).expect("failed to map file")
+        MmapOptions::new()
+            .offset(offset as u64)
+            .len(len)
+            .populate()
+            .map_mut(file)
+            .expect("failed to map file")
     }
 }
 
@@ -1021,7 +1048,7 @@ fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usi
     (row_offsets, col_offsets)
 }
 
-fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
+fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
     let nrow = lhs.len();
     let ncol = lhs[0].len();
     parallel_iter!(0..nrow)
@@ -1033,7 +1060,7 @@ fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: Vec<Vec<DCRTPoly>>) -> Vec<V
         .collect::<Vec<Vec<DCRTPoly>>>()
 }
 
-fn sub_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
+fn sub_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
     let nrow = lhs.len();
     let ncol = lhs[0].len();
     parallel_iter!(0..nrow)
@@ -1387,18 +1414,17 @@ mod tests {
 
         // Decompose 'other' matrix
         let other_decompose = other.decompose();
-
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
-        println!("mul_tensor_identity computed");
         // Check dimensions
         assert_eq!(result.size().0, 2);
         assert_eq!(result.size().1, 2516);
 
-        let identity = DCRTPolyMatrix::identity(&params, 37, None);
-
         // Check result
-        let expected_result = s * (identity.tensor(&other_decompose));
+        let tensor = identity_tensor_matrix(37, &other_decompose);
+        println!("before");
+        let expected_result = s * tensor;
+        println!("after");
 
         assert_eq!(expected_result.size().0, 2);
         assert_eq!(expected_result.size().1, 2516);
@@ -1425,11 +1451,15 @@ mod tests {
         assert_eq!(result.size().0, 2);
         assert_eq!(result.size().1, 2516);
 
-        let identity = DCRTPolyMatrix::identity(&params, 37, None);
-
         // Check result
-        let expected_result = s.clone() * (identity.tensor(&other.decompose()));
-        let expected_result_2 = s.mul_tensor_identity(&other.decompose(), 37);
+        let decomposed = other.decompose();
+        println!("decomposed");
+        let tensor = identity_tensor_matrix(37, &decomposed);
+        println!("tensor");
+        let expected_result = s.clone() * tensor;
+        println!("expected_result");
+        let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);
+        println!("expected_result_2");
 
         assert_eq!(expected_result.size().0, 2);
         assert_eq!(expected_result.size().1, 2516);
@@ -1439,5 +1469,9 @@ mod tests {
 
         assert_eq!(result, expected_result);
         assert_eq!(result, expected_result_2);
+    }
+
+    fn identity_tensor_matrix(identity_size: usize, matrix: &DCRTPolyMatrix) -> DCRTPolyMatrix {
+        matrix.concat_diag(&vec![matrix; identity_size - 1])
     }
 }
