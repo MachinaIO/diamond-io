@@ -208,7 +208,7 @@ impl Poly for DCRTPoly {
     fn to_compact_bytes(&self) -> Vec<u8> {
         let modulus = self.ptr_poly.GetModulus();
         let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
-        let q_half = modulus_big.clone() / 2u8;
+        let q_half = &modulus_big / 2u8;
 
         let coeffs = self.coeffs();
         let ring_dimension = coeffs.len();
