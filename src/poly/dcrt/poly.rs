@@ -218,6 +218,7 @@ impl Poly for DCRTPoly {
         let mut max_byte_size = 0;
         let mut processed_values = Vec::with_capacity(ring_dimension);
 
+        // First pass: Process coefficients and calculate max_byte_size
         for (i, coeff) in coeffs.iter().enumerate() {
             // Center coefficients around 0
             let value = if coeff.value() > &q_half {
@@ -246,13 +247,13 @@ impl Poly for DCRTPoly {
         // Store bit vector
         result[1..1 + bit_vector_byte_size].copy_from_slice(&bit_vector);
 
-        // Store coefficient values using the pre-calculated values
-        for (i, value) in processed_values.iter().enumerate() {
+        // Second pass: Store preprocessed coefficient values s.t. each coefficient is max_byte_size bytes long
+        parallel_iter!(processed_values.iter().enumerate()).for_each(|(i, value)| {
             let value_bytes = value.to_bytes_le();
             let start_pos = 1 + bit_vector_byte_size + (i * max_byte_size);
 
             result[start_pos..start_pos + value_bytes.len()].copy_from_slice(&value_bytes);
-        }
+        });
 
         result
     }
