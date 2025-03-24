@@ -163,8 +163,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 (k + 2) * size,
             );
 
-            log_mem("Generate pubic matrix");
-
             for i in 0..size {
                 for j in 0..(k + 2) * size {
                     let poly = public_matrix.entry(i, j).get_poly();
@@ -179,8 +177,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 size,
                 size,
             );
-
-            log_mem("Generate target matrix");
 
             for i in 0..size {
                 for j in 0..target_cols {
@@ -198,6 +194,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 }
             }
 
+            log_mem("Start DCRTSquareMatTrapdoorGaussSamp");
+
             let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
                 n as u32,
                 k as u32,
@@ -208,7 +206,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 SIGMA,
             );
 
-            log_mem("Sampled trapdoor matrix");
+            log_mem("End DCRTSquareMatTrapdoorGaussSamp");
 
             let nrow = size * (k + 2);
             let ncol = size;
