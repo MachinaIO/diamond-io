@@ -1,4 +1,4 @@
-use super::{DCRTPoly, DCRTPolyParams};
+use super::{poly, DCRTPoly, DCRTPolyParams, FinRingElem};
 use crate::{
     impl_binop_with_refs, parallel_iter,
     poly::{Poly, PolyMatrix, PolyParams},
@@ -7,6 +7,7 @@ use itertools::Itertools;
 #[cfg(target_os = "linux")]
 use memmap2::RemapOptions;
 use memmap2::{Advice, Mmap, MmapMut, MmapOptions};
+use num_bigint::BigInt;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -408,43 +409,176 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn tensor(&self, other: &Self) -> Self {
-        let mut new_matrix =
+        let new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
-        // for i in 0..self.nrow {
-        //     for j in 0..self.ncol {
-        //         let scalar = self.entry(i, j);
-        //         let sub_matrix = other.clone() * scalar;
-
-        //     }
-        // }
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                let scalar = self.entry(i, j);
+                let sub_matrix = other.clone() * scalar;
+                let (row_offsets, col_offsets) =
+                    block_offsets(0..sub_matrix.nrow, 0..sub_matrix.ncol);
+                parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_row_idx, next_block_row_idx)| {
+                        parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                            |(cur_block_col_idx, next_block_col_idx)| {
+                                let sub_block_polys = sub_matrix.block_entries(
+                                    *cur_block_row_idx..*next_block_row_idx,
+                                    *cur_block_col_idx..*next_block_col_idx,
+                                );
+                                // This is secure because the modified entries are not overlapped
+                                // among threads
+                                unsafe {
+                                    new_matrix.replace_block_entries(
+                                        i * sub_matrix.nrow + *cur_block_row_idx
+                                            ..i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx
+                                            ..j * sub_matrix.ncol + *next_block_col_idx,
+                                        sub_block_polys,
+                                    );
+                                }
+                            },
+                        );
+                    },
+                );
+            }
+        }
         new_matrix
     }
 
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self {
-        todo!();
+        let bit_length = params.modulus_bits();
+        let mut poly_vec = Vec::with_capacity(bit_length);
+        for i in 0u32..(bit_length as u32) {
+            let value = BigInt::from(2).pow(i);
+            poly_vec.push(DCRTPoly::from_const(params, &FinRingElem::new(value, params.modulus())));
+        }
+        let gadget_vector = Self::from_poly_vec(params, vec![poly_vec]);
+        let identity = DCRTPolyMatrix::identity(params, size, None);
+        identity.tensor(&gadget_vector)
     }
 
     fn decompose(&self) -> Self {
-        todo!();
+        let bit_length = self.params.modulus_bits();
+        let new_nrow = self.nrow * bit_length;
+        let new_matrix = Self::new_empty(&self.params, new_nrow, self.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let self_block_polys = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let block_row_len = next_block_row_idx - cur_block_row_idx;
+                        let block_col_len = next_block_col_idx - cur_block_col_idx;
+                        let mut new_entries =
+                            vec![
+                                vec![DCRTPoly::const_zero(&self.params); block_col_len];
+                                block_row_len * bit_length
+                            ];
+                        for j in 0..block_col_len {
+                            for i in 0..block_row_len {
+                                let poly = &self_block_polys[i][j];
+                                let decomposed_polys = poly.decompose(&self.params);
+                                for (k, poly) in decomposed_polys.into_iter().enumerate() {
+                                    new_entries[i * bit_length + k][j] = poly;
+                                }
+                            }
+                        }
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            new_matrix.replace_block_entries(
+                                cur_block_row_idx * bit_length..next_block_row_idx * bit_length,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                new_entries,
+                            );
+                        }
+                    },
+                );
+            },
+        );
+        new_matrix
     }
 
     fn modulus_switch(
         &self,
         new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
     ) -> Self {
-        todo!();
+        let new_matrix = Self::new_empty(&self.params, self.nrow, self.ncol);
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let self_block_polys = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let new_block_polys = self_block_polys
+                            .iter()
+                            .map(|row| {
+                                row.iter()
+                                    .map(|poly| {
+                                        poly.modulus_switch(&self.params, new_modulus.clone())
+                                    })
+                                    .collect_vec()
+                            })
+                            .collect_vec();
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            new_matrix.replace_block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                new_block_polys,
+                            );
+                        }
+                    },
+                );
+            },
+        );
+        new_matrix
     }
 
     fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self {
-        todo!();
+        debug_assert_eq!(self.ncol, other.nrow * identity_size);
+
+        let slice_width = other.nrow;
+        let mut slice_results = Vec::with_capacity(identity_size);
+
+        for i in 0..identity_size {
+            let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+            slice_results.push(slice * other);
+        }
+
+        slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
-        todo!();
+        debug_assert_eq!(self.ncol, other.nrow * identity_size * self.params.modulus_bits());
+
+        let slice_width = other.nrow * self.params.modulus_bits();
+        let mut output = Vec::with_capacity(other.ncol * identity_size);
+
+        for j in 0..other.ncol {
+            let jth_col_m_decompose = other.get_column_matrix_decompose(j);
+            for i in 0..identity_size {
+                let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+                let result = slice * &jth_col_m_decompose;
+                output.push(result);
+            }
+        }
+
+        output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
     fn get_column_matrix_decompose(&self, j: usize) -> Self {
-        todo!();
+        let column = self.get_column(j);
+        let column_matrix =
+            Self::from_poly_vec(&self.params, column.into_iter().map(|poly| vec![poly]).collect());
+        column_matrix.decompose()
     }
 }
 
@@ -518,178 +652,6 @@ impl PartialEq for DCRTPolyMatrix {
 }
 
 impl Eq for DCRTPolyMatrix {}
-
-impl DCRTPolyMatrix {
-    fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
-        let entry_size = params.modulus_bits().div_ceil(8);
-        let len = entry_size * nrow * ncol;
-        let file = tempfile().expect("failed to open file");
-        file.set_len(len as u64).expect("failed to set file length");
-        if BLOCK_SIZE.get().is_none() {
-            let system = System::new();
-            let mem_size = system.total_memory() * 2 / 3;
-            #[cfg(feature = "parallel")]
-            let num_threads = rayon::current_num_threads();
-            #[cfg(not(feature = "parallel"))]
-            let num_threads = 1;
-            let num_polys = mem_size as usize / num_threads / entry_size;
-            let block_size = (num_polys as f64).sqrt() as usize;
-            BLOCK_SIZE.set(block_size).unwrap();
-        }
-        Self { params: params.clone(), file, nrow, ncol, volatile: Volatility::Transient }
-    }
-
-    fn entry_size(&self) -> usize {
-        self.params.modulus_bits().div_ceil(8)
-    }
-
-    fn block_entries(
-        &self,
-        rows: Range<usize>,
-        cols: Range<usize>,
-    ) -> Vec<Vec<<Self as PolyMatrix>::P>> {
-        let entry_size = self.entry_size();
-        parallel_iter!(rows)
-            .map(|i| {
-                let offset = entry_size * (i * self.ncol + cols.start);
-                let mmap = map_file(&self.file, offset, entry_size * cols.len());
-                let row_vec = mmap.to_vec();
-                let row_col_vec = row_vec
-                    .chunks(entry_size)
-                    .map(|entry| {
-                        <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, &entry)
-                    })
-                    .collect_vec();
-                drop(mmap);
-                row_col_vec
-            })
-            .collect::<Vec<Vec<_>>>()
-    }
-
-    unsafe fn replace_block_entries(
-        &self,
-        rows: Range<usize>,
-        cols: Range<usize>,
-        new_entries: Vec<Vec<<Self as PolyMatrix>::P>>,
-    ) {
-        debug_assert_eq!(new_entries.len(), rows.end - rows.start);
-        debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
-        let entry_size = self.entry_size();
-        let row_start = rows.start;
-        parallel_iter!(rows).for_each(|i| {
-            let offset = entry_size * (i * self.ncol + cols.start);
-            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
-            let bytes = new_entries[i - row_start]
-                .iter()
-                .map(|poly| poly.to_bytes())
-                .flatten()
-                .collect::<Vec<_>>();
-            mmap.copy_from_slice(&bytes);
-            drop(mmap);
-        });
-    }
-
-    // // (m * n1), (m * n2) -> (m * (n1 + n2))
-    // pub fn concat_columns(&self, other: &Self) -> Self {
-    //     debug_assert_eq!(self.nrow, other.nrow);
-    //     debug_assert_eq!(self.entry_size, other.entry_size);
-    //     let updated_ncol = self.ncol + other.ncol;
-
-    //     let new_matrix = Self::new_empty(self.nrow, updated_ncol, self.entry_size);
-    //     parallel_iter!(0..self.nrow).for_each(|i| {
-    //         let self_mmap = map_file(
-    //             &self.file,
-    //             self.entry_size * (i * self.ncol),
-    //             self.entry_size * self.ncol,
-    //         );
-    //         let other_mmap = map_file(
-    //             &other.file,
-    //             other.entry_size * (i * other.ncol),
-    //             other.entry_size * other.ncol,
-    //         );
-    //         let mut new_mmap = map_file_mut(
-    //             &new_matrix.file,
-    //             self.entry_size * (i * updated_ncol),
-    //             self.entry_size * updated_ncol,
-    //         );
-    //         new_mmap[0..self.entry_size * self.ncol].copy_from_slice(&self_mmap);
-    //         drop(self_mmap);
-    //         new_mmap[self.entry_size * self.ncol..].copy_from_slice(&other_mmap);
-    //         drop(other_mmap);
-    //         drop(new_mmap);
-    //     });
-
-    //     new_matrix
-    // }
-
-    // // (m1 * n), (m2 * n) -> ((m1 + m2) * n)
-    // pub fn concat_rows(&self, other: &Self) -> Self {
-    //     debug_assert_eq!(self.ncol, other.ncol);
-    //     debug_assert_eq!(self.entry_size, other.entry_size);
-    //     let updated_nrow = self.nrow + other.nrow;
-
-    //     let new_matrix = Self::new_empty(updated_nrow, self.ncol, self.entry_size);
-    //     parallel_iter!(0..self.nrow).for_each(|i| {
-    //         let offset = self.entry_size * i * self.ncol;
-    //         let self_mmap = map_file(&self.file, offset, self.entry_size * self.ncol);
-    //         let mut new_mmap = map_file_mut(&new_matrix.file, offset, self.entry_size *
-    // self.ncol);         new_mmap.copy_from_slice(&self_mmap);
-    //         drop(self_mmap);
-    //         drop(new_mmap);
-    //     });
-    //     parallel_iter!(0..other.nrow).for_each(|i| {
-    //         let other_mmap = map_file(
-    //             &other.file,
-    //             other.entry_size * i * other.ncol,
-    //             other.entry_size * other.ncol,
-    //         );
-    //         let mut new_mmap = map_file_mut(
-    //             &new_matrix.file,
-    //             self.entry_size * (self.nrow + i) * self.ncol,
-    //             self.entry_size * self.ncol,
-    //         );
-    //         new_mmap.copy_from_slice(&other_mmap);
-    //         drop(other_mmap);
-    //         drop(new_mmap);
-    //     });
-    //     new_matrix
-    // }
-
-    // // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
-    // pub fn concat_diag(&self, other: &Self) -> Self {
-    //     debug_assert_eq!(self.entry_size, other.entry_size);
-    //     let updated_nrow = self.nrow + other.nrow;
-    //     let updated_ncol = self.ncol + other.ncol;
-
-    //     let new_matrix = Self::new_empty(updated_nrow, updated_ncol, self.entry_size);
-
-    //     // Copy the first matrix (self) to the top-left corner
-    //     parallel_iter!(0..self.nrow).for_each(|i| {
-    //         let self_offset = self.entry_size * i * self.ncol;
-    //         let new_offset = self.entry_size * i * updated_ncol;
-    //         let self_mmap = map_file(&self.file, self_offset, self.entry_size * self.ncol);
-    //         let mut new_mmap =
-    //             map_file_mut(&new_matrix.file, new_offset, self.entry_size * self.ncol);
-    //         new_mmap.copy_from_slice(&self_mmap);
-    //         drop(self_mmap);
-    //         drop(new_mmap);
-    //     });
-
-    //     // Copy the second matrix (other) to the bottom-right corner
-    //     parallel_iter!(0..other.nrow).for_each(|i| {
-    //         let other_offset = other.entry_size * i * other.ncol;
-    //         let new_offset = self.entry_size * ((self.nrow + i) * updated_ncol + self.ncol);
-    //         let other_mmap = map_file(&other.file, other_offset, other.entry_size * other.ncol);
-    //         let mut new_mmap =
-    //             map_file_mut(&new_matrix.file, new_offset, other.entry_size * other.ncol);
-    //         new_mmap.copy_from_slice(&other_mmap);
-    //         drop(other_mmap);
-    //         drop(new_mmap);
-    //     });
-
-    //     new_matrix
-    // }
-}
 
 impl Drop for DCRTPolyMatrix {
     fn drop(&mut self) {
@@ -962,9 +924,76 @@ impl Neg for DCRTPolyMatrix {
     }
 }
 
-// fn dim1_to_dim2(one_dim: usize, ncol: usize) -> (usize, usize) {
-//     (one_dim / ncol, one_dim % ncol)
-// }
+impl DCRTPolyMatrix {
+    fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
+        let entry_size = params.modulus_bits().div_ceil(8);
+        let len = entry_size * nrow * ncol;
+        let file = tempfile().expect("failed to open file");
+        file.set_len(len as u64).expect("failed to set file length");
+        if BLOCK_SIZE.get().is_none() {
+            let system = System::new();
+            let mem_size = system.total_memory() * 2 / 3;
+            #[cfg(feature = "parallel")]
+            let num_threads = rayon::current_num_threads();
+            #[cfg(not(feature = "parallel"))]
+            let num_threads = 1;
+            let num_polys = mem_size as usize / num_threads / entry_size;
+            let block_size = (num_polys as f64).sqrt() as usize;
+            BLOCK_SIZE.set(block_size).unwrap();
+        }
+        Self { params: params.clone(), file, nrow, ncol, volatile: Volatility::Transient }
+    }
+
+    fn entry_size(&self) -> usize {
+        self.params.modulus_bits().div_ceil(8)
+    }
+
+    fn block_entries(
+        &self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+    ) -> Vec<Vec<<Self as PolyMatrix>::P>> {
+        let entry_size = self.entry_size();
+        parallel_iter!(rows)
+            .map(|i| {
+                let offset = entry_size * (i * self.ncol + cols.start);
+                let mmap = map_file(&self.file, offset, entry_size * cols.len());
+                let row_vec = mmap.to_vec();
+                let row_col_vec = row_vec
+                    .chunks(entry_size)
+                    .map(|entry| {
+                        <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, &entry)
+                    })
+                    .collect_vec();
+                drop(mmap);
+                row_col_vec
+            })
+            .collect::<Vec<Vec<_>>>()
+    }
+
+    unsafe fn replace_block_entries(
+        &self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+        new_entries: Vec<Vec<<Self as PolyMatrix>::P>>,
+    ) {
+        debug_assert_eq!(new_entries.len(), rows.end - rows.start);
+        debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
+        let entry_size = self.entry_size();
+        let row_start = rows.start;
+        parallel_iter!(rows).for_each(|i| {
+            let offset = entry_size * (i * self.ncol + cols.start);
+            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
+            let bytes = new_entries[i - row_start]
+                .iter()
+                .map(|poly| poly.to_bytes())
+                .flatten()
+                .collect::<Vec<_>>();
+            mmap.copy_from_slice(&bytes);
+            drop(mmap);
+        });
+    }
+}
 
 fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     unsafe {
