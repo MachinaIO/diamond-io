@@ -194,8 +194,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 }
             }
 
-            log_mem("Start DCRTSquareMatTrapdoorGaussSamp");
-
             let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
                 n as u32,
                 k as u32,
@@ -205,8 +203,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 2_i64,
                 SIGMA,
             );
-
-            log_mem("End DCRTSquareMatTrapdoorGaussSamp");
 
             let nrow = size * (k + 2);
             let ncol = size;
