@@ -9,6 +9,7 @@ use crate::{
         sampler::PolyTrapdoorSampler,
         Poly, PolyMatrix, PolyParams,
     },
+    utils::log_mem,
 };
 
 use openfhe::{
@@ -148,76 +149,89 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 })
                 .collect();
 
+            log_mem("Collected preimages");
+
             // Concatenate all preimages horizontally
             return preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>());
-        }
+        } else {
+            // Case 2: Target columns is equal or less than size
+            let mut public_matrix_ptr = MatrixGen(
+                params.ring_dimension(),
+                params.crt_depth(),
+                params.crt_bits(),
+                size,
+                (k + 2) * size,
+            );
 
-        // Case 2: Target columns is equal or less than size
-        let mut public_matrix_ptr = MatrixGen(
-            params.ring_dimension(),
-            params.crt_depth(),
-            params.crt_bits(),
-            size,
-            (k + 2) * size,
-        );
+            log_mem("Generate pubic matrix");
 
-        for i in 0..size {
-            for j in 0..(k + 2) * size {
-                let poly = public_matrix.entry(i, j).get_poly();
-                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
-            }
-        }
-
-        let mut target_matrix_ptr =
-            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
-
-        for i in 0..size {
-            for j in 0..target_cols {
-                let poly = target.entry(i, j).get_poly();
-                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
-            }
-
-            // Pad the remaining columns with zeros if target_cols < size
-            if target_cols < size {
-                for j in target_cols..size {
-                    let zero_poly = DCRTPoly::const_zero(params);
-                    let zero_poly_ptr = zero_poly.get_poly();
-                    SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, zero_poly_ptr);
+            for i in 0..size {
+                for j in 0..(k + 2) * size {
+                    let poly = public_matrix.entry(i, j).get_poly();
+                    SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
                 }
             }
-        }
 
-        let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
-            n as u32,
-            k as u32,
-            &public_matrix_ptr,
-            &trapdoor.ptr_trapdoor,
-            &target_matrix_ptr,
-            2_i64,
-            SIGMA,
-        );
+            let mut target_matrix_ptr = MatrixGen(
+                params.ring_dimension(),
+                params.crt_depth(),
+                params.crt_bits(),
+                size,
+                size,
+            );
 
-        let nrow = size * (k + 2);
-        let ncol = size;
+            log_mem("Generate target matrix");
 
-        let mut matrix_inner = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                let poly = GetMatrixElement(&preimage_matrix_ptr, i, j);
-                let dcrt_poly = DCRTPoly::new(poly);
-                row.push(dcrt_poly);
+            for i in 0..size {
+                for j in 0..target_cols {
+                    let poly = target.entry(i, j).get_poly();
+                    SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
+                }
+
+                // Pad the remaining columns with zeros if target_cols < size
+                if target_cols < size {
+                    for j in target_cols..size {
+                        let zero_poly = DCRTPoly::const_zero(params);
+                        let zero_poly_ptr = zero_poly.get_poly();
+                        SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, zero_poly_ptr);
+                    }
+                }
             }
-            matrix_inner.push(row);
-        }
 
-        let full_preimage = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
+            let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
+                n as u32,
+                k as u32,
+                &public_matrix_ptr,
+                &trapdoor.ptr_trapdoor,
+                &target_matrix_ptr,
+                2_i64,
+                SIGMA,
+            );
 
-        // If the target matrix has fewer columns than size, slice the preimage matrix
-        if target_cols < size {
-            full_preimage.slice_columns(0, target_cols)
-        } else {
-            full_preimage
+            log_mem("Sampled trapdoor matrix");
+
+            let nrow = size * (k + 2);
+            let ncol = size;
+
+            let mut matrix_inner = Vec::with_capacity(nrow);
+            for i in 0..nrow {
+                let mut row = Vec::with_capacity(ncol);
+                for j in 0..ncol {
+                    let poly = GetMatrixElement(&preimage_matrix_ptr, i, j);
+                    let dcrt_poly = DCRTPoly::new(poly);
+                    row.push(dcrt_poly);
+                }
+                matrix_inner.push(row);
+            }
+
+            let full_preimage = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
+
+            // If the target matrix has fewer columns than size, slice the preimage matrix
+            if target_cols < size {
+                full_preimage.slice_columns(0, target_cols)
+            } else {
+                full_preimage
+            }
         }
     }
 }
