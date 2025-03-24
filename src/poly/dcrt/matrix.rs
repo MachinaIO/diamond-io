@@ -557,7 +557,6 @@ impl PolyMatrix for DCRTPolyMatrix {
             let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
             slice_results.push(slice * other);
         }
-
         slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
@@ -1370,23 +1369,23 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_tensor_identity() {
+    fn test_matrix_mul_tensor_identity() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
         // Create matrix S (2x12)
         let s = sampler.sample_uniform(&params, 2, 12, crate::poly::sampler::DistType::FinRingDist);
 
-        // Create 'other' matrix (3x3)
+        // Create 'other' matrix (3x5)
         let other =
-            sampler.sample_uniform(&params, 3, 3, crate::poly::sampler::DistType::FinRingDist);
+            sampler.sample_uniform(&params, 3, 5, crate::poly::sampler::DistType::FinRingDist);
 
         // Perform S * (I_4 ⊗ other)
         let result = s.mul_tensor_identity(&other, 4);
 
         // Check dimensions
         assert_eq!(result.size().0, 2);
-        assert_eq!(result.size().1, 12);
+        assert_eq!(result.size().1, 20);
 
         let identity = DCRTPolyMatrix::identity(&params, 4, None);
 
@@ -1394,7 +1393,7 @@ mod tests {
         let expected_result = s * (identity.tensor(&other));
 
         assert_eq!(expected_result.size().0, 2);
-        assert_eq!(expected_result.size().1, 12);
+        assert_eq!(expected_result.size().1, 20);
         assert_eq!(result, expected_result)
     }
 
@@ -1438,7 +1437,7 @@ mod tests {
         let s =
             sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
 
-        // Create 'other' matrix (13)
+        // Create 'other' matrix (2x13)
         let other =
             sampler.sample_uniform(&params, 2, 13, crate::poly::sampler::DistType::FinRingDist);
 
@@ -1471,6 +1470,10 @@ mod tests {
     }
 
     fn identity_tensor_matrix(identity_size: usize, matrix: &DCRTPolyMatrix) -> DCRTPolyMatrix {
-        matrix.concat_diag(&vec![matrix; identity_size - 1])
+        let mut others = vec![];
+        for _ in 1..identity_size {
+            others.push(matrix);
+        }
+        matrix.concat_diag(&others[..])
     }
 }
