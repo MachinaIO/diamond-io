@@ -28,8 +28,6 @@ where
     SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
-    for<'a> &'a M: Mul<&'a <M as PolyMatrix>::P, Output = M>,
-    for<'a> &'a M: Mul<&'a M, Output = M>,
 {
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
@@ -81,7 +79,8 @@ where
             DistType::GaussDist { sigma: obf_params.hardcoded_key_sigma },
         );
         let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        &t_bar_matrix * &public_data.a_rlwe_bar + &e - &(&hardcoded_key_matrix * &scale)
+        t_bar_matrix.clone() * &public_data.a_rlwe_bar + &e
+            - &(hardcoded_key_matrix.clone() * &scale)
     };
     let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
     log_mem("Sampled enc_hardcoded_key_polys");
@@ -182,7 +181,7 @@ where
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
-                &(&u_bits[bit] * &b_bit_idx),
+                &(u_bits[bit].clone() * &b_bit_idx),
             );
             log_mem("Computed m_preimage_bit");
 
@@ -192,7 +191,7 @@ where
                 &params,
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
-                &(&u_star * &b_star_idx.clone()),
+                &(u_star.clone() * &b_star_idx.clone()),
             );
             log_mem("Computed n_preimage_bit");
 
