@@ -200,8 +200,10 @@ impl Poly for DCRTPoly {
 
     /// Convert the polynomial to a compact byte representation
     /// The returned bytes vector is encoded as follows:
-    /// 1. The first byte contains the `max_byte_size`, namely the maximum byte size of any coefficient in the poly
-    /// 2. The next `ceil(n/8)` bytes contain a bit vector, where each bit indicates if the corresponding coefficient is negative and `n` is the ring dimension
+    /// 1. The first byte contains the `max_byte_size`, namely the maximum byte size of any
+    ///    coefficient in the poly
+    /// 2. The next `ceil(n/8)` bytes contain a bit vector, where each bit indicates if the
+    ///    corresponding coefficient is negative and `n` is the ring dimension
     /// 3. The remaining `n * max_byte_size` contain the coefficient values
     fn to_compact_bytes(&self) -> Vec<u8> {
         let modulus = self.ptr_poly.GetModulus();
@@ -247,13 +249,14 @@ impl Poly for DCRTPoly {
         // Store bit vector
         result[1..1 + bit_vector_byte_size].copy_from_slice(&bit_vector);
 
-        // Second pass: Store preprocessed coefficient values s.t. each coefficient is max_byte_size bytes long
-        parallel_iter!(processed_values.iter().enumerate()).for_each(|(i, value)| {
+        // Second pass: Store preprocessed coefficient values s.t. each coefficient is max_byte_size
+        // bytes long
+        for (i, value) in processed_values.iter().enumerate() {
             let value_bytes = value.to_bytes_le();
             let start_pos = 1 + bit_vector_byte_size + (i * max_byte_size);
 
             result[start_pos..start_pos + value_bytes.len()].copy_from_slice(&value_bytes);
-        });
+        }
 
         result
     }

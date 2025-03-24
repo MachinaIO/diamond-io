@@ -6,8 +6,6 @@ use crate::{
 use itertools::Itertools;
 use std::{ops::Mul, sync::Arc};
 
-const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
-
 impl<M> Obfuscation<M>
 where
     M: PolyMatrix,
@@ -43,9 +41,10 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
-                bgg_pubkey_sampler.sample(
+                sample_public_key_by_idx(
+                    &bgg_pubkey_sampler,
                     &obf_params.params,
-                    &[TAG_BGG_PUBKEY_INPUT_PREFIX, &idx.to_le_bytes()].concat(),
+                    idx,
                     &reveal_plaintexts,
                 )
             })
