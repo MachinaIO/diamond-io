@@ -16,6 +16,7 @@ use openfhe::{
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -106,6 +107,48 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
+    /// Create a polynomial from a compact byte representation
+    /// The bytes should have the format created by to_compact_bytes
+    fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
+        let ring_dimension = params.ring_dimension() as usize;
+        let modulus = params.modulus();
+
+        // First byte contains the byte size per coefficient
+        let max_byte_size = bytes[0] as usize;
+
+        // Next n/8 bytes contain the bit vector
+        let bit_vector_byte_size = ring_dimension.div_ceil(8);
+        let bit_vector = &bytes[1..1 + bit_vector_byte_size];
+
+        // Remaining bytes contain coefficient values
+        let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
+            .map(|i| {
+                let start = 1 + bit_vector_byte_size + (i * max_byte_size);
+                let end = start + max_byte_size;
+                let value_bytes = &bytes[start..end];
+
+                let value = BigUint::from_bytes_le(value_bytes);
+
+                let byte_idx = i / 8;
+                let bit_idx = i % 8;
+                let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
+
+                // Convert back from centered representation
+                let final_value = if is_negative {
+                    // If negative flag is set, compute q - value
+                    modulus.as_ref() - &value
+                } else {
+                    // Otherwise, use value as is
+                    value
+                };
+
+                FinRingElem::new(final_value, modulus.clone())
+            })
+            .collect();
+
+        Self::from_coeffs(params, &coeffs)
+    }
+
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
@@ -153,6 +196,65 @@ impl Poly for DCRTPoly {
                 )
             })
             .collect()
+    }
+
+    /// Convert the polynomial to a compact byte representation
+    /// The returned bytes vector is encoded as follows:
+    /// 1. The first byte contains the `max_byte_size`, namely the maximum byte size of any coefficient in the poly
+    /// 2. The next `ceil(n/8)` bytes contain a bit vector, where each bit indicates if the corresponding coefficient is negative and `n` is the ring dimension
+    /// 3. The remaining `n * max_byte_size` contain the coefficient values
+    fn to_compact_bytes(&self) -> Vec<u8> {
+        let modulus = self.ptr_poly.GetModulus();
+        let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
+        let q_half = modulus_big.clone() / 2u8;
+
+        let coeffs = self.coeffs();
+        let ring_dimension = coeffs.len();
+
+        // Create a bit vector to store flags for negative coefficients
+        let bit_vector_byte_size = ring_dimension.div_ceil(8);
+        let mut bit_vector = vec![0u8; bit_vector_byte_size];
+
+        let mut max_byte_size = 0;
+        let mut processed_values = Vec::with_capacity(ring_dimension);
+
+        for (i, coeff) in coeffs.iter().enumerate() {
+            // Center coefficients around 0
+            let value = if coeff.value() > &q_half {
+                let byte_idx = i / 8;
+                let bit_idx = i % 8;
+                bit_vector[byte_idx] |= 1 << bit_idx; // Set flag for negative coefficient
+                &modulus_big - coeff.value() // Convert to absolute value: q - a
+            } else if coeff.value() == &BigUint::from(0u32) {
+                BigUint::from(0u32)
+            } else {
+                coeff.value().clone()
+            };
+
+            processed_values.push(value.clone());
+
+            let value_bytes = value.to_bytes_le();
+            max_byte_size = std::cmp::max(max_byte_size, value_bytes.len());
+        }
+
+        let total_byte_size = 1 + bit_vector_byte_size + (ring_dimension * max_byte_size);
+        let mut result = vec![0u8; total_byte_size];
+
+        // Store max_byte_size in the first byte
+        result[0] = max_byte_size as u8;
+
+        // Store bit vector
+        result[1..1 + bit_vector_byte_size].copy_from_slice(&bit_vector);
+
+        // Store coefficient values using the pre-calculated values
+        for (i, value) in processed_values.iter().enumerate() {
+            let value_bytes = value.to_bytes_le();
+            let start_pos = 1 + bit_vector_byte_size + (i * max_byte_size);
+
+            result[start_pos..start_pos + value_bytes.len()].copy_from_slice(&value_bytes);
+        }
+
+        result
     }
 }
 
@@ -338,5 +440,88 @@ mod tests {
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
         let decomposed = poly.decompose(&params);
         assert_eq!(decomposed.len(), params.modulus_bits());
+    }
+
+    #[test]
+    fn test_dcrtpoly_to_compact_bytes() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+        let poly = sampler.sample_poly(&params, &DistType::BitDist);
+        let bytes = poly.to_compact_bytes();
+
+        let ring_dimension = params.ring_dimension() as usize;
+
+        // First byte containts `max_byte_size` (maximum byte size of any coefficient)
+        // Since we're using BitDist, we expect byte_size to be 1
+        let max_byte_size = bytes[0];
+        assert_eq!(max_byte_size, 1, "Max byte size size should be 1 for BitDist");
+
+        // Next ceil(n/8) bytes are the bit vector (1 bit per coefficient)
+        let bit_vector_byte_size = ring_dimension.div_ceil(8);
+
+        // Expected total size
+        // 1 byte for `max_byte_size` + bit_vector_byte_size + (ring_dimension * max_byte_size)
+        let expected_total_size =
+            1 + bit_vector_byte_size + (ring_dimension * max_byte_size as usize);
+        assert_eq!(bytes.len(), expected_total_size, "Incorrect total byte size");
+
+        // Check that the structure is as expected
+        // Verify bit vector section exists
+        let bit_vector = &bytes[1..1 + bit_vector_byte_size];
+        assert_eq!(bit_vector.len(), bit_vector_byte_size, "Bit vector size is incorrect");
+
+        // Verify coefficient values section exists
+        let coeffs_section = &bytes[1 + bit_vector_byte_size..];
+        assert_eq!(coeffs_section.len(), ring_dimension, "Coefficient section size is incorrect");
+
+        // Since we're using BitDist, each coefficient should be either 0 or 1
+        // This means each byte in the coefficient section should be 0 or 1
+        for (i, &coeff_byte) in coeffs_section.iter().enumerate() {
+            assert!(
+                coeff_byte == 0 || coeff_byte == 1,
+                "Coefficient at position {} should be 0 or 1, got {}",
+                i,
+                coeff_byte
+            );
+        }
+    }
+
+    #[test]
+    fn test_dcrtpoly_from_compact_bytes() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Test with BitDist (binary coefficients)
+        let original_poly = sampler.sample_poly(&params, &DistType::BitDist);
+        let bytes = original_poly.to_compact_bytes();
+        let reconstructed_poly = DCRTPoly::from_compact_bytes(&params, &bytes);
+
+        // The original and reconstructed polynomials should be equal
+        assert_eq!(
+            original_poly, reconstructed_poly,
+            "Reconstructed polynomial does not match original (BitDist)"
+        );
+
+        // Test with FinRingDist (random coefficients in the ring)
+        let original_poly = sampler.sample_poly(&params, &DistType::FinRingDist);
+        let bytes = original_poly.to_compact_bytes();
+        let reconstructed_poly = DCRTPoly::from_compact_bytes(&params, &bytes);
+
+        // The original and reconstructed polynomials should be equal
+        assert_eq!(
+            original_poly, reconstructed_poly,
+            "Reconstructed polynomial does not match original (FinRingDist)"
+        );
+
+        // Test with GaussDist (Gaussian distribution)
+        let original_poly = sampler.sample_poly(&params, &DistType::GaussDist { sigma: 3.2 });
+        let bytes = original_poly.to_compact_bytes();
+        let reconstructed_poly = DCRTPoly::from_compact_bytes(&params, &bytes);
+
+        // The original and reconstructed polynomials should be equal
+        assert_eq!(
+            original_poly, reconstructed_poly,
+            "Reconstructed polynomial does not match original (GaussDist)"
+        );
     }
 }
