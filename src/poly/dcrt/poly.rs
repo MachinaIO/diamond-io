@@ -11,6 +11,7 @@ use num_bigint::BigUint;
 use openfhe::{
     cxx::UniquePtr,
     ffi::{self, DCRTPoly as DCRTPolyCxx},
+    parse_coefficients_bytes,
 };
 
 use std::{
@@ -75,10 +76,13 @@ impl Poly for DCRTPoly {
     type Params = DCRTPolyParams;
 
     fn coeffs(&self) -> Vec<Self::Elem> {
-        let coeffs = self.ptr_poly.GetCoefficients();
-        let modulus = self.ptr_poly.GetModulus();
+        let poly_encoding = self.ptr_poly.GetCoefficientsBytes();
+        let parsed_values = parse_coefficients_bytes(&poly_encoding);
+        let coeffs = &parsed_values[..parsed_values.len() - 1];
+        let modulus = &parsed_values[parsed_values.len() - 1];
+        // TODO: avoid cloning
         parallel_iter!(coeffs)
-            .map(|s| FinRingElem::from_str(&s, &modulus).expect("invalid string"))
+            .map(|s| FinRingElem::new(s.clone(), Arc::new(modulus.clone())))
             .collect()
     }
 
