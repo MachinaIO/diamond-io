@@ -12,7 +12,6 @@ use itertools::Itertools;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
-use tracing::info;
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
