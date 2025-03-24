@@ -16,6 +16,7 @@ mod test {
     use num_bigint::BigUint;
     use num_traits::Num;
     use std::sync::Arc;
+    use tracing::info;
 
     #[test]
     #[ignore]
@@ -60,7 +61,7 @@ mod test {
             &mut rng,
         );
         let obfuscation_time = start_time.elapsed();
-        println!("Time to obfuscate: {:?}", obfuscation_time);
+        info!("Time to obfuscate: {:?}", obfuscation_time);
 
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
@@ -73,9 +74,9 @@ mod test {
             .collect::<Vec<_>>();
         let output = obfuscation.eval(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
-        println!("{:?}", output);
-        println!("Time for evaluation: {:?}", total_time - obfuscation_time);
-        println!("Total time: {:?}", total_time);
+        info!("{:?}", output);
+        info!("Time for evaluation: {:?}", total_time - obfuscation_time);
+        info!("Total time: {:?}", total_time);
         #[cfg(feature = "test")]
         assert_eq!(output, hardcoded_key);
     }

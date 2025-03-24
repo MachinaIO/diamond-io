@@ -15,6 +15,7 @@ mod test {
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
     use std::sync::Arc;
+    use tracing::info;
 
     #[test]
     fn test_io_just_mul_enc_and_bit() {
@@ -40,7 +41,7 @@ mod test {
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
-            d: 1,
+            d: 3,
             encoding_sigma: 0.0,
             hardcoded_key_sigma: 0.0,
             p_sigma: 0.0,
@@ -58,7 +59,7 @@ mod test {
             &mut rng,
         );
         let obfuscation_time = start_time.elapsed();
-        println!("Time to obfuscate: {:?}", obfuscation_time);
+        info!("Time to obfuscate: {:?}", obfuscation_time);
 
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
@@ -72,9 +73,9 @@ mod test {
             .collect::<Vec<_>>();
         let output = obfuscation.eval(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
-        println!("{:?}", output);
-        println!("Time for evaluation: {:?}", total_time - obfuscation_time);
-        println!("Total time: {:?}", total_time);
+        info!("{:?}", output);
+        info!("Time for evaluation: {:?}", total_time - obfuscation_time);
+        info!("Total time: {:?}", total_time);
         #[cfg(feature = "test")]
         assert_eq!(output, hardcoded_key);
     }
