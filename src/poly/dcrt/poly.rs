@@ -228,8 +228,8 @@ impl Poly for DCRTPoly {
                 let bit_idx = i % 8;
                 bit_vector[byte_idx] |= 1 << bit_idx; // Set flag for negative coefficient
                 &modulus_big - coeff.value() // Convert to absolute value: q - a
-            } else if coeff.value() == &BigUint::from(0u32) {
-                BigUint::from(0u32)
+            } else if coeff.value() == &BigUint::ZERO {
+                BigUint::ZERO
             } else {
                 coeff.value().clone()
             };
