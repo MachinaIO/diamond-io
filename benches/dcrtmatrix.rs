@@ -18,7 +18,7 @@ fn bench_matrix_operation(c: &mut Criterion) {
 
     c.bench_with_input(BenchmarkId::new("Matrix Multiplication", size), &size, |b, _| {
         b.iter(|| {
-            let _ = &matrix_a * &matrix_b;
+            let _ = matrix_a.clone() * &matrix_b;
         })
     });
 }

@@ -1,6 +1,5 @@
 pub mod element;
 pub mod matrix;
-pub mod new_matrix;
 pub mod params;
 pub mod poly;
 pub mod sampler;
