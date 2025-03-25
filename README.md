@@ -23,7 +23,7 @@ cargo test -r --test test_io_dummy_param --no-default-features --features parall
 cargo test -r --test test_io_real_param --no-default-features --features parallel -- --ignored --nocapture
 ```
 
-- with memory profiler (and disabled parallel feature)
+- with memory profiler 
 ```
-uv run memory_profile.py cargo test -r --test test_io_dummy_param --no-default-features -- --nocapture
+uv run memory_profile.py cargo test -r --test test_io_dummy_param --no-default-features --features parallel
 ```
