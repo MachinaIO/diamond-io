@@ -40,13 +40,7 @@ pub trait Poly:
             .collect_vec();
         Self::from_coeffs(params, &coeffs)
     }
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        for elem in self.coeffs() {
-            bytes.extend_from_slice(&elem.to_bytes());
-        }
-        bytes
-    }
+    fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self;
     fn coeffs(&self) -> Vec<Self::Elem>;
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;
@@ -67,4 +61,12 @@ pub trait Poly:
         bits
     }
     fn decompose(&self, params: &Self::Params) -> Vec<Self>;
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for elem in self.coeffs() {
+            bytes.extend_from_slice(&elem.to_bytes());
+        }
+        bytes
+    }
+    fn to_compact_bytes(&self) -> Vec<u8>;
 }
