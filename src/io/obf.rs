@@ -184,7 +184,7 @@ where
             );
             log_mem("Computed m_preimage_bit");
 
-            m_preimages[idx][bit] = m_preimage_bit;
+            // m_preimages[idx][bit] = m_preimage_bit;
 
             let n_preimage_bit = sampler_trapdoor.preimage(
                 &params,
@@ -194,7 +194,7 @@ where
             );
             log_mem("Computed n_preimage_bit");
 
-            n_preimages[idx][bit] = n_preimage_bit;
+            // n_preimages[idx][bit] = n_preimage_bit;
 
             let rg = &public_data.rgs[bit];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -220,7 +220,7 @@ where
                 sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
             log_mem("Computed k_preimage_bit");
 
-            k_preimages[idx][bit] = k_preimage_bit;
+            // k_preimages[idx][bit] = k_preimage_bit;
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
@@ -266,10 +266,10 @@ where
         enc_hardcoded_key,
         encodings_init,
         p_init,
-        m_preimages,
-        n_preimages,
-        k_preimages,
-        final_preimage,
+        // m_preimages,
+        // n_preimages,
+        // k_preimages,
+        // final_preimage,
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
