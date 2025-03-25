@@ -152,7 +152,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             log_mem("Collected preimages");
 
             // Concatenate all preimages horizontally
-            return preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>());
+            preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>())
         } else {
             // Case 2: Target columns is equal or less than size
             let mut public_matrix_ptr = MatrixGen(

@@ -13,7 +13,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
-use std::{ops::Mul, sync::Arc};
+use std::sync::Arc;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,

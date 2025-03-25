@@ -7,7 +7,7 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
-use std::{marker::PhantomData, ops::Mul};
+use std::marker::PhantomData;
 
 use super::params::ObfuscationParams;
 
