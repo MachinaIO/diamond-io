@@ -165,7 +165,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
             for i in 0..size {
                 for j in 0..(k + 2) * size {
-                    let entry = target.entry(i, j);
+                    let entry = public_matrix.entry(i, j);
                     let poly = entry.get_poly();
                     SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
                 }
