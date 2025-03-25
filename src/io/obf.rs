@@ -179,21 +179,24 @@ where
                 bs[idx + 1][bit] = b_bit_idx.clone();
             }
 
-            let m_preimage_bit = sampler_trapdoor.preimage(
+            sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
                 &(&u_bits[bit] * &b_bit_idx),
+                &format!("m_preimage_{}_{}", idx, bit),
             );
+
             log_mem("Computed m_preimage_bit");
 
             // m_preimages[idx][bit] = m_preimage_bit;
 
-            let n_preimage_bit = sampler_trapdoor.preimage(
+            sampler_trapdoor.preimage(
                 &params,
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
                 &(&u_star * &b_star_idx.clone()),
+                &format!("n_preimage_{}_{}", idx, bit),
             );
             log_mem("Computed n_preimage_bit");
 
@@ -220,7 +223,13 @@ where
             let bottom = pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
 
-            sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
+            sampler_trapdoor.preimage(
+                &params,
+                &b_bit_trapdoor_idx,
+                &b_bit_idx,
+                &k_target,
+                &format!("k_preimage_{}_{}", idx, bit),
+            );
             log_mem("Computed k_preimage_bit");
 
             // k_preimages[idx][bit] = k_preimage_bit;
@@ -256,7 +265,13 @@ where
     };
     log_mem("Computed final_preimage_target");
 
-    sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &final_preimage_target);
+    sampler_trapdoor.preimage(
+        &params,
+        &b_star_trapdoor_cur,
+        &b_star_cur,
+        &final_preimage_target,
+        "final_preimage",
+    );
     log_mem("Sampled final_preimage");
 
     Obfuscation {

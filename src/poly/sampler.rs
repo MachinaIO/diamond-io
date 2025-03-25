@@ -63,6 +63,7 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
+        trapdoor_id: &str,
     );
     fn process_preimage_block(
         &self,
@@ -70,5 +71,6 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target_block: &Self::M,
+        trapdoor_id: &str,
     );
 }

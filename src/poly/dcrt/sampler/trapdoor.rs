@@ -114,6 +114,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
+        trapdoor_id: &str,
     ) {
         let size = public_matrix.row_size();
         let target_cols = target.col_size();
@@ -132,7 +133,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             let target_block = target.slice(0, size, start_col, end_col);
             debug_mem(format!("preimage iter : start_col = {}", start_col));
 
-            self.process_preimage_block(params, trapdoor, public_matrix, &target_block)
+            self.process_preimage_block(params, trapdoor, public_matrix, &target_block, trapdoor_id)
         });
 
         // log_mem("Collected preimages");
@@ -145,6 +146,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target_block: &Self::M,
+        trapdoor_id: &str,
     ) {
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
@@ -198,7 +200,9 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let mut rng = rand::rng();
         let id = rng.random::<u64>();
-        let random_identifier = &String::from(id.to_string());
+        let random_id = id.to_string();
+        let file_identifier = format!("{}_{}", trapdoor_id, random_id);
+        let random_identifier = &file_identifier;
 
         DCRTSquareMatTrapdoorGaussSamp(
             n as u32,
