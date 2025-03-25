@@ -4,7 +4,7 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
-use std::{ops::Mul, sync::Arc};
+use std::sync::Arc;
 
 impl<M> Obfuscation<M>
 where

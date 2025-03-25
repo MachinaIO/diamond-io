@@ -947,7 +947,7 @@ impl DCRTPolyMatrix {
                 let row_col_vec = row_vec
                     .chunks(entry_size)
                     .map(|entry| {
-                        <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, &entry)
+                        <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, entry)
                     })
                     .collect_vec();
                 drop(mmap);
@@ -971,8 +971,7 @@ impl DCRTPolyMatrix {
             let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
             let bytes = new_entries[i - row_start]
                 .iter()
-                .map(|poly| poly.to_bytes())
-                .flatten()
+                .flat_map(|poly| poly.to_bytes())
                 .collect::<Vec<_>>();
             mmap.copy_from_slice(&bytes);
             drop(mmap);
