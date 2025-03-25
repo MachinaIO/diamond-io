@@ -161,8 +161,6 @@ where
             bs[idx + 1][2] = b_star_idx.clone();
         }
 
-        log_mem("Sampled b_star trapdoor for idx");
-
         // Precomputation for k_preimage that are not bit dependent
         let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
         let inserted_poly_index = 1 + idx / dim;
