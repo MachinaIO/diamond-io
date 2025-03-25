@@ -9,6 +9,7 @@ cargo test -r  --features="parallel"
 ```
 
 #### Test iO (without test feature) 
+
 this will remove helper logic + helper fields for test which is not require for iO security.
 
 
@@ -19,5 +20,10 @@ cargo test -r --test test_io_dummy_param --no-default-features --features parall
 
 - real params (by default ignored)
 ```
-cargo test -r --test test_io_real_param --no-default-features --features parallel -- --nocapture
+cargo test -r --test test_io_real_param --no-default-features --features parallel -- --ignored --nocapture
+```
+
+- with memory profiler 
+```
+uv run memory_profile.py cargo test -r --test test_io_dummy_param --no-default-features --features parallel
 ```

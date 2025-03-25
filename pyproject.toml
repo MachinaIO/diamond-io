@@ -1,0 +1,9 @@
+[project]
+name = "memory-profile"
+version = "0.1.0"
+description = "Format memory profiling with script"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.2.3",
+]
