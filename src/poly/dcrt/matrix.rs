@@ -116,8 +116,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                         unsafe {
                             new_matrix.replace_block_entries(
                                 *cur_block_row_idx - row_start..*next_block_row_idx - row_start,
-                                *cur_block_col_idx - column_start
-                                    ..*next_block_col_idx - column_start,
+                                *cur_block_col_idx - column_start..
+                                    *next_block_col_idx - column_start,
                                 new_entries,
                             );
                         }
@@ -414,10 +414,10 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 // among threads
                                 unsafe {
                                     new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx
-                                            ..i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx
-                                            ..j * sub_matrix.ncol + *next_block_col_idx,
+                                        i * sub_matrix.nrow + *cur_block_row_idx..
+                                            i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx..
+                                            j * sub_matrix.ncol + *next_block_col_idx,
                                         sub_block_polys,
                                     );
                                 }
