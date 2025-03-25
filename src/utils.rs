@@ -6,7 +6,7 @@ use crate::poly::{
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
-use tracing::info;
+use tracing::{debug, info};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
@@ -82,6 +82,19 @@ pub fn log_mem<T: Into<String>>(tag: T) {
         );
     } else {
         info!("Couldn't get the current memory usage :(");
+    }
+}
+
+pub fn debug_mem<T: Into<String>>(tag: T) {
+    if let Some(usage) = memory_stats() {
+        debug!(
+            "{} || Current physical/virtural memory usage: {} | {}",
+            tag.into(),
+            usage.physical_mem,
+            usage.virtual_mem
+        );
+    } else {
+        debug!("Couldn't get the current memory usage :(");
     }
 }
 
