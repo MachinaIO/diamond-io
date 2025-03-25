@@ -19,7 +19,7 @@ mod test {
     use tracing::info;
 
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_io_just_mul_enc_and_bit_real_params() {
         init_tracing();
         let start_time = std::time::Instant::now();

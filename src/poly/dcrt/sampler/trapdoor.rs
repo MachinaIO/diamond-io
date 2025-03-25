@@ -93,7 +93,9 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             2_i64,
             false,
         );
+        log_mem("Generated DCRT trapdoor");
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
+        log_mem("Extracted RLWE trapdoor by calling `get_trapdoor_pair`");
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
         let public_matrix = DCRTPolyMatrix::from_poly_vec(
@@ -104,6 +106,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 })
                 .collect(),
         );
+        log_mem("Generated public matrix via double parallel iteration");
         (rlwe_trapdoor, public_matrix)
     }
 
@@ -149,8 +152,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 })
                 .collect();
 
-            log_mem("Collected preimages");
-
             // Concatenate all preimages horizontally
             return preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>());
         } else {
@@ -194,6 +195,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 }
             }
 
+            log_mem("Before `DCRTSquareMatTrapdoorGaussSamp` call");
+
             let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
                 n as u32,
                 k as u32,
@@ -203,6 +206,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 2_i64,
                 SIGMA,
             );
+
+            log_mem("After `DCRTSquareMatTrapdoorGaussSamp` call");
 
             let nrow = size * (k + 2);
             let ncol = size;
