@@ -129,11 +129,12 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         // Case 1: Target columns is greater than size
         if target_cols > size {
+            debug_mem("preimage case 1");
             let full_blocks = target_cols / size;
             let remaining_cols = target_cols % size;
             let total_blocks = if remaining_cols > 0 { full_blocks + 1 } else { full_blocks };
 
-            let preimages: Vec<_> = parallel_iter!(0..total_blocks)
+            let preimages: Vec<_> = (0..total_blocks)
                 .map(|block| {
                     let start_col = block * size;
 
@@ -147,6 +148,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
                     // Process the block
                     let target_block = target.slice(0, size, start_col, end_col);
+                    debug_mem(format!("preimage iter :{}", block));
                     self.preimage(params, trapdoor, public_matrix, &target_block)
                 })
                 .collect();
@@ -156,6 +158,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             // Concatenate all preimages horizontally
             preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>())
         } else {
+            debug_mem("preimage case 2");
             // Case 2: Target columns is equal or less than size
             let mut public_matrix_ptr = MatrixGen(
                 params.ring_dimension(),
