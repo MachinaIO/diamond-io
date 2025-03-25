@@ -10,10 +10,10 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub enc_hardcoded_key: M,
     pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
-    // pub m_preimages: Vec<Vec<M>>,
-    // pub n_preimages: Vec<Vec<M>>,
-    // pub k_preimages: Vec<Vec<M>>,
-    // pub final_preimage: M,
+    pub m_preimages_ids: Vec<Vec<String>>,
+    pub n_preimages_ids: Vec<Vec<String>>,
+    pub k_preimages_ids: Vec<Vec<String>>,
+    pub final_preimage_id: String,
     #[cfg(feature = "test")]
     pub s_init: M,
     #[cfg(feature = "test")]

@@ -126,10 +126,10 @@ where
     };
     log_mem("Computed u_0, u_1, u_star");
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
-        vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
-        vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
+    let (mut m_preimages_ids, mut n_preimages_ids, mut k_preimages_ids) = (
+        vec![vec![String::new(); 2]; obf_params.input_size],
+        vec![vec![String::new(); 2]; obf_params.input_size],
+        vec![vec![String::new(); 2]; obf_params.input_size],
     );
 
     let mut b_star_trapdoor_cur = b_star_trapdoor_init;
@@ -179,28 +179,32 @@ where
                 bs[idx + 1][bit] = b_bit_idx.clone();
             }
 
+            let m_preimage_bit_id = format!("m_preimage_{}_{}", idx, bit);
+            let n_preimage_bit_id = format!("n_preimage_{}_{}", idx, bit);
+            let k_preimage_bit_id = format!("k_preimage_{}_{}", idx, bit);
+
             sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
                 &(&u_bits[bit] * &b_bit_idx),
-                &format!("m_preimage_{}_{}", idx, bit),
+                &m_preimage_bit_id,
             );
 
             log_mem("Computed m_preimage_bit");
 
-            // m_preimages[idx][bit] = m_preimage_bit;
+            m_preimages_ids[idx][bit] = m_preimage_bit_id;
 
             sampler_trapdoor.preimage(
                 &params,
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
                 &(&u_star * &b_star_idx.clone()),
-                &format!("n_preimage_{}_{}", idx, bit),
+                &n_preimage_bit_id,
             );
             log_mem("Computed n_preimage_bit");
 
-            // n_preimages[idx][bit] = n_preimage_bit;
+            n_preimages_ids[idx][bit] = n_preimage_bit_id;
 
             let rg = &public_data.rgs[bit];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -228,11 +232,11 @@ where
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
                 &k_target,
-                &format!("k_preimage_{}_{}", idx, bit),
+                &k_preimage_bit_id,
             );
             log_mem("Computed k_preimage_bit");
 
-            // k_preimages[idx][bit] = k_preimage_bit;
+            k_preimages_ids[idx][bit] = k_preimage_bit_id;
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
@@ -265,12 +269,13 @@ where
     };
     log_mem("Computed final_preimage_target");
 
+    let final_preimage_id = "final_preimage";
     sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target,
-        "final_preimage",
+        final_preimage_id,
     );
     log_mem("Sampled final_preimage");
 
@@ -279,10 +284,10 @@ where
         enc_hardcoded_key,
         encodings_init,
         p_init,
-        // m_preimages,
-        // n_preimages,
-        // k_preimages,
-        // final_preimage,
+        m_preimages_ids,
+        n_preimages_ids,
+        k_preimages_ids,
+        final_preimage_id: final_preimage_id.to_string(),
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
