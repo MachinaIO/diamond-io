@@ -126,7 +126,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         debug_mem("preimage before loop processing");
         let num_block = target_cols.div_ceil(size);
-        parallel_iter!(0..num_block).map(|i| {
+        parallel_iter!(0..num_block).for_each(|i| {
             let start_col = i * size;
             let end_col = (start_col + size).min(target_cols);
             let target_block = target.slice(0, size, start_col, end_col);
