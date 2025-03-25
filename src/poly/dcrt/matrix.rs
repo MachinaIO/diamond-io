@@ -946,9 +946,7 @@ impl DCRTPolyMatrix {
                 let row_vec = mmap.to_vec();
                 let row_col_vec = row_vec
                     .chunks(entry_size)
-                    .map(|entry| {
-                        <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, entry)
-                    })
+                    .map(|entry| <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, entry))
                     .collect_vec();
                 drop(mmap);
                 row_col_vec
@@ -1024,7 +1022,7 @@ fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usi
     (row_offsets, col_offsets)
 }
 
-fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
+fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &[Vec<DCRTPoly>]) -> Vec<Vec<DCRTPoly>> {
     let nrow = lhs.len();
     let ncol = lhs[0].len();
     parallel_iter!(0..nrow)
@@ -1036,7 +1034,7 @@ fn add_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &Vec<Vec<DCRTPoly>>) -> Vec<
         .collect::<Vec<Vec<DCRTPoly>>>()
 }
 
-fn sub_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &Vec<Vec<DCRTPoly>>) -> Vec<Vec<DCRTPoly>> {
+fn sub_block_matrices(lhs: Vec<Vec<DCRTPoly>>, rhs: &[Vec<DCRTPoly>]) -> Vec<Vec<DCRTPoly>> {
     let nrow = lhs.len();
     let ncol = lhs[0].len();
     parallel_iter!(0..nrow)
@@ -1150,17 +1148,10 @@ mod tests {
         let value = FinRingElem::new(5u32, params.modulus());
 
         // Create a 2x2 matrix with values at (0,0) and (1,1)
-        let mut matrix_vec = Vec::with_capacity(2);
-        let mut row1 = Vec::with_capacity(2);
-        row1.push(DCRTPoly::from_const(&params, &value));
-        row1.push(DCRTPoly::const_zero(&params));
-
-        let mut row2 = Vec::with_capacity(2);
-        row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::from_const(&params, &value));
-
-        matrix_vec.push(row1);
-        matrix_vec.push(row2);
+        let matrix_vec = vec![
+            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_const(&params, &value)],
+        ];
 
         let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
         assert_eq!(matrix1.entry(0, 0).coeffs()[0], value);
@@ -1190,32 +1181,18 @@ mod tests {
         let value = FinRingElem::new(5u32, params.modulus());
 
         // Create first matrix with value at (0,0)
-        let mut matrix1_vec = Vec::with_capacity(2);
-        let mut row1 = Vec::with_capacity(2);
-        row1.push(DCRTPoly::from_const(&params, &value));
-        row1.push(DCRTPoly::const_zero(&params));
-
-        let mut row2 = Vec::with_capacity(2);
-        row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::const_zero(&params));
-
-        matrix1_vec.push(row1);
-        matrix1_vec.push(row2);
+        let matrix1_vec = vec![
+            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
+        ];
 
         let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix1_vec);
 
         // Create second matrix with value at (1,1)
-        let mut matrix2_vec = Vec::with_capacity(2);
-        let mut row1 = Vec::with_capacity(2);
-        row1.push(DCRTPoly::const_zero(&params));
-        row1.push(DCRTPoly::const_zero(&params));
-
-        let mut row2 = Vec::with_capacity(2);
-        row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::from_const(&params, &value));
-
-        matrix2_vec.push(row1);
-        matrix2_vec.push(row2);
+        let matrix2_vec = vec![
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_const(&params, &value)],
+        ];
 
         let matrix2 = DCRTPolyMatrix::from_poly_vec(&params, matrix2_vec);
 
@@ -1247,32 +1224,18 @@ mod tests {
         let value = FinRingElem::new(5u32, params.modulus());
 
         // Create first matrix with value at (0,0)
-        let mut matrix1_vec = Vec::with_capacity(2);
-        let mut row1 = Vec::with_capacity(2);
-        row1.push(DCRTPoly::from_const(&params, &value));
-        row1.push(DCRTPoly::const_zero(&params));
-
-        let mut row2 = Vec::with_capacity(2);
-        row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::const_zero(&params));
-
-        matrix1_vec.push(row1);
-        matrix1_vec.push(row2);
+        let matrix1_vec = vec![
+            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
+        ];
 
         let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix1_vec);
 
         // Create second matrix with value at (0,0)
-        let mut matrix2_vec = Vec::with_capacity(2);
-        let mut row1 = Vec::with_capacity(2);
-        row1.push(DCRTPoly::from_const(&params, &value));
-        row1.push(DCRTPoly::const_zero(&params));
-
-        let mut row2 = Vec::with_capacity(2);
-        row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::const_zero(&params));
-
-        matrix2_vec.push(row1);
-        matrix2_vec.push(row2);
+        let matrix2_vec = vec![
+            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
+        ];
 
         let matrix2 = DCRTPolyMatrix::from_poly_vec(&params, matrix2_vec);
 
