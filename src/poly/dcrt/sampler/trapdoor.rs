@@ -9,7 +9,7 @@ use crate::{
         sampler::PolyTrapdoorSampler,
         Poly, PolyMatrix, PolyParams,
     },
-    utils::log_mem,
+    utils::{debug_mem, log_mem},
 };
 
 use openfhe::{
@@ -125,6 +125,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             "Target matrix should have the same number of rows as the public matrix"
         );
 
+        debug_mem("preimage before case branch");
+
         // Case 1: Target columns is greater than size
         if target_cols > size {
             let full_blocks = target_cols / size;
@@ -163,6 +165,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 (k + 2) * size,
             );
 
+            debug_mem("public_matrix_ptr gen");
+
             for i in 0..size {
                 for j in 0..(k + 2) * size {
                     let entry = public_matrix.entry(i, j);
@@ -171,6 +175,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 }
             }
 
+            debug_mem("SetMatrixElement public_matrix_ptr");
+
             let mut target_matrix_ptr = MatrixGen(
                 params.ring_dimension(),
                 params.crt_depth(),
@@ -178,6 +184,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 size,
                 size,
             );
+
+            debug_mem("target_matrix_ptr gen");
 
             for i in 0..size {
                 for j in 0..target_cols {
@@ -196,6 +204,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 }
             }
 
+            debug_mem("SetMatrixElement target_matrix_ptr");
+
             let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
                 n as u32,
                 k as u32,
@@ -205,6 +215,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 2_i64,
                 SIGMA,
             );
+
+            debug_mem("DCRTSquareMatTrapdoorGaussSamp");
 
             let nrow = size * (k + 2);
             let ncol = size;
@@ -220,7 +232,11 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 matrix_inner.push(row);
             }
 
+            debug_mem("GetMatrixElement");
+
             let full_preimage = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
+
+            debug_mem("full_preimage");
 
             // If the target matrix has fewer columns than size, slice the preimage matrix
             if target_cols < size {

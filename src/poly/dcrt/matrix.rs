@@ -4,8 +4,6 @@ use crate::{
     poly::{Poly, PolyMatrix, PolyParams},
 };
 use itertools::Itertools;
-#[cfg(target_os = "linux")]
-use memmap2::RemapOptions;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use num_bigint::BigInt;
 use once_cell::sync::OnceCell;
