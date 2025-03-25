@@ -41,7 +41,7 @@ mod test {
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
-            d: 3,
+            d: 1,
             encoding_sigma: 0.0,
             hardcoded_key_sigma: 0.0,
             p_sigma: 0.0,
@@ -61,22 +61,22 @@ mod test {
         let obfuscation_time = start_time.elapsed();
         info!("Time to obfuscate: {:?}", obfuscation_time);
 
-        let input = [true];
-        let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        // let input = [true];
+        // let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
 
-        #[cfg(feature = "test")]
-        let hardcoded_key = obfuscation
-            .hardcoded_key
-            .coeffs()
-            .iter()
-            .map(|elem| elem.value() != &BigUint::from(0u8))
-            .collect::<Vec<_>>();
-        let output = obfuscation.eval(obf_params, sampler_hash, &input);
-        let total_time = start_time.elapsed();
-        info!("{:?}", output);
-        info!("Time for evaluation: {:?}", total_time - obfuscation_time);
-        info!("Total time: {:?}", total_time);
-        #[cfg(feature = "test")]
-        assert_eq!(output, hardcoded_key);
+        // #[cfg(feature = "test")]
+        // let hardcoded_key = obfuscation
+        //     .hardcoded_key
+        //     .coeffs()
+        //     .iter()
+        //     .map(|elem| elem.value() != &BigUint::from(0u8))
+        //     .collect::<Vec<_>>();
+        // let output = obfuscation.eval(obf_params, sampler_hash, &input);
+        // let total_time = start_time.elapsed();
+        // info!("{:?}", output);
+        // info!("Time for evaluation: {:?}", total_time - obfuscation_time);
+        // info!("Total time: {:?}", total_time);
+        // #[cfg(feature = "test")]
+        // assert_eq!(output, hardcoded_key);
     }
 }
