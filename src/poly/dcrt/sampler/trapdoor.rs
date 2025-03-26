@@ -40,7 +40,7 @@ impl DCRTMatrixPtr {
         let mut target_matrix_ptr =
             MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
 
-        debug_mem("target_matrix_ptr generated");
+        debug_mem("target_matrix_ptr MatrixGen");
 
         for i in 0..size {
             for j in 0..target_cols {
@@ -71,13 +71,16 @@ impl DCRTMatrixPtr {
     ) -> Self {
         let mut public_matrix_ptr = MatrixGen(n, size, k_res, nrow, ncol);
 
-        debug_mem("public_matrix_ptr generated");
+        debug_mem("public_matrix_ptr MatrixGen");
 
         for i in 0..nrow {
             for j in 0..ncol {
-                let entry = matrix.entry(i, j);
-                let poly = entry.get_poly();
-                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
+                SetMatrixElement(
+                    public_matrix_ptr.as_mut().unwrap(),
+                    i,
+                    j,
+                    matrix.entry(i, j).get_poly(),
+                );
             }
         }
 
@@ -94,9 +97,7 @@ impl DCRTMatrixPtr {
         for i in 0..nrow {
             let mut row = Vec::with_capacity(ncol);
             for j in 0..ncol {
-                let poly = GetMatrixElement(&self.ptr_matrix, i, j);
-                let dcrt_poly = DCRTPoly::new(poly);
-                row.push(dcrt_poly);
+                row.push(DCRTPoly::new(GetMatrixElement(&self.ptr_matrix, i, j)));
             }
             matrix_inner.push(row);
         }
