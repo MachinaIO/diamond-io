@@ -51,6 +51,7 @@ pub trait PolyUniformSampler {
 pub trait PolyTrapdoorSampler: Send + Sync {
     type M: PolyMatrix;
     type Trapdoor: Send + Sync;
+    type MatrixPtr: Send + Sync;
 
     fn trapdoor(
         &self,
@@ -68,7 +69,8 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::M,
+        public_matrix: &Self::MatrixPtr,
         target_block: &Self::M,
+        size: usize,
     ) -> Self::M;
 }

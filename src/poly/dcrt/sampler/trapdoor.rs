@@ -15,8 +15,8 @@ use crate::{
 use openfhe::{
     cxx::UniquePtr,
     ffi::{
-        DCRTSquareMatTrapdoorGaussSamp, DCRTSquareMatTrapdoorGen, GetMatrixElement, MatrixGen,
-        RLWETrapdoorPair, SetMatrixElement,
+        DCRTSquareMatTrapdoorGaussSamp, DCRTSquareMatTrapdoorGen, GetMatrixElement, Matrix,
+        MatrixGen, RLWETrapdoorPair, SetMatrixElement,
     },
 };
 
@@ -24,6 +24,10 @@ const SIGMA: f64 = 4.578;
 
 pub struct RLWETrapdoor {
     ptr_trapdoor: Arc<UniquePtr<RLWETrapdoorPair>>,
+}
+
+pub struct DCRTMatrixPtr {
+    ptr_matrix: Arc<UniquePtr<Matrix>>,
 }
 
 pub struct DCRTTrapdoor {
@@ -61,6 +65,10 @@ unsafe impl Sync for DCRTTrapdoor {}
 unsafe impl Send for RLWETrapdoor {}
 unsafe impl Sync for RLWETrapdoor {}
 
+// SAFETY:
+unsafe impl Send for DCRTMatrixPtr {}
+unsafe impl Sync for DCRTMatrixPtr {}
+
 pub struct DCRTPolyTrapdoorSampler {}
 
 impl DCRTPolyTrapdoorSampler {
@@ -78,6 +86,7 @@ impl Default for DCRTPolyTrapdoorSampler {
 impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     type M = DCRTPolyMatrix;
     type Trapdoor = RLWETrapdoor;
+    type MatrixPtr = DCRTMatrixPtr;
 
     fn trapdoor(
         &self,
@@ -126,45 +135,11 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         // todo: real param and dummy param should have diff value
         let chunk_size = 80;
         let num_block = target_cols.div_ceil(size);
+        let k = params.modulus_bits();
         debug_mem(format!(
             "preimage before loop processing with chunksize {}, out of {}",
             chunk_size, num_block
         ));
-        let indices: Vec<_> = (0..num_block).collect();
-        let preimages: Vec<_> = parallel_chunk_iter!(indices, chunk_size)
-            .map(|chunk| {
-                chunk
-                    .iter()
-                    .map(|&i| {
-                        let start_col = i * size;
-                        let end_col = (start_col + size).min(target_cols);
-                        let target_block = target.slice(0, size, start_col, end_col);
-                        debug_mem(format!("preimage iter: start_col = {}", start_col));
-                        self.process_preimage_block(params, trapdoor, public_matrix, &target_block)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .flatten()
-            .collect();
-
-        log_mem("Collected preimages");
-        preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>())
-    }
-
-    fn process_preimage_block(
-        &self,
-        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::M,
-        target_block: &Self::M,
-    ) -> Self::M {
-        let n = params.ring_dimension() as usize;
-        let k = params.modulus_bits();
-        let size = public_matrix.row_size();
-        let target_cols = target_block.col_size();
-
-        debug_mem("Processing preimage block");
-
         let mut public_matrix_ptr = MatrixGen(
             params.ring_dimension(),
             params.crt_depth(),
@@ -183,7 +158,49 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             }
         }
 
+        let public_matrix = DCRTMatrixPtr { ptr_matrix: public_matrix_ptr.into() };
+
         debug_mem("SetMatrixElement public_matrix_ptr completed");
+        let indices: Vec<_> = (0..num_block).collect();
+        let preimages: Vec<_> = parallel_chunk_iter!(indices, chunk_size)
+            .map(|chunk| {
+                chunk
+                    .iter()
+                    .map(|&i| {
+                        let start_col = i * size;
+                        let end_col = (start_col + size).min(target_cols);
+                        let target_block = target.slice(0, size, start_col, end_col);
+                        debug_mem(format!("preimage iter: start_col = {}", start_col));
+                        self.process_preimage_block(
+                            params,
+                            trapdoor,
+                            &public_matrix,
+                            &target_block,
+                            size,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect();
+
+        log_mem("Collected preimages");
+        preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>())
+    }
+
+    fn process_preimage_block(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        trapdoor: &Self::Trapdoor,
+        public_matrix: &Self::MatrixPtr,
+        target_block: &Self::M,
+        size: usize,
+    ) -> Self::M {
+        let n = params.ring_dimension() as usize;
+        let k = params.modulus_bits();
+        let target_cols = target_block.col_size();
+
+        debug_mem("Processing preimage block");
 
         let mut target_matrix_ptr =
             MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
@@ -211,7 +228,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
             n as u32,
             k as u32,
-            &public_matrix_ptr,
+            &public_matrix.ptr_matrix,
             &trapdoor.ptr_trapdoor,
             &target_matrix_ptr,
             2_i64,
