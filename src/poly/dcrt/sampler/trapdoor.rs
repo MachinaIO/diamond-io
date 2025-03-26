@@ -123,7 +123,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             "Target matrix should have the same number of rows as the public matrix"
         );
 
-        let chunk_size = 20;
+        // todo: real param and dummy param should have diff value
+        let chunk_size = 80;
         let num_block = target_cols.div_ceil(size);
         debug_mem(format!(
             "preimage before loop processing with chunksize {}, out of {}",
