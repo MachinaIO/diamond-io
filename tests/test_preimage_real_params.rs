@@ -7,6 +7,8 @@ mod test {
         },
         utils::{init_tracing, log_mem},
     };
+    use std::time::Instant;
+    use tracing::info;
 
     #[test]
     fn test_preimage_sampling_real_params() {
@@ -17,8 +19,11 @@ mod test {
         // gen trapdoor
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new();
         log_mem("Before trapdoor gen");
+        let trapdoor_start = Instant::now();
         let (trapdoor, public_matrix) = sampler_trapdoor.trapdoor(&params, d);
+        let trapdoor_time = trapdoor_start.elapsed();
         log_mem("After trapdoor gen");
+        info!("Time for trapdoor generation: {:?}", trapdoor_time);
 
         // gen a dxd target matrix from uniform distribution
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -31,7 +36,10 @@ mod test {
 
         // sample preimage
         log_mem("Before preimage gen");
+        let preimage_start = Instant::now();
         let preimage = sampler_trapdoor.preimage(&params, &trapdoor, &public_matrix, &target);
+        let preimage_time = preimage_start.elapsed();
         log_mem("After preimage gen");
+        info!("Time for preimage sampling: {:?}", preimage_time);
     }
 }
