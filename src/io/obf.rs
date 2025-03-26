@@ -39,7 +39,6 @@ where
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
     let sampler_uniform = Arc::new(sampler_uniform);
-    let sampler_trapdoor = Arc::new(sampler_trapdoor);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     log_mem("Sampled public data");
@@ -57,8 +56,7 @@ where
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-    let s_bars =
-        sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0).clone();
+    let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
@@ -86,9 +84,9 @@ where
     let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
     log_mem("Sampled enc_hardcoded_key_polys");
 
-    let t_bar = t_bar_matrix.entry(0, 0).clone();
+    let t_bar = t_bar_matrix.entry(0, 0);
     #[cfg(feature = "test")]
-    let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
+    let hardcoded_key = hardcoded_key_matrix.entry(0, 0);
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
