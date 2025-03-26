@@ -210,7 +210,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         // todo: real param and dummy param should have diff value
-        let chunk_size = 20;
+        let chunk_size = 100;
         let num_block = target_cols.div_ceil(size);
         let k = params.modulus_bits();
         debug_mem(format!(
