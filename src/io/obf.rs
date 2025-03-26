@@ -174,7 +174,7 @@ where
                 bs[idx + 1][bit] = b_bit_idx.clone();
             }
 
-            let m_preimage_bit = sampler_trapdoor.preimage(
+            m_preimages[idx][bit] = sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
@@ -182,44 +182,41 @@ where
             );
             log_mem("Computed m_preimage_bit");
 
-            m_preimages[idx][bit] = m_preimage_bit;
-
-            let n_preimage_bit = sampler_trapdoor.preimage(
+            n_preimages[idx][bit] = sampler_trapdoor.preimage(
                 &params,
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
-                &(&u_star * &b_star_idx.clone()),
+                &(&u_star * &b_star_idx),
             );
             log_mem("Computed n_preimage_bit");
 
-            n_preimages[idx][bit] = n_preimage_bit;
-
-            let rg = &public_data.rgs[bit];
-            let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
-            if bit != 0 {
-                coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
+            k_preimages[idx][bit] = {
+                let inserted_poly_gadget = {
+                    let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
+                    let zero = <M::P as Poly>::const_zero(params.as_ref());
+                    let mut polys = vec![];
+                    for _ in 0..(inserted_poly_index) {
+                        polys.push(zero.clone());
+                    }
+                    polys.push(M::P::from_coeffs(params.as_ref(), &coeffs));
+                    for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
+                        polys.push(zero.clone());
+                    }
+                    M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
+                };
+                let k_target = {
+                    let rg = &public_data.rgs[bit];
+                    let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
+                    if bit != 0 {
+                        coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
+                    };
+                    let bottom =
+                        pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
+                    top.concat_rows(&[&bottom])
+                };
+                sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target)
             };
-
-            let inserted_poly_gadget = {
-                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
-                let zero = <M::P as Poly>::const_zero(params.as_ref());
-                let mut polys = vec![];
-                for _ in 0..(inserted_poly_index) {
-                    polys.push(zero.clone());
-                }
-                polys.push(M::P::from_coeffs(params.as_ref(), &coeffs));
-                for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
-                    polys.push(zero.clone());
-                }
-                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
-            };
-            let bottom = pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
-            let k_target = top.concat_rows(&[&bottom]);
-            let k_preimage_bit =
-                sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
             log_mem("Computed k_preimage_bit");
-
-            k_preimages[idx][bit] = k_preimage_bit;
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
@@ -227,16 +224,13 @@ where
         pub_key_cur = pub_key_idx;
     }
 
-    let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
-    let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
-        &a_decomposed_polys,
-        &enc_hardcoded_key_polys,
-        public_circuit.clone(),
-    );
     let final_preimage_target = {
-        let one = pub_key_cur[0].clone();
-        let input = &pub_key_cur[1..];
-        let eval_outputs = final_circuit.eval(params.as_ref(), &one, input);
+        let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
+            &public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0),
+            &enc_hardcoded_key_polys,
+            public_circuit.clone(),
+        );
+        let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs
             .chunks(log_q)
