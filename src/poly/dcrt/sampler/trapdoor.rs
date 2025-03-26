@@ -265,9 +265,9 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let k = params.modulus_bits();
         let target_cols = target_block.col_size();
 
-        debug_mem("Processing preimage block");
+        debug_mem(format!("Processing preimage block, target_cols={}, size={}", target_cols, size));
 
-        let target_matrix_ptr =
+        let target_matrix =
             DCRTMatrixPtr::new_target_matrix(target_block, params, size, target_cols);
 
         debug_mem("SetMatrixElement target_matrix_ptr completed");
@@ -278,7 +278,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 k as u32,
                 &public_matrix.ptr_matrix,
                 &trapdoor.ptr_trapdoor,
-                &target_matrix_ptr.ptr_matrix,
+                &target_matrix.ptr_matrix,
                 2_i64,
                 SIGMA,
             )
@@ -286,15 +286,16 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         };
         debug_mem("DCRTSquareMatTrapdoorGaussSamp completed");
 
-        let full_preimage = preimage_matrix.to_dcry_poly_matrix(size * (k + 2), size, params);
+        let full_preimage_matrix =
+            preimage_matrix.to_dcry_poly_matrix(size * (k + 2), size, params);
 
-        debug_mem("full_preimage generated");
+        debug_mem("full_preimage_matrix generated");
 
         if target_cols < size {
-            debug_mem("Slicing full_preimage columns");
-            full_preimage.slice_columns(0, target_cols)
+            debug_mem("Slicing full_preimage_matrix columns");
+            full_preimage_matrix.slice_columns(0, target_cols)
         } else {
-            full_preimage
+            full_preimage_matrix
         }
     }
 }
