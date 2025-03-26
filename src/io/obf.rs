@@ -97,13 +97,13 @@ where
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
 
-    let (b_star_trapdoor_init, b_star_init) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-    log_mem("b star trapdoor init sampled");
+    let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+    log_mem(format!("b star trapdoor init sampled, size={}", 2 * (d + 1)));
 
     let m_b = (2 * (d + 1)) * (2 + log_q);
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init]);
-        let s_b = s_connect * &b_star_init;
+        let s_b = s_connect * &b_star_cur;
         let error = sampler_uniform.sample_uniform(
             &params,
             1,
@@ -131,9 +131,6 @@ where
         vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
     );
 
-    let mut b_star_trapdoor_cur = b_star_trapdoor_init;
-    let mut b_star_cur = b_star_init;
-
     let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
 
     #[cfg(feature = "test")]
@@ -149,7 +146,13 @@ where
 
     for idx in 0..obf_params.input_size {
         let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-        log_mem("Sampled b_star trapdoor for idx");
+        log_mem(format!(
+            "Sampled b_star trapdoor for idx={}, size={}, b_star_idx: nrow={}, ncol={}",
+            idx,
+            2 * (d + 1),
+            b_star_idx.row_size(),
+            b_star_idx.col_size()
+        ));
 
         let pub_key_idx =
             sample_public_key_by_idx(&bgg_pubkey_sampler, &params, idx + 1, &reveal_plaintexts);
@@ -182,7 +185,11 @@ where
                 &b_star_cur,
                 &(u_bits[bit].clone() * &b_bit_idx),
             );
-            log_mem("Computed m_preimage_bit");
+            log_mem(format!(
+                "Computed m_preimage_bit nrow={}, ncol={}",
+                m_preimage_bit.row_size(),
+                m_preimage_bit.col_size()
+            ));
 
             m_preimages[idx][bit] = m_preimage_bit;
 
@@ -192,8 +199,11 @@ where
                 &b_bit_idx,
                 &(u_star.clone() * b_star_idx.clone()),
             );
-            log_mem("Computed n_preimage_bit");
-
+            log_mem(format!(
+                "Computed n_preimage_bit nrow={}, ncol={}",
+                n_preimage_bit.row_size(),
+                n_preimage_bit.col_size()
+            ));
             n_preimages[idx][bit] = n_preimage_bit;
 
             let rg = &public_data.rgs[bit];
@@ -201,11 +211,11 @@ where
             if bit != 0 {
                 coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
             };
-            let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             let inserted_poly_gadget = {
+                let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
                 let zero = <M::P as Poly>::const_zero(params.as_ref());
                 let mut polys = vec![];
-                for _ in 0..(inserted_poly_index) {
+                for _ in 0..inserted_poly_index {
                     polys.push(zero.clone());
                 }
                 polys.push(inserted_poly);
@@ -218,8 +228,11 @@ where
             let k_target = top.concat_rows(&[&bottom]);
             let k_preimage_bit =
                 sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
-            log_mem("Computed k_preimage_bit");
-
+            log_mem(format!(
+                "Computed k_preimage_bit nrow={}, ncol={}",
+                k_preimage_bit.row_size(),
+                k_preimage_bit.col_size()
+            ));
             k_preimages[idx][bit] = k_preimage_bit;
         }
 
@@ -259,7 +272,12 @@ where
         &b_star_cur,
         &final_preimage_target,
     );
-    log_mem("Sampled final_preimage");
+
+    log_mem(format!(
+        "Computed final_preimage nrow={}, ncol={}",
+        final_preimage.row_size(),
+        final_preimage.col_size()
+    ));
 
     Obfuscation {
         hash_key,
