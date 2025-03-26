@@ -30,6 +30,31 @@ pub struct DCRTMatrixPtr {
     ptr_matrix: Arc<UniquePtr<Matrix>>,
 }
 
+impl DCRTMatrixPtr {
+    fn new(
+        matrix: &DCRTPolyMatrix,
+        n: u32,
+        size: usize,
+        k_res: usize,
+        nrow: usize,
+        ncol: usize,
+    ) -> Self {
+        let mut public_matrix_ptr = MatrixGen(n, size, k_res, nrow, ncol);
+
+        debug_mem("public_matrix_ptr generated");
+
+        for i in 0..nrow {
+            for j in 0..ncol {
+                let entry = matrix.entry(i, j);
+                let poly = entry.get_poly();
+                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
+            }
+        }
+
+        Self { ptr_matrix: public_matrix_ptr.into() }
+    }
+}
+
 pub struct DCRTTrapdoor {
     ptr_dcrt_trapdoor: Arc<UniquePtr<openfhe::ffi::DCRTTrapdoor>>,
 }
@@ -133,32 +158,22 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         // todo: real param and dummy param should have diff value
-        let chunk_size = 80;
+        let chunk_size = 1;
         let num_block = target_cols.div_ceil(size);
         let k = params.modulus_bits();
         debug_mem(format!(
             "preimage before loop processing with chunksize {}, out of {}",
             chunk_size, num_block
         ));
-        let mut public_matrix_ptr = MatrixGen(
+
+        let public_matrix = DCRTMatrixPtr::new(
+            public_matrix,
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
             size,
             (k + 2) * size,
         );
-
-        debug_mem("public_matrix_ptr generated");
-
-        for i in 0..size {
-            for j in 0..(k + 2) * size {
-                let entry = public_matrix.entry(i, j);
-                let poly = entry.get_poly();
-                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly);
-            }
-        }
-
-        let public_matrix = DCRTMatrixPtr { ptr_matrix: public_matrix_ptr.into() };
 
         debug_mem("SetMatrixElement public_matrix_ptr completed");
         let indices: Vec<_> = (0..num_block).collect();
