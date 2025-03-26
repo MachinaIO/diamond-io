@@ -31,7 +31,37 @@ pub struct DCRTMatrixPtr {
 }
 
 impl DCRTMatrixPtr {
-    fn new(
+    fn new_target_matrix(
+        matrix: &DCRTPolyMatrix,
+        params: &DCRTPolyParams,
+        size: usize,
+        target_cols: usize,
+    ) -> Self {
+        let mut target_matrix_ptr =
+            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
+
+        debug_mem("target_matrix_ptr generated");
+
+        for i in 0..size {
+            for j in 0..target_cols {
+                let entry = matrix.entry(i, j);
+                let poly = entry.get_poly();
+                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
+            }
+
+            if target_cols < size {
+                for j in target_cols..size {
+                    let zero_poly = DCRTPoly::const_zero(params);
+                    let zero_poly_ptr = zero_poly.get_poly();
+                    SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, zero_poly_ptr);
+                }
+            }
+        }
+
+        Self { ptr_matrix: target_matrix_ptr.into() }
+    }
+
+    fn new_public_matrix(
         matrix: &DCRTPolyMatrix,
         n: u32,
         size: usize,
@@ -186,7 +216,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             chunk_size, num_block
         ));
 
-        let public_matrix = DCRTMatrixPtr::new(
+        let public_matrix = DCRTMatrixPtr::new_public_matrix(
             public_matrix,
             params.ring_dimension(),
             params.crt_depth(),
@@ -237,26 +267,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         debug_mem("Processing preimage block");
 
-        let mut target_matrix_ptr =
-            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
-
-        debug_mem("target_matrix_ptr generated");
-
-        for i in 0..size {
-            for j in 0..target_cols {
-                let entry = target_block.entry(i, j);
-                let poly = entry.get_poly();
-                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
-            }
-
-            if target_cols < size {
-                for j in target_cols..size {
-                    let zero_poly = DCRTPoly::const_zero(params);
-                    let zero_poly_ptr = zero_poly.get_poly();
-                    SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, zero_poly_ptr);
-                }
-            }
-        }
+        let target_matrix_ptr =
+            DCRTMatrixPtr::new_target_matrix(target_block, params, size, target_cols);
 
         debug_mem("SetMatrixElement target_matrix_ptr completed");
 
@@ -266,7 +278,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 k as u32,
                 &public_matrix.ptr_matrix,
                 &trapdoor.ptr_trapdoor,
-                &target_matrix_ptr,
+                &target_matrix_ptr.ptr_matrix,
                 2_i64,
                 SIGMA,
             )
