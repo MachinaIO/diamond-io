@@ -48,7 +48,7 @@ pub trait PolyUniformSampler {
     ) -> Self::M;
 }
 
-pub trait PolyTrapdoorSampler: Send + Sync {
+pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
     type Trapdoor;
 

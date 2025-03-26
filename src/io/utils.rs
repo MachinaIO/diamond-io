@@ -26,7 +26,6 @@ pub fn sample_public_key_by_idx<K: AsRef<[u8]>, S>(
 ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>>
 where
     S: PolyHashSampler<K>,
-    <S as PolyHashSampler<K>>::M: Send + Sync,
 {
     sampler.sample(
         params,
