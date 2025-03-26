@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     parallel_chunk_iter, parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyMatrix},
+        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
         sampler::PolyTrapdoorSampler,
         Poly, PolyMatrix, PolyParams,
     },
@@ -52,6 +52,26 @@ impl DCRTMatrixPtr {
         }
 
         Self { ptr_matrix: public_matrix_ptr.into() }
+    }
+
+    fn to_dcry_poly_matrix(
+        &self,
+        nrow: usize,
+        ncol: usize,
+        params: &DCRTPolyParams,
+    ) -> DCRTPolyMatrix {
+        let mut matrix_inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                let poly = GetMatrixElement(&self.ptr_matrix, i, j);
+                let dcrt_poly = DCRTPoly::new(poly);
+                row.push(dcrt_poly);
+            }
+            matrix_inner.push(row);
+        }
+        debug_mem("GetMatrixElement completed");
+        DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 }
 
@@ -240,35 +260,21 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         debug_mem("SetMatrixElement target_matrix_ptr completed");
 
-        let preimage_matrix_ptr = DCRTSquareMatTrapdoorGaussSamp(
-            n as u32,
-            k as u32,
-            &public_matrix.ptr_matrix,
-            &trapdoor.ptr_trapdoor,
-            &target_matrix_ptr,
-            2_i64,
-            SIGMA,
-        );
-
+        let preimage_matrix = DCRTMatrixPtr {
+            ptr_matrix: DCRTSquareMatTrapdoorGaussSamp(
+                n as u32,
+                k as u32,
+                &public_matrix.ptr_matrix,
+                &trapdoor.ptr_trapdoor,
+                &target_matrix_ptr,
+                2_i64,
+                SIGMA,
+            )
+            .into(),
+        };
         debug_mem("DCRTSquareMatTrapdoorGaussSamp completed");
 
-        let nrow = size * (k + 2);
-        let ncol = size;
-
-        let mut matrix_inner = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                let poly = GetMatrixElement(&preimage_matrix_ptr, i, j);
-                let dcrt_poly = DCRTPoly::new(poly);
-                row.push(dcrt_poly);
-            }
-            matrix_inner.push(row);
-        }
-
-        debug_mem("GetMatrixElement completed");
-
-        let full_preimage = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
+        let full_preimage = preimage_matrix.to_dcry_poly_matrix(size * (k + 2), size, params);
 
         debug_mem("full_preimage generated");
 
