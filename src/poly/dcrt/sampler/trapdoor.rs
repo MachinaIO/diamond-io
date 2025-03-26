@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use std::sync::Arc;
 
 use crate::{
-    parallel_iter,
+    parallel_chunk_iter, parallel_iter,
     poly::{
         dcrt::{DCRTPoly, DCRTPolyMatrix},
         sampler::PolyTrapdoorSampler,
@@ -124,16 +124,24 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         debug_mem("preimage before loop processing");
+        let chunk_size = 8;
         let num_block = target_cols.div_ceil(size);
-        let preimages: Vec<_> = parallel_iter!(0..num_block)
-            .map(|i| {
-                let start_col = i * size;
-                let end_col = (start_col + size).min(target_cols);
-                let target_block = target.slice(0, size, start_col, end_col);
-                debug_mem(format!("preimage iter : start_col = {}", start_col));
+        let indices: Vec<_> = (0..num_block).collect();
+        let preimages: Vec<_> = parallel_chunk_iter!(indices, chunk_size)
+            .map(|chunk| {
+                chunk
+                    .iter()
+                    .map(|&i| {
+                        let start_col = i * size;
+                        let end_col = (start_col + size).min(target_cols);
+                        let target_block = target.slice(0, size, start_col, end_col);
+                        debug_mem(format!("preimage iter : start_col = {}", start_col));
 
-                self.process_preimage_block(params, trapdoor, public_matrix, &target_block)
+                        self.process_preimage_block(params, trapdoor, public_matrix, &target_block)
+                    })
+                    .collect::<Vec<_>>()
             })
+            .flatten()
             .collect();
 
         log_mem("Collected preimages");
