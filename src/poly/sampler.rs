@@ -1,3 +1,5 @@
+use openfhe::{cxx::UniquePtr, ffi::Matrix};
+
 use super::{Poly, PolyMatrix};
 
 #[derive(Debug)]
@@ -50,27 +52,18 @@ pub trait PolyUniformSampler {
 
 pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
-    type Trapdoor;
 
-    fn trapdoor(
-        &self,
-        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        size: usize,
-    ) -> (Self::Trapdoor, Self::M);
+    fn new(params: &<<Self::M as PolyMatrix>::P as Poly>::Params, size: usize) -> Self;
 
     fn preimage(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::M,
         target: &Self::M,
-    ) -> Self::M;
+    ) -> UniquePtr<Matrix>;
 
     fn process_preimage_block(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::M,
         target_block: &Self::M,
-    ) -> Self::M;
+    ) -> UniquePtr<Matrix>;
 }
