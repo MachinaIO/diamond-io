@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use super::{Poly, PolyMatrix};
 
 #[derive(Debug)]
@@ -57,18 +59,20 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M);
-    fn preimage(
+    fn preimage_to_fs(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-    ) -> Self::M;
-    fn process_preimage_block(
+        preimage_id: &String,
+    ) -> Vec<PathBuf>;
+    fn process_preimage_block_to_fs(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target_block: &Self::M,
-    ) -> Self::M;
+        preimage_block_id: &String,
+    ) -> PathBuf;
 }
