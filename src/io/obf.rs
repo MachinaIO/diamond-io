@@ -188,6 +188,10 @@ where
             );
             log_mem("Computed n_preimage_bit");
 
+            if bit != 0 {
+                coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
+            };
+
             k_preimages[idx][bit] = {
                 let inserted_poly_gadget = {
                     let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
@@ -205,9 +209,7 @@ where
                 let k_target = {
                     let rg = &public_data.rgs[bit];
                     let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
-                    if bit != 0 {
-                        coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
-                    };
+
                     let bottom =
                         pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
                     top.concat_rows(&[&bottom])
