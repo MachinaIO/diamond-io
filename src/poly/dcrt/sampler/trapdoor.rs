@@ -123,9 +123,12 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             "Target matrix should have the same number of rows as the public matrix"
         );
 
-        debug_mem("preimage before loop processing");
-        let chunk_size = 8;
+        let chunk_size = 20;
         let num_block = target_cols.div_ceil(size);
+        debug_mem(format!(
+            "preimage before loop processing with chunksize {}, out of {}",
+            chunk_size, num_block
+        ));
         let indices: Vec<_> = (0..num_block).collect();
         let preimages: Vec<_> = parallel_chunk_iter!(indices, chunk_size)
             .map(|chunk| {
@@ -135,8 +138,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                         let start_col = i * size;
                         let end_col = (start_col + size).min(target_cols);
                         let target_block = target.slice(0, size, start_col, end_col);
-                        debug_mem(format!("preimage iter : start_col = {}", start_col));
-
+                        debug_mem(format!("preimage iter: start_col = {}", start_col));
                         self.process_preimage_block(params, trapdoor, public_matrix, &target_block)
                     })
                     .collect::<Vec<_>>()
