@@ -236,7 +236,7 @@ where
     let final_preimage_target = {
         let one = pub_key_cur[0].clone();
         let input = &pub_key_cur[1..];
-        let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
+        let eval_outputs = final_circuit.eval(params.as_ref(), &one, input);
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs
             .chunks(log_q)

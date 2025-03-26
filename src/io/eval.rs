@@ -181,7 +181,7 @@ where
         let last_input_encodings = encodings.last().unwrap();
         let output_encodings = final_circuit.eval::<BggEncoding<M>>(
             params.as_ref(),
-            last_input_encodings[0].clone(),
+            &last_input_encodings[0],
             &last_input_encodings[1..],
         );
         let output_encoding_ints = output_encodings

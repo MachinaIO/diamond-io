@@ -208,7 +208,7 @@ mod test {
         let one = DCRTPoly::const_one(&params);
         let mut inputs = vec![one.clone()];
         inputs.push(t_bar.entry(0, 0).clone());
-        let circuit_outputs = final_circuit.eval(&params, one, &inputs);
+        let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
         // 9. Extract the hardcoded key bits
         let hardcoded_key_bits = hardcoded_key
             .entry(0, 0)
