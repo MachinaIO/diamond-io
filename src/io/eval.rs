@@ -10,14 +10,16 @@ impl<M> Obfuscation<M>
 where
     M: PolyMatrix,
 {
-    pub fn eval<SH>(
+    pub fn eval<SH, ST>(
         &self,
         obf_params: ObfuscationParams<M>,
         mut sampler_hash: SH,
+        sampler_trapdoor: ST,
         inputs: &[bool],
     ) -> Vec<bool>
     where
         SH: PolyHashSampler<[u8; 32], M = M>,
+        ST: PolyTrapdoorSampler<M = M>,
         for<'a> &'a M: Mul<&'a M, Output = M>,
     {
         sampler_hash.set_key(self.hash_key);
@@ -50,6 +52,7 @@ where
             })
             .collect_vec();
 
+        let sampler_trapdoor = Arc::new(sampler_trapdoor);
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
@@ -83,12 +86,27 @@ where
         let log_q = params.as_ref().modulus_bits();
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
-            let m = if *input { &self.m_preimages[idx][1] } else { &self.m_preimages[idx][0] };
-            let q = &ps[idx] * m;
-            let n = if *input { &self.n_preimages[idx][1] } else { &self.n_preimages[idx][0] };
-            let p = &q * n;
-            let k = if *input { &self.k_preimages[idx][1] } else { &self.k_preimages[idx][0] };
-            let v = &q * k;
+            let m_preimage_paths = if *input {
+                &self.m_preimages_paths[idx][1]
+            } else {
+                &self.m_preimages_paths[idx][0]
+            };
+            let m = sampler_trapdoor.preimage_from_fs(params.as_ref(), m_preimage_paths);
+            let q = &ps[idx] * &m;
+            let n_preimage_paths = if *input {
+                &self.n_preimages_paths[idx][1]
+            } else {
+                &self.n_preimages_paths[idx][0]
+            };
+            let n = sampler_trapdoor.preimage_from_fs(params.as_ref(), n_preimage_paths);
+            let p = &q * &n;
+            let k_preimage_paths = if *input {
+                &self.k_preimages_paths[idx][1]
+            } else {
+                &self.k_preimages_paths[idx][0]
+            };
+            let k = sampler_trapdoor.preimage_from_fs(params.as_ref(), k_preimage_paths);
+            let v = &q * &k;
             let new_encode_vec = {
                 let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
@@ -190,7 +208,9 @@ where
             .collect_vec();
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
-        let final_v = ps.last().unwrap() * &self.final_preimage;
+        let final_preimage =
+            sampler_trapdoor.preimage_from_fs(params.as_ref(), &self.final_preimage_path);
+        let final_v = ps.last().unwrap() * &final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(feature = "test")]
