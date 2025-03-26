@@ -124,7 +124,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         // todo: real param and dummy param should have diff value
-        let chunk_size = 80;
+        let chunk_size = 300;
         let num_block = target_cols.div_ceil(size);
         debug_mem(format!(
             "preimage before loop processing with chunksize {}, out of {}",
@@ -163,6 +163,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let size = public_matrix.row_size();
         let target_cols = target_block.col_size();
 
+        debug_mem(format!(
+            "Processing preimage block, n={}, size={}, k_res={}, nrow={}, ncol={}",
+            params.ring_dimension(),
+            params.crt_depth(),
+            params.crt_bits(),
+            size,
+            (k + 2) * size,
+        ));
         debug_mem("Processing preimage block");
 
         let mut public_matrix_ptr = MatrixGen(
@@ -173,7 +181,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             (k + 2) * size,
         );
 
-        debug_mem("public_matrix_ptr generated");
+        debug_mem(format!("public_matrix_ptr generated"));
 
         for i in 0..size {
             for j in 0..(k + 2) * size {
