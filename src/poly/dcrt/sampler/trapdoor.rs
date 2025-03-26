@@ -73,6 +73,8 @@ impl DCRTMatrixPtr {
 
         debug_mem(format!("public_matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
 
+        // todo: if using mmap, this process taking 2hr for real param, probably for matrix.entry(i,
+        // j) need to be better
         for i in 0..nrow {
             for j in 0..ncol {
                 SetMatrixElement(
