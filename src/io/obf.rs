@@ -98,13 +98,13 @@ where
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
 
-    let (b_star_trapdoor_init, b_star_init) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+    let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    let m_b = (2 * (d + 1)) * (2 + log_q);
     let p_init = {
+        let m_b = (2 * (d + 1)) * (2 + log_q);
         let s_connect = s_init.concat_columns(&[s_init]);
-        let s_b = s_connect * &b_star_init;
+        let s_b = s_connect * &b_star_cur;
         let error = sampler_uniform.sample_uniform(
             &params,
             1,
@@ -131,11 +131,6 @@ where
         vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
         vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
     );
-
-    let mut b_star_trapdoor_cur = b_star_trapdoor_init;
-    let mut b_star_cur = b_star_init;
-
-    let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
 
     #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> =
@@ -204,14 +199,15 @@ where
             if bit != 0 {
                 coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
             };
-            let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
+
             let inserted_poly_gadget = {
+                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
                 let zero = <M::P as Poly>::const_zero(params.as_ref());
                 let mut polys = vec![];
                 for _ in 0..(inserted_poly_index) {
                     polys.push(zero.clone());
                 }
-                polys.push(inserted_poly);
+                polys.push(M::P::from_coeffs(params.as_ref(), &coeffs));
                 for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
                     polys.push(zero.clone());
                 }
