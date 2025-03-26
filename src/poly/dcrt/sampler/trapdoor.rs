@@ -18,8 +18,8 @@ use std::{
 use openfhe::{
     cxx::UniquePtr,
     ffi::{
-        DCRTSquareMatTrapdoorGaussSamp, DCRTSquareMatTrapdoorGaussSampToFs,
-        DCRTSquareMatTrapdoorGen, GetMatrixElement, MatrixGen, RLWETrapdoorPair, SetMatrixElement,
+        DCRTSquareMatTrapdoorGaussSampToFs, DCRTSquareMatTrapdoorGen, MatrixGen, RLWETrapdoorPair,
+        SetMatrixElement,
     },
 };
 
@@ -116,7 +116,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-        preimage_id: &String,
+        preimage_id: &str,
     ) -> Vec<std::path::PathBuf> {
         let size = public_matrix.row_size();
         let target_cols = target.col_size();
@@ -157,7 +157,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target_block: &Self::M,
-        preimage_block_id: &String,
+        preimage_block_id: &str,
     ) -> PathBuf {
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
@@ -211,6 +211,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         debug_mem("SetMatrixElement target_matrix_ptr completed");
 
+        let preimage_block_id_path = format!("data/{}.bin", preimage_block_id);
+
         DCRTSquareMatTrapdoorGaussSampToFs(
             n as u32,
             k as u32,
@@ -219,13 +221,13 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             &target_matrix_ptr,
             2_i64,
             SIGMA,
-            &preimage_block_id,
+            &preimage_block_id_path,
         );
 
         debug_mem("DCRTSquareMatTrapdoorGaussSamp completed");
 
         let mut path = PathBuf::new();
-        path.push(preimage_block_id);
+        path.push(preimage_block_id_path);
         path
 
         // let nrow = size * (k + 2);
@@ -255,198 +257,285 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         //     full_preimage
         // }
     }
+
+    fn preimage_from_fs(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        preimages_paths: &Vec<PathBuf>,
+    ) -> Self::M {
+        if preimages_paths.is_empty() {
+            return DCRTPolyMatrix::zero(params, 0, 0);
+        }
+
+        let n = params.ring_dimension();
+        let k_res = params.crt_bits();
+        let size = preimages_paths.len();
+
+        let mut all_preimages = Vec::with_capacity(preimages_paths.len());
+
+        for (idx, path) in preimages_paths.iter().enumerate() {
+            debug_mem(format!("Loading preimage {} from path: {}", idx, path.display()));
+
+            // Extract target_cols and size from the filename
+            // Format is: "{preimage_id}_{:08}_{:08}" where the last two numbers are target_cols and
+            // size
+            let filename = path.file_name().unwrap().to_string_lossy();
+            let parts: Vec<&str> = filename.split('_').collect();
+
+            let mut target_cols = 0;
+            let mut matrix_size = 0;
+
+            if parts.len() >= 2 {
+                if let Ok(tc) = parts[parts.len() - 2].parse::<usize>() {
+                    target_cols = tc;
+                    if let Ok(sz) = parts[parts.len() - 1].parse::<usize>() {
+                        matrix_size = sz;
+                    }
+                }
+            }
+
+            let path_str = path.to_string_lossy().to_string();
+            let preimage = openfhe::ffi::GetMatrixFromFs(n, size, k_res, &path_str);
+            let nrow = openfhe::ffi::GetMatrixRows(&preimage);
+            let ncol = openfhe::ffi::GetMatrixCols(&preimage);
+
+            let mut matrix_inner = Vec::with_capacity(nrow);
+            for i in 0..nrow {
+                let mut row = Vec::with_capacity(ncol);
+                for j in 0..ncol {
+                    let poly = openfhe::ffi::GetMatrixElement(&preimage, i, j);
+                    let dcrt_poly = DCRTPoly::new(poly);
+                    row.push(dcrt_poly);
+                }
+                matrix_inner.push(row);
+            }
+
+            let mut preimage_matrix = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
+
+            // Slice the matrix if target_cols < matrix_size
+            if target_cols > 0 && matrix_size > 0 && target_cols < matrix_size {
+                preimage_matrix =
+                    preimage_matrix.slice(0, preimage_matrix.row_size(), 0, target_cols);
+            }
+
+            all_preimages.push(preimage_matrix);
+        }
+
+        // Concatenate all preimages by columns
+        if all_preimages.len() == 1 {
+            return all_preimages.remove(0);
+        }
+
+        let mut result = all_preimages.remove(0);
+        let preimage_refs: Vec<&DCRTPolyMatrix> = all_preimages.iter().collect();
+        result = result.concat_columns(&preimage_refs);
+
+        result
+    }
 }
 
-// #[cfg(test)]
-// #[cfg(feature = "test")]
-// mod tests {
-//     use super::*;
-//     use crate::poly::{
-//         dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
-//         sampler::{DistType, PolyUniformSampler},
-//     };
+#[cfg(test)]
+#[cfg(feature = "test")]
+mod tests {
+    use super::*;
+    use crate::poly::{
+        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
+        sampler::{DistType, PolyUniformSampler},
+    };
 
-//     #[test]
-//     fn test_trapdoor_generation() {
-//         let size: usize = 3;
-//         let sampler = DCRTPolyTrapdoorSampler::new();
-//         let params = DCRTPolyParams::default();
+    #[test]
+    fn test_trapdoor_generation() {
+        let size: usize = 3;
+        let sampler = DCRTPolyTrapdoorSampler::new();
+        let params = DCRTPolyParams::default();
 
-//         let (_, public_matrix) = sampler.trapdoor(&params, size);
+        let (_, public_matrix) = sampler.trapdoor(&params, size);
 
-//         let expected_rows = size;
-//         let expected_cols = (&params.modulus_bits() + 2) * size;
+        let expected_rows = size;
+        let expected_cols = (&params.modulus_bits() + 2) * size;
 
-//         assert_eq!(
-//             public_matrix.row_size(),
-//             expected_rows,
-//             "Public matrix should have the correct number of rows"
-//         );
-//         assert_eq!(
-//             public_matrix.col_size(),
-//             expected_cols,
-//             "Public matrix should have the correct number of columns"
-//         );
+        assert_eq!(
+            public_matrix.row_size(),
+            expected_rows,
+            "Public matrix should have the correct number of rows"
+        );
+        assert_eq!(
+            public_matrix.col_size(),
+            expected_cols,
+            "Public matrix should have the correct number of columns"
+        );
 
-//         // Verify that all entries in the matrix are valid DCRTPolys
-//         for i in 0..public_matrix.row_size() {
-//             for j in 0..public_matrix.col_size() {
-//                 let poly = public_matrix.entry(i, j);
-//                 assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
-//             }
-//         }
-//     }
+        // Verify that all entries in the matrix are valid DCRTPolys
+        for i in 0..public_matrix.row_size() {
+            for j in 0..public_matrix.col_size() {
+                let poly = public_matrix.entry(i, j);
+                assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
+            }
+        }
+    }
 
-//     #[test]
-//     fn test_preimage_generation() {
-//         let params = DCRTPolyParams::default();
-//         let size = 3;
-//         let k = params.modulus_bits();
-//         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
-//         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+    #[test]
+    fn test_preimage_generation() {
+        let params = DCRTPolyParams::default();
+        let size = 3;
+        let k = params.modulus_bits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
-//         let uniform_sampler = DCRTPolyUniformSampler::new();
-//         let target = uniform_sampler.sample_uniform(&params, size, size, DistType::FinRingDist);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target = uniform_sampler.sample_uniform(&params, size, size, DistType::FinRingDist);
 
-//         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+        let preimage_paths =
+            trapdoor_sampler.preimage_to_fs(&params, &trapdoor, &public_matrix, &target, "test");
 
-//         let expected_rows = size * (k + 2);
-//         let expected_cols = size;
+        let preimage = trapdoor_sampler.preimage_from_fs(&params, &preimage_paths);
 
-//         assert_eq!(
-//             preimage.row_size(),
-//             expected_rows,
-//             "Preimage matrix should have the correct number of rows"
-//         );
+        let expected_rows = size * (k + 2);
+        let expected_cols = size;
 
-//         assert_eq!(
-//             preimage.col_size(),
-//             expected_cols,
-//             "Preimage matrix should have the correct number of columns"
-//         );
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
 
-//         // public_matrix * preimage should be equal to target
-//         let product = public_matrix * &preimage;
-//         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-//     }
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns"
+        );
 
-//     #[test]
-//     fn test_preimage_generation_non_square_target_lt() {
-//         let params = DCRTPolyParams::default();
-//         let size = 4;
-//         let target_cols = 2;
-//         let k = params.modulus_bits();
-//         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
-//         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+        // public_matrix * preimage should be equal to target
+        let product = public_matrix * &preimage;
+        assert_eq!(
+            product, target,
+            "Product of public matrix and preimage should equal target"
+        );
+    }
 
-//         // Create a non-square target matrix (size x target_cols) such that target_cols < size
-//         let uniform_sampler = DCRTPolyUniformSampler::new();
-//         let target =
-//             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+    //     #[test]
+    //     fn test_preimage_generation_non_square_target_lt() {
+    //         let params = DCRTPolyParams::default();
+    //         let size = 4;
+    //         let target_cols = 2;
+    //         let k = params.modulus_bits();
+    //         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+    //         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
-//         // Compute the preimage
-//         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+    //         // Create a non-square target matrix (size x target_cols) such that target_cols <
+    // size         let uniform_sampler = DCRTPolyUniformSampler::new();
+    //         let target =
+    //             uniform_sampler.sample_uniform(&params, size, target_cols,
+    // DistType::FinRingDist);
 
-//         // Verify dimensions of the preimage matrix
-//         let expected_rows = size * (k + 2);
-//         let expected_cols = target_cols; // Preimage should be sliced to match target columns
+    //         // Compute the preimage
+    //         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix,
+    // &target);
 
-//         assert_eq!(
-//             preimage.row_size(),
-//             expected_rows,
-//             "Preimage matrix should have the correct number of rows"
-//         );
+    //         // Verify dimensions of the preimage matrix
+    //         let expected_rows = size * (k + 2);
+    //         let expected_cols = target_cols; // Preimage should be sliced to match target columns
 
-//         assert_eq!(
-//             preimage.col_size(),
-//             expected_cols,
-//             "Preimage matrix should have the correct number of columns (sliced to match target)"
-//         );
+    //         assert_eq!(
+    //             preimage.row_size(),
+    //             expected_rows,
+    //             "Preimage matrix should have the correct number of rows"
+    //         );
 
-//         // Verify that public_matrix * preimage = target
-//         let product = public_matrix * &preimage;
+    //         assert_eq!(
+    //             preimage.col_size(),
+    //             expected_cols,
+    //             "Preimage matrix should have the correct number of columns (sliced to match
+    // target)"         );
 
-//         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-//     }
+    //         // Verify that public_matrix * preimage = target
+    //         let product = public_matrix * &preimage;
 
-//     #[test]
-//     fn test_preimage_generation_non_square_target_gt_multiple() {
-//         let params = DCRTPolyParams::default();
-//         let size = 4;
-//         let multiple = 2;
-//         let target_cols = size * multiple;
-//         let k = params.modulus_bits();
-//         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
-//         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+    //         assert_eq!(product, target, "Product of public matrix and preimage should equal
+    // target");     }
 
-//         // Create a non-square target matrix (size x target_cols) such that target_cols > size
-// and         // target_cols is a multiple of size
-//         let uniform_sampler = DCRTPolyUniformSampler::new();
-//         let target =
-//             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+    //     #[test]
+    //     fn test_preimage_generation_non_square_target_gt_multiple() {
+    //         let params = DCRTPolyParams::default();
+    //         let size = 4;
+    //         let multiple = 2;
+    //         let target_cols = size * multiple;
+    //         let k = params.modulus_bits();
+    //         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+    //         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
-//         // Compute the preimage
-//         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+    //         // Create a non-square target matrix (size x target_cols) such that target_cols >
+    // size and         // target_cols is a multiple of size
+    //         let uniform_sampler = DCRTPolyUniformSampler::new();
+    //         let target =
+    //             uniform_sampler.sample_uniform(&params, size, target_cols,
+    // DistType::FinRingDist);
 
-//         // Verify dimensions of the preimage matrix
-//         let expected_rows = size * (k + 2);
-//         let expected_cols = target_cols;
+    //         // Compute the preimage
+    //         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix,
+    // &target);
 
-//         assert_eq!(
-//             preimage.row_size(),
-//             expected_rows,
-//             "Preimage matrix should have the correct number of rows"
-//         );
+    //         // Verify dimensions of the preimage matrix
+    //         let expected_rows = size * (k + 2);
+    //         let expected_cols = target_cols;
 
-//         assert_eq!(
-//             preimage.col_size(),
-//             expected_cols,
-//             "Preimage matrix should have the correct number of columns (equal to target columns)"
-//         );
+    //         assert_eq!(
+    //             preimage.row_size(),
+    //             expected_rows,
+    //             "Preimage matrix should have the correct number of rows"
+    //         );
 
-//         // Verify that public_matrix * preimage = target
-//         let product = public_matrix * &preimage;
+    //         assert_eq!(
+    //             preimage.col_size(),
+    //             expected_cols,
+    //             "Preimage matrix should have the correct number of columns (equal to target
+    // columns)"         );
 
-//         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-//     }
+    //         // Verify that public_matrix * preimage = target
+    //         let product = public_matrix * &preimage;
 
-//     #[test]
-//     fn test_preimage_generation_non_square_target_gt_non_multiple() {
-//         let params = DCRTPolyParams::default();
-//         let size = 4;
-//         let target_cols = 6;
-//         let k = params.modulus_bits();
-//         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
-//         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+    //         assert_eq!(product, target, "Product of public matrix and preimage should equal
+    // target");     }
 
-//         // Create a non-square target matrix (size x target_cols) such that target_cols > size
-// but         // not a multiple of size
-//         let uniform_sampler = DCRTPolyUniformSampler::new();
-//         let target =
-//             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+    //     #[test]
+    //     fn test_preimage_generation_non_square_target_gt_non_multiple() {
+    //         let params = DCRTPolyParams::default();
+    //         let size = 4;
+    //         let target_cols = 6;
+    //         let k = params.modulus_bits();
+    //         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+    //         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
-//         // Compute the preimage
-//         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+    //         // Create a non-square target matrix (size x target_cols) such that target_cols >
+    // size but         // not a multiple of size
+    //         let uniform_sampler = DCRTPolyUniformSampler::new();
+    //         let target =
+    //             uniform_sampler.sample_uniform(&params, size, target_cols,
+    // DistType::FinRingDist);
 
-//         // Verify dimensions of the preimage matrix
-//         let expected_rows = size * (k + 2);
-//         let expected_cols = target_cols;
+    //         // Compute the preimage
+    //         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix,
+    // &target);
 
-//         assert_eq!(
-//             preimage.row_size(),
-//             expected_rows,
-//             "Preimage matrix should have the correct number of rows"
-//         );
+    //         // Verify dimensions of the preimage matrix
+    //         let expected_rows = size * (k + 2);
+    //         let expected_cols = target_cols;
 
-//         assert_eq!(
-//             preimage.col_size(),
-//             expected_cols,
-//             "Preimage matrix should have the correct number of columns (equal to target columns)"
-//         );
+    //         assert_eq!(
+    //             preimage.row_size(),
+    //             expected_rows,
+    //             "Preimage matrix should have the correct number of rows"
+    //         );
 
-//         // Verify that public_matrix * preimage = target
-//         let product = public_matrix * &preimage;
+    //         assert_eq!(
+    //             preimage.col_size(),
+    //             expected_cols,
+    //             "Preimage matrix should have the correct number of columns (equal to target
+    // columns)"         );
 
-//         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-//     }
-// }
+    //         // Verify that public_matrix * preimage = target
+    //         let product = public_matrix * &preimage;
+
+    //         assert_eq!(product, target, "Product of public matrix and preimage should equal
+    // target");     }
+}

@@ -65,7 +65,7 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-        preimage_id: &String,
+        preimage_id: &str,
     ) -> Vec<PathBuf>;
     fn process_preimage_block_to_fs(
         &self,
@@ -73,6 +73,11 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target_block: &Self::M,
-        preimage_block_id: &String,
+        preimage_block_id: &str,
     ) -> PathBuf;
+    fn preimage_from_fs(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        preimages_paths: &Vec<PathBuf>,
+    ) -> Self::M;
 }
