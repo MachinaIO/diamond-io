@@ -42,19 +42,23 @@ impl DCRTMatrixPtr {
 
         debug_mem(format!("target_matrix_ptr MatrixGen row={}, col={}", size, target_cols));
 
-        for i in 0..size {
-            for j in 0..target_cols {
-                let entry = matrix.entry(i, j);
-                let poly = entry.get_poly();
-                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly);
-            }
+        let poly_matrix: Vec<Vec<DCRTPoly>> = parallel_iter!(0..size)
+            .map(|i| {
+                let mut row: Vec<DCRTPoly> =
+                    parallel_iter!(0..target_cols).map(|j| matrix.entry(i, j)).collect();
 
-            if target_cols < size {
-                for j in target_cols..size {
+                if target_cols < size {
                     let zero_poly = DCRTPoly::const_zero(params);
-                    let zero_poly_ptr = zero_poly.get_poly();
-                    SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, zero_poly_ptr);
+                    row.extend((target_cols..size).map(|_| zero_poly.clone()));
                 }
+
+                row
+            })
+            .collect();
+
+        for (i, row) in poly_matrix.iter().enumerate() {
+            for (j, poly) in row.iter().enumerate() {
+                SetMatrixElement(target_matrix_ptr.as_mut().unwrap(), i, j, poly.get_poly());
             }
         }
 
@@ -75,14 +79,13 @@ impl DCRTMatrixPtr {
 
         // todo: if using mmap, this process taking 2hr for real param, probably for matrix.entry(i,
         // j) need to be better
-        for i in 0..nrow {
-            for j in 0..ncol {
-                SetMatrixElement(
-                    public_matrix_ptr.as_mut().unwrap(),
-                    i,
-                    j,
-                    matrix.entry(i, j).get_poly(),
-                );
+        let poly_matrix: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
+            .map(|i| parallel_iter!(0..ncol).map(|j| matrix.entry(i, j)).collect())
+            .collect();
+
+        for (i, row) in poly_matrix.iter().enumerate() {
+            for (j, poly) in row.iter().enumerate() {
+                SetMatrixElement(public_matrix_ptr.as_mut().unwrap(), i, j, poly.get_poly());
             }
         }
 
@@ -212,7 +215,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         // todo: real param and dummy param should have diff value
-        let chunk_size = 100;
+        let chunk_size = 1;
         let num_block = target_cols.div_ceil(size);
         let k = params.modulus_bits();
         debug_mem(format!(
