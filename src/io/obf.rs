@@ -274,7 +274,7 @@ where
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target,
-        &final_preimage_id,
+        final_preimage_id,
     );
     log_mem("Sampled final_preimage");
 
