@@ -106,7 +106,7 @@ impl DCRTMatrixPtr {
 }
 
 pub struct DCRTTrapdoor {
-    ptr_dcrt_trapdoor: Arc<UniquePtr<openfhe::ffi::DCRTTrapdoor>>,
+    ptr_dcrt_trapdoor: UniquePtr<openfhe::ffi::DCRTTrapdoor>,
 }
 
 impl DCRTTrapdoor {
@@ -128,8 +128,8 @@ impl DCRTTrapdoor {
         RLWETrapdoor { ptr_trapdoor: self.ptr_dcrt_trapdoor.GetTrapdoorPair().into() }
     }
 
-    fn get_public_matrix(&self, row: usize, col: usize) -> DCRTPoly {
-        DCRTPoly::new(self.ptr_dcrt_trapdoor.GetPublicMatrixElement(row, col))
+    fn get_public_matrix(&mut self, row: usize, col: usize) -> DCRTPoly {
+        DCRTPoly::new(self.ptr_dcrt_trapdoor.as_mut().unwrap().GetPublicMatrixElement(row, col))
     }
 }
 
@@ -165,8 +165,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M) {
-        log_mem("Before trap gen");
-        let dcrt_trapdoor = DCRTTrapdoor::new(
+        debug_mem("Before trap gen");
+        let mut dcrt_trapdoor = DCRTTrapdoor::new(
             params.ring_dimension(),
             params.crt_depth(),
             params.crt_bits(),
@@ -175,20 +175,18 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             2_i64,
             false,
         );
-        log_mem("After trap gen");
+        debug_mem("After trap gen");
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
-        log_mem("After get trapdoor pair");
+        debug_mem("After get trapdoor pair");
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
         let public_matrix = DCRTPolyMatrix::from_poly_vec(
             params,
-            parallel_iter!(0..nrow)
-                .map(|i| {
-                    parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
-                })
+            (0..nrow)
+                .map(|i| (0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect())
                 .collect(),
         );
-        log_mem("After get public matrix");
+        debug_mem("After get public matrix");
         (rlwe_trapdoor, public_matrix)
     }
 
