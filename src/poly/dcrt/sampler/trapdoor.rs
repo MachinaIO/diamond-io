@@ -165,6 +165,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M) {
+        log_mem("Before trap gen");
         let dcrt_trapdoor = DCRTTrapdoor::new(
             params.ring_dimension(),
             params.crt_depth(),
@@ -174,7 +175,9 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             2_i64,
             false,
         );
+        log_mem("After trap gen");
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
+        log_mem("After get trapdoor pair");
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
         let public_matrix = DCRTPolyMatrix::from_poly_vec(
@@ -185,6 +188,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 })
                 .collect(),
         );
+        log_mem("After get public matrix");
         (rlwe_trapdoor, public_matrix)
     }
 
