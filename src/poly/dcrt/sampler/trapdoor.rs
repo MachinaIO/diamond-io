@@ -181,16 +181,17 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             false,
         );
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
+        log_mem(format!("Get_trapdoor_pair"));
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
-        let public_matrix = DCRTPolyMatrix::from_poly_vec(
-            params,
-            parallel_iter!(0..nrow)
-                .map(|i| {
-                    parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
-                })
-                .collect(),
-        );
+        let inner = parallel_iter!(0..nrow)
+            .map(|i| {
+                parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
+            })
+            .collect();
+        log_mem(format!("Collected inner, get_public_matrix nrow={}, ncol={}", nrow, ncol));
+        let public_matrix = DCRTPolyMatrix::from_poly_vec(params, inner);
+        log_mem(format!("public_matrix, rust version"));
         (rlwe_trapdoor, public_matrix)
     }
 
