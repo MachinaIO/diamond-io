@@ -38,7 +38,7 @@ impl DCRTMatrixPtr {
         let mut target_matrix_ptr =
             MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
 
-        debug_mem(format!("target_matrix_ptr MatrixGen row={}, col={}", size, target_cols));
+        // debug_mem(format!("target_matrix_ptr MatrixGen row={}, col={}", size, target_cols));
 
         for i in 0..size {
             for j in 0..target_cols {
@@ -69,7 +69,7 @@ impl DCRTMatrixPtr {
     ) -> Self {
         let mut public_matrix_ptr = MatrixGen(n, size, k_res, nrow, ncol);
 
-        debug_mem(format!("public_matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
+        // debug_mem(format!("public_matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
 
         for i in 0..nrow {
             for j in 0..ncol {
@@ -100,7 +100,7 @@ impl DCRTMatrixPtr {
             matrix_inner.push(row);
         }
 
-        debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
+        // debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
         DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 }
@@ -122,14 +122,6 @@ impl DCRTTrapdoor {
         let ptr_dcrt_trapdoor =
             DCRTSquareMatTrapdoorGen(ring_dimension, crt_depth, crt_bits, d, sigma, base, balanced);
         Self { ptr_dcrt_trapdoor: ptr_dcrt_trapdoor.into() }
-    }
-
-    fn get_trapdoor_pair(&self) -> RLWETrapdoor {
-        RLWETrapdoor { ptr_trapdoor: self.ptr_dcrt_trapdoor.GetTrapdoorPair().into() }
-    }
-
-    fn get_public_matrix(&self, row: usize, col: usize) -> DCRTPoly {
-        DCRTPoly::new(self.ptr_dcrt_trapdoor.GetPublicMatrixElement(row, col))
     }
 }
 
@@ -165,6 +157,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M) {
+        debug_mem("Before trapdoor gen");
         let dcrt_trapdoor = DCRTTrapdoor::new(
             params.ring_dimension(),
             params.crt_depth(),
@@ -174,18 +167,20 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             2_i64,
             false,
         );
-        let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
+        debug_mem("After trapdoor gen");
+        let rlwe_trapdoor =
+            RLWETrapdoor { ptr_trapdoor: dcrt_trapdoor.ptr_dcrt_trapdoor.GetTrapdoorPair().into() };
+        debug_mem("After get_trapdoor_pair");
+        let public_matrix = dcrt_trapdoor.ptr_dcrt_trapdoor.GetPublicMatrix();
         let nrow = size;
         let ncol = (&params.modulus_bits() + 2) * size;
-        let public_matrix = DCRTPolyMatrix::from_poly_vec(
-            params,
-            parallel_iter!(0..nrow)
-                .map(|i| {
-                    parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
-                })
-                .collect(),
-        );
-        (rlwe_trapdoor, public_matrix)
+
+        let public_matrix = DCRTMatrixPtr { ptr_matrix: public_matrix.into() };
+
+        let dcrt_public_matrix = public_matrix.to_dcry_poly_matrix(nrow, ncol, params);
+        debug_mem("After get_public_matrix");
+
+        (rlwe_trapdoor, dcrt_public_matrix)
     }
 
     fn preimage_to_fs(
@@ -207,7 +202,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let num_block = target_cols.div_ceil(size);
         let k = params.modulus_bits();
-        debug_mem(format!("preimage before loop processing out of {}", num_block));
+        // debug_mem(format!("preimage before loop processing out of {}", num_block));
 
         let public_matrix = DCRTMatrixPtr::new_public_matrix(
             public_matrix,
@@ -218,14 +213,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             (k + 2) * size,
         );
 
-        debug_mem("SetMatrixElement public_matrix_ptr completed");
+        // debug_mem("SetMatrixElement public_matrix_ptr completed");
 
         let preimages_paths: Vec<_> = parallel_iter!(0..num_block)
             .map(|i| {
                 let start_col = i * size;
                 let end_col = (start_col + size).min(target_cols);
                 let target_block = target.slice(0, size, start_col, end_col);
-                debug_mem(format!("preimage iter : start_col = {}", start_col));
+                // debug_mem(format!("preimage iter : start_col = {}", start_col));
 
                 self.process_preimage_block_to_fs(
                     params,
@@ -257,12 +252,12 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let preimage_block_id = format!("{}_{:08}_{:08}", preimage_block_id, target_cols, size);
 
-        debug_mem(format!("Processing preimage block id={}", preimage_block_id));
+        // debug_mem(format!("Processing preimage block id={}", preimage_block_id));
 
         let target_matrix =
             DCRTMatrixPtr::new_target_matrix(target_block, params, size, target_cols);
 
-        debug_mem("SetMatrixElement target_matrix_ptr completed");
+        // debug_mem("SetMatrixElement target_matrix_ptr completed");
 
         let preimage_block_id_path = format!("data/{}.bin", preimage_block_id);
 
@@ -277,7 +272,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             &preimage_block_id_path,
         );
 
-        debug_mem("DCRTSquareMatTrapdoorGaussSampToFs completed");
+        // debug_mem("DCRTSquareMatTrapdoorGaussSampToFs completed");
 
         preimage_block_id_path.into()
     }
@@ -297,7 +292,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let mut all_preimages = Vec::with_capacity(preimages_paths.len());
 
         for (idx, path) in preimages_paths.iter().enumerate() {
-            debug_mem(format!("Loading preimage {} from path: {}", idx, path.display()));
+            // debug_mem(format!("Loading preimage {} from path: {}", idx, path.display()));
             // Extract target_cols and size from the filename
             // Format is: "data/{preimage_id}_{:08}_{:08}.bin" where the last two numbers are
             // target_cols and size
