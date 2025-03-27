@@ -265,7 +265,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         debug_mem("SetMatrixElement target_matrix_ptr completed");
 
         let preimage_block_id_path = format!("data/{}.bin", preimage_block_id);
-
+        //file should be handled sequencially
         DCRTSquareMatTrapdoorGaussSampToFs(
             n as u32,
             k as u32,
