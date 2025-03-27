@@ -117,20 +117,6 @@ macro_rules! parallel_iter {
 }
 
 #[macro_export]
-macro_rules! parallel_chunk_iter {
-    ($i: expr, $chunk_size: expr) => {{
-        let chunks: Vec<_> = $i.chunks($chunk_size).map(|c| c.to_vec()).collect();
-        #[cfg(not(feature = "parallel"))]
-        {
-            chunks.into_iter()
-        }
-        #[cfg(feature = "parallel")]
-        {
-            rayon::iter::IntoParallelIterator::into_par_iter(chunks)
-        }
-    }};
-}
-#[macro_export]
 macro_rules! join {
     ($a:expr, $b:expr $(,)?) => {{
         #[cfg(not(feature = "parallel"))]
