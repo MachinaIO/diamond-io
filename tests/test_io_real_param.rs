@@ -18,6 +18,8 @@ mod test {
     use std::sync::Arc;
     use tracing::info;
 
+    const SIGMA: f64 = 4.578;
+
     #[test]
     #[ignore]
     fn test_io_just_mul_enc_and_bit_real_params() {
@@ -51,7 +53,7 @@ mod test {
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new();
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
         let mut rng = rand::rng();
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
@@ -65,7 +67,7 @@ mod test {
 
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new();
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
         #[cfg(feature = "test")]
         let hardcoded_key = obfuscation
             .hardcoded_key
@@ -80,5 +82,6 @@ mod test {
         info!("Total time: {:?}", total_time);
         #[cfg(feature = "test")]
         assert_eq!(output, hardcoded_key);
+        std::fs::remove_dir_all("data").unwrap();
     }
 }

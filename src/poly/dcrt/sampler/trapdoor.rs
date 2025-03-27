@@ -20,8 +20,6 @@ use openfhe::{
     },
 };
 
-const SIGMA: f64 = 4.578;
-
 pub struct RLWETrapdoor {
     ptr_trapdoor: Arc<UniquePtr<RLWETrapdoorPair>>,
 }
@@ -147,17 +145,13 @@ unsafe impl Sync for RLWETrapdoor {}
 unsafe impl Send for DCRTMatrixPtr {}
 unsafe impl Sync for DCRTMatrixPtr {}
 
-pub struct DCRTPolyTrapdoorSampler {}
-
-impl DCRTPolyTrapdoorSampler {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub struct DCRTPolyTrapdoorSampler {
+    sigma: f64,
 }
 
-impl Default for DCRTPolyTrapdoorSampler {
-    fn default() -> Self {
-        Self::new()
+impl DCRTPolyTrapdoorSampler {
+    pub fn new(sigma: f64) -> Self {
+        Self { sigma }
     }
 }
 
@@ -176,7 +170,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             params.crt_depth(),
             params.crt_bits(),
             size,
-            SIGMA,
+            self.sigma,
             2_i64,
             false,
         );
@@ -279,7 +273,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             &trapdoor.ptr_trapdoor,
             &target_matrix.ptr_matrix,
             2_i64,
-            SIGMA,
+            self.sigma,
             &preimage_block_id_path,
         );
 
@@ -376,13 +370,15 @@ mod tests {
         sampler::{DistType, PolyUniformSampler},
     };
 
+    const SIGMA: f64 = 4.578;
+
     #[test]
     fn test_trapdoor_generation() {
         let size: usize = 3;
-        let sampler = DCRTPolyTrapdoorSampler::new();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let params = DCRTPolyParams::default();
 
-        let (_, public_matrix) = sampler.trapdoor(&params, size);
+        let (_, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let expected_rows = size;
         let expected_cols = (&params.modulus_bits() + 2) * size;
@@ -412,7 +408,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let size = 3;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -446,6 +442,7 @@ mod tests {
         // public_matrix * preimage should be equal to target
         let product = public_matrix * &preimage;
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+        std::fs::remove_dir_all("data").unwrap();
     }
 
     #[test]
@@ -454,7 +451,7 @@ mod tests {
         let size = 4;
         let target_cols = 2;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols < size
@@ -491,6 +488,7 @@ mod tests {
         let product = public_matrix * &preimage;
 
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+        std::fs::remove_dir_all("data").unwrap();
     }
 
     #[test]
@@ -500,7 +498,7 @@ mod tests {
         let multiple = 2;
         let target_cols = size * multiple;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size
@@ -537,6 +535,7 @@ mod tests {
         let product = public_matrix * &preimage;
 
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+        std::fs::remove_dir_all("data").unwrap();
     }
 
     #[test]
@@ -545,7 +544,7 @@ mod tests {
         let size = 4;
         let target_cols = 6;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size
@@ -583,5 +582,6 @@ mod tests {
         let product = public_matrix * &preimage;
 
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+        std::fs::remove_dir_all("data").unwrap();
     }
 }
