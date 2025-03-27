@@ -279,13 +279,10 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         debug_mem("DCRTSquareMatTrapdoorGaussSampToFs completed");
 
-        let mut path = PathBuf::new();
-        path.push(preimage_block_id_path);
-        path
+        preimage_block_id_path.into()
     }
 
     fn preimage_from_fs(
-        &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         preimages_paths: &[PathBuf],
     ) -> Self::M {
@@ -422,7 +419,7 @@ mod tests {
             "test_preimage",
         );
 
-        let preimage = trapdoor_sampler.preimage_from_fs(&params, &preimage_paths);
+        let preimage = DCRTPolyTrapdoorSampler::preimage_from_fs(&params, &preimage_paths);
 
         let expected_rows = size * (k + 2);
         let expected_cols = size;
@@ -466,7 +463,7 @@ mod tests {
             "test_preimage_1",
         );
 
-        let preimage = trapdoor_sampler.preimage_from_fs(&params, &preimage_paths);
+        let preimage = DCRTPolyTrapdoorSampler::preimage_from_fs(&params, &preimage_paths);
 
         let expected_rows = size * (k + 2);
         let expected_cols = target_cols; // Preimage should be sliced to match target columns
@@ -512,7 +509,7 @@ mod tests {
             &target,
             "test_preimage_2",
         );
-        let preimage = trapdoor_sampler.preimage_from_fs(&params, &preimage_paths);
+        let preimage = DCRTPolyTrapdoorSampler::preimage_from_fs(&params, &preimage_paths);
 
         let expected_rows = size * (k + 2);
         let expected_cols = target_cols;
@@ -558,7 +555,7 @@ mod tests {
             "test_preimage_3",
         );
 
-        let preimage = trapdoor_sampler.preimage_from_fs(&params, &preimage_paths);
+        let preimage = DCRTPolyTrapdoorSampler::preimage_from_fs(&params, &preimage_paths);
 
         let expected_rows = size * (k + 2);
         let expected_cols = target_cols;

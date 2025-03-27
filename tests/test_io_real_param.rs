@@ -67,7 +67,6 @@ mod test {
 
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
         #[cfg(feature = "test")]
         let hardcoded_key = obfuscation
             .hardcoded_key
@@ -75,7 +74,8 @@ mod test {
             .iter()
             .map(|elem| elem.value() != &BigUint::from(0u8))
             .collect::<Vec<_>>();
-        let output = obfuscation.eval(obf_params, sampler_hash, sampler_trapdoor, &input);
+        let output =
+            obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
         info!("{:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);

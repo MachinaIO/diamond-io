@@ -14,7 +14,6 @@ where
         &self,
         obf_params: ObfuscationParams<M>,
         mut sampler_hash: SH,
-        sampler_trapdoor: ST,
         inputs: &[bool],
     ) -> Vec<bool>
     where
@@ -52,7 +51,6 @@ where
             })
             .collect_vec();
 
-        let sampler_trapdoor = Arc::new(sampler_trapdoor);
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
@@ -91,21 +89,21 @@ where
             } else {
                 &self.m_preimages_paths[idx][0]
             };
-            let m = sampler_trapdoor.preimage_from_fs(params.as_ref(), m_preimage_paths);
+            let m = ST::preimage_from_fs(params.as_ref(), m_preimage_paths);
             let q = &ps[idx] * &m;
             let n_preimage_paths = if *input {
                 &self.n_preimages_paths[idx][1]
             } else {
                 &self.n_preimages_paths[idx][0]
             };
-            let n = sampler_trapdoor.preimage_from_fs(params.as_ref(), n_preimage_paths);
+            let n = ST::preimage_from_fs(params.as_ref(), n_preimage_paths);
             let p = &q * &n;
             let k_preimage_paths = if *input {
                 &self.k_preimages_paths[idx][1]
             } else {
                 &self.k_preimages_paths[idx][0]
             };
-            let k = sampler_trapdoor.preimage_from_fs(params.as_ref(), k_preimage_paths);
+            let k = ST::preimage_from_fs(params.as_ref(), k_preimage_paths);
             let v = &q * &k;
             let new_encode_vec = {
                 let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
@@ -208,8 +206,7 @@ where
             .collect_vec();
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
-        let final_preimage =
-            sampler_trapdoor.preimage_from_fs(params.as_ref(), &self.final_preimage_path);
+        let final_preimage = ST::preimage_from_fs(params.as_ref(), &self.final_preimage_path);
         let final_v = ps.last().unwrap() * &final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));

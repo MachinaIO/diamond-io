@@ -78,7 +78,6 @@ pub trait PolyTrapdoorSampler: Send + Sync {
         preimage_block_id: &str,
     ) -> PathBuf;
     fn preimage_from_fs(
-        &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         preimages_paths: &[PathBuf],
     ) -> Self::M;
