@@ -39,7 +39,6 @@ where
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
     let sampler_uniform = Arc::new(sampler_uniform);
-    let sampler_trapdoor = Arc::new(sampler_trapdoor);
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     log_mem("Sampled public data");
@@ -57,8 +56,7 @@ where
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-    let s_bars =
-        sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0).clone();
+    let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
@@ -86,9 +84,9 @@ where
     let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
     log_mem("Sampled enc_hardcoded_key_polys");
 
-    let t_bar = t_bar_matrix.entry(0, 0).clone();
+    let t_bar = t_bar_matrix.entry(0, 0);
     #[cfg(feature = "test")]
-    let hardcoded_key = hardcoded_key_matrix.entry(0, 0).clone();
+    let hardcoded_key = hardcoded_key_matrix.entry(0, 0);
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
@@ -98,13 +96,13 @@ where
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
 
-    let (b_star_trapdoor_init, b_star_init) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+    let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    let m_b = (2 * (d + 1)) * (2 + log_q);
     let p_init = {
+        let m_b = (2 * (d + 1)) * (2 + log_q);
         let s_connect = s_init.concat_columns(&[s_init]);
-        let s_b = s_connect * &b_star_init;
+        let s_b = s_connect * &b_star_cur;
         let error = sampler_uniform.sample_uniform(
             &params,
             1,
@@ -131,11 +129,6 @@ where
         vec![vec![vec![]; 2]; obf_params.input_size],
         vec![vec![vec![]; 2]; obf_params.input_size],
     );
-
-    let mut b_star_trapdoor_cur = b_star_trapdoor_init;
-    let mut b_star_cur = b_star_init;
-
-    let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
 
     #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> =
@@ -212,6 +205,7 @@ where
             };
             let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             let inserted_poly_gadget = {
+                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
                 let zero = <M::P as Poly>::const_zero(params.as_ref());
                 let mut polys = vec![];
                 for _ in 0..(inserted_poly_index) {
@@ -242,16 +236,16 @@ where
         pub_key_cur = pub_key_idx;
     }
 
-    let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
-    let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
-        &a_decomposed_polys,
-        &enc_hardcoded_key_polys,
-        public_circuit.clone(),
-    );
     let final_preimage_target = {
-        let one = pub_key_cur[0].clone();
-        let input = &pub_key_cur[1..];
-        let eval_outputs = final_circuit.eval(params.as_ref(), one, input);
+        let a_decomposed_polys =
+            public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
+        let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
+            &a_decomposed_polys,
+            &enc_hardcoded_key_polys,
+            public_circuit.clone(),
+        );
+        log_mem("Computed final_circuit");
+        let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs
             .chunks(log_q)
