@@ -226,7 +226,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         debug_mem("SetMatrixElement public_matrix_ptr completed");
 
-        let preimages_paths: Vec<_> = parallel_iter!(0..num_block)
+        let preimages_paths: Vec<_> = (0..num_block)
             .map(|i| {
                 let start_col = i * size;
                 let end_col = (start_col + size).min(target_cols);
@@ -246,7 +246,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         log_mem("Collected preimages paths");
         preimages_paths
-        // preimages[0].concat_columns(&preimages[1..].iter().collect::<Vec<_>>());
     }
 
     fn process_preimage_block_to_fs(
@@ -289,33 +288,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let mut path = PathBuf::new();
         path.push(preimage_block_id_path);
         path
-
-        // let nrow = size * (k + 2);
-        // let ncol = size;
-
-        // let mut matrix_inner = Vec::with_capacity(nrow);
-        // for i in 0..nrow {
-        //     let mut row = Vec::with_capacity(ncol);
-        //     for j in 0..ncol {
-        //         let poly = GetMatrixElement(&preimage_matrix_ptr, i, j);
-        //         let dcrt_poly = DCRTPoly::new(poly);
-        //         row.push(dcrt_poly);
-        //     }
-        //     matrix_inner.push(row);
-        // }
-
-        // debug_mem("GetMatrixElement completed");
-
-        // let full_preimage = DCRTPolyMatrix::from_poly_vec(params, matrix_inner);
-
-        // debug_mem("full_preimage generated");
-
-        // if target_cols < size {
-        //     debug_mem("Slicing full_preimage columns");
-        //     full_preimage.slice_columns(0, target_cols)
-        // } else {
-        //     full_preimage
-        // }
     }
 
     fn preimage_from_fs(
