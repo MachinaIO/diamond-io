@@ -22,7 +22,7 @@ test:
    cargo test -r --features="parallel"
 
 test-io:
-   cargo test -r --test test_io --no-default-features --features parallel
+   cargo test -r --test test_io_dummy_param --no-default-features --features parallel
 
 # Run the entire CI pipeline including format, clippy, docs, and test checks
 ci: format clippy docs test test-io
