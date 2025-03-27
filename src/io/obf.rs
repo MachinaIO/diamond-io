@@ -124,10 +124,10 @@ where
     };
     log_mem("Computed u_0, u_1, u_star");
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
-        vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
-        vec![vec![M::zero(params.as_ref(), 0, 0); 2]; obf_params.input_size],
+    let (mut m_preimages_paths, mut n_preimages_paths, mut k_preimages_paths) = (
+        vec![vec![vec![]; 2]; obf_params.input_size],
+        vec![vec![vec![]; 2]; obf_params.input_size],
+        vec![vec![vec![]; 2]; obf_params.input_size],
     );
 
     #[cfg(feature = "test")]
@@ -171,52 +171,64 @@ where
             {
                 bs[idx + 1][bit] = b_bit_idx.clone();
             }
+            let m_preimage_bit_id = format!("m_preimage_{}_{}", idx, bit);
+            let n_preimage_bit_id = format!("n_preimage_{}_{}", idx, bit);
+            let k_preimage_bit_id = format!("k_preimage_{}_{}", idx, bit);
 
-            m_preimages[idx][bit] = sampler_trapdoor.preimage(
+            let m_preimage_bit_path = sampler_trapdoor.preimage_to_fs(
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
                 &(&u_bits[bit] * &b_bit_idx),
+                &m_preimage_bit_id,
             );
+
             log_mem("Computed m_preimage_bit");
 
-            n_preimages[idx][bit] = sampler_trapdoor.preimage(
+            m_preimages_paths[idx][bit] = m_preimage_bit_path;
+
+            let n_preimage_bit_path = sampler_trapdoor.preimage_to_fs(
                 &params,
                 &b_bit_trapdoor_idx,
                 &b_bit_idx,
-                &(&u_star * &b_star_idx),
+                &(&u_star * &b_star_idx.clone()),
+                &n_preimage_bit_id,
             );
             log_mem("Computed n_preimage_bit");
 
+            n_preimages_paths[idx][bit] = n_preimage_bit_path;
+
+            let rg = &public_data.rgs[bit];
+            let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             if bit != 0 {
                 coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
             };
-
-            k_preimages[idx][bit] = {
-                let inserted_poly_gadget = {
-                    let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
-                    let zero = <M::P as Poly>::const_zero(params.as_ref());
-                    let mut polys = vec![];
-                    for _ in 0..(inserted_poly_index) {
-                        polys.push(zero.clone());
-                    }
-                    polys.push(M::P::from_coeffs(params.as_ref(), &coeffs));
-                    for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
-                        polys.push(zero.clone());
-                    }
-                    M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
-                };
-                let k_target = {
-                    let rg = &public_data.rgs[bit];
-                    let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
-
-                    let bottom =
-                        pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
-                    top.concat_rows(&[&bottom])
-                };
-                sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target)
+            let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
+            let inserted_poly_gadget = {
+                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
+                let zero = <M::P as Poly>::const_zero(params.as_ref());
+                let mut polys = vec![];
+                for _ in 0..(inserted_poly_index) {
+                    polys.push(zero.clone());
+                }
+                polys.push(inserted_poly);
+                for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
+                    polys.push(zero.clone());
+                }
+                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
+            let bottom = pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
+            let k_target = top.concat_rows(&[&bottom]);
+            let k_preimage_bit_path = sampler_trapdoor.preimage_to_fs(
+                &params,
+                &b_bit_trapdoor_idx,
+                &b_bit_idx,
+                &k_target,
+                &k_preimage_bit_id,
+            );
             log_mem("Computed k_preimage_bit");
+
+            k_preimages_paths[idx][bit] = k_preimage_bit_path;
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_idx;
@@ -246,11 +258,14 @@ where
     };
     log_mem("Computed final_preimage_target");
 
-    let final_preimage = sampler_trapdoor.preimage(
+    let final_preimage_id = "final_preimage";
+
+    let final_preimage_path = sampler_trapdoor.preimage_to_fs(
         &params,
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target,
+        final_preimage_id,
     );
     log_mem("Sampled final_preimage");
 
@@ -259,10 +274,10 @@ where
         enc_hardcoded_key,
         encodings_init,
         p_init,
-        m_preimages,
-        n_preimages,
-        k_preimages,
-        final_preimage,
+        m_preimages_paths,
+        n_preimages_paths,
+        k_preimages_paths,
+        final_preimage_path,
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
