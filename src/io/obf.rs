@@ -13,7 +13,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
-use std::{ops::Mul, path::PathBuf, sync::Arc};
+use std::{ops::Mul, sync::Arc};
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -274,7 +274,7 @@ where
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target,
-        &final_preimage_id,
+        final_preimage_id,
     );
     log_mem("Sampled final_preimage");
 
