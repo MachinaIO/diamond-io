@@ -52,8 +52,8 @@ pub trait PolyUniformSampler {
 
 pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
-    type Trapdoor: Send + Sync;
-    type MatrixPtr: Send + Sync;
+    type Trapdoor;
+    type MatrixPtr;
 
     fn trapdoor(
         &self,

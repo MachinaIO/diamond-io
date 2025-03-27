@@ -11,7 +11,7 @@ test = []
 parallel = ["rayon"]
 
 [dependencies]
-openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "feat/preimage_to_disk" }
+openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git" }
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
 num-traits = "0.2"
