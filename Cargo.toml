@@ -10,6 +10,7 @@ default = ["test"]
 test = []
 parallel = ["rayon"]
 
+[dependencies]
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/trapdoor_gen" }
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
