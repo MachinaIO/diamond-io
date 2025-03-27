@@ -248,6 +248,7 @@ where
         &enc_hardcoded_key_polys,
         public_circuit.clone(),
     );
+    log_mem("Computed final_circuit");
     let final_preimage_target = {
         let one = pub_key_cur[0].clone();
         let input = &pub_key_cur[1..];
