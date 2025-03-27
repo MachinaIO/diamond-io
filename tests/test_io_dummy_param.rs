@@ -81,6 +81,5 @@ mod test {
         info!("Total time: {:?}", total_time);
         #[cfg(feature = "test")]
         assert_eq!(output, hardcoded_key);
-        std::fs::remove_dir_all("data").unwrap();
     }
 }

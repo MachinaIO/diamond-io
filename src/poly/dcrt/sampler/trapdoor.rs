@@ -442,7 +442,6 @@ mod tests {
         // public_matrix * preimage should be equal to target
         let product = public_matrix * &preimage;
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-        std::fs::remove_dir_all("data").unwrap();
     }
 
     #[test]
@@ -488,7 +487,6 @@ mod tests {
         let product = public_matrix * &preimage;
 
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-        std::fs::remove_dir_all("data").unwrap();
     }
 
     #[test]
@@ -535,7 +533,6 @@ mod tests {
         let product = public_matrix * &preimage;
 
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-        std::fs::remove_dir_all("data").unwrap();
     }
 
     #[test]
@@ -582,6 +579,5 @@ mod tests {
         let product = public_matrix * &preimage;
 
         assert_eq!(product, target, "Product of public matrix and preimage should equal target");
-        std::fs::remove_dir_all("data").unwrap();
     }
 }
