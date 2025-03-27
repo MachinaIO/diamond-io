@@ -237,7 +237,8 @@ where
     }
 
     let final_preimage_target = {
-        let a_decomposed_polys = public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
+        let a_decomposed_polys =
+            public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
         let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed_polys,
             &enc_hardcoded_key_polys,
