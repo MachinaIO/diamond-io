@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 default = ["test"]
 test = []
 parallel = ["rayon"]
+bgm = ["rodio", "reqwest"]
 
 [dependencies]
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git" }
@@ -24,14 +25,16 @@ bitvec = "1"
 memory-stats = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+rodio = { version = "0.20.1", git = "https://github.com/RustAudio/rodio.git", optional = true }
 # for now we put in test
-
 
 [dev-dependencies]
 keccak-asm = { version = "0.1.4" }
 proptest = "1.0.0"
 criterion = "0.5.0"
 
+[build-dependencies]
+reqwest = { version = "0.11", features = ["blocking"], optional = true }
 
 [profile.dev]
 debug = "line-tables-only"
