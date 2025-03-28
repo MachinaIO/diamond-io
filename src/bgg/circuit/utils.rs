@@ -101,7 +101,7 @@ mod tests {
 
         // Evaluate the public circuit to get its outputs
         let pub_circuit_outputs =
-            public_circuit_for_eval.eval(&params, DCRTPoly::const_one(&params), &pub_polys);
+            public_circuit_for_eval.eval(&params, &DCRTPoly::const_one(&params), &pub_polys);
 
         // Verify that the public circuit outputs are as expected
         let expected_out1 = pub_polys[0].clone() + pub_polys[1].clone(); // add_gate(pub_inputs[0], pub_inputs[1])
@@ -138,7 +138,7 @@ mod tests {
 
         // Evaluate the inner product circuit
         let all_inputs = [pub_polys, priv_polys].concat();
-        let result = ip_circuit.eval(&params, DCRTPoly::const_one(&params), &all_inputs);
+        let result = ip_circuit.eval(&params, &DCRTPoly::const_one(&params), &all_inputs);
 
         // Verify the results
         assert_eq!(result.len(), 2);

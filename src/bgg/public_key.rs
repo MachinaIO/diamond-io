@@ -120,7 +120,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() + pk2.clone();
@@ -160,7 +160,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() - pk2.clone();
@@ -200,7 +200,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result
         let expected = pk1.clone() * pk2.clone();
@@ -250,7 +250,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 + pk2)-2) - pk3
         let expected = ((pk1.clone() + pk2.clone()) * (pk1.clone() + pk2.clone())) - pk3.clone();
@@ -313,7 +313,7 @@ mod tests {
 
         // Evaluate the circuit
         let result =
-            circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()]);
+            circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()]);
 
         // Expected result: (((pk1 + pk2) * (pk3 * pk4)) + (pk1 - pk3))^2
         let sum1 = pk1.clone() + pk2.clone();
@@ -386,7 +386,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
 
         // Expected result: (pk1 + pk2) - (pk1 * pk2)
         let expected = (pk1.clone() + pk2.clone()) - (pk1.clone() * pk2.clone());
@@ -459,7 +459,7 @@ mod tests {
         main_circuit.output(vec![square_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
 
         // Expected result: ((pk1 * pk2) + pk3)^2
         let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()) *

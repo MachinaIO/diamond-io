@@ -24,7 +24,6 @@ pub struct BGGPublicKeySampler<K: AsRef<[u8]>, S: PolyHashSampler<K>> {
 impl<K: AsRef<[u8]>, S> BGGPublicKeySampler<K, S>
 where
     S: PolyHashSampler<K>,
-    <S as PolyHashSampler<K>>::M: Send + Sync,
 {
     /// Create a new public key sampler
     /// # Arguments
@@ -88,8 +87,6 @@ pub struct BGGEncodingSampler<S: PolyUniformSampler> {
 impl<S> BGGEncodingSampler<S>
 where
     S: PolyUniformSampler,
-    <S as PolyUniformSampler>::M: Send + Sync,
-    <<S as PolyUniformSampler>::M as PolyMatrix>::P: Send + Sync,
 {
     /// Create a new encoding sampler
     /// # Arguments

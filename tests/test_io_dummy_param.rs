@@ -17,6 +17,8 @@ mod test {
     use std::sync::Arc;
     use tracing::info;
 
+    const SIGMA: f64 = 4.578;
+
     #[test]
     fn test_io_just_mul_enc_and_bit() {
         init_tracing();
@@ -49,7 +51,7 @@ mod test {
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new();
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
         let mut rng = rand::rng();
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
@@ -63,7 +65,6 @@ mod test {
 
         let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-
         #[cfg(feature = "test")]
         let hardcoded_key = obfuscation
             .hardcoded_key
@@ -71,7 +72,8 @@ mod test {
             .iter()
             .map(|elem| elem.value() != &BigUint::from(0u8))
             .collect::<Vec<_>>();
-        let output = obfuscation.eval(obf_params, sampler_hash, &input);
+        let output =
+            obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
         info!("{:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);

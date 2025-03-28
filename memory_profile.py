@@ -12,14 +12,11 @@ from datetime import datetime
 from pathlib import Path
 import subprocess
 import sys
+import argparse
 
 
 def run_cargo_test(command):
-    """Run a command and capture the output.
-    
-    Args:
-        command: List of command arguments to execute.
-    """
+    """Run a command and capture the output, ensuring logs are saved even if interrupted."""
     print(f"Running command: {' '.join(command)}")
     process = subprocess.Popen(
         command,
@@ -32,20 +29,25 @@ def run_cargo_test(command):
     
     # Capture output line by line
     all_output = []
-    for line in iter(process.stdout.readline, ''):
-        print(line, end='')  # Print in real-time
-        all_output.append(line)
-        
-        # Stop when we see the completion message
-        if "OBFUSCATION COMPLETED" in line:
-            print("Obfuscation completed, stopping log capture.")
-            break
-    
-    # Wait for the process to complete
-    process.stdout.close()
-    process.wait()
-    
+    try:
+        for line in iter(process.stdout.readline, ''):
+            print(line, end='')  # Print in real-time
+            all_output.append(line)
+            
+            # Stop when we see the completion message
+            if "OBFUSCATION COMPLETED" in line:
+                print("Obfuscation completed, stopping log capture.")
+                break
+    except KeyboardInterrupt:
+        print("\nProcess interrupted! Saving captured logs...\n")
+    finally:
+        # Ensure process is terminated properly
+        process.stdout.close()
+        process.terminate()
+        process.wait()
+
     return ''.join(all_output)
+
 
 
 def strip_ansi_codes(text):
@@ -54,59 +56,69 @@ def strip_ansi_codes(text):
     return ansi_escape.sub('', text)
 
 
-def analyze_memory_usage_from_string(log_string):
-    """Analyze memory usage from a log string."""
-    # Strip ANSI color codes from the log string
-    clean_log = strip_ansi_codes(log_string)
-    lines = clean_log.splitlines()
+def analyze_memory_usage_from_string(log_output):
+    """
+    Parses memory usage logs and returns a DataFrame.
+    Skips invalid entries instead of crashing.
+    """
+    # First strip all ANSI codes from the output
+    log_output = strip_ansi_codes(log_output)
     
-    # Parse log lines
-    log_entries = []
+    # Pattern for lines with message
+    pattern_with_message = re.compile(
+        r".*?diamond_io::utils\s*:\s*(.*?)\s*\|\|\s*Current physical/virtural memory usage:\s*(\d+)\s*\|\s*(\d+)"
+    )
     
-    # New pattern to match the actual log format where memory info is on the same line
-    # Example: 2025-03-25T08:35:31.295990Z  INFO diamond_io::utils: Sampled public data || Current physical/virtural memory usage: 7651328 | 420061642752
-    log_pattern = r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+INFO\s+([\w:]+):\s+(.*?)\s+\|\|\s+Current physical/virtural memory usage:\s+(\d+)\s+\|\s+(\d+)'
+    # Pattern for lines with just numbers
+    pattern_numbers = re.compile(
+        r"(\d+)\s*\|\s*(\d+)"
+    )
+
+    data = []
     
-    for line in lines:
-        line = line.strip()
-        match = re.search(log_pattern, line)
-        
+    for line in log_output.splitlines():
+        # Try to match line with message first
+        match = pattern_with_message.search(line)
         if match:
-            timestamp_str = match.group(1)
-            module = match.group(2)
-            message = match.group(3).strip()
-            physical_memory = int(match.group(4))
-            virtual_memory = int(match.group(5))
-            
-            # Convert timestamp to datetime object
-            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%fZ')
-            
-            log_entries.append({
-                'timestamp': timestamp,
-                'module': module,
-                'message': message,
-                'physical_memory': physical_memory,
-                'virtual_memory': virtual_memory
-            })
+            try:
+                message = match.group(1).strip()
+                physical_memory = int(match.group(2))
+                virtual_memory = int(match.group(3))
+                data.append({
+                    'message': message,
+                    'physical_memory': physical_memory,
+                    'virtual_memory': virtual_memory
+                })
+            except ValueError as e:
+                print(f"Skipping invalid log entry: {line} (Error: {e})")
+        else:
+            # Try to match line with just numbers
+            match = pattern_numbers.search(line)
+            if match:
+                try:
+                    physical_memory = int(match.group(1))
+                    virtual_memory = int(match.group(2))
+                    # Use a generic message for number-only lines
+                    data.append({
+                        'message': f"Memory measurement {len(data) + 1}",
+                        'physical_memory': physical_memory,
+                        'virtual_memory': virtual_memory
+                    })
+                except ValueError as e:
+                    print(f"Skipping invalid log entry: {line} (Error: {e})")
     
-    if not log_entries:
-        print("No valid log entries found.")
-        return None
+    if not data:
+        return None  # No valid logs
+
+    df = pd.DataFrame(data)
     
-    # Convert to DataFrame for easier analysis
-    df = pd.DataFrame(log_entries)
-    
-    # Calculate memory changes between steps
+    # Calculate changes and percentages
     df['physical_memory_change'] = df['physical_memory'].diff().fillna(0)
     df['virtual_memory_change'] = df['virtual_memory'].diff().fillna(0)
     
-    # Calculate percentage increases
-    df['physical_percentage_increase'] = (df['physical_memory_change'] / df['physical_memory'].shift(1)) * 100
-    df['virtual_percentage_increase'] = (df['virtual_memory_change'] / df['virtual_memory'].shift(1)) * 100
-    
-    # Calculate elapsed time in seconds from the first log entry
-    start_time = df['timestamp'].iloc[0]
-    df['elapsed_seconds'] = (df['timestamp'] - start_time).dt.total_seconds()
+    # Calculate percentage changes
+    df['physical_percentage_increase'] = (df['physical_memory_change'] / df['physical_memory'].shift(1) * 100).fillna(0)
+    df['virtual_percentage_increase'] = (df['virtual_memory_change'] / df['virtual_memory'].shift(1) * 100).fillna(0)
     
     return df
 
@@ -234,62 +246,85 @@ def analyze_log_file(log_file_path):
         print(f"Error reading or analyzing log file: {e}")
         return None
 
+def save_analysis_files(df, logs_dir, timestamp):
+    """Save analysis files if we have valid data."""
+    if df is None or df.empty:
+        print("No valid log entries found. Skipping file save.")
+        return False
+
+    physical_table = generate_physical_memory_table(df)
+    virtual_table = generate_virtual_memory_table(df)
+    combined_table = generate_combined_memory_table(df)
+    
+    print("\n" + combined_table)
+    
+    physical_table_path = logs_dir / f"physical_memory_analysis_{timestamp}.txt"
+    virtual_table_path = logs_dir / f"virtual_memory_analysis_{timestamp}.txt"
+    combined_table_path = logs_dir / f"combined_memory_analysis_{timestamp}.txt"
+    
+    with open(physical_table_path, 'w') as f:
+        f.write(physical_table)
+    with open(virtual_table_path, 'w') as f:
+        f.write(virtual_table)
+    with open(combined_table_path, 'w') as f:
+        f.write(combined_table)
+
+    print(f"Physical memory analysis saved to {physical_table_path}")
+    print(f"Virtual memory analysis saved to {virtual_table_path}")
+    print(f"Combined memory analysis saved to {combined_table_path}")
+    return True
+
 def main():
-    """Run the memory profiler with the specified command."""
-    # Create logs directory if it doesn't exist
+    """Run the memory profiler with the specified command or analyze an existing log file."""
+    parser = argparse.ArgumentParser(description='Memory Usage Analyzer for Diamond-IO Logs')
+    parser.add_argument('--log-file', help='Path to an existing log file to analyze')
+    parser.add_argument('command', nargs=argparse.REMAINDER, help='Command to run (if not using --log-file)')
+    args = parser.parse_args()
+
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
-    
-    # Get current timestamp for file naming
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Get command from command line arguments
-    if len(sys.argv) > 1:
-        command = sys.argv[1:]
-    else:
+
+    if args.log_file:
+        # Analyze existing log file
+        df = analyze_log_file(args.log_file)
+        if df is not None and not df.empty:
+            save_analysis_files(df, logs_dir, timestamp)
+        return
+
+    if not args.command:
         print("Error: No command specified.")
         print("Usage: python memory_profiler.py <command> [args...]")
-        print("Example: python memory_profiler.py cargo test -r --test test_io_dummy_param --no-default-features -- --nocapture")
+        print("       python memory_profiler.py --log-file <path>")
         sys.exit(1)
-    
-    # Run the command and capture the output
-    print("Running memory profiler...")
-    log_output = run_cargo_test(command)
-    
-    # Save the raw logs to a file
-    log_file_path = logs_dir / f"test_logs_{timestamp}.txt"
-    with open(log_file_path, 'w') as f:
-        f.write(log_output)
-    print(f"Raw logs saved to {log_file_path}")
-    
-    # Analyze the logs
-    df = analyze_memory_usage_from_string(log_output)
-    
-    if df is not None:
-        # Generate the tables
-        physical_table = generate_physical_memory_table(df)
-        virtual_table = generate_virtual_memory_table(df)
-        combined_table = generate_combined_memory_table(df)
-        
-        # Output to console
-        print("\n" + combined_table)
-        
-        # Save to files
-        physical_table_path = logs_dir / f"physical_memory_analysis_{timestamp}.txt"
-        with open(physical_table_path, 'w') as f:
-            f.write(physical_table)
-        print(f"Physical memory analysis saved to {physical_table_path}")
-        
-        virtual_table_path = logs_dir / f"virtual_memory_analysis_{timestamp}.txt"
-        with open(virtual_table_path, 'w') as f:
-            f.write(virtual_table)
-        print(f"Virtual memory analysis saved to {virtual_table_path}")
-        
-        combined_table_path = logs_dir / f"combined_memory_analysis_{timestamp}.txt"
-        with open(combined_table_path, 'w') as f:
-            f.write(combined_table)
-        print(f"Combined memory analysis saved to {combined_table_path}")
 
+    print("Running memory profiler...")
+    log_output = ""
+    df = None
+
+    try:
+        log_output = run_cargo_test(args.command)
+        df = analyze_memory_usage_from_string(log_output)
+    except KeyboardInterrupt:
+        print("\nProcess interrupted! Checking logs before saving...\n")
+        if log_output:  # Only analyze if we have some output
+            df = analyze_memory_usage_from_string(log_output)
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        if log_output:  # Try to analyze any output we got
+            df = analyze_memory_usage_from_string(log_output)
+
+    if df is not None and not df.empty:
+        # Save raw logs only if we have valid data
+        log_file_path = logs_dir / f"test_logs_{timestamp}.txt"
+        with open(log_file_path, 'w') as f:
+            f.write(log_output)
+        print(f"Raw logs saved to {log_file_path}")
+        
+        # Save analysis files
+        save_analysis_files(df, logs_dir, timestamp)
+    else:
+        print("No valid log entries found. No files will be written.")
 
 if __name__ == "__main__":
     main()

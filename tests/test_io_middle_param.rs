@@ -22,10 +22,10 @@ mod test {
 
     #[test]
     #[ignore]
-    fn test_io_just_mul_enc_and_bit_real_params() {
+    fn test_io_just_mul_enc_and_bit_middle_params() {
         init_tracing();
         let start_time = std::time::Instant::now();
-        let params = DCRTPolyParams::new(8192, 7, 51);
+        let params = DCRTPolyParams::new(1024, 4, 37);
         let log_q = params.modulus_bits();
         let switched_modulus = Arc::new(BigUint::from_str_radix("71671831749689734737838152978190216899892655911508785116799651230841339877765150252187381844012976550000", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();

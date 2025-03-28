@@ -21,7 +21,7 @@ impl PolyCircuit {
             ));
             remaining_inputs -= num_bits;
         }
-        let outputs = self.eval(&(), one, &inputs);
+        let outputs = self.eval(&(), &one, &inputs);
         NormBounds::from_norm_simulators(&outputs)
     }
 }
