@@ -7,7 +7,7 @@ use crate::{
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
-use std::{marker::PhantomData, ops::Mul};
+use std::marker::PhantomData;
 
 use super::params::ObfuscationParams;
 
@@ -46,10 +46,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     _s: PhantomData<S>,
 }
 
-impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S>
-where
-    for<'a> &'a S::M: Mul<&'a S::M, Output = S::M>,
-{
+impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
     pub fn sample(
         obf_params: &ObfuscationParams<S::M>,
         bgg_pubkey_sampler: &BGGPublicKeySampler<[u8; 32], S>,
@@ -72,7 +69,7 @@ where
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
         let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(&r_0 * &gadget_d_plus_1), (&r_1 * &gadget_d_plus_1)];
+            [(r_0.clone() * &gadget_d_plus_1), (r_1.clone() * &gadget_d_plus_1)];
 
         let a_prf_raw = hash_sampler.sample_hash(
             params,

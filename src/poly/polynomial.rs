@@ -1,5 +1,6 @@
 use super::PolyElem;
 use crate::poly::params::PolyParams;
+use itertools::Itertools;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -29,6 +30,16 @@ pub trait Poly:
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self;
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_decomposed(params: &Self::Params, decomposed: &[Self]) -> Self;
+    fn from_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
+        let log_q_bytes = params.modulus_bits().div_ceil(8);
+        let dim = params.ring_dimension() as usize;
+        debug_assert_eq!(bytes.len(), log_q_bytes * dim);
+        let coeffs = bytes
+            .chunks_exact(log_q_bytes)
+            .map(|chunk| Self::Elem::from_bytes(&params.modulus(), chunk))
+            .collect_vec();
+        Self::from_coeffs(params, &coeffs)
+    }
     fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self;
     fn coeffs(&self) -> Vec<Self::Elem>;
     fn const_zero(params: &Self::Params) -> Self;
@@ -50,5 +61,12 @@ pub trait Poly:
         bits
     }
     fn decompose(&self, params: &Self::Params) -> Vec<Self>;
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for elem in self.coeffs() {
+            bytes.extend_from_slice(&elem.to_bytes());
+        }
+        bytes
+    }
     fn to_compact_bytes(&self) -> Vec<u8>;
 }

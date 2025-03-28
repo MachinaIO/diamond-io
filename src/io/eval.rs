@@ -19,7 +19,6 @@ where
     where
         SH: PolyHashSampler<[u8; 32], M = M>,
         ST: PolyTrapdoorSampler<M = M>,
-        for<'a> &'a M: Mul<&'a M, Output = M>,
     {
         sampler_hash.set_key(self.hash_key);
         let params = Arc::new(obf_params.params.clone());
@@ -74,7 +73,7 @@ where
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = &self.s_init *
+            let expected_encoding_init = self.s_init.clone() *
                 &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             debug_assert_eq!(
                 encodings[0][0].concat_vector(&encodings[0][1..]),
@@ -90,21 +89,21 @@ where
                 &self.m_preimages_paths[idx][0]
             };
             let m = ST::preimage_from_fs(params.as_ref(), m_preimage_paths);
-            let q = &ps[idx] * &m;
+            let q = ps[idx].clone() * &m;
             let n_preimage_paths = if *input {
                 &self.n_preimages_paths[idx][1]
             } else {
                 &self.n_preimages_paths[idx][0]
             };
             let n = ST::preimage_from_fs(params.as_ref(), n_preimage_paths);
-            let p = &q * &n;
+            let p = q.clone() * &n;
             let k_preimage_paths = if *input {
                 &self.k_preimages_paths[idx][1]
             } else {
                 &self.k_preimages_paths[idx][0]
             };
             let k = ST::preimage_from_fs(params.as_ref(), k_preimage_paths);
-            let v = &q * &k;
+            let v = q.clone() * &k;
             let new_encode_vec = {
                 let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
@@ -145,8 +144,11 @@ where
                     let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
                     cur_s = cur_s * r;
                 }
-                let new_s =
-                    if *input { &cur_s * &public_data.r_1 } else { &cur_s * &public_data.r_0 };
+                let new_s = if *input {
+                    cur_s.clone() * &public_data.r_1
+                } else {
+                    cur_s.clone() * &public_data.r_0
+                };
                 let b_next_bit =
                     if *input { self.bs[idx + 1][1].clone() } else { self.bs[idx + 1][0].clone() };
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
@@ -207,7 +209,7 @@ where
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
         let final_preimage = ST::preimage_from_fs(params.as_ref(), &self.final_preimage_path);
-        let final_v = ps.last().unwrap() * &final_preimage;
+        let final_v = ps.last().unwrap().clone() * &final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(feature = "test")]

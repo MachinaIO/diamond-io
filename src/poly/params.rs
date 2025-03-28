@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-pub trait PolyParams: Clone + Debug + Send + Sync {
+pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
     type Modulus: Debug + Clone;
     /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n -
     /// 1)`.
