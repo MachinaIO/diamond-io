@@ -1,7 +1,5 @@
 use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
+use std::{fs::File, io::BufReader, path::Path};
 
 pub struct Player {
     stream_handle: OutputStream,

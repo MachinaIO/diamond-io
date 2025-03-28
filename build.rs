@@ -16,8 +16,7 @@ fn main() {
     // Only execute the following code when the "bgm" feature is enabled
     #[cfg(feature = "bgm")]
     {
-        use std::fs;
-        use std::path::Path;
+        use std::{fs, path::Path};
         // Create bgm directory if it doesn't exist
         let bgm_dir = Path::new("bgm");
         if !bgm_dir.exists() {
