@@ -168,7 +168,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, &enc_one.clone(), &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() + enc2.clone();
@@ -218,7 +218,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() - enc2.clone();
@@ -268,7 +268,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()]);
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
@@ -332,8 +332,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval(&params, enc_one.clone(), &[enc1.clone(), enc2.clone(), enc3.clone()]);
+        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 + enc2)^2) - enc3
         let expected =
@@ -413,7 +412,7 @@ mod tests {
         // Evaluate the circuit
         let result = circuit.eval(
             &params,
-            enc_one.clone(),
+            &enc_one,
             &[enc1.clone(), enc2.clone(), enc3.clone(), enc4.clone()],
         );
 
@@ -498,7 +497,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone()]);
+        let result = main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()]);
 
         // Expected result: (enc1 + enc2) - (enc1 * enc2)
         let expected = (enc1.clone() + enc2.clone()) - (enc1.clone() * enc2.clone());
@@ -586,7 +585,7 @@ mod tests {
 
         // Evaluate the main circuit
         let result =
-            main_circuit.eval(&params, enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
+            main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 * enc2) + enc3)^2
         let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
