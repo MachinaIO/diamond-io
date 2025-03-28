@@ -68,15 +68,6 @@ pub trait PolyTrapdoorSampler {
         target: &Self::M,
         preimage_id: &str,
     ) -> Vec<PathBuf>;
-    fn process_preimage_block_to_fs(
-        &self,
-        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::MatrixPtr,
-        target_block: &Self::M,
-        size: usize,
-        preimage_block_id: &str,
-    ) -> PathBuf;
     fn preimage_from_fs(
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         preimages_paths: &[PathBuf],

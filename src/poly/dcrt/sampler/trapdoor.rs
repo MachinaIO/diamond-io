@@ -153,6 +153,46 @@ impl DCRTPolyTrapdoorSampler {
     pub fn new(sigma: f64) -> Self {
         Self { sigma }
     }
+
+    fn process_preimage_block_to_fs(
+        &self,
+        params: &DCRTPolyParams,
+        trapdoor: &RLWETrapdoor,
+        public_matrix: &DCRTMatrixPtr,
+        target_block: &DCRTPolyMatrix,
+        size: usize,
+        preimage_block_id: &str,
+    ) -> PathBuf {
+        let n = params.ring_dimension() as usize;
+        let k = params.modulus_bits();
+        let target_cols = target_block.col_size();
+
+        let preimage_block_id = format!("{}_{:08}_{:08}", preimage_block_id, target_cols, size);
+
+        debug_mem(format!("Processing preimage block id={}", preimage_block_id));
+
+        let target_matrix =
+            DCRTMatrixPtr::new_target_matrix(target_block, params, size, target_cols);
+
+        debug_mem("SetMatrixElement target_matrix_ptr completed");
+
+        let preimage_block_id_path = format!("data/{}.bin", preimage_block_id);
+
+        DCRTSquareMatTrapdoorGaussSampToFs(
+            n as u32,
+            k as u32,
+            &public_matrix.ptr_matrix,
+            &trapdoor.ptr_trapdoor,
+            &target_matrix.ptr_matrix,
+            2_i64,
+            self.sigma,
+            &preimage_block_id_path,
+        );
+
+        debug_mem("DCRTSquareMatTrapdoorGaussSampToFs completed");
+
+        preimage_block_id_path.into()
+    }
 }
 
 impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
@@ -240,46 +280,6 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         log_mem("Collected preimages paths");
         preimages_paths
-    }
-
-    fn process_preimage_block_to_fs(
-        &self,
-        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::MatrixPtr,
-        target_block: &Self::M,
-        size: usize,
-        preimage_block_id: &str,
-    ) -> PathBuf {
-        let n = params.ring_dimension() as usize;
-        let k = params.modulus_bits();
-        let target_cols = target_block.col_size();
-
-        let preimage_block_id = format!("{}_{:08}_{:08}", preimage_block_id, target_cols, size);
-
-        debug_mem(format!("Processing preimage block id={}", preimage_block_id));
-
-        let target_matrix =
-            DCRTMatrixPtr::new_target_matrix(target_block, params, size, target_cols);
-
-        debug_mem("SetMatrixElement target_matrix_ptr completed");
-
-        let preimage_block_id_path = format!("data/{}.bin", preimage_block_id);
-
-        DCRTSquareMatTrapdoorGaussSampToFs(
-            n as u32,
-            k as u32,
-            &public_matrix.ptr_matrix,
-            &trapdoor.ptr_trapdoor,
-            &target_matrix.ptr_matrix,
-            2_i64,
-            self.sigma,
-            &preimage_block_id_path,
-        );
-
-        debug_mem("DCRTSquareMatTrapdoorGaussSampToFs completed");
-
-        preimage_block_id_path.into()
     }
 
     fn preimage_from_fs(
