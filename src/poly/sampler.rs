@@ -29,8 +29,8 @@ pub trait PolyHashSampler<K: AsRef<[u8]>> {
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         tag: B,
-        rows: usize,
-        columns: usize,
+        nrow: usize,
+        ncol: usize,
         dist: DistType,
     ) -> Self::M;
 
@@ -44,8 +44,8 @@ pub trait PolyUniformSampler {
     fn sample_uniform(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        rows: usize,
-        columns: usize,
+        nrow: usize,
+        ncol: usize,
         dist: DistType,
     ) -> Self::M;
 }
