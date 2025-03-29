@@ -1,3 +1,6 @@
+#[cfg(feature = "bgm")]
+use super::bgm::Player;
+
 use super::{params::ObfuscationParams, utils::sample_public_key_by_idx, Obfuscation};
 use crate::{
     bgg::{
@@ -31,6 +34,11 @@ where
     for<'a> &'a M: Mul<&'a <M as PolyMatrix>::P, Output = M>,
     for<'a> &'a M: Mul<&'a M, Output = M>,
 {
+    #[cfg(feature = "bgm")]
+    let player = Player::new();
+    #[cfg(feature = "bgm")]
+    player.play_music("bgm/obf_bgm1.mp3");
+
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
@@ -164,6 +172,11 @@ where
         let mut coeffs = vec![zero_coeff; dim];
 
         for bit in 0..=1 {
+            #[cfg(feature = "bgm")]
+            {
+                player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * idx + bit) % 3 + 2));
+            }
+
             let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for idx and bit");
 
@@ -234,6 +247,10 @@ where
         b_star_trapdoor_cur = b_star_trapdoor_idx;
         b_star_cur = b_star_idx;
         pub_key_cur = pub_key_idx;
+    }
+    #[cfg(feature = "bgm")]
+    {
+        player.play_music("bgm/obf_bgm5.mp3");
     }
 
     let final_preimage_target = {
