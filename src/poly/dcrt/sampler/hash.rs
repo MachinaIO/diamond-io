@@ -1,7 +1,7 @@
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem},
+        dcrt::{DCRTPoly, DCRTPolyMatrix, FinRingElem},
         sampler::{DistType, PolyHashSampler},
         Poly, PolyMatrix, PolyParams,
     },

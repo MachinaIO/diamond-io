@@ -6,7 +6,6 @@ use crate::{
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use num_bigint::BigInt;
-// use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{
@@ -15,23 +14,15 @@ use std::{
     fs::File,
     ops::{Add, Mul, Neg, Range, Sub},
 };
-// use sysinfo::System;
 use tempfile::tempfile;
 
 // static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Volatility {
-    Persistent,
-    Transient,
-}
 
 pub struct DCRTPolyMatrix {
     params: DCRTPolyParams,
     file: File,
     nrow: usize,
     ncol: usize,
-    volatile: Volatility,
 }
 
 impl PolyMatrix for DCRTPolyMatrix {
@@ -240,10 +231,10 @@ impl PolyMatrix for DCRTPolyMatrix {
                                 // among threads
                                 unsafe {
                                     new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx..
-                                            i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx..
-                                            j * sub_matrix.ncol + *next_block_col_idx,
+                                        i * sub_matrix.nrow + *cur_block_row_idx
+                                            ..i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx
+                                            ..j * sub_matrix.ncol + *next_block_col_idx,
                                         sub_block_polys,
                                     );
                                 }
@@ -445,9 +436,7 @@ impl Eq for DCRTPolyMatrix {}
 
 impl Drop for DCRTPolyMatrix {
     fn drop(&mut self) {
-        if self.volatile == Volatility::Transient {
-            self.file.set_len(0).expect("failed to truncate file");
-        }
+        self.file.set_len(0).expect("failed to truncate file");
     }
 }
 
@@ -647,7 +636,7 @@ impl DCRTPolyMatrix {
         //         BLOCK_SIZE.set(block_size).unwrap();
         //     }
         // }
-        Self { params: params.clone(), file, nrow, ncol, volatile: Volatility::Transient }
+        Self { params: params.clone(), file, nrow, ncol }
     }
 
     pub fn entry_size(&self) -> usize {
