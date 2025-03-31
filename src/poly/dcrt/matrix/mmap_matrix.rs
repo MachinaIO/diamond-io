@@ -338,10 +338,10 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                                 // among threads
                                 unsafe {
                                     new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx
-                                            ..i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx
-                                            ..j * sub_matrix.ncol + *next_block_col_idx,
+                                        i * sub_matrix.nrow + *cur_block_row_idx..
+                                            i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx..
+                                            j * sub_matrix.ncol + *next_block_col_idx,
                                         sub_block_polys,
                                     );
                                 }
@@ -620,8 +620,8 @@ impl<T: MmapMatrixElem> Neg for MmapMatrix<T> {
 //                 let row_vec = mmap.to_vec();
 //                 let row_col_vec = row_vec
 //                     .chunks(entry_size)
-//                     .map(|entry| <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params, entry))
-//                     .collect_vec();
+//                     .map(|entry| <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params,
+// entry))                     .collect_vec();
 //                 drop(mmap);
 //                 row_col_vec
 //             })
@@ -973,22 +973,24 @@ fn mul_block_matrices<T: MmapMatrixElem>(
 //     fn test_matrix_modulus_switch() {
 //         let params = DCRTPolyParams::default();
 
-//         let value00 = FinRingElem::new(1023782870921908217643761278891282178u128, params.modulus());
-//         let value01 = FinRingElem::new(8179012198875468938912873783289218738u128, params.modulus());
-//         let value10 = FinRingElem::new(2034903202902173762872163465127672178u128, params.modulus());
-//         let value11 = FinRingElem::new(1990091289902891278121564387120912660u128, params.modulus());
+//         let value00 = FinRingElem::new(1023782870921908217643761278891282178u128,
+// params.modulus());         let value01 =
+// FinRingElem::new(8179012198875468938912873783289218738u128, params.modulus());         let
+// value10 = FinRingElem::new(2034903202902173762872163465127672178u128, params.modulus());
+//         let value11 = FinRingElem::new(1990091289902891278121564387120912660u128,
+// params.modulus());
 
 //         let matrix_vec = vec![
-//             vec![DCRTPoly::from_const(&params, &value00), DCRTPoly::from_const(&params, &value01)],
-//             vec![DCRTPoly::from_const(&params, &value10), DCRTPoly::from_const(&params, &value11)],
-//         ];
+//             vec![DCRTPoly::from_const(&params, &value00), DCRTPoly::from_const(&params,
+// &value01)],             vec![DCRTPoly::from_const(&params, &value10),
+// DCRTPoly::from_const(&params, &value11)],         ];
 
 //         let matrix = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
 //         let new_modulus = Arc::new(BigUint::from(2u32));
 //         let switched = matrix.modulus_switch(&new_modulus);
 
-//         // Although the value becomes less than the new modulus, the set modulus is still the same
-//         assert_eq!(switched.params.modulus(), params.modulus());
+//         // Although the value becomes less than the new modulus, the set modulus is still the
+// same         assert_eq!(switched.params.modulus(), params.modulus());
 
 //         let new_value00 = value00.modulus_switch(new_modulus.clone());
 //         let new_value01 = value01.modulus_switch(new_modulus.clone());
@@ -1036,8 +1038,8 @@ fn mul_block_matrices<T: MmapMatrixElem>(
 //         let sampler = DCRTPolyUniformSampler::new();
 
 //         // Create matrix S (2x20)
-//         let s = sampler.sample_uniform(&params, 2, 20, crate::poly::sampler::DistType::FinRingDist);
-//         // Create 'other' matrix (5x7)
+//         let s = sampler.sample_uniform(&params, 2, 20,
+// crate::poly::sampler::DistType::FinRingDist);         // Create 'other' matrix (5x7)
 //         let other =
 //             sampler.sample_uniform(&params, 5, 7, crate::poly::sampler::DistType::FinRingDist);
 //         // Perform S * (I_4 ⊗ other)
@@ -1063,7 +1065,8 @@ fn mul_block_matrices<T: MmapMatrixElem>(
 
 //         // Create matrix S (2x2516)
 //         let s =
-//             sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
+//             sampler.sample_uniform(&params, 2, 2516,
+// crate::poly::sampler::DistType::FinRingDist);
 
 //         // Create 'other' matrix (2x13)
 //         let other =
@@ -1093,7 +1096,8 @@ fn mul_block_matrices<T: MmapMatrixElem>(
 
 //         // Create matrix S (2x2516)
 //         let s =
-//             sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
+//             sampler.sample_uniform(&params, 2, 2516,
+// crate::poly::sampler::DistType::FinRingDist);
 
 //         // Create 'other' matrix (2x13)
 //         let other =

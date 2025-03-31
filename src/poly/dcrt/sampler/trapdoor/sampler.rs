@@ -116,11 +116,11 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let d = public_matrix.row_size();
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
-        let s = SPECTRAL_CONSTANT
-            * 3.0
-            * SIGMA
-            * SIGMA
-            * (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
+        let s = SPECTRAL_CONSTANT *
+            3.0 *
+            SIGMA *
+            SIGMA *
+            (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
         todo!()
     }
 
@@ -132,7 +132,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     }
 }
 
-// A function corresponding to lines 260-266 in trapdoor-dcrtpoly.cpp and the `GaussSampGqArbBase` function provided by OpenFHE.
+// A function corresponding to lines 260-266 in trapdoor-dcrtpoly.cpp and the `GaussSampGqArbBase`
+// function provided by OpenFHE.
 fn gauss_samp_gq_arb_base(
     params: &DCRTPolyParams,
     tower_idx: usize,

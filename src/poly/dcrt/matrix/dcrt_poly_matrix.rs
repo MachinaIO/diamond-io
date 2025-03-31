@@ -1,9 +1,10 @@
 use super::{block_offsets, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
-use crate::parallel_iter;
-use crate::poly::dcrt::FinRingElem;
-use crate::poly::{
-    dcrt::{DCRTPoly, DCRTPolyParams},
-    Poly, PolyMatrix, PolyParams,
+use crate::{
+    parallel_iter,
+    poly::{
+        dcrt::{DCRTPoly, DCRTPolyParams, FinRingElem},
+        Poly, PolyMatrix, PolyParams,
+    },
 };
 use itertools::Itertools;
 use num_bigint::BigInt;
