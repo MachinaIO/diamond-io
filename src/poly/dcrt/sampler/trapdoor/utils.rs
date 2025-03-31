@@ -57,9 +57,9 @@ pub(crate) fn gen_dgg_int_vec(size: usize, peikert: bool, m_a: f64, m_std: f64) 
 }
 
 pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams) -> DCRTPolyMatrix {
-    debug_assert_eq!(vec.size().1, 1, "Matrix must be a column vector");
+    debug_assert_eq!(vec.ncol, 1, "Matrix must be a column vector");
     let n = params.ring_dimension() as usize;
-    let nrow = vec.size().0 / n;
+    let nrow = vec.nrow / n;
     let mut poly_vec = DCRTPolyMatrix::zero(params, nrow, 1);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
         debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
