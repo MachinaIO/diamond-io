@@ -20,7 +20,14 @@ pub(crate) fn gen_int_karney(mean: f64, stddev: f64) -> i64 {
 }
 
 fn find_in_vec(vec: &[f64], search: f64) -> u32 {
-    todo!()
+    // binary search to find the position of a value
+    let pos = vec.partition_point(|&x| x < search);
+    if pos < vec.len() {
+        // returns 1-indexed position
+        (pos + 1) as u32
+    } else {
+        panic!("Value not found: {}", search)
+    }
 }
 
 pub(crate) fn gen_dgg_int_vec(size: usize, peikert: bool, m_a: f64, m_std: f64) -> I64Matrix {
