@@ -8,6 +8,7 @@ use crate::{
 };
 use itertools::Itertools;
 use num_bigint::BigInt;
+use openfhe::{cxx::UniquePtr, ffi::Matrix};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{ops::Range, path::Path};
@@ -292,6 +293,16 @@ impl PolyMatrix for DCRTPolyMatrix {
                 );
             },
         );
+    }
+}
+
+impl DCRTPolyMatrix {
+    pub fn to_dcrt_matrix_ptr(&self) -> UniquePtr<Matrix> {
+        todo!()
+    }
+
+    pub fn from_dcrt_matrix_ptr(matrix_ptr: UniquePtr<Matrix>) -> Self {
+        todo!()
     }
 }
 

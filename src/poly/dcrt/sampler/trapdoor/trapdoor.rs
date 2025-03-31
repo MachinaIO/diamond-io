@@ -15,6 +15,7 @@ use crate::{
         PolyParams,
     },
 };
+use openfhe::ffi::SampleP1ForPertSquareMat;
 
 pub(crate) const KARNEY_THRESHOLD: f64 = 300.0;
 
@@ -88,7 +89,7 @@ impl DCRTTrapdoor {
         let b_mat = r.clone() * e.transpose(); // d * d
         let d_mat = e.clone() * e.transpose(); // d * d
         let tp2 = r.concat_rows(&[e]) * &p2;
-        let p1 = sample_p1_for_pert_square_mat(&a_mat, &b_mat, &d_mat, &tp2, &params, n, c, dgg);
+        let p1 = sample_p1_for_pert_square_mat(&a_mat, &b_mat, &d_mat, &tp2, params, s, dgg);
         p1.concat_rows(&[&p2])
     }
 }
@@ -100,9 +101,24 @@ fn sample_p1_for_pert_square_mat(
     d_mat: &DCRTPolyMatrix,
     tp2: &DCRTPolyMatrix,
     params: &DCRTPolyParams,
-    n: usize,
+    s: f64,
     sigma: f64,
-    dgg: f64,
 ) -> DCRTPolyMatrix {
-    todo!();
+    let n = params.ring_dimension();
+    let depth = params.crt_depth();
+    let k_res = params.modulus_bits() / depth;
+
+    let p1_mat = SampleP1ForPertSquareMat(
+        a_mat.to_dcrt_matrix_ptr().as_mut().unwrap(),
+        b_mat.to_dcrt_matrix_ptr().as_mut().unwrap(),
+        d_mat.to_dcrt_matrix_ptr().as_mut().unwrap(),
+        tp2.to_dcrt_matrix_ptr().as_mut().unwrap(),
+        n,
+        depth,
+        k_res,
+        sigma,
+        s,
+    );
+
+    DCRTPolyMatrix::from_dcrt_matrix_ptr(p1_mat)
 }
