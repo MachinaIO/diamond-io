@@ -72,7 +72,7 @@ where
                                 let mut local_bits = bitvec![u8, Lsb0;];
                                 for hash_idx in 0..num_hash_fin_per_poly {
                                     let mut hasher = hasher.clone();
-                                    hasher.update(hash_idx.to_le_bytes());
+                                    hasher.update((hash_idx as u64).to_le_bytes());
                                     for &byte in hasher.finalize().iter() {
                                         for bit_index in 0..8 {
                                             local_bits.push((byte >> bit_index) & 1 != 0);
@@ -109,7 +109,7 @@ where
                                 let mut local_bits = bitvec![u8, Lsb0;];
                                 for hash_idx in 0..num_hash_bit_per_poly {
                                     let mut hasher = hasher.clone();
-                                    hasher.update(hash_idx.to_le_bytes());
+                                    hasher.update((hash_idx as u64).to_le_bytes());
                                     for &byte in hasher.finalize().iter() {
                                         for bit_index in 0..8 {
                                             local_bits.push((byte >> bit_index) & 1 != 0);

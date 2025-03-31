@@ -32,6 +32,15 @@ impl FinRingElem {
         Ok(Self::new(value, modulus))
     }
 
+    pub fn from_int64(value: i64, modulus: Arc<BigUint>) -> Self {
+        if value < 0 {
+            let value = modulus.as_ref() - &BigUint::from(value.abs() as u64);
+            Self::new(value, modulus)
+        } else {
+            Self::new(value, modulus)
+        }
+    }
+
     pub fn value(&self) -> &BigUint {
         &self.value
     }

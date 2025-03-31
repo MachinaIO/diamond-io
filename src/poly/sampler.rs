@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::{Poly, PolyMatrix};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 /// Enum representing different types of distributions for random sampling.
 pub enum DistType {
     /// Distribution over a finite ring, typically samples elements from a ring in a uniform or
@@ -53,7 +53,6 @@ pub trait PolyUniformSampler {
 pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
     type Trapdoor;
-    type MatrixPtr;
 
     fn trapdoor(
         &self,

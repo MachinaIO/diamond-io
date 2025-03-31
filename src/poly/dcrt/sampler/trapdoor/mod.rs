@@ -1,3 +1,7 @@
+pub mod sampler;
+pub mod trapdoor;
+pub mod utils;
+
 use crate::{
     parallel_iter,
     poly::{
@@ -198,7 +202,6 @@ impl DCRTPolyTrapdoorSampler {
 impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     type M = DCRTPolyMatrix;
     type Trapdoor = RLWETrapdoor;
-    type MatrixPtr = DCRTMatrixPtr;
 
     fn trapdoor(
         &self,
@@ -234,7 +237,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-        preimage_id: &str,
+        filepath: P,
     ) -> Vec<std::path::PathBuf> {
         let size = public_matrix.row_size();
         let target_cols = target.col_size();
