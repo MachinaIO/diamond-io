@@ -243,6 +243,7 @@ where
         );
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
+        log_mem("Evaluated outputs");
         assert_eq!(eval_outputs.len(), log_q * packed_output_size);
         let output_ints = eval_outputs
             .chunks(log_q)

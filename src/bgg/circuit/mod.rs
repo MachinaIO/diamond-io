@@ -8,6 +8,8 @@ use itertools::Itertools;
 use std::{collections::BTreeMap, fmt::Debug};
 pub use utils::*;
 
+use crate::utils::debug_mem;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PolyCircuit {
     gates: BTreeMap<usize, PolyGate>,
@@ -208,6 +210,7 @@ impl PolyCircuit {
         let output_gates = self.output_ids.iter().map(|id| self.gates[id].clone()).collect_vec();
         for gate in output_gates.iter() {
             self.eval_poly_gate(params, one, &mut wires, gate);
+            debug_mem("Evaluated polynomial gate");
         }
         self.output_ids
             .iter()
