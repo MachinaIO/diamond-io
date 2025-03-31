@@ -47,14 +47,13 @@ impl DCRTPolyTrapdoorSampler {
         let p_hat = trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large, peikert);
 
         let perturbed_syndrome = target.clone() - public_matrix.clone() * &p_hat;
-        let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
         let d = public_matrix.row_size();
         let depth = params.crt_depth();
 
-        let mut z_hat_mat = DCRTPolyMatrix::zero(params, 0, 0);
+        let mut z_hat_vecs = Vec::with_capacity(d);
         for i in 0..d {
-            let mut z_hat_row_vec = DCRTPolyMatrix::zero(params, 0, 0);
+            let mut z_hat_row_vec = Vec::with_capacity(d);
             for j in 0..d {
                 let z_hat_bbi_blocks = parallel_iter!(0..depth)
                     .map(|tower_idx| {
@@ -70,10 +69,20 @@ impl DCRTPolyTrapdoorSampler {
                 let z_hat_bbi = z_hat_bbi_blocks[0]
                     .concat_rows(&z_hat_bbi_blocks[1..].iter().collect::<Vec<_>>());
                 let z_hat = split_int64_vec_to_elems(&z_hat_bbi, params);
-                // I64Matrix::zero(&I64MatrixParams, k, n);
+                z_hat_row_vec.push(z_hat);
             }
+            z_hat_vecs.push(
+                z_hat_row_vec[0].concat_columns(&z_hat_row_vec[1..].iter().collect::<Vec<_>>()),
+            );
         }
-        todo!()
+        let z_hat_mat = z_hat_vecs[0].concat_rows(&z_hat_vecs[1..].iter().collect::<Vec<_>>());
+
+        let r_z_hat = trapdoor.r.clone() * &z_hat_mat;
+        let e_z_hat = trapdoor.e.clone() * &z_hat_mat;
+        let p_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
+            .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
+        let p_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+        p_hat_former.concat_rows(&[&p_hat_latter])
     }
 }
 
