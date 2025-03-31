@@ -2,6 +2,7 @@ use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
 pub trait PolyMatrix:
@@ -102,4 +103,8 @@ pub trait PolyMatrix:
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
     /// j is column and return decomposed matrix of target column
     fn get_column_matrix_decompose(&self, j: usize) -> Self;
+    /// Reads a matrix from a file.
+    fn read_from_file<P: AsRef<Path>>(params: &<Self::P as Poly>::Params, path: P) -> Self;
+    /// Writes a matrix to a file.
+    fn write_to_file<P: AsRef<Path>>(&self, path: P);
 }

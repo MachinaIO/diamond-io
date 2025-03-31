@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-const KARNEY_THRESHOLD: f64 = 300.0;
+pub(crate) const KARNEY_THRESHOLD: f64 = 300.0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DCRTTrapdoor {
@@ -39,7 +39,7 @@ impl DCRTTrapdoor {
         s: f64,
         c: f64,
         dgg: f64,
-        dgg_large: (f64, f64),
+        dgg_large_params: (f64, f64, &[f64]),
         peikert: bool,
     ) -> DCRTPolyMatrix {
         let r = &self.r;
@@ -65,7 +65,13 @@ impl DCRTTrapdoor {
             matrix.replace_entries(0..n * dk, 0..d, f);
             matrix
         } else {
-            let dgg_vectors = gen_dgg_int_vec(d, peikert, dgg_large.0, dgg_large.1);
+            let dgg_vectors = gen_dgg_int_vec(
+                d,
+                peikert,
+                dgg_large_params.0,
+                dgg_large_params.1,
+                dgg_large_params.2,
+            );
             let vecs = parallel_iter!(0..n * dk)
                 .map(|i| dgg_vectors.slice(i * d, (i + 1) * d, 0, 1))
                 .collect::<Vec<_>>();

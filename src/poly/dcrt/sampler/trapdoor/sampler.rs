@@ -2,22 +2,21 @@
 use rayon::iter::ParallelIterator;
 
 use super::{
-    trapdoor::DCRTTrapdoor,
-    utils::{gen_dgg_int_vec, gen_int_karney, split_int64_vec_to_elems},
+    trapdoor::{DCRTTrapdoor, KARNEY_THRESHOLD},
+    utils::split_int64_vec_to_elems,
 };
 use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
-            sampler::DCRTPolyUniformSampler,
-            DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
+            matrix::I64Matrix, sampler::DCRTPolyUniformSampler, DCRTPoly, DCRTPolyMatrix,
+            DCRTPolyParams,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
+    utils::debug_mem,
 };
-use std::path::PathBuf;
 
 const SIGMA: f64 = 4.578;
 const SPECTRAL_CONSTANT: f64 = 1.8;
@@ -41,11 +40,12 @@ impl DCRTPolyTrapdoorSampler {
         public_matrix: &DCRTPolyMatrix,
         target: &DCRTPolyMatrix,
         s: f64,
-        dgg_large: (f64, f64),
+        dgg_large_params: (f64, f64, &[f64]),
         peikert: bool,
     ) -> DCRTPolyMatrix {
         // (d * (k+2)) times d
-        let p_hat = trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large, peikert);
+        let p_hat =
+            trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
 
         let perturbed_syndrome = target.clone() - public_matrix.clone() * &p_hat;
         let k = params.modulus_bits();
@@ -106,30 +106,70 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         (trapdoor, a)
     }
 
-    fn preimage_to_fs(
+    fn preimage(
         &self,
         params: &<<Self::M as PolyMatrix>::P as crate::poly::Poly>::Params,
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-        preimage_id: &str,
-    ) -> Vec<std::path::PathBuf> {
+    ) -> Self::M {
         let d = public_matrix.row_size();
+        let target_cols = target.col_size();
+        assert_eq!(
+            target.row_size(),
+            d,
+            "Target matrix should have the same number of rows as the public matrix"
+        );
+
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
-        let s = SPECTRAL_CONSTANT *
-            3.0 *
-            SIGMA *
-            SIGMA *
-            (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
-        todo!()
-    }
+        let s = SPECTRAL_CONSTANT
+            * 3.0
+            * SIGMA
+            * SIGMA
+            * (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
+        let dgg_large_std = (s * s - self.c * self.c).sqrt();
+        let peikert = dgg_large_std < KARNEY_THRESHOLD;
+        let (dgg_large_mean, dgg_large_table) = {
+            let acc: f64 = 5e-32;
+            let m = (-2.0 * acc.ln()).sqrt();
+            let fin = (dgg_large_std * m).ceil() as usize;
 
-    fn preimage_from_fs(
-        params: &<<Self::M as PolyMatrix>::P as crate::poly::Poly>::Params,
-        preimages_paths: &[PathBuf],
-    ) -> Self::M {
-        todo!()
+            let mut m_vals = Vec::with_capacity(fin);
+            let variance = 2.0 * dgg_large_std * dgg_large_std;
+            let mut cusum = 0.0f64;
+            for i in 1..=fin {
+                cusum += (-(i as f64 * i as f64) / variance).exp();
+                m_vals.push(cusum);
+            }
+            let m_a = 1.0 / (2.0 * cusum + 1.0);
+            for i in 0..fin {
+                m_vals[i] *= m_a;
+            }
+            (m_a, m_vals)
+        };
+        let dgg_large_params = (dgg_large_mean, dgg_large_std, &dgg_large_table[..]);
+        let num_block = target_cols.div_ceil(d);
+        debug_mem(format!("preimage before loop processing out of {}", num_block));
+        let preimage_blocks = parallel_iter!(0..num_block)
+            .map(|i| {
+                let start_col = i * d;
+                let end_col = (start_col + d).min(target_cols);
+                let target_block = target.slice(0, d, start_col, end_col);
+                debug_mem(format!("preimage iter : start_col = {}", start_col));
+                self.preimage_square(
+                    params,
+                    trapdoor,
+                    public_matrix,
+                    &target_block,
+                    s,
+                    dgg_large_params,
+                    peikert,
+                )
+            })
+            .collect::<Vec<_>>();
+        debug_mem(format!("preimage after loop processing out of {}", num_block));
+        preimage_blocks[0].concat_columns(&preimage_blocks[1..].iter().collect::<Vec<_>>())
     }
 }
 

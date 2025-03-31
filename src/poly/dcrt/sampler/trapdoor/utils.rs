@@ -30,7 +30,13 @@ fn find_in_vec(vec: &[f64], search: f64) -> u32 {
     }
 }
 
-pub(crate) fn gen_dgg_int_vec(size: usize, peikert: bool, m_a: f64, m_std: f64) -> I64Matrix {
+pub(crate) fn gen_dgg_int_vec(
+    size: usize,
+    peikert: bool,
+    m_a: f64,
+    m_std: f64,
+    m_table: &[f64],
+) -> I64Matrix {
     let mut vec = I64Matrix::zero(&I64MatrixParams, size, 1);
     if !peikert {
         // Use Karney's method
@@ -53,7 +59,7 @@ pub(crate) fn gen_dgg_int_vec(size: usize, peikert: bool, m_a: f64, m_std: f64) 
 
                     if tmp > 0.0f64 {
                         let sign = if seed > 0.0f64 { 1 } else { -1 };
-                        val = find_in_vec(&vec![0.0f64; size], tmp) as i64 * sign;
+                        val = find_in_vec(&m_table, tmp) as i64 * sign;
                     }
                     vec![val]
                 })
