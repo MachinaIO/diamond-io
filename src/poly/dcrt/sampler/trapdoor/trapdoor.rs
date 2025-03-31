@@ -93,7 +93,7 @@ impl DCRTTrapdoor {
     }
 }
 
-// A function to generate `p1`for the `sample_pert_square_mat` function, corresponding to lines 425-473 (except for the line 448) in the `SamplePertSquareMat` function in the trapdoor.h of OpenFHE. https://github.com/openfheorg/openfhe-development/blob/main/src/core/include/lattice/trapdoor.h#L425-L473
+// A function to generate `p1` for the `sample_pert_square_mat` function, corresponding to lines 425-473 (except for the line 448) in the `SamplePertSquareMat` function in the trapdoor.h of OpenFHE. https://github.com/openfheorg/openfhe-development/blob/main/src/core/include/lattice/trapdoor.h#L425-L473
 fn sample_p1_for_pert_square_mat(
     a_mat: &DCRTPolyMatrix,
     b_mat: &DCRTPolyMatrix,

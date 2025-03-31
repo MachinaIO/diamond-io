@@ -1,6 +1,3 @@
-#[cfg(feature = "parallel")]
-use rayon::iter::ParallelIterator;
-
 use super::{
     trapdoor::{DCRTTrapdoor, KARNEY_THRESHOLD},
     utils::split_int64_vec_to_elems,
@@ -9,14 +6,19 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::I64Matrix, sampler::DCRTPolyUniformSampler, DCRTPoly, DCRTPolyMatrix,
-            DCRTPolyParams,
+            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
+            sampler::DCRTPolyUniformSampler,
+            DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
+use openfhe::ffi::{DCRTGaussSampGqArbBase, MatrixGen, SetMatrixElement};
+#[cfg(feature = "parallel")]
+use rayon::iter::ParallelIterator;
+use std::ops::Range;
 
 const SIGMA: f64 = 4.578;
 const SPECTRAL_CONSTANT: f64 = 1.8;
@@ -59,11 +61,12 @@ impl DCRTPolyTrapdoorSampler {
                 let z_hat_bbi_blocks = parallel_iter!(0..depth)
                     .map(|tower_idx| {
                         gauss_samp_gq_arb_base(
-                            params,
-                            tower_idx,
                             &perturbed_syndrome.entry(i, j),
                             self.c,
+                            params,
+                            2, // TODO: is it ok to hardcode it?
                             self.sigma,
+                            tower_idx,
                         )
                     })
                     .collect::<Vec<_>>();
@@ -176,11 +179,18 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 // A function corresponding to lines 260-266 in trapdoor-dcrtpoly.cpp and the `GaussSampGqArbBase`
 // function provided by OpenFHE.
 fn gauss_samp_gq_arb_base(
-    params: &DCRTPolyParams,
-    tower_idx: usize,
     syndrome: &DCRTPoly,
     c: f64,
+    params: &DCRTPolyParams,
+    base: i64,
     dgg: f64,
+    tower_idx: usize,
 ) -> I64Matrix {
+    let n = params.ring_dimension();
+    let size = params.crt_depth();
+    let k_res = params.modulus_bits();
+    let mut syndrome_matrix = MatrixGen(n, size, k_res, 1, 1);
+    SetMatrixElement(syndrome_matrix.as_mut().unwrap(), 0, 0, syndrome.get_poly());
+    let vec = DCRTGaussSampGqArbBase(&syndrome_matrix, c, n, size, k_res, base, dgg, tower_idx);
     todo!()
 }
