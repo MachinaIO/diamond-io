@@ -5,7 +5,10 @@ pub mod utils;
 pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};
 use itertools::Itertools;
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fmt::Debug,
+};
 pub use utils::*;
 
 use crate::utils::debug_mem;
@@ -194,105 +197,104 @@ impl PolyCircuit {
         gate_id
     }
 
-    fn eval_gate<E: Evaluable>(
-        &self,
-        params: &E::Params,
-        one: &E,
-        wires: &mut BTreeMap<usize, E>,
-        gate: &PolyGate,
-    ) {
-        if !wires.contains_key(&gate.gate_id) {
-            let input_ids = &gate.input_gates;
-            for input_id in input_ids.iter() {
-                if !wires.contains_key(input_id) {
-                    debug_mem("didn't evaluated input gate yet");
-                    self.eval_gate(params, one, wires, &self.gates[input_id]);
-                }
+    /// Computes a topological order (as a vector of gate IDs) for all gates that
+    /// are needed to evaluate the outputs. This is done via a DFS from each output gate.
+    fn topological_order(&self) -> Vec<usize> {
+        let mut visited = HashSet::new();
+        let mut order = Vec::new();
+
+        fn dfs(
+            circuit: &PolyCircuit,
+            gate_id: usize,
+            visited: &mut HashSet<usize>,
+            order: &mut Vec<usize>,
+        ) {
+            if !visited.insert(gate_id) {
+                return;
             }
-            match &gate.gate_type {
-                PolyGateType::Input => {
-                    panic!("The wire for the input gate {:?} should be already inserted", gate);
-                }
-                PolyGateType::Const { bits } => {
-                    let output = E::from_bits(params, one, bits);
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Add => {
-                    let left = wires
-                        .get(&input_ids[0])
-                        .expect("wire value not exist for target key")
-                        .clone();
-                    let right = wires
-                        .get(&input_ids[1])
-                        .expect("wire value not exist for target key")
-                        .clone();
-                    let output = left + right;
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Sub => {
-                    let left = wires
-                        .get(&input_ids[0])
-                        .expect("wire value not exist for target key")
-                        .clone();
-                    let right = wires
-                        .get(&input_ids[1])
-                        .expect("wire value not exist for target key")
-                        .clone();
-                    let output = left - right;
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Mul => {
-                    let left = wires
-                        .get(&input_ids[0])
-                        .expect("wire value not exist for target key")
-                        .clone();
-                    let right = wires
-                        .get(&input_ids[1])
-                        .expect("wire value not exist for target key")
-                        .clone();
-                    let output = left.clone() * right.clone();
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Rotate { shift } => {
-                    let input =
-                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
-                    let output = input.rotate(params, *shift);
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Call { circuit_id, output_id, .. } => {
-                    let sub_circuit = &self.sub_circuits[circuit_id];
-                    let inputs = input_ids
-                        .iter()
-                        .map(|id| {
-                            wires.get(id).expect("wire value not exist for target key").clone()
-                        })
-                        .collect_vec();
-                    let outputs = sub_circuit.eval(params, one, &inputs);
-                    let first_output_wire = gate.gate_id - output_id;
-                    for (idx, output_wire) in outputs.into_iter().enumerate() {
-                        wires.insert(first_output_wire + idx, output_wire);
-                    }
-                }
+            let gate = circuit.gates.get(&gate_id).expect("gate not found");
+            for &input_id in &gate.input_gates {
+                dfs(circuit, input_id, visited, order);
             }
+            order.push(gate_id);
         }
+
+        for &output_gate in &self.output_ids {
+            dfs(self, output_gate, &mut visited, &mut order);
+        }
+        order
     }
 
-    /// Evaluate the circuit in parallel using a levelized approach.
+    /// Evaluate the circuit using an iterative approach over a precomputed topological order.
     pub fn eval<E: Evaluable>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E> {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), inputs.len());
             assert_ne!(self.num_output(), 0);
         }
+
+        // Preload the wires for constant and input gates.
         let mut wires: BTreeMap<usize, E> = BTreeMap::new();
         wires.insert(0, one.clone());
         for (idx, input) in inputs.iter().enumerate() {
             wires.insert(idx + 1, input.clone());
         }
-        let output_gates = self.output_ids.iter().map(|id| self.gates[id].clone()).collect_vec();
-        for gate in output_gates.iter() {
-            self.eval_gate(params, one, &mut wires, gate);
-            debug_mem("Evaluated polynomial gate");
+
+        // Compute a topological order of gate IDs.
+        let order = self.topological_order();
+        for gate_id in order {
+            debug_mem("Evaluated gate");
+            if wires.contains_key(&gate_id) {
+                continue;
+            }
+            let gate = self.gates.get(&gate_id).expect("gate not found");
+            let input_ids = &gate.input_gates;
+            match &gate.gate_type {
+                PolyGateType::Input => {
+                    panic!("Input gate {:?} should already be preloaded", gate);
+                }
+                PolyGateType::Const { bits } => {
+                    let output = E::from_bits(params, one, bits);
+                    wires.insert(gate_id, output);
+                }
+                PolyGateType::Add => {
+                    let left =
+                        wires.get(&input_ids[0]).expect("wire value missing for Add").clone();
+                    let right =
+                        wires.get(&input_ids[1]).expect("wire value missing for Add").clone();
+                    wires.insert(gate_id, left + right);
+                }
+                PolyGateType::Sub => {
+                    let left =
+                        wires.get(&input_ids[0]).expect("wire value missing for Sub").clone();
+                    let right =
+                        wires.get(&input_ids[1]).expect("wire value missing for Sub").clone();
+                    wires.insert(gate_id, left - right);
+                }
+                PolyGateType::Mul => {
+                    let left =
+                        wires.get(&input_ids[0]).expect("wire value missing for Mul").clone();
+                    let right =
+                        wires.get(&input_ids[1]).expect("wire value missing for Mul").clone();
+                    wires.insert(gate_id, left * right);
+                }
+                PolyGateType::Rotate { shift } => {
+                    let input = wires.get(&input_ids[0]).expect("wire value missing for Rotate");
+                    wires.insert(gate_id, input.rotate(params, *shift));
+                }
+                PolyGateType::Call { circuit_id, output_id, .. } => {
+                    let sub_circuit = &self.sub_circuits[circuit_id];
+                    let sub_inputs: Vec<E> = input_ids
+                        .iter()
+                        .map(|id| wires.get(id).expect("wire value missing for Call").clone())
+                        .collect();
+                    let outputs = sub_circuit.eval(params, one, &sub_inputs);
+                    let first_output_wire = gate_id - output_id;
+                    for (i, out_val) in outputs.into_iter().enumerate() {
+                        wires.insert(first_output_wire + i, out_val);
+                    }
+                }
+            }
         }
 
         self.output_ids
