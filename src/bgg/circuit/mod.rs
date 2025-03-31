@@ -146,7 +146,6 @@ impl PolyCircuit {
         assert_eq!(inputs.len(), sub_circuit.num_input());
         let mut outputs = Vec::with_capacity(sub_circuit.num_output());
         for idx in 0..sub_circuit.num_output() {
-            println!("output_id: {}", idx);
             let gate_id = self.new_gate_generic(
                 inputs.to_vec(),
                 PolyGateType::Call { circuit_id, num_input: inputs.len(), output_id: idx },
@@ -206,27 +205,18 @@ impl PolyCircuit {
     pub fn compute_levels(&self) -> Vec<Vec<usize>> {
         let mut gate_levels: HashMap<usize, usize> = HashMap::new();
         let mut levels: Vec<Vec<usize>> = vec![];
-
-        // Input wires (including constant one at key 0) are at level 0.
         for i in 0..=self.num_input {
             gate_levels.insert(i, 0);
         }
-
-        // For each gate, compute its level
         for (&gate_id, gate) in self.gates.iter() {
             // skipping input gates
             if gate_id <= self.num_input {
                 continue;
             }
-
             let level = gate
                 .input_gates
                 .iter()
-                .map(|id| {
-                    let r = *gate_levels.get(id).unwrap_or(&0);
-                    println!("gate: {} / {:?}", r, gate_levels.get(id));
-                    r
-                })
+                .map(|id| *gate_levels.get(id).unwrap_or(&0))
                 .max()
                 .unwrap_or(0) +
                 1;
@@ -234,13 +224,11 @@ impl PolyCircuit {
             if levels.len() <= level {
                 levels.resize(level + 1, vec![]);
             }
-            println!("level :{}, gate_id: {}", level, gate_id);
             levels[level].push(gate_id);
         }
         levels
     }
 
-    /// Each gate is evaluated assuming that all its input wires have already been computed.
     fn eval_gate<E: Evaluable>(
         &self,
         params: &E::Params,
@@ -252,6 +240,7 @@ impl PolyCircuit {
             let input_ids = &gate.input_gates;
             for input_id in input_ids.iter() {
                 if !wires.contains_key(input_id) {
+                    debug_mem("didn't evaluated input gate yet");
                     self.eval_gate(params, one, wires, &self.gates[input_id]);
                 }
             }
@@ -336,8 +325,6 @@ impl PolyCircuit {
             wires.insert(idx + 1, input.clone());
         }
         let levels = self.compute_levels();
-        println!("levels :{:?}", levels);
-        // Evaluate gates level-by-level.
         for level in levels.iter() {
             // All gates in the same level can be processed in parallel.
             level.par_iter().for_each(|&gate_id| {
