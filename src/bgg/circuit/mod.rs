@@ -2,10 +2,15 @@ pub mod eval;
 pub mod gate;
 pub mod serde;
 pub mod utils;
+use dashmap::DashMap;
 pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};
 use itertools::Itertools;
-use std::{collections::BTreeMap, fmt::Debug};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Debug,
+};
 pub use utils::*;
 
 use crate::utils::debug_mem;
@@ -140,10 +145,15 @@ impl PolyCircuit {
         #[cfg(debug_assertions)]
         assert_eq!(inputs.len(), sub_circuit.num_input());
         let mut outputs = Vec::with_capacity(sub_circuit.num_output());
+        let base_gate_id = self.gates.len();
         for idx in 0..sub_circuit.num_output() {
             let gate_id = self.new_gate_generic(
                 inputs.to_vec(),
-                PolyGateType::Call { circuit_id, num_input: inputs.len(), output_id: idx },
+                PolyGateType::Call {
+                    circuit_id,
+                    num_input: inputs.len(),
+                    output_id: base_gate_id + idx,
+                },
             );
             outputs.push(gate_id);
         }
@@ -194,98 +204,123 @@ impl PolyCircuit {
         gate_id
     }
 
-    /// Evaluate [`PolyCircuit`]
+    /// Computes a levelized grouping of gate ids.
+    /// Input wires (keys 0..=num_input) are assigned level 0.
+    /// Each non‐input gate’s level is defined as max(levels of its inputs) + 1.
+    pub fn compute_levels(&self) -> Vec<Vec<usize>> {
+        let mut gate_levels: HashMap<usize, usize> = HashMap::new();
+        let mut levels: Vec<Vec<usize>> = vec![];
+
+        // Input wires (including constant one at key 0) are at level 0.
+        for i in 0..=self.num_input {
+            gate_levels.insert(i, 0);
+        }
+
+        // For each gate, compute its level
+        for (&gate_id, gate) in self.gates.iter() {
+            // skipping input gates
+            if gate_id <= self.num_input {
+                continue;
+            }
+
+            let level = gate
+                .input_gates
+                .iter()
+                .map(|id| {
+                    let r = *gate_levels.get(id).unwrap_or(&0);
+                    println!("gate: {} / {:?}", r, gate_levels.get(id));
+                    r
+                })
+                .max()
+                .unwrap_or(0) +
+                1;
+            gate_levels.insert(gate_id, level);
+            if levels.len() <= level {
+                levels.resize(level + 1, vec![]);
+            }
+            println!("level :{}, gate_id: {}", level, gate_id);
+            levels[level].push(gate_id);
+        }
+        levels
+    }
+
+    /// Each gate is evaluated assuming that all its input wires have already been computed.
+    fn eval_gate<E: Evaluable>(
+        &self,
+        params: &E::Params,
+        one: &E,
+        wires: &DashMap<usize, E>,
+        gate: &PolyGate,
+    ) -> E {
+        let input_ids = &gate.input_gates;
+        match &gate.gate_type {
+            PolyGateType::Input => {
+                panic!("Input gate should have been initialized")
+            }
+            PolyGateType::Const { bits } => E::from_bits(params, one, bits),
+            PolyGateType::Add => {
+                let left = wires.get(&input_ids[0]).expect("missing wire").clone();
+                let right = wires.get(&input_ids[1]).expect("missing wire").clone();
+                left + right
+            }
+            PolyGateType::Sub => {
+                let left = wires.get(&input_ids[0]).expect("missing wire").clone();
+                let right = wires.get(&input_ids[1]).expect("missing wire").clone();
+                left - right
+            }
+            PolyGateType::Mul => {
+                let left = wires.get(&input_ids[0]).expect("missing wire").clone();
+                let right = wires.get(&input_ids[1]).expect("missing wire").clone();
+                left * right
+            }
+            PolyGateType::Rotate { shift } => {
+                let input = wires.get(&input_ids[0]).expect("missing wire").clone();
+                input.rotate(params, *shift)
+            }
+            PolyGateType::Call { circuit_id, output_id, .. } => {
+                let sub_circuit = self.sub_circuits.get(circuit_id).expect("missing sub-circuit");
+                let sub_inputs: Vec<E> = input_ids
+                    .iter()
+                    .map(|id| wires.get(id).expect("missing sub-input").clone())
+                    .collect();
+                let outputs = sub_circuit.eval(params, one, &sub_inputs);
+                for (idx, output_wire) in outputs.into_iter().enumerate() {
+                    wires.insert(output_id + idx, output_wire);
+                }
+                wires.get(output_id).expect("sub-circuit output missing").clone()
+            }
+        }
+    }
+
+    /// Evaluate the circuit in parallel using a levelized approach.
     pub fn eval<E: Evaluable>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E> {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), inputs.len());
             assert_ne!(self.num_output(), 0);
         }
-
-        let mut wires: BTreeMap<usize, E> = BTreeMap::new();
+        let wires = DashMap::new();
         wires.insert(0, one.clone());
         for (idx, input) in inputs.iter().enumerate() {
             wires.insert(idx + 1, input.clone());
         }
-        let output_gates = self.output_ids.iter().map(|id| self.gates[id].clone()).collect_vec();
-        for gate in output_gates.iter() {
-            self.eval_poly_gate(params, one, &mut wires, gate);
-            debug_mem("Evaluated polynomial gate");
+        let levels = self.compute_levels();
+        println!("levels :{:?}", levels);
+        // Evaluate gates level-by-level.
+        for level in levels.iter() {
+            // All gates in the same level can be processed in parallel.
+            level.par_iter().for_each(|&gate_id| {
+                let gate = self.gates.get(&gate_id).expect("gate not found").clone();
+                let res = self.eval_gate(params, one, &wires, &gate);
+                wires.insert(gate.gate_id, res);
+                debug_mem("Evaluated gate in parallel");
+            });
         }
+
         self.output_ids
             .iter()
-            .map(|id| wires.get(id).expect("expected output id doesn't exist").clone())
+            .map(|id| wires.get(id).expect("output missing").clone())
             .collect_vec()
-    }
-
-    fn eval_poly_gate<E: Evaluable>(
-        &self,
-        params: &E::Params,
-        one: &E,
-        wires: &mut BTreeMap<usize, E>,
-        gate: &PolyGate,
-    ) {
-        if !wires.contains_key(&gate.gate_id) {
-            let input_ids = &gate.input_gates;
-            for input_id in input_ids.iter() {
-                if !wires.contains_key(input_id) {
-                    self.eval_poly_gate(params, one, wires, &self.gates[input_id]);
-                }
-            }
-            match &gate.gate_type {
-                PolyGateType::Input => {
-                    panic!("The wire for the input gate {:?} should be already inserted", gate);
-                }
-                PolyGateType::Const { bits } => {
-                    let output = E::from_bits(params, one, bits);
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Add => {
-                    let left =
-                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
-                    let right =
-                        wires.get(&input_ids[1]).expect("wire value not exist for target key");
-                    let output = left.clone() + right;
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Sub => {
-                    let left =
-                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
-                    let right =
-                        wires.get(&input_ids[1]).expect("wire value not exist for target key");
-                    let output = left.clone() - right;
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Mul => {
-                    let left =
-                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
-                    let right =
-                        wires.get(&input_ids[1]).expect("wire value not exist for target key");
-                    let output = left.clone() * right.clone();
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Rotate { shift } => {
-                    let input =
-                        wires.get(&input_ids[0]).expect("wire value not exist for target key");
-                    let output = input.rotate(params, *shift);
-                    wires.insert(gate.gate_id, output);
-                }
-                PolyGateType::Call { circuit_id, output_id, .. } => {
-                    let sub_circuit = &self.sub_circuits[circuit_id];
-                    let inputs = input_ids
-                        .iter()
-                        .map(|id| {
-                            wires.get(id).expect("wire value not exist for target key").clone()
-                        })
-                        .collect_vec();
-                    let outputs = sub_circuit.eval(params, one, &inputs);
-                    let first_output_wire = gate.gate_id - output_id;
-                    for (idx, output_wire) in outputs.into_iter().enumerate() {
-                        wires.insert(first_output_wire + idx, output_wire);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -453,7 +488,7 @@ mod tests {
         let poly2 = create_random_poly(&params);
         let poly3 = create_random_poly(&params);
 
-        // Create a complex circuit: ((poly1 + poly2) * scalar) - poly3
+        // Create a complex circuit: (poly1 + poly2) - poly3
         let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(3);
 
@@ -533,8 +568,8 @@ mod tests {
 
         // Create a complex circuit with depth = 4
         // Circuit structure:
-        // Level 1: a = poly1 + poly2, b = poly3 * poly4
-        // Level 2: c = a * b, d = poly1 - poly3
+        // Level 1: a = poly1 + poly2, b = poly3 * poly4, d = poly1 - poly3
+        // Level 2: c = a * b
         // Level 3: e = c + d
         // Level 4: f = e * e
         // Output: f
@@ -544,10 +579,10 @@ mod tests {
         // Level 1
         let a = circuit.add_gate(inputs[0], inputs[1]); // poly1 + poly2
         let b = circuit.mul_gate(inputs[2], inputs[3]); // poly3 * poly4
+        let d = circuit.sub_gate(inputs[0], inputs[2]); // poly1 - poly3
 
         // Level 2
         let c = circuit.mul_gate(a, b); // (poly1 + poly2) * (poly3 * poly4)
-        let d = circuit.sub_gate(inputs[0], inputs[2]); // poly1 - poly3
 
         // Level 3
         let e = circuit.add_gate(c, d); // ((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3)

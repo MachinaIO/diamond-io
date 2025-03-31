@@ -6,7 +6,6 @@ use crate::{
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use num_bigint::BigInt;
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{
     env,

@@ -13,8 +13,10 @@ pub trait Evaluable:
     + for<'a> Add<&'a Self, Output = Self>
     + for<'a> Sub<&'a Self, Output = Self>
     + for<'a> Mul<&'a Self, Output = Self>
+    + Send
+    + Sync
 {
-    type Params: Debug + Clone;
+    type Params: Debug + Clone + Send + Sync;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
     fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self;
 }
