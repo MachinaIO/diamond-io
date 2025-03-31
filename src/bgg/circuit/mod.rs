@@ -147,6 +147,7 @@ impl PolyCircuit {
         let mut outputs = Vec::with_capacity(sub_circuit.num_output());
         let base_gate_id = self.gates.len();
         for idx in 0..sub_circuit.num_output() {
+            println!("output_id: {}", base_gate_id + idx);
             let gate_id = self.new_gate_generic(
                 inputs.to_vec(),
                 PolyGateType::Call {
@@ -285,6 +286,7 @@ impl PolyCircuit {
                     .collect();
                 let outputs = sub_circuit.eval(params, one, &sub_inputs);
                 for (idx, output_wire) in outputs.into_iter().enumerate() {
+                    println!("call polygate :{}", output_id + idx);
                     wires.insert(output_id + idx, output_wire);
                 }
                 wires.get(output_id).expect("sub-circuit output missing").clone()
@@ -313,8 +315,8 @@ impl PolyCircuit {
                 let gate = self.gates.get(&gate_id).expect("gate not found").clone();
                 let res = self.eval_gate(params, one, &wires, &gate);
                 wires.insert(gate.gate_id, res);
-                debug_mem("Evaluated gate in parallel");
             });
+            debug_mem("Evaluated gate in parallel");
         }
 
         self.output_ids
