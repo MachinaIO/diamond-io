@@ -64,7 +64,6 @@ impl DCRTPolyTrapdoorSampler {
                             &perturbed_syndrome.entry(i, j),
                             self.c,
                             params,
-                            2, // TODO: is it ok to hardcode it?
                             self.sigma,
                             tower_idx,
                         )
@@ -126,11 +125,11 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
-        let s = SPECTRAL_CONSTANT *
-            3.0 *
-            SIGMA *
-            SIGMA *
-            (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
+        let s = SPECTRAL_CONSTANT
+            * 3.0
+            * SIGMA
+            * SIGMA
+            * (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
         let dgg_large_std = (s * s - self.c * self.c).sqrt();
         let peikert = dgg_large_std < KARNEY_THRESHOLD;
         let (dgg_large_mean, dgg_large_table) = {
@@ -182,15 +181,26 @@ fn gauss_samp_gq_arb_base(
     syndrome: &DCRTPoly,
     c: f64,
     params: &DCRTPolyParams,
-    base: i64,
-    dgg: f64,
+    sigma: f64,
     tower_idx: usize,
 ) -> I64Matrix {
     let n = params.ring_dimension();
-    let size = params.crt_depth();
-    let k_res = params.modulus_bits();
-    let mut syndrome_matrix = MatrixGen(n, size, k_res, 1, 1);
+    let depth = params.crt_depth();
+    let k_res = params.modulus_bits() / depth;
+    let mut syndrome_matrix = MatrixGen(n, depth, k_res, 1, 1);
     SetMatrixElement(syndrome_matrix.as_mut().unwrap(), 0, 0, syndrome.get_poly());
-    let vec = DCRTGaussSampGqArbBase(&syndrome_matrix, c, n, size, k_res, base, dgg, tower_idx);
-    todo!()
+    let result = DCRTGaussSampGqArbBase(&syndrome_matrix, c, n, depth, k_res, 2, sigma, tower_idx);
+    debug_assert_eq!(result.len(), n as usize * k_res);
+    let mut matrix = I64Matrix::zero(&I64MatrixParams, k_res, n as usize);
+    let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<i64>> {
+        parallel_iter!(row_offsets)
+            .map(|i| {
+                parallel_iter!(col_offsets.clone())
+                    .map(|j| result[i * n as usize + j])
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    matrix.replace_entries(0..k_res, 0..n as usize, f);
+    matrix
 }
