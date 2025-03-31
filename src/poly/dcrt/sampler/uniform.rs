@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -43,6 +45,9 @@ impl DCRTPolyUniformSampler {
                 params.crt_bits(),
             ),
         };
+        if sampled_poly.is_null() {
+            panic!("Attempted to dereference a null pointer");
+        }
         DCRTPoly::new(sampled_poly)
     }
 }
@@ -53,25 +58,22 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
     fn sample_uniform(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        rows: usize,
-        columns: usize,
+        nrow: usize,
+        ncol: usize,
         dist: DistType,
     ) -> Self::M {
-        let c: Vec<Vec<DCRTPoly>> = parallel_iter!(0..rows)
-            .map(|_| {
-                parallel_iter!(0..columns)
-                    .map(|_| {
-                        let sampled_poly = self.sample_poly(params, &dist);
-                        if sampled_poly.get_poly().is_null() {
-                            panic!("Attempted to dereference a null pointer");
-                        }
-                        sampled_poly
-                    })
-                    .collect()
-            })
-            .collect();
-
-        DCRTPolyMatrix::from_poly_vec(params, c)
+        let mut new_matrix = DCRTPolyMatrix::new_empty(params, nrow, ncol);
+        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            parallel_iter!(row_offsets)
+                .map(|_| {
+                    parallel_iter!(col_offsets.clone())
+                        .map(|_| self.sample_poly(params, &dist))
+                        .collect()
+                })
+                .collect()
+        };
+        new_matrix.replace_entries(0..nrow, 0..ncol, f);
+        new_matrix
     }
 }
 
