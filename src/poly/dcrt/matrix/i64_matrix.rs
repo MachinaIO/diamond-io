@@ -1,4 +1,4 @@
-use super::{block_offsets, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
 use crate::{
     parallel_iter,
     poly::{
@@ -6,11 +6,6 @@ use crate::{
         Poly, PolyMatrix, PolyParams,
     },
 };
-use itertools::Itertools;
-use num_bigint::BigInt;
-#[cfg(feature = "parallel")]
-use rayon::prelude::*;
-use std::ops::Range;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;
