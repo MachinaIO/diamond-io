@@ -13,9 +13,10 @@ use rand_distr::Uniform;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::ops::Range;
+use openfhe::ffi::GenerateIntegerKarney;
 
 pub(crate) fn gen_int_karney(mean: f64, stddev: f64) -> i64 {
-    todo!()
+    GenerateIntegerKarney(mean, stddev)
 }
 
 fn find_in_vec(vec: &[f64], search: f64) -> u32 {
