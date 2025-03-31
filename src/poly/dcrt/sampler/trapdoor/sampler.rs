@@ -187,9 +187,8 @@ fn gauss_samp_gq_arb_base(
     let n = params.ring_dimension();
     let depth = params.crt_depth();
     let k_res = params.modulus_bits() / depth;
-    let mut syndrome_matrix = MatrixGen(n, depth, k_res, 1, 1);
-    SetMatrixElement(syndrome_matrix.as_mut().unwrap(), 0, 0, syndrome.get_poly());
-    let result = DCRTGaussSampGqArbBase(&syndrome_matrix, c, n, depth, k_res, 2, sigma, tower_idx);
+    let result =
+        DCRTGaussSampGqArbBase(syndrome.get_poly(), c, n, depth, k_res, 2, sigma, tower_idx);
     debug_assert_eq!(result.len(), n as usize * k_res);
     let mut matrix = I64Matrix::zero(&I64MatrixParams, k_res, n as usize);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<i64>> {
