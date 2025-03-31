@@ -9,7 +9,6 @@ use crate::{
     },
 };
 use itertools::Itertools;
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
 

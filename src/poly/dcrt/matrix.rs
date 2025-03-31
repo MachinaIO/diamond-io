@@ -68,8 +68,8 @@ impl PolyMatrix for DCRTPolyMatrix {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<Self::P>> {
             let row_offsets = row_start + row_offsets.start..row_start + row_offsets.end;
             let col_offsets = col_start + col_offsets.start..col_start + col_offsets.end;
-            let new_entries = self.block_entries(row_offsets, col_offsets);
-            new_entries
+
+            self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..nrow, 0..ncol, f);
         new_matrix
@@ -465,8 +465,8 @@ impl Add<&DCRTPolyMatrix> for DCRTPolyMatrix {
          -> Vec<Vec<<Self as PolyMatrix>::P>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
-            let new_block_polys = add_block_matrices(self_block_polys, &rhs_block_polys);
-            new_block_polys
+
+            add_block_matrices(self_block_polys, &rhs_block_polys)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -499,8 +499,8 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
          -> Vec<Vec<<Self as PolyMatrix>::P>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
-            let new_block_polys = sub_block_matrices(self_block_polys, &rhs_block_polys);
-            new_block_polys
+
+            sub_block_matrices(self_block_polys, &rhs_block_polys)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -761,7 +761,7 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
 
 fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {
     let block_size =
-        env::var("BLOCK_SIZE").map(|str| usize::from_str_radix(&str, 10).unwrap()).unwrap_or(1000);
+        env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(1000);
     // *BLOCK_SIZE.get().unwrap();
     let nrow = rows.end - rows.start;
     let ncol = cols.end - cols.start;

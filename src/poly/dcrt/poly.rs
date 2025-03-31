@@ -1,5 +1,4 @@
 use itertools::Itertools;
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};

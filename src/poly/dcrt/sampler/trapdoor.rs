@@ -7,7 +7,6 @@ use crate::{
     },
     utils::{debug_mem, log_mem},
 };
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{path::PathBuf, sync::Arc};
 

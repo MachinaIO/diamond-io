@@ -72,7 +72,7 @@ jobs:
           RUSTFLAGS: -A unused
 
       - name: Run test
-        run: cargo test --features="parallel"
+        run: cargo test
   
   ci-success:
     name: ci success
