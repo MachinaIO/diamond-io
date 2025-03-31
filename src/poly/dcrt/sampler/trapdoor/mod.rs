@@ -237,7 +237,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-        filepath: P,
+        preimage_id: &str,
     ) -> Vec<std::path::PathBuf> {
         let size = public_matrix.row_size();
         let target_cols = target.col_size();
