@@ -42,7 +42,8 @@ pub use sampler::DCRTPolyTrapdoorSampler;
 //         target_cols: usize,
 //     ) -> Self {
 //         let mut target_matrix_ptr =
-//             MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size, size);
+//             MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), size,
+// size);
 
 //         debug_mem(format!("target_matrix_ptr MatrixGen row={}, col={}", size, target_cols));
 
@@ -126,8 +127,8 @@ pub use sampler::DCRTPolyTrapdoorSampler;
 //         balanced: bool,
 //     ) -> Self {
 //         let ptr_dcrt_trapdoor =
-//             DCRTSquareMatTrapdoorGen(ring_dimension, crt_depth, crt_bits, d, sigma, base, balanced);
-//         Self { ptr_dcrt_trapdoor: ptr_dcrt_trapdoor.into() }
+//             DCRTSquareMatTrapdoorGen(ring_dimension, crt_depth, crt_bits, d, sigma, base,
+// balanced);         Self { ptr_dcrt_trapdoor: ptr_dcrt_trapdoor.into() }
 //     }
 
 //     fn get_trapdoor_pair(&self) -> RLWETrapdoor {
@@ -226,8 +227,8 @@ pub use sampler::DCRTPolyTrapdoorSampler;
 //             params,
 //             parallel_iter!(0..nrow)
 //                 .map(|i| {
-//                     parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i, j)).collect()
-//                 })
+//                     parallel_iter!(0..ncol).map(|j| dcrt_trapdoor.get_public_matrix(i,
+// j)).collect()                 })
 //                 .collect(),
 //         );
 //         (rlwe_trapdoor, public_matrix)
@@ -334,13 +335,14 @@ pub use sampler::DCRTPolyTrapdoorSampler;
 
 //             let path_str = path.to_string_lossy().to_string();
 //             let preimage_matrix = DCRTMatrixPtr {
-//                 ptr_matrix: GetMatrixFromFs(ring_dimension, crt_depth, crt_bits, &path_str).into(),
-//             };
+//                 ptr_matrix: GetMatrixFromFs(ring_dimension, crt_depth, crt_bits,
+// &path_str).into(),             };
 
 //             let nrow = GetMatrixRows(&preimage_matrix.ptr_matrix);
 //             let ncol = GetMatrixCols(&preimage_matrix.ptr_matrix);
 
-//             let mut dcrt_matrix_preimage = preimage_matrix.to_dcry_poly_matrix(nrow, ncol, params);
+//             let mut dcrt_matrix_preimage = preimage_matrix.to_dcry_poly_matrix(nrow, ncol,
+// params);
 
 //             // Slice the matrix if target_cols < matrix_size
 //             if target_cols < size {

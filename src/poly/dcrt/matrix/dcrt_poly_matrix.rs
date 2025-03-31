@@ -1,4 +1,4 @@
-use super::{block_offsets, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::{block_offsets, block_size, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
 use crate::{
     parallel_iter,
     poly::{
@@ -10,7 +10,7 @@ use itertools::Itertools;
 use num_bigint::BigInt;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-use std::ops::Range;
+use std::{ops::Range, path::Path};
 
 impl MmapMatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -225,6 +225,73 @@ impl PolyMatrix for DCRTPolyMatrix {
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
         .decompose()
+    }
+
+    fn read_from_files<P: AsRef<Path> + Send + Sync>(
+        params: &<Self::P as Poly>::Params,
+        nrow: usize,
+        ncol: usize,
+        dir_path: P,
+    ) -> Self {
+        let block_size = block_size();
+        let mut matrix = Self::new_empty(params, nrow, ncol);
+        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            let mut path = dir_path.as_ref().to_path_buf();
+            path.push(format!(
+                "{}_{}.{}_{}.{}.matrix",
+                block_size, row_offsets.start, row_offsets.end, col_offsets.start, col_offsets.end
+            ));
+            let bytes =
+                std::fs::read(&path).expect(&format!("Failed to read matrix file {:?}", path));
+            let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
+            parallel_iter!(0..row_offsets.len())
+                .map(|i| {
+                    parallel_iter!(0..col_offsets.len())
+                        .map(|j| {
+                            let entry_bytes = &entries_bytes[i][j];
+                            DCRTPoly::from_compact_bytes(params, entry_bytes)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        };
+        matrix.replace_entries(0..nrow, 0..ncol, f);
+        matrix
+    }
+
+    fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P) {
+        let block_size = block_size();
+        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let entries = self.block_entries(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        let mut path = dir_path.as_ref().to_path_buf();
+                        path.push(format!(
+                            "{}_{}.{}_{}.{}.matrix",
+                            block_size,
+                            cur_block_row_idx,
+                            next_block_row_idx,
+                            cur_block_col_idx,
+                            next_block_col_idx
+                        ));
+                        let entries_bytes: Vec<Vec<Vec<u8>>> = entries
+                            .iter()
+                            .map(|row| row.iter().map(|poly| poly.to_compact_bytes()).collect_vec())
+                            .collect_vec();
+                        serde_json::to_writer(
+                            std::fs::File::create(&path).unwrap(),
+                            &entries_bytes,
+                        )
+                        .expect(format!("Failed to write matrix file {:?}", path).as_str());
+                    },
+                );
+            },
+        );
     }
 }
 

@@ -1,11 +1,4 @@
 use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
-use crate::{
-    parallel_iter,
-    poly::{
-        dcrt::{DCRTPoly, DCRTPolyParams, FinRingElem},
-        Poly, PolyMatrix, PolyParams,
-    },
-};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;

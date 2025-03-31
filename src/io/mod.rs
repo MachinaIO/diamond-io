@@ -2,7 +2,6 @@ pub mod eval;
 pub mod obf;
 pub mod params;
 pub mod utils;
-use std::path::PathBuf;
 
 use crate::{bgg::BggEncoding, poly::PolyMatrix};
 
@@ -12,10 +11,10 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub enc_hardcoded_key: M,
     pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
-    pub m_preimages_paths: Vec<Vec<Vec<PathBuf>>>,
-    pub n_preimages_paths: Vec<Vec<Vec<PathBuf>>>,
-    pub k_preimages_paths: Vec<Vec<Vec<PathBuf>>>,
-    pub final_preimage_path: Vec<PathBuf>,
+    pub m_preimages: Vec<Vec<M>>,
+    pub n_preimages: Vec<Vec<M>>,
+    pub k_preimages: Vec<Vec<M>>,
+    pub final_preimage: M,
     #[cfg(feature = "test")]
     pub s_init: M,
     #[cfg(feature = "test")]
@@ -27,3 +26,5 @@ pub struct Obfuscation<M: PolyMatrix> {
     #[cfg(feature = "test")]
     pub final_preimage_target: M,
 }
+
+// [TODO] Add a function to read/write the obfuscation to/from files

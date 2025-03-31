@@ -32,7 +32,6 @@ once_cell = "1.21.1"
 rand_distr = "0.5.1"
 # for now we put in test
 
-
 [dev-dependencies]
 keccak-asm = { version = "0.1.4" }
 proptest = "1.0.0"

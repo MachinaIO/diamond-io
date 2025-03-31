@@ -2,10 +2,10 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{i64_matrix::I64MatrixParams, I64Matrix, MmapMatrixParams},
+            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem,
         },
-        Poly, PolyElem, PolyMatrix, PolyParams,
+        Poly, PolyParams,
     },
 };
 use openfhe::ffi::GenerateIntegerKarney;

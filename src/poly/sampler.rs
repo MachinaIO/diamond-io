@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use super::{Poly, PolyMatrix};
 
 #[derive(Debug, Clone, Copy)]

@@ -573,133 +573,6 @@ impl<T: MmapMatrixElem> Neg for MmapMatrix<T> {
     }
 }
 
-// impl DCRTPolyMatrix {
-//     pub fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
-//         let dim = params.ring_dimension() as usize;
-//         let log_q_bytes = params.modulus_bits().div_ceil(8);
-//         let entry_size = dim * log_q_bytes;
-//         let len = entry_size * nrow * ncol;
-//         let file = tempfile().expect("failed to open file");
-//         file.set_len(len as u64).expect("failed to set file length");
-//         // if BLOCK_SIZE.get().is_none() {
-//         //     if let Ok(block_size_str) = env::var("BLOCK_SIZE") {
-//         //         let block_size =
-//         //             block_size_str.parse::<usize>().expect("failed to parse BLOCK_SIZE");
-//         //         BLOCK_SIZE.set(block_size).unwrap();
-//         //     } else {
-//         //         let system = System::new_all();
-//         //         let mem_size = system.total_memory() * 2 / 3;
-//         //         #[cfg(feature = "parallel")]
-//         //         let num_threads = rayon::current_num_threads();
-//         //         #[cfg(not(feature = "parallel"))]
-//         //         let num_threads = 1;
-//         //         let num_polys = mem_size as usize / num_threads / entry_size;
-//         //         let block_size = (num_polys as f64).sqrt() as usize;
-//         //         BLOCK_SIZE.set(block_size).unwrap();
-//         //     }
-//         // }
-//         Self { params: params.clone(), file, nrow, ncol, volatile: Volatility::Transient }
-//     }
-
-//     pub fn entry_size(&self) -> usize {
-//         let log_q_bytes = self.params.modulus_bits().div_ceil(8);
-//         let dim = self.params.ring_dimension() as usize;
-//         dim * log_q_bytes
-//     }
-
-//     pub fn block_entries(
-//         &self,
-//         rows: Range<usize>,
-//         cols: Range<usize>,
-//     ) -> Vec<Vec<<Self as PolyMatrix>::P>> {
-//         let entry_size = self.entry_size();
-//         parallel_iter!(rows)
-//             .map(|i| {
-//                 let offset = entry_size * (i * self.ncol + cols.start);
-//                 let mmap = map_file(&self.file, offset, entry_size * cols.len());
-//                 let row_vec = mmap.to_vec();
-//                 let row_col_vec = row_vec
-//                     .chunks(entry_size)
-//                     .map(|entry| <<Self as PolyMatrix>::P as Poly>::from_bytes(&self.params,
-// entry))                     .collect_vec();
-//                 drop(mmap);
-//                 row_col_vec
-//             })
-//             .collect::<Vec<Vec<_>>>()
-//     }
-
-//     pub fn replace_entries<F>(&mut self, rows: Range<usize>, cols: Range<usize>, f: F)
-//     where
-//         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<<Self as PolyMatrix>::P>> + Send + Sync,
-//     {
-//         let (row_offsets, col_offsets) = block_offsets(rows.clone(), cols.clone());
-//         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
-//             |(cur_block_row_idx, next_block_row_idx)| {
-//                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
-//                     |(cur_block_col_idx, next_block_col_idx)| {
-//                         let new_entries = f(
-//                             *cur_block_row_idx..*next_block_row_idx,
-//                             *cur_block_col_idx..*next_block_col_idx,
-//                         );
-//                         // This is secure because the modified entries are not overlapped among
-//                         // threads
-//                         unsafe {
-//                             self.replace_block_entries(
-//                                 *cur_block_row_idx..*next_block_row_idx,
-//                                 *cur_block_col_idx..*next_block_col_idx,
-//                                 new_entries,
-//                             );
-//                         }
-//                     },
-//                 );
-//             },
-//         );
-//     }
-
-//     pub fn replace_entries_diag<F>(&mut self, diags: Range<usize>, f: F)
-//     where
-//         F: Fn(Range<usize>) -> Vec<Vec<<Self as PolyMatrix>::P>> + Send + Sync,
-//     {
-//         let (offsets, _) = block_offsets(diags.clone(), 0..0);
-//         parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
-//             |(cur_block_diag_idx, next_block_diag_idx)| {
-//                 let new_entries = f(*cur_block_diag_idx..*next_block_diag_idx);
-//                 // This is secure because the modified entries are not overlapped among
-//                 // threads
-//                 unsafe {
-//                     self.replace_block_entries(
-//                         *cur_block_diag_idx..*next_block_diag_idx,
-//                         *cur_block_diag_idx..*next_block_diag_idx,
-//                         new_entries,
-//                     );
-//                 }
-//             },
-//         );
-//     }
-
-//     unsafe fn replace_block_entries(
-//         &self,
-//         rows: Range<usize>,
-//         cols: Range<usize>,
-//         new_entries: Vec<Vec<<Self as PolyMatrix>::P>>,
-//     ) {
-//         debug_assert_eq!(new_entries.len(), rows.end - rows.start);
-//         debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
-//         let entry_size = self.entry_size();
-//         let row_start = rows.start;
-//         parallel_iter!(rows).for_each(|i| {
-//             let offset = entry_size * (i * self.ncol + cols.start);
-//             let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
-//             let bytes = new_entries[i - row_start]
-//                 .iter()
-//                 .flat_map(|poly| poly.to_bytes())
-//                 .collect::<Vec<_>>();
-//             mmap.copy_from_slice(&bytes);
-//             drop(mmap);
-//         });
-//     }
-// }
-
 fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     unsafe {
         MmapOptions::new()
@@ -722,9 +595,12 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
     }
 }
 
+pub fn block_size() -> usize {
+    env::var("BLOCK_SIZE").map(|str| usize::from_str_radix(&str, 10).unwrap()).unwrap_or(1000)
+}
+
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {
-    let block_size =
-        env::var("BLOCK_SIZE").map(|str| usize::from_str_radix(&str, 10).unwrap()).unwrap_or(1000);
+    let block_size = block_size();
     // *BLOCK_SIZE.get().unwrap();
     let nrow = rows.end - rows.start;
     let ncol = cols.end - cols.start;

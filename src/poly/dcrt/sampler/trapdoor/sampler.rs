@@ -123,11 +123,11 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let n = params.ring_dimension() as usize;
         let k = params.modulus_bits();
-        let s = SPECTRAL_CONSTANT
-            * 3.0
-            * SIGMA
-            * SIGMA
-            * (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
+        let s = SPECTRAL_CONSTANT *
+            3.0 *
+            SIGMA *
+            SIGMA *
+            (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
         let dgg_large_std = (s * s - self.c * self.c).sqrt();
         let peikert = dgg_large_std < KARNEY_THRESHOLD;
         let (dgg_large_mean, dgg_large_table) = {
