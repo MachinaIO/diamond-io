@@ -409,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn test_preimage_generation() {
+    fn test_preimage_generation_square() {
         let params = DCRTPolyParams::default();
         let size = 3;
         let k = params.modulus_bits();

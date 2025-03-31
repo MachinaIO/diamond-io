@@ -48,7 +48,7 @@ impl DCRTPolyTrapdoorSampler {
         // (d * (k+2)) times d
         let p_hat =
             trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
-
+        println!("p_hat generated");
         let perturbed_syndrome = target.clone() - public_matrix.clone() * &p_hat;
         let k = params.modulus_bits();
         let d = public_matrix.row_size();
@@ -69,6 +69,7 @@ impl DCRTPolyTrapdoorSampler {
                         )
                     })
                     .collect::<Vec<_>>();
+                println!("z_hat_bbi_blocks generated");
                 let z_hat_bbi = z_hat_bbi_blocks[0]
                     .concat_rows(&z_hat_bbi_blocks[1..].iter().collect::<Vec<_>>());
                 let z_hat = split_int64_vec_to_elems(&z_hat_bbi, params);
@@ -85,6 +86,7 @@ impl DCRTPolyTrapdoorSampler {
         let p_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
             .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
         let p_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+        println!("p_hat generated");
         p_hat_former.concat_rows(&[&p_hat_latter])
     }
 }

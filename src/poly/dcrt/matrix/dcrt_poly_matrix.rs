@@ -5,10 +5,18 @@ use crate::{
         dcrt::{DCRTPoly, DCRTPolyParams, FinRingElem},
         Poly, PolyMatrix, PolyParams,
     },
+    utils::debug_mem,
 };
 use itertools::Itertools;
 use num_bigint::BigInt;
-use openfhe::{cxx::UniquePtr, ffi::Matrix};
+use openfhe::{
+    cxx::UniquePtr,
+    ffi::{
+        DCRTSquareMatTrapdoorGaussSampToFs, DCRTSquareMatTrapdoorGen, GetMatrixCols,
+        GetMatrixElement, GetMatrixFromFs, GetMatrixRows, Matrix, MatrixGen, RLWETrapdoorPair,
+        SetMatrixElement,
+    },
+};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{ops::Range, path::Path};
@@ -297,12 +305,35 @@ impl PolyMatrix for DCRTPolyMatrix {
 }
 
 impl DCRTPolyMatrix {
-    pub fn to_dcrt_matrix_ptr(&self) -> UniquePtr<Matrix> {
-        todo!()
+    pub fn to_cpp_matrix_ptr(&self) -> UniquePtr<Matrix> {
+        let nrow = self.nrow;
+        let ncol = self.ncol;
+        let params = &self.params;
+        let mut matrix_ptr =
+            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), nrow, ncol);
+        debug_mem(format!("matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
+        for i in 0..nrow {
+            for j in 0..ncol {
+                SetMatrixElement(matrix_ptr.as_mut().unwrap(), i, j, self.entry(i, j).get_poly());
+            }
+        }
+        debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
+        matrix_ptr
     }
 
-    pub fn from_dcrt_matrix_ptr(matrix_ptr: UniquePtr<Matrix>) -> Self {
-        todo!()
+    pub fn from_cpp_matrix_ptr(params: &DCRTPolyParams, matrix_ptr: UniquePtr<Matrix>) -> Self {
+        let nrow = GetMatrixRows(&matrix_ptr);
+        let ncol = GetMatrixCols(&matrix_ptr);
+        let mut matrix_inner = Vec::with_capacity(nrow);
+        for i in 0..nrow {
+            let mut row = Vec::with_capacity(ncol);
+            for j in 0..ncol {
+                row.push(DCRTPoly::new(GetMatrixElement(&matrix_ptr, i, j)));
+            }
+            matrix_inner.push(row);
+        }
+        debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
+        DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 }
 

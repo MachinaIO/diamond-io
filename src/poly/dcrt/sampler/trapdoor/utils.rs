@@ -77,8 +77,11 @@ pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams)
     let mut poly_vec = DCRTPolyMatrix::zero(params, nrow, 1);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
         debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
-        let i64_values =
-            &vec.block_entries(row_offsets.start * n..row_offsets.end * n, col_offsets)[0];
+        let i64_values = &vec
+            .block_entries(row_offsets.start * n..row_offsets.end * n, col_offsets)
+            .into_iter()
+            .map(|vec| vec[0])
+            .collect::<Vec<_>>();
         parallel_iter!(0..row_offsets.len())
             .map(|i| {
                 let coeffs = i64_values[i * n..(i + 1) * n]
