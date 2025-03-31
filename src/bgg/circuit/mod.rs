@@ -202,26 +202,27 @@ impl PolyCircuit {
     fn topological_order(&self) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
-
-        fn dfs(
-            circuit: &PolyCircuit,
-            gate_id: usize,
-            visited: &mut HashSet<usize>,
-            order: &mut Vec<usize>,
-        ) {
-            if !visited.insert(gate_id) {
-                return;
-            }
-            let gate = circuit.gates.get(&gate_id).expect("gate not found");
-            for &input_id in &gate.input_gates {
-                dfs(circuit, input_id, visited, order);
-            }
-            order.push(gate_id);
-        }
-
+        let mut stack = Vec::new();
         for &output_gate in &self.output_ids {
-            dfs(self, output_gate, &mut visited, &mut order);
+            if visited.insert(output_gate) {
+                stack.push((output_gate, 0));
+            }
         }
+
+        while let Some((node, child_idx)) = stack.pop() {
+            let gate = self.gates.get(&node).expect("gate not found");
+
+            if child_idx < gate.input_gates.len() {
+                stack.push((node, child_idx + 1));
+                let child = gate.input_gates[child_idx];
+                if visited.insert(child) {
+                    stack.push((child, 0));
+                }
+            } else {
+                order.push(node);
+            }
+        }
+
         order
     }
 

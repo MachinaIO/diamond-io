@@ -32,7 +32,7 @@ impl<P: Poly> Evaluable for P {
         let poly = Self::const_zero(params);
         let mut coeffs = poly.coeffs();
         let one_elem = <P::Elem as PolyElem>::one(&params.modulus());
-        for (i, bit) in bits.into_iter().enumerate() {
+        for (i, bit) in bits.iter().enumerate() {
             if *bit {
                 coeffs[i] = one_elem.clone();
             }
