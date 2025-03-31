@@ -27,4 +27,7 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub final_preimage_target: M,
 }
 
+// impl<M: PolyMatrix> Obfuscation<M> {
+//     pub fn read_from_files
+// }
 // [TODO] Add a function to read/write the obfuscation to/from files
