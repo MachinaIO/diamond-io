@@ -234,6 +234,7 @@ mod test {
     use super::*;
     use crate::poly::{
         dcrt::{
+            matrix::MmapMatrixElem,
             sampler::{trapdoor::utils::gen_dcrt_gadget_vector, DCRTPolyUniformSampler},
             DCRTPolyMatrix, DCRTPolyParams,
         },
@@ -247,9 +248,14 @@ mod test {
     fn test_decompose_dcrt_gadget() {
         let params = DCRTPolyParams::default();
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+        // let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+        let target = DCRTPolyMatrix::from_poly_vec(&params, vec![vec![DCRTPoly::one(&params)]]);
         let decomposed = decompose_dcrt_gadget(&target.entry(0, 0), 3.0 * SIGMA, &params, SIGMA);
         let gadget_vec = gen_dcrt_gadget_vector(&params);
+        for i in 0..decomposed.row_size() {
+            let entry = decomposed.entry(i, 0);
+            println!("{}-th entry: {:?}", i, entry);
+        }
         assert_eq!(gadget_vec * decomposed, target);
     }
 }
