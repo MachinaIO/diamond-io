@@ -411,9 +411,9 @@ mod tests {
     #[test]
     fn test_preimage_generation_square() {
         let params = DCRTPolyParams::default();
-        let size = 2;
+        let size = 3;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(0.0);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let uniform_sampler = DCRTPolyUniformSampler::new();

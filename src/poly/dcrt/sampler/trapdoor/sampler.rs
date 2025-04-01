@@ -50,6 +50,7 @@ impl DCRTPolyTrapdoorSampler {
             trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
         println!("p_hat generated");
         let perturbed_syndrome = target.clone() - public_matrix.clone() * &p_hat;
+        println!("perturbed_syndrome generated");
         let k = params.modulus_bits();
         let d = public_matrix.row_size();
         let depth = params.crt_depth();
@@ -83,11 +84,11 @@ impl DCRTPolyTrapdoorSampler {
 
         let r_z_hat = trapdoor.r.clone() * &z_hat_mat;
         let e_z_hat = trapdoor.e.clone() * &z_hat_mat;
-        let p_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
+        let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
             .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
-        let p_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
-        println!("p_hat generated");
-        p_hat_former.concat_rows(&[&p_hat_latter])
+        let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+        println!("z_hat generated");
+        z_hat_former.concat_rows(&[&z_hat_latter])
     }
 }
 
@@ -159,9 +160,14 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             .map(|i| {
                 let start_col = i * d;
                 let end_col = (start_col + d).min(target_cols);
-                let target_block = target.slice(0, d, start_col, end_col);
+                let mut target_block = target.slice(0, d, start_col, end_col);
+                let is_padded = end_col - start_col < d;
+                if is_padded {
+                    let zeros = DCRTPolyMatrix::zero(params, d, start_col + d - end_col);
+                    target_block = target_block.concat_columns(&[&zeros]);
+                }
                 debug_mem(format!("preimage iter : start_col = {}", start_col));
-                self.preimage_square(
+                let mut preimage = self.preimage_square(
                     params,
                     trapdoor,
                     public_matrix,
@@ -169,7 +175,11 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                     s,
                     dgg_large_params,
                     peikert,
-                )
+                );
+                if is_padded {
+                    preimage = preimage.slice(0, preimage.row_size(), 0, end_col - start_col);
+                }
+                preimage
             })
             .collect::<Vec<_>>();
         debug_mem(format!("preimage after loop processing out of {}", num_block));
