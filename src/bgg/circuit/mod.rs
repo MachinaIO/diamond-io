@@ -4,15 +4,11 @@ pub mod serde;
 pub mod utils;
 pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};
-use itertools::Itertools;
 use std::{
     collections::{BTreeMap, HashSet},
     fmt::Debug,
 };
 pub use utils::*;
-
-use crate::utils::debug_mem;
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PolyCircuit {
     gates: BTreeMap<usize, PolyGate>,
@@ -233,66 +229,53 @@ impl PolyCircuit {
             assert_eq!(self.num_input(), inputs.len());
             assert_ne!(self.num_output(), 0);
         }
-
-        // Preload the wires for constant and input gates.
-        let mut wires: BTreeMap<usize, E> = BTreeMap::new();
-        wires.insert(0, one.clone());
+        let num_gates = self.gates.len();
+        let mut wires: Vec<Option<E>> = vec![None; num_gates];
+        wires[0] = Some(one.clone());
         for (idx, input) in inputs.iter().enumerate() {
-            wires.insert(idx + 1, input.clone());
+            wires[idx + 1] = Some(input.clone());
         }
 
         // Compute a topological order of gate IDs.
         let order = self.topological_order();
         for gate_id in order {
-            debug_mem("Evaluated gate");
-            if wires.contains_key(&gate_id) {
+            // Skip if the wire has already been set (i.e. it is an input or constant)
+            if wires[gate_id].is_some() {
                 continue;
             }
             let gate = self.gates.get(&gate_id).expect("gate not found");
-            let input_ids = &gate.input_gates;
-            match &gate.gate_type {
+            let result = match &gate.gate_type {
                 PolyGateType::Input => {
                     panic!("Input gate {:?} should already be preloaded", gate);
                 }
-                PolyGateType::Const { bits } => {
-                    let output = E::from_bits(params, one, bits);
-                    wires.insert(gate_id, output);
-                }
+                PolyGateType::Const { bits } => E::from_bits(params, one, bits),
                 PolyGateType::Add => {
-                    let left =
-                        wires.get(&input_ids[0]).expect("wire value missing for Add").clone();
-                    let right =
-                        wires.get(&input_ids[1]).expect("wire value missing for Add").clone();
-                    wires.insert(gate_id, left + right);
+                    let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Add");
+                    let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Add");
+                    left.clone() + right
                 }
                 PolyGateType::Sub => {
-                    let left =
-                        wires.get(&input_ids[0]).expect("wire value missing for Sub").clone();
-                    let right =
-                        wires.get(&input_ids[1]).expect("wire value missing for Sub").clone();
-                    wires.insert(gate_id, left - right);
+                    let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Sub");
+                    let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Sub");
+                    left.clone() - right
                 }
                 PolyGateType::Mul => {
-                    let left =
-                        wires.get(&input_ids[0]).expect("wire value missing for Mul").clone();
-                    let right =
-                        wires.get(&input_ids[1]).expect("wire value missing for Mul").clone();
-                    wires.insert(gate_id, left * right);
+                    let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Mul");
+                    let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Mul");
+                    left.clone() * right
                 }
                 PolyGateType::Rotate { shift } => {
-                    let input = wires.get(&input_ids[0]).expect("wire value missing for Rotate");
-                    wires.insert(gate_id, input.rotate(params, *shift));
+                    let input =
+                        wires[gate.input_gates[0]].as_ref().expect("wire missing for Rotate");
+                    input.rotate(params, *shift)
                 }
                 PolyGateType::Call { .. } => {
                     panic!("no more call gate type during evaluation");
                 }
-            }
+            };
+            wires[gate_id] = Some(result);
         }
-
-        self.output_ids
-            .iter()
-            .map(|id| wires.get(id).expect("output missing").clone())
-            .collect_vec()
+        self.output_ids.iter().map(|&id| wires[id].take().expect("output missing")).collect()
     }
 
     /// Inlines the subcircuit operations directly into the main circuit instead of using call
@@ -315,34 +298,45 @@ impl PolyCircuit {
 
         let mut outputs = Vec::with_capacity(sub_circuit.num_output());
         for &output_id in &sub_circuit.output_ids {
-            let main_gate_id = self.inline_gate_recursive(output_id, &sub_circuit, &mut gate_map);
+            let main_gate_id = self.inline_gate(output_id, &sub_circuit, &mut gate_map);
             outputs.push(main_gate_id);
         }
         outputs
     }
 
-    /// Recursively inlines a gate and its dependencies from a subcircuit into the main circuit.
+    /// Iteratively inlines a gate and its dependencies from a subcircuit into the main circuit.
     /// Returns the ID of the corresponding gate in the main circuit.
-    fn inline_gate_recursive(
+    fn inline_gate(
         &mut self,
-        gate_id: usize,
+        start_gate_id: usize,
         sub_circuit: &PolyCircuit,
         gate_map: &mut BTreeMap<usize, usize>,
     ) -> usize {
-        if let Some(&main_id) = gate_map.get(&gate_id) {
-            return main_id;
-        }
+        let mut stack = Vec::new();
+        stack.push(start_gate_id);
 
-        let gate = sub_circuit.gates.get(&gate_id).unwrap().clone();
-        let mut main_inputs = Vec::with_capacity(gate.input_gates.len());
-        for &input_id in &gate.input_gates {
-            let main_id = self.inline_gate_recursive(input_id, sub_circuit, gate_map);
-            main_inputs.push(main_id);
+        while let Some(&current_gate_id) = stack.last() {
+            if gate_map.contains_key(&current_gate_id) {
+                stack.pop();
+                continue;
+            }
+            let gate = sub_circuit.gates.get(&current_gate_id).unwrap();
+            let mut all_inputs_inlined = true;
+            for &input_id in &gate.input_gates {
+                if !gate_map.contains_key(&input_id) {
+                    all_inputs_inlined = false;
+                    stack.push(input_id);
+                }
+            }
+            if all_inputs_inlined {
+                let main_inputs: Vec<usize> =
+                    gate.input_gates.iter().map(|input_id| gate_map[input_id]).collect();
+                let main_gate_id = self.new_gate_generic(main_inputs, gate.gate_type);
+                gate_map.insert(current_gate_id, main_gate_id);
+                stack.pop();
+            }
         }
-
-        let main_gate_id = self.new_gate_generic(main_inputs, gate.gate_type);
-        gate_map.insert(gate_id, main_gate_id);
-        main_gate_id
+        gate_map[&start_gate_id]
     }
 }
 
