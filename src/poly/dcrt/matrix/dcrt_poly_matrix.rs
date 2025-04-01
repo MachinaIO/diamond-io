@@ -11,11 +11,7 @@ use itertools::Itertools;
 use num_bigint::BigInt;
 use openfhe::{
     cxx::UniquePtr,
-    ffi::{
-        DCRTSquareMatTrapdoorGaussSampToFs, DCRTSquareMatTrapdoorGen, GetMatrixCols,
-        GetMatrixElement, GetMatrixFromFs, GetMatrixRows, Matrix, MatrixGen, RLWETrapdoorPair,
-        SetMatrixElement,
-    },
+    ffi::{GetMatrixCols, GetMatrixElement, GetMatrixRows, Matrix, MatrixGen, SetMatrixElement},
 };
 use rayon::prelude::*;
 use std::{ops::Range, path::Path};

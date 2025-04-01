@@ -1,9 +1,8 @@
 use super::{
     trapdoor::{DCRTTrapdoor, KARNEY_THRESHOLD},
-    utils::{gen_dcrt_gadget_vector, split_int64_vec_alt_to_elems, split_int64_vec_to_elems},
+    utils::{gen_dcrt_gadget_vector, split_int64_vec_alt_to_elems},
 };
 use crate::{
-    io::params,
     parallel_iter,
     poly::{
         dcrt::{
