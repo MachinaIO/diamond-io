@@ -96,8 +96,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let a_bar = uniform_sampler.sample_uniform(params, size, size, DistType::FinRingDist);
         let g_vec = gen_dcrt_gadget_vector(params);
-        let identity = DCRTPolyMatrix::identity(params, size, None);
-        let g = identity.tensor(&g_vec);
+        let g = g_vec.concat_diag(&vec![&g_vec; size - 1]);
         let a0 = a_bar.concat_columns(&[&DCRTPolyMatrix::identity(params, size, None)]);
         let a1 = g - (a_bar * &trapdoor.r + &trapdoor.e);
         let a = a0.concat_columns(&[&a1]);
