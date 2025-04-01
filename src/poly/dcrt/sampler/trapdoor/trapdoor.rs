@@ -80,7 +80,7 @@ impl DCRTTrapdoor {
         };
         // create a matrix of d*k x d ring elements in coefficient representation
         let p2_vecs = parallel_iter!(0..d)
-            .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), &params))
+            .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
             .collect::<Vec<_>>();
         let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
         println!("p2 generated");
@@ -88,7 +88,7 @@ impl DCRTTrapdoor {
         let b_mat = r.clone() * e.transpose(); // d * d
         let d_mat = e.clone() * e.transpose(); // d * d
         let tp2 = r.concat_rows(&[e]) * &p2;
-        let p1 = sample_p1_for_pert_square_mat(&a_mat, &b_mat, &d_mat, &tp2, params, s, dgg);
+        let p1 = sample_p1_for_pert_square_mat(&a_mat, &b_mat, &d_mat, &tp2, params, c, s, dgg);
         println!("p1 generated");
         p1.concat_rows(&[&p2])
     }
@@ -101,8 +101,9 @@ fn sample_p1_for_pert_square_mat(
     d_mat: &DCRTPolyMatrix,
     tp2: &DCRTPolyMatrix,
     params: &DCRTPolyParams,
+    c: f64,
     s: f64,
-    sigma: f64,
+    dgg_stddev: f64,
 ) -> DCRTPolyMatrix {
     let n = params.ring_dimension();
     let depth = params.crt_depth();
@@ -121,8 +122,9 @@ fn sample_p1_for_pert_square_mat(
         n,
         depth,
         k_res,
-        sigma,
+        c,
         s,
+        dgg_stddev,
     );
     println!("p1_mat generated");
 
