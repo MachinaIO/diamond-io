@@ -54,7 +54,6 @@ impl DCRTPolyTrapdoorSampler {
         println!("perturbed_syndrome generated");
         let k = params.modulus_bits();
         let d = public_matrix.row_size();
-        let depth = params.crt_depth();
 
         let mut z_hat_vecs = Vec::with_capacity(d);
         for i in 0..d {
