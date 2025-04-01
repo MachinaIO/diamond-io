@@ -243,8 +243,7 @@ mod test {
     fn test_decompose_dcrt_gadget() {
         let params = DCRTPolyParams::default();
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        // let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-        let target = DCRTPolyMatrix::from_poly_vec(&params, vec![vec![DCRTPoly::one(&params)]]);
+        let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
         let decomposed = decompose_dcrt_gadget(&target.entry(0, 0), 3.0 * SIGMA, &params, SIGMA);
         let gadget_vec = gen_dcrt_gadget_vector(&params);
         for i in 0..decomposed.row_size() {
