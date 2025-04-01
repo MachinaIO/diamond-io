@@ -15,7 +15,7 @@ use crate::{
     },
     utils::debug_mem,
 };
-use openfhe::ffi::DCRTGaussSampGqArbBase;
+use openfhe::ffi::{DCRTGaussSampGqArbBase, DCRTPolyGadgetVector};
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use std::ops::Range;
@@ -104,7 +104,16 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let trapdoor = DCRTTrapdoor::new(params, size, self.sigma);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let a_bar = uniform_sampler.sample_uniform(params, size, size, DistType::FinRingDist);
-        let g = DCRTPolyMatrix::gadget_matrix(params, size);
+        let g_vec_cpp = DCRTPolyGadgetVector(
+            params.ring_dimension(),
+            params.crt_depth(),
+            params.crt_bits(),
+            params.modulus_bits(),
+            2,
+        );
+        let g_vec = DCRTPolyMatrix::from_cpp_matrix_ptr(params, g_vec_cpp);
+        let identity = DCRTPolyMatrix::identity(params, size, None);
+        let g = identity.tensor(&g_vec);
         let a0 = a_bar.concat_columns(&[&DCRTPolyMatrix::identity(params, size, None)]);
         let a1 = g - (a_bar * &trapdoor.r + &trapdoor.e);
         let a = a0.concat_columns(&[&a1]);
