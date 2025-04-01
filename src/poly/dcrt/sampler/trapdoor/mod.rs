@@ -370,7 +370,10 @@ pub use sampler::DCRTPolyTrapdoorSampler;
 mod tests {
     use super::*;
     use crate::poly::{
-        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
+        dcrt::{
+            sampler::{trapdoor::utils::gen_dcrt_gadget_vector, DCRTPolyUniformSampler},
+            DCRTPolyMatrix, DCRTPolyParams,
+        },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     };
@@ -383,7 +386,7 @@ mod tests {
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let params = DCRTPolyParams::default();
 
-        let (_, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let expected_rows = size;
         let expected_cols = (&params.modulus_bits() + 2) * size;
@@ -406,6 +409,16 @@ mod tests {
                 assert!(!poly.get_poly().is_null(), "Matrix entry should be a valid DCRTPoly");
             }
         }
+
+        let muled = {
+            let k = params.modulus_bits();
+            let identity = DCRTPolyMatrix::identity(&params, size * k, None);
+            let trapdoor_matrix = trapdoor.r.concat_rows(&[&trapdoor.e, &identity]);
+            public_matrix * trapdoor_matrix
+        };
+        let gadget_vec = gen_dcrt_gadget_vector(&params);
+        let gadget_matrix = gadget_vec.concat_diag(&vec![&gadget_vec; size - 1]);
+        assert_eq!(muled, gadget_matrix);
     }
 
     #[test]

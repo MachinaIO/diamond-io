@@ -8,7 +8,7 @@ use crate::{
         Poly, PolyParams,
     },
 };
-use openfhe::ffi::GenerateIntegerKarney;
+use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
 use rand::{rng, Rng};
 use rand_distr::Uniform;
 #[cfg(feature = "parallel")]
@@ -119,4 +119,15 @@ pub(crate) fn split_int64_vec_alt_to_elems(
     };
     poly_vec.replace_entries(0..nrow, 0..1, f);
     poly_vec
+}
+
+pub(crate) fn gen_dcrt_gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix {
+    let g_vec_cpp = DCRTPolyGadgetVector(
+        params.ring_dimension(),
+        params.crt_depth(),
+        params.crt_bits(),
+        params.modulus_bits(),
+        2,
+    );
+    DCRTPolyMatrix::from_cpp_matrix_ptr(params, g_vec_cpp)
 }

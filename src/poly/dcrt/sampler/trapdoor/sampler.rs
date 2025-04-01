@@ -1,8 +1,9 @@
 use super::{
     trapdoor::{DCRTTrapdoor, KARNEY_THRESHOLD},
-    utils::{split_int64_vec_alt_to_elems, split_int64_vec_to_elems},
+    utils::{gen_dcrt_gadget_vector, split_int64_vec_alt_to_elems, split_int64_vec_to_elems},
 };
 use crate::{
+    io::params,
     parallel_iter,
     poly::{
         dcrt::{
@@ -15,7 +16,7 @@ use crate::{
     },
     utils::debug_mem,
 };
-use openfhe::ffi::{DCRTGaussSampGqArbBase, DCRTPolyGadgetVector};
+use openfhe::ffi::DCRTGaussSampGqArbBase;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use std::ops::Range;
@@ -46,10 +47,11 @@ impl DCRTPolyTrapdoorSampler {
         peikert: bool,
     ) -> DCRTPolyMatrix {
         // (d * (k+2)) times d
-        let p_hat =
-            trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
+        // let p_hat =
+        //     trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
         println!("p_hat generated");
-        let perturbed_syndrome = target.clone() - public_matrix.clone() * &p_hat;
+        let perturbed_syndrome = target.clone();
+        // - public_matrix.clone() * &p_hat;
         println!("perturbed_syndrome generated");
         let k = params.modulus_bits();
         let d = public_matrix.row_size();
@@ -59,21 +61,12 @@ impl DCRTPolyTrapdoorSampler {
         for i in 0..d {
             let mut z_hat_row_vec = Vec::with_capacity(d);
             for j in 0..d {
-                let z_hat_bbi_blocks = parallel_iter!(0..depth)
-                    .map(|tower_idx| {
-                        gauss_samp_gq_arb_base(
-                            &perturbed_syndrome.entry(i, j),
-                            self.c,
-                            params,
-                            self.sigma,
-                            tower_idx,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                println!("z_hat_bbi_blocks generated");
-                let z_hat_bbi = z_hat_bbi_blocks[0]
-                    .concat_rows(&z_hat_bbi_blocks[1..].iter().collect::<Vec<_>>());
-                let z_hat = split_int64_vec_alt_to_elems(&z_hat_bbi, params);
+                let z_hat = decompose_dcrt_gadget(
+                    &perturbed_syndrome.entry(i, j),
+                    self.c,
+                    params,
+                    self.sigma,
+                );
                 z_hat_row_vec.push(z_hat);
             }
             z_hat_vecs.push(
@@ -84,9 +77,11 @@ impl DCRTPolyTrapdoorSampler {
 
         let r_z_hat = trapdoor.r.clone() * &z_hat_mat;
         let e_z_hat = trapdoor.e.clone() * &z_hat_mat;
-        let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
-            .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
-        let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+        // let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
+        //     .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
+        // let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+        let z_hat_former = (r_z_hat).concat_rows(&[&(e_z_hat)]);
+        let z_hat_latter = z_hat_mat;
         println!("z_hat generated");
         z_hat_former.concat_rows(&[&z_hat_latter])
     }
@@ -104,14 +99,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let trapdoor = DCRTTrapdoor::new(params, size, self.sigma);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let a_bar = uniform_sampler.sample_uniform(params, size, size, DistType::FinRingDist);
-        let g_vec_cpp = DCRTPolyGadgetVector(
-            params.ring_dimension(),
-            params.crt_depth(),
-            params.crt_bits(),
-            params.modulus_bits(),
-            2,
-        );
-        let g_vec = DCRTPolyMatrix::from_cpp_matrix_ptr(params, g_vec_cpp);
+        let g_vec = gen_dcrt_gadget_vector(params);
         let identity = DCRTPolyMatrix::identity(params, size, None);
         let g = identity.tensor(&g_vec);
         let a0 = a_bar.concat_columns(&[&DCRTPolyMatrix::identity(params, size, None)]);
@@ -196,9 +184,25 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
     }
 }
 
+pub(crate) fn decompose_dcrt_gadget(
+    syndrome: &DCRTPoly,
+    c: f64,
+    params: &DCRTPolyParams,
+    sigma: f64,
+) -> DCRTPolyMatrix {
+    let depth = params.crt_depth();
+    let z_hat_bbi_blocks = parallel_iter!(0..depth)
+        .map(|tower_idx| gauss_samp_gq_arb_base(&syndrome, c, params, sigma, tower_idx))
+        .collect::<Vec<_>>();
+    println!("z_hat_bbi_blocks generated");
+    let z_hat_bbi =
+        z_hat_bbi_blocks[0].concat_rows(&z_hat_bbi_blocks[1..].iter().collect::<Vec<_>>());
+    split_int64_vec_alt_to_elems(&z_hat_bbi, params)
+}
+
 // A function corresponding to lines 260-266 in trapdoor-dcrtpoly.cpp and the `GaussSampGqArbBase`
 // function provided by OpenFHE.
-fn gauss_samp_gq_arb_base(
+pub(crate) fn gauss_samp_gq_arb_base(
     syndrome: &DCRTPoly,
     c: f64,
     params: &DCRTPolyParams,
@@ -223,4 +227,29 @@ fn gauss_samp_gq_arb_base(
     };
     matrix.replace_entries(0..k_res, 0..n as usize, f);
     matrix
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::poly::{
+        dcrt::{
+            sampler::{trapdoor::utils::gen_dcrt_gadget_vector, DCRTPolyUniformSampler},
+            DCRTPolyMatrix, DCRTPolyParams,
+        },
+        sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
+        PolyMatrix, PolyParams,
+    };
+
+    const SIGMA: f64 = 4.578;
+
+    #[test]
+    fn test_decompose_dcrt_gadget() {
+        let params = DCRTPolyParams::default();
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+        let decomposed = decompose_dcrt_gadget(&target.entry(0, 0), 3.0 * SIGMA, &params, SIGMA);
+        let gadget_vec = gen_dcrt_gadget_vector(&params);
+        assert_eq!(gadget_vec * decomposed, target);
+    }
 }
