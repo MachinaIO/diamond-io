@@ -17,7 +17,6 @@ use openfhe::{
         SetMatrixElement,
     },
 };
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{ops::Range, path::Path};
 

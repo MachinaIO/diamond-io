@@ -2,7 +2,6 @@ use crate::parallel_iter;
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{
     env,
@@ -438,8 +437,7 @@ impl<T: MmapMatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
-            let new_block_polys = add_block_matrices(self_block_polys, &rhs_block_polys);
-            new_block_polys
+            add_block_matrices(self_block_polys, &rhs_block_polys)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -470,8 +468,7 @@ impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
-            let new_block_polys = sub_block_matrices(self_block_polys, &rhs_block_polys);
-            new_block_polys
+            sub_block_matrices(self_block_polys, &rhs_block_polys)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -596,7 +593,7 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
 }
 
 pub fn block_size() -> usize {
-    env::var("BLOCK_SIZE").map(|str| usize::from_str_radix(&str, 10).unwrap()).unwrap_or(1000)
+    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(1000)
 }
 
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {

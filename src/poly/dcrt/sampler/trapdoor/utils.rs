@@ -11,7 +11,6 @@ use crate::{
 use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
 use rand::{rng, Rng};
 use rand_distr::Uniform;
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::ops::Range;
 

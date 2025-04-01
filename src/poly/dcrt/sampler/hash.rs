@@ -10,7 +10,6 @@ use bitvec::prelude::*;
 use digest::OutputSizeUser;
 use num_bigint::BigUint;
 use num_traits::Zero;
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::{marker::PhantomData, ops::Range};
 
@@ -146,13 +145,8 @@ where
 mod tests {
     use super::*;
     use crate::poly::dcrt::DCRTPolyParams;
-    #[cfg(not(feature = "parallel"))]
-    use itertools::Itertools;
+
     use keccak_asm::Keccak256;
-    #[cfg(not(feature = "parallel"))]
-    use proptest::prelude::*;
-    #[cfg(not(feature = "parallel"))]
-    use std::sync::Arc;
 
     #[test]
     fn test_poly_hash_sampler() {
@@ -191,7 +185,7 @@ mod tests {
         assert_eq!(matrix.col_size(), ncol, "Matrix column count mismatch");
     }
 
-    #[cfg(not(feature = "parallel"))]
+    #[cfg(not(feature = "test"))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
 

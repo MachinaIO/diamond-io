@@ -1,4 +1,3 @@
-#[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use std::ops::Range;
 
