@@ -13,6 +13,7 @@ use crate::{
         sampler::{DistType, PolyUniformSampler},
         PolyParams,
     },
+    utils::debug_mem,
 };
 use openfhe::ffi::SampleP1ForPertSquareMat;
 
@@ -48,7 +49,7 @@ impl DCRTTrapdoor {
         let n = params.ring_dimension() as usize;
         let (d, dk) = r.size();
         let sigma_large = (s * s - c * c).sqrt();
-
+        debug_mem("sample_pert_square_mat parameters computed");
         // for distribution parameters up to the experimentally found threshold, use
         // the Peikert's inversion method otherwise, use Karney's method
         let p2z_vec = if sigma_large > KARNEY_THRESHOLD {
@@ -77,18 +78,20 @@ impl DCRTTrapdoor {
                 .collect::<Vec<_>>();
             vecs[0].concat_columns(&vecs[1..].iter().collect::<Vec<_>>())
         };
+        debug_mem("p2z_vec generated");
         // create a matrix of d*k x d ring elements in coefficient representation
         let p2_vecs = parallel_iter!(0..d)
             .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
             .collect::<Vec<_>>();
+        debug_mem("p2_vecs are generated");
         let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
-        println!("p2 generated");
+        debug_mem("p2 generated");
         let a_mat = r.clone() * r.transpose(); // d * d
         let b_mat = r.clone() * e.transpose(); // d * d
         let d_mat = e.clone() * e.transpose(); // d * d
         let tp2 = r.concat_rows(&[e]) * &p2;
         let p1 = sample_p1_for_pert_square_mat(&a_mat, &b_mat, &d_mat, &tp2, params, c, s, dgg);
-        println!("p1 generated");
+        debug_mem("p1 generated");
         p1.concat_rows(&[&p2])
     }
 }
@@ -107,12 +110,10 @@ fn sample_p1_for_pert_square_mat(
     let n = params.ring_dimension();
     let depth = params.crt_depth();
     let k_res = params.modulus_bits() / depth;
-    println!("a size: {:?}", a_mat.size());
     let mut a = a_mat.to_cpp_matrix_ptr();
     let mut b = b_mat.to_cpp_matrix_ptr();
     let mut d = d_mat.to_cpp_matrix_ptr();
     let mut tp2 = tp2.to_cpp_matrix_ptr();
-    println!("to_cpp_matrix_ptr done");
     let p1_mat = SampleP1ForPertSquareMat(
         a.as_mut().unwrap(),
         b.as_mut().unwrap(),
@@ -125,7 +126,6 @@ fn sample_p1_for_pert_square_mat(
         s,
         dgg_stddev,
     );
-    println!("p1_mat generated");
 
     DCRTPolyMatrix::from_cpp_matrix_ptr(params, p1_mat)
 }
