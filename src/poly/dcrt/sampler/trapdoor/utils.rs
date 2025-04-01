@@ -95,3 +95,28 @@ pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams)
     poly_vec.replace_entries(0..nrow, 0..1, f);
     poly_vec
 }
+
+pub(crate) fn split_int64_vec_alt_to_elems(
+    vec: &I64Matrix,
+    params: &DCRTPolyParams,
+) -> DCRTPolyMatrix {
+    let n = params.ring_dimension() as usize;
+    debug_assert_eq!(vec.ncol, n, "Matrix must have n columns");
+    let nrow = vec.nrow;
+    let mut poly_vec = DCRTPolyMatrix::zero(params, nrow, 1);
+    let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+        debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
+        let i64_values = &vec.block_entries(row_offsets.clone(), 0..n);
+        parallel_iter!(0..row_offsets.len())
+            .map(|i| {
+                let coeffs = i64_values[i]
+                    .iter()
+                    .map(|x| FinRingElem::from_int64(*x, params.modulus()))
+                    .collect::<Vec<_>>();
+                vec![DCRTPoly::from_coeffs(params, &coeffs)]
+            })
+            .collect::<Vec<Vec<DCRTPoly>>>()
+    };
+    poly_vec.replace_entries(0..nrow, 0..1, f);
+    poly_vec
+}

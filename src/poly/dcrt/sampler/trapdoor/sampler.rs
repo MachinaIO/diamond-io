@@ -1,6 +1,6 @@
 use super::{
     trapdoor::{DCRTTrapdoor, KARNEY_THRESHOLD},
-    utils::split_int64_vec_to_elems,
+    utils::{split_int64_vec_alt_to_elems, split_int64_vec_to_elems},
 };
 use crate::{
     parallel_iter,
@@ -72,7 +72,7 @@ impl DCRTPolyTrapdoorSampler {
                 println!("z_hat_bbi_blocks generated");
                 let z_hat_bbi = z_hat_bbi_blocks[0]
                     .concat_rows(&z_hat_bbi_blocks[1..].iter().collect::<Vec<_>>());
-                let z_hat = split_int64_vec_to_elems(&z_hat_bbi, params);
+                let z_hat = split_int64_vec_alt_to_elems(&z_hat_bbi, params);
                 z_hat_row_vec.push(z_hat);
             }
             z_hat_vecs.push(
