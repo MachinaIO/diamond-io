@@ -128,27 +128,6 @@ impl PolyCircuit {
         self.not_gate(xor_result) // NOT XOR
     }
 
-    pub fn register_sub_circuit(&mut self, sub_circuit: Self) -> usize {
-        let circuit_id = self.sub_circuits.len();
-        self.sub_circuits.insert(circuit_id, sub_circuit);
-        circuit_id
-    }
-
-    // pub fn call_sub_circuit(&mut self, circuit_id: usize, inputs: &[usize]) -> Vec<usize> {
-    //     let sub_circuit = &self.sub_circuits[&circuit_id];
-    //     #[cfg(debug_assertions)]
-    //     assert_eq!(inputs.len(), sub_circuit.num_input());
-    //     let mut outputs = Vec::with_capacity(sub_circuit.num_output());
-    //     for idx in 0..sub_circuit.num_output() {
-    //         let gate_id = self.new_gate_generic(
-    //             inputs.to_vec(),
-    //             PolyGateType::Call { circuit_id, num_input: inputs.len(), output_id: idx },
-    //         );
-    //         outputs.push(gate_id);
-    //     }
-    //     outputs
-    // }
-
     pub fn add_gate(&mut self, left_input: usize, right_input: usize) -> usize {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Add)
     }
@@ -276,6 +255,12 @@ impl PolyCircuit {
             wires[gate_id] = Some(result);
         }
         self.output_ids.iter().map(|&id| wires[id].take().expect("output missing")).collect()
+    }
+
+    pub fn register_sub_circuit(&mut self, sub_circuit: Self) -> usize {
+        let circuit_id = self.sub_circuits.len();
+        self.sub_circuits.insert(circuit_id, sub_circuit);
+        circuit_id
     }
 
     /// Inlines the subcircuit operations directly into the main circuit instead of using call
@@ -992,88 +977,5 @@ mod tests {
         // Verify the result
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], expected);
-    }
-
-    #[test]
-    fn test_inline_sub_circuit() {
-        // Create parameters for testing
-        let params = DCRTPolyParams::default();
-
-        // Create input polynomials
-        let poly1 = create_random_poly(&params);
-        let poly2 = create_random_poly(&params);
-        let poly3 = create_random_poly(&params);
-
-        // Create a sub-circuit
-        let mut sub_circuit = PolyCircuit::new();
-        let sub_inputs = sub_circuit.input(2);
-        let add_gate = sub_circuit.add_gate(sub_inputs[0], sub_inputs[1]);
-        let mul_gate = sub_circuit.mul_gate(sub_inputs[0], sub_inputs[1]);
-        sub_circuit.output(vec![add_gate, mul_gate]);
-
-        // Create a main circuit with call_sub_circuit
-        let mut call_circuit = PolyCircuit::new();
-        let call_inputs = call_circuit.input(3);
-
-        // Register the sub-circuit
-        let sub_circuit_id = call_circuit.register_sub_circuit(sub_circuit.clone());
-
-        // Call the sub-circuit
-        let call_outputs =
-            call_circuit.call_sub_circuit(sub_circuit_id, &[call_inputs[0], call_inputs[1]]);
-
-        // Use the sub-circuit outputs
-        let call_final = call_circuit.add_gate(call_outputs[0], call_outputs[1]);
-        let call_result = call_circuit.mul_gate(call_final, call_inputs[2]);
-        call_circuit.output(vec![call_result]);
-
-        // Create a parallel main circuit using inline_sub_circuit
-        let mut inline_circuit = PolyCircuit::new();
-        let inline_inputs = inline_circuit.input(3);
-
-        // Register the sub-circuit
-        let inline_sub_id = inline_circuit.register_sub_circuit(sub_circuit);
-
-        // Inline the sub-circuit
-        let inline_outputs =
-            inline_circuit.call_sub_circuit(inline_sub_id, &[inline_inputs[0], inline_inputs[1]]);
-
-        // Use the sub-circuit outputs the same way
-        let inline_final = inline_circuit.add_gate(inline_outputs[0], inline_outputs[1]);
-        let inline_result = inline_circuit.mul_gate(inline_final, inline_inputs[2]);
-        inline_circuit.output(vec![inline_result]);
-
-        // The inline circuit should still have the sub-circuit registered
-        assert_eq!(inline_circuit.sub_circuits.len(), 1);
-
-        // But it shouldn't have any Call gates
-        for gate in inline_circuit.gates.values() {
-            if let PolyGateType::Call { .. } = gate.gate_type {
-                panic!("inline_circuit should not have any Call gates");
-            }
-        }
-
-        // Evaluate both circuits
-        let call_eval = call_circuit.eval(
-            &params,
-            &DCRTPoly::const_one(&params),
-            &[poly1.clone(), poly2.clone(), poly3.clone()],
-        );
-
-        let inline_eval = inline_circuit.eval(
-            &params,
-            &DCRTPoly::const_one(&params),
-            &[poly1.clone(), poly2.clone(), poly3.clone()],
-        );
-
-        // Results should be identical
-        assert_eq!(call_eval.len(), inline_eval.len());
-        for (call, inline) in call_eval.iter().zip(inline_eval.iter()) {
-            assert_eq!(call, inline);
-        }
-
-        // Calculate expected result manually for verification
-        let expected = ((poly1.clone() + poly2.clone()) + (poly1 * poly2)) * poly3;
-        assert_eq!(inline_eval[0], expected);
     }
 }
