@@ -47,11 +47,10 @@ impl DCRTPolyTrapdoorSampler {
         peikert: bool,
     ) -> DCRTPolyMatrix {
         // (d * (k+2)) times d
-        // let p_hat =
-        //     trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
+        let p_hat =
+            trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
         println!("p_hat generated");
-        let perturbed_syndrome = target.clone();
-        // - public_matrix.clone() * &p_hat;
+        let perturbed_syndrome = target.clone() - public_matrix.clone() * &p_hat;
         println!("perturbed_syndrome generated");
         let k = params.modulus_bits();
         let d = public_matrix.row_size();
@@ -77,11 +76,9 @@ impl DCRTPolyTrapdoorSampler {
 
         let r_z_hat = trapdoor.r.clone() * &z_hat_mat;
         let e_z_hat = trapdoor.e.clone() * &z_hat_mat;
-        // let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
-        //     .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
-        // let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
-        let z_hat_former = (r_z_hat).concat_rows(&[&(e_z_hat)]);
-        let z_hat_latter = z_hat_mat;
+        let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
+            .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
+        let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
         println!("z_hat generated");
         z_hat_former.concat_rows(&[&z_hat_latter])
     }
