@@ -283,17 +283,8 @@ impl PolyCircuit {
                     let input = wires.get(&input_ids[0]).expect("wire value missing for Rotate");
                     wires.insert(gate_id, input.rotate(params, *shift));
                 }
-                PolyGateType::Call { circuit_id, output_id, .. } => {
-                    let sub_circuit = &self.sub_circuits[circuit_id];
-                    let sub_inputs: Vec<E> = input_ids
-                        .iter()
-                        .map(|id| wires.get(id).expect("wire value missing for Call").clone())
-                        .collect();
-                    let outputs = sub_circuit.eval(params, one, &sub_inputs);
-                    let first_output_wire = gate_id - output_id;
-                    for (i, out_val) in outputs.into_iter().enumerate() {
-                        wires.insert(first_output_wire + i, out_val);
-                    }
+                PolyGateType::Call { .. } => {
+                    panic!("no more call gate type during evaluation");
                 }
             }
         }
