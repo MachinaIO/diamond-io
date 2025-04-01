@@ -331,7 +331,7 @@ impl PolyCircuit {
             if all_inputs_inlined {
                 let main_inputs: Vec<usize> =
                     gate.input_gates.iter().map(|input_id| gate_map[input_id]).collect();
-                let main_gate_id = self.new_gate_generic(main_inputs, gate.gate_type);
+                let main_gate_id = self.new_gate_generic(main_inputs, gate.gate_type.clone());
                 gate_map.insert(current_gate_id, main_gate_id);
                 stack.pop();
             }
