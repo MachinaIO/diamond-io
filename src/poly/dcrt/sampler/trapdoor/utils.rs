@@ -36,7 +36,7 @@ pub(crate) fn gen_dgg_int_vec(
     m_std: f64,
     m_table: &[f64],
 ) -> I64Matrix {
-    let mut vec = I64Matrix::zero(&I64MatrixParams, size, 1);
+    let mut vec = I64Matrix::new_empty(&I64MatrixParams, size, 1);
     if !peikert {
         // Use Karney's method
         let f = |row_offsets: Range<usize>, _: Range<usize>| -> Vec<Vec<i64>> {
@@ -73,7 +73,7 @@ pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams)
     debug_assert_eq!(vec.ncol, 1, "Matrix must be a column vector");
     let n = params.ring_dimension() as usize;
     let nrow = vec.nrow / n;
-    let mut poly_vec = DCRTPolyMatrix::zero(params, nrow, 1);
+    let mut poly_vec = DCRTPolyMatrix::new_empty(params, nrow, 1);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
         debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
         let i64_values = &vec
@@ -102,7 +102,7 @@ pub(crate) fn split_int64_vec_alt_to_elems(
     let n = params.ring_dimension() as usize;
     debug_assert_eq!(vec.ncol, n, "Matrix must have n columns");
     let nrow = vec.nrow;
-    let mut poly_vec = DCRTPolyMatrix::zero(params, nrow, 1);
+    let mut poly_vec = DCRTPolyMatrix::new_empty(params, nrow, 1);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
         debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
         let i64_values = &vec.block_entries(row_offsets.clone(), 0..n);

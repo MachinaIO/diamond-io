@@ -209,7 +209,7 @@ pub(crate) fn gauss_samp_gq_arb_base(
     let result =
         DCRTGaussSampGqArbBase(syndrome.get_poly(), c, n, depth, k_res, 2, sigma, tower_idx);
     debug_assert_eq!(result.len(), n as usize * k_res);
-    let mut matrix = I64Matrix::zero(&I64MatrixParams, k_res, n as usize);
+    let mut matrix = I64Matrix::new_empty(&I64MatrixParams, k_res, n as usize);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<i64>> {
         parallel_iter!(row_offsets)
             .map(|i| {

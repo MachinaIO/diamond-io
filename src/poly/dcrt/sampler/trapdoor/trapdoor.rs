@@ -53,7 +53,7 @@ impl DCRTTrapdoor {
         // for distribution parameters up to the experimentally found threshold, use
         // the Peikert's inversion method otherwise, use Karney's method
         let p2z_vec = if sigma_large > KARNEY_THRESHOLD {
-            let mut matrix = I64Matrix::zero(&I64MatrixParams, n * dk, d);
+            let mut matrix = I64Matrix::new_empty(&I64MatrixParams, n * dk, d);
             let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<i64>> {
                 parallel_iter!(row_offsets)
                     .map(|_| {
