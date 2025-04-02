@@ -321,8 +321,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         parallel_iter!(0..self.nrow).for_each(|i| {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
-                let sub_matrix = other.clone() * scalar;
-
+                let sub_matrix = other * &scalar;
                 parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_row_idx, next_block_row_idx)| {
                         parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -442,7 +441,7 @@ impl<T: MmapMatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Sub for MmapMatrix<T> {
+impl<T: MmapMatrixElem> Sub<MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -451,6 +450,14 @@ impl<T: MmapMatrixElem> Sub for MmapMatrix<T> {
 }
 
 impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
+    type Output = MmapMatrix<T>;
+
+    fn sub(self, rhs: &Self) -> Self::Output {
+        &self - rhs
+    }
+}
+
+impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn sub(self, rhs: &MmapMatrix<T>) -> Self::Output {
@@ -473,7 +480,7 @@ impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul for MmapMatrix<T> {
+impl<T: MmapMatrixElem> Mul<MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -485,6 +492,14 @@ impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: &Self) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
+    type Output = MmapMatrix<T>;
+
+    fn mul(self, rhs: &MmapMatrix<T>) -> Self::Output {
         debug_assert!(
             self.ncol == rhs.nrow,
             "Multiplication condition failed: self.ncol ({}) must equal rhs.nrow ({})",
@@ -493,23 +508,19 @@ impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for MmapMatrix<T> {
         );
         let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
         let (_, ip_offsets) = block_offsets(0..0, 0..self.ncol);
-
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            let mut ip_sum =
-                vec![vec![T::zero(&self.params); col_offsets.len()]; row_offsets.len()];
-            for (cur_block_ip_idx, next_block_ip_idx) in ip_offsets.iter().tuple_windows() {
-                let self_block_polys =
-                    self.block_entries(row_offsets.clone(), *cur_block_ip_idx..*next_block_ip_idx);
-                let other_block_polys =
-                    rhs.block_entries(*cur_block_ip_idx..*next_block_ip_idx, col_offsets.clone());
-                let muled = mul_block_matrices(
-                    &self.params,
-                    self_block_polys.clone(),
-                    other_block_polys.clone(),
-                );
-                ip_sum = add_block_matrices(muled, &ip_sum);
-            }
-            ip_sum
+            ip_offsets
+                .iter()
+                .tuple_windows()
+                .map(|(cur_block_ip_idx, next_block_ip_idx)| {
+                    let self_block_polys = self
+                        .block_entries(row_offsets.clone(), *cur_block_ip_idx..*next_block_ip_idx);
+                    let other_block_polys = rhs
+                        .block_entries(*cur_block_ip_idx..*next_block_ip_idx, col_offsets.clone());
+                    mul_block_matrices(&self.params, self_block_polys, other_block_polys)
+                })
+                .reduce(|acc, muled| add_block_matrices(muled, &acc))
+                .unwrap()
         };
         new_matrix.replace_entries(0..self.nrow, 0..rhs.ncol, f);
         new_matrix
@@ -527,19 +538,20 @@ impl<T: MmapMatrixElem> Mul<&T> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: &T) -> Self::Output {
-        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        &self * rhs
+    }
+}
 
+impl<T: MmapMatrixElem> Mul<&T> for &MmapMatrix<T> {
+    type Output = MmapMatrix<T>;
+
+    fn mul(self, rhs: &T) -> Self::Output {
+        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            let nrow = row_offsets.len();
-            let ncol = col_offsets.len();
-            let mut new_block_polys = vec![vec![T::zero(&self.params); ncol]; nrow];
-            let self_block_polys = self.block_entries(row_offsets, col_offsets);
-            for i in 0..nrow {
-                for j in 0..ncol {
-                    new_block_polys[i][j] = self_block_polys[i][j].clone() * rhs;
-                }
-            }
-            new_block_polys
+            self.block_entries(row_offsets, col_offsets)
+                .into_iter()
+                .map(|row| row.into_iter().map(|elem| elem * rhs).collect::<Vec<T>>())
+                .collect::<Vec<Vec<T>>>()
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -552,16 +564,10 @@ impl<T: MmapMatrixElem> Neg for MmapMatrix<T> {
     fn neg(self) -> Self::Output {
         let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            let nrow = row_offsets.len();
-            let ncol = col_offsets.len();
-            let self_block_polys = self.block_entries(row_offsets, col_offsets);
-            let mut new_block_polys = vec![vec![T::zero(&self.params); ncol]; nrow];
-            for i in 0..nrow {
-                for j in 0..ncol {
-                    new_block_polys[i][j] = -self_block_polys[i][j].clone();
-                }
-            }
-            new_block_polys
+            self.block_entries(row_offsets, col_offsets)
+                .into_iter()
+                .map(|row| row.into_iter().map(|elem| -elem.clone()).collect())
+                .collect()
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -650,11 +656,10 @@ fn mul_block_matrices<T: MmapMatrixElem>(
         .map(|i| {
             parallel_iter!(0..ncol)
                 .map(|j: usize| {
-                    let mut sum = T::zero(params);
-                    for k in 0..n_inner {
-                        sum += lhs[i][k].clone() * &rhs[k][j];
-                    }
-                    sum
+                    (0..n_inner)
+                        .map(|k| lhs[i][k].clone() * &rhs[k][j])
+                        .reduce(|acc, prod| acc + prod)
+                        .unwrap()
                 })
                 .collect::<Vec<T>>()
         })
