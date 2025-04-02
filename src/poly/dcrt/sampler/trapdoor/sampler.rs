@@ -33,53 +33,6 @@ impl DCRTPolyTrapdoorSampler {
         let c = 3.0 * SIGMA;
         Self { sigma, c }
     }
-
-    fn preimage_square(
-        &self,
-        params: &DCRTPolyParams,
-        trapdoor: &DCRTTrapdoor,
-        public_matrix: &DCRTPolyMatrix,
-        target: &DCRTPolyMatrix,
-        s: f64,
-        dgg_large_params: (f64, f64, &[f64]),
-        peikert: bool,
-    ) -> DCRTPolyMatrix {
-        // (d * (k+2)) times d
-        let p_hat =
-            trapdoor.sample_pert_square_mat(s, self.c, self.sigma, dgg_large_params, peikert);
-        log_mem("p_hat generated");
-        let perturbed_syndrome = target - &(public_matrix * &p_hat);
-        let k = params.modulus_bits();
-        let d = public_matrix.row_size();
-
-        let z_hat_vecs = parallel_iter!(0..d)
-            .map(|i| {
-                let row_vec = parallel_iter!(0..d)
-                    .map(|j| {
-                        decompose_dcrt_gadget(
-                            &perturbed_syndrome.entry(i, j),
-                            self.c,
-                            params,
-                            self.sigma,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                row_vec[0].concat_columns(&row_vec[1..].iter().collect::<Vec<_>>())
-            })
-            .collect::<Vec<_>>();
-        let z_hat_mat = z_hat_vecs[0].concat_rows(&z_hat_vecs[1..].iter().collect::<Vec<_>>());
-        log_mem("z_hat_mat generated");
-
-        let r_z_hat = &trapdoor.r * &z_hat_mat;
-        debug_mem("r_z_hat generated");
-        let e_z_hat = &trapdoor.e * &z_hat_mat;
-        debug_mem("e_z_hat generated");
-        let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
-            .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
-        let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
-        log_mem("z_hat generated");
-        z_hat_former.concat_rows(&[&z_hat_latter])
-    }
 }
 
 impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
@@ -145,36 +98,43 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             (m_a, m_vals)
         };
         let dgg_large_params = (dgg_large_mean, dgg_large_std, &dgg_large_table[..]);
-        let num_block = target_cols.div_ceil(d);
-        log_mem(format!("preimage before loop processing out of {}", num_block));
-        let preimage_blocks = parallel_iter!(0..num_block)
+        log_mem("preimage parameters computed");
+        let p_hat = trapdoor.sample_pert_square_mat(
+            s,
+            self.c,
+            self.sigma,
+            dgg_large_params,
+            peikert,
+            target_cols,
+        );
+        log_mem("p_hat generated");
+        let perturbed_syndrome = target - &(public_matrix * &p_hat);
+        let z_hat_vecs = parallel_iter!(0..d)
             .map(|i| {
-                let start_col = i * d;
-                let end_col = (start_col + d).min(target_cols);
-                let mut target_block = target.slice(0, d, start_col, end_col);
-                let is_padded = end_col - start_col < d;
-                if is_padded {
-                    let zeros = DCRTPolyMatrix::zero(params, d, start_col + d - end_col);
-                    target_block = target_block.concat_columns(&[&zeros]);
-                }
-                log_mem(format!("preimage iter : start_col = {}", start_col));
-                let mut preimage = self.preimage_square(
-                    params,
-                    trapdoor,
-                    public_matrix,
-                    &target_block,
-                    s,
-                    dgg_large_params,
-                    peikert,
-                );
-                if is_padded {
-                    preimage = preimage.slice(0, preimage.row_size(), 0, end_col - start_col);
-                }
-                preimage
+                let row_vec = parallel_iter!(0..target_cols)
+                    .map(|j| {
+                        decompose_dcrt_gadget(
+                            &perturbed_syndrome.entry(i, j),
+                            self.c,
+                            params,
+                            self.sigma,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                row_vec[0].concat_columns(&row_vec[1..].iter().collect::<Vec<_>>())
             })
             .collect::<Vec<_>>();
-        log_mem(format!("preimage after loop processing out of {}", num_block));
-        preimage_blocks[0].concat_columns(&preimage_blocks[1..].iter().collect::<Vec<_>>())
+        let z_hat_mat = z_hat_vecs[0].concat_rows(&z_hat_vecs[1..].iter().collect::<Vec<_>>());
+        log_mem("z_hat_mat generated");
+        let r_z_hat = &trapdoor.r * &z_hat_mat;
+        debug_mem("r_z_hat generated");
+        let e_z_hat = &trapdoor.e * &z_hat_mat;
+        debug_mem("e_z_hat generated");
+        let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
+            .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
+        let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+        log_mem("z_hat generated");
+        z_hat_former.concat_rows(&[&z_hat_latter])
     }
 }
 
