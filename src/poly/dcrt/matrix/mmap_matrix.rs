@@ -4,13 +4,10 @@ use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
 use rayon::prelude::*;
 use std::{
-    cell::RefCell,
     env,
     fmt::Debug,
     fs::File,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Range, Sub, SubAssign},
-    sync::{mpsc::channel, Arc, RwLock},
-    thread,
 };
 // use sysinfo::System;
 use tempfile::tempfile;
@@ -47,41 +44,11 @@ pub trait MmapMatrixElem:
     fn as_elem_to_bytes(&self) -> Vec<u8>;
 }
 
-// Thread-local buffer to store working data
-struct ThreadLocalBuffer<T: MmapMatrixElem> {
-    buffer: Arc<RwLock<Vec<Vec<T>>>>,
-}
-
-impl<T: MmapMatrixElem> ThreadLocalBuffer<T> {
-    fn new() -> Self {
-        Self { buffer: Arc::new(RwLock::new(Vec::new())) }
-    }
-
-    fn resize(&self, rows: usize, cols: usize, params: &T::Params) {
-        let mut buffer = self.buffer.write().unwrap();
-        buffer.resize(rows, Vec::with_capacity(cols));
-        for row in buffer.iter_mut() {
-            row.resize(cols, T::zero(params));
-        }
-    }
-
-    fn get(&self) -> &Arc<RwLock<Vec<Vec<T>>>> {
-        &self.buffer
-    }
-}
-
-impl<T: MmapMatrixElem> Clone for ThreadLocalBuffer<T> {
-    fn clone(&self) -> Self {
-        Self { buffer: self.buffer.clone() }
-    }
-}
-
 pub struct MmapMatrix<T: MmapMatrixElem> {
     pub params: T::Params,
     pub file: File,
     pub nrow: usize,
     pub ncol: usize,
-    buffer: ThreadLocalBuffer<T>,
 }
 
 impl<T: MmapMatrixElem> MmapMatrix<T> {
@@ -90,7 +57,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let len = entry_size * nrow * ncol;
         let file = tempfile().expect("failed to open file");
         file.set_len(len as u64).expect("failed to set file length");
-        Self { params: params.clone(), file, nrow, ncol, buffer: ThreadLocalBuffer::new() }
+        Self { params: params.clone(), file, nrow, ncol }
     }
 
     pub fn entry_size(&self) -> usize {
@@ -99,12 +66,6 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
 
     pub fn block_entries(&self, rows: Range<usize>, cols: Range<usize>) -> Vec<Vec<T>> {
         let entry_size = self.entry_size();
-        let nrows = rows.len();
-        let ncols = cols.len();
-
-        // Resize thread-local buffer if needed
-        self.buffer.resize(nrows, ncols, &self.params);
-
         parallel_iter!(rows)
             .map(|i| {
                 let offset = entry_size * (i * self.ncol + cols.start);
@@ -124,89 +85,71 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (row_offsets, col_offsets) = block_offsets(rows.clone(), cols.clone());
-        let entry_size = self.entry_size();
-        let ncol = self.ncol;
-
-        let (tx, rx) = channel::<(usize, Vec<u8>)>();
-        let file = self.file.try_clone().expect("failed to clone file");
-
-        let io_handle = thread::spawn(move || {
-            while let Ok((offset, data)) = rx.recv() {
-                unsafe {
-                    let mut mmap = map_file_mut(&file, offset, data.len());
-                    mmap.copy_from_slice(&data);
-                    drop(mmap);
-                }
-            }
-        });
-
+        let (row_offsets, col_offsets) = block_offsets(rows, cols);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_col_idx, next_block_col_idx)| {
-                        // Compute new entries in thread-local buffer
                         let new_entries = f(
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-
-                        // Write back to mmap through I/O thread
-                        send_block_rows(
-                            &tx,
-                            new_entries,
-                            *cur_block_row_idx,
-                            *cur_block_col_idx,
-                            ncol,
-                            entry_size,
-                        );
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+                        unsafe {
+                            self.replace_block_entries(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
+                                new_entries,
+                            );
+                        }
                     },
                 );
             },
         );
-        drop(tx);
-        io_handle.join().expect("I/O thread panicked");
     }
 
-    /// Replace diagonal entries using batching via a dedicated I/O thread.
     pub fn replace_entries_diag<F>(&mut self, diags: Range<usize>, f: F)
     where
         F: Fn(Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (offsets, _) = block_offsets(diags.clone(), 0..0);
-        let entry_size = self.entry_size();
-        let ncol = self.ncol;
-
-        let (tx, rx) = channel::<(usize, Vec<u8>)>();
-        let file = self.file.try_clone().expect("failed to clone file");
-
-        let io_handle = thread::spawn(move || {
-            while let Ok((offset, data)) = rx.recv() {
-                unsafe {
-                    let mut mmap = map_file_mut(&file, offset, data.len());
-                    mmap.copy_from_slice(&data);
-                    drop(mmap);
-                }
-            }
-        });
-
+        let (offsets, _) = block_offsets(diags, 0..0);
         parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_diag_idx, next_block_diag_idx)| {
                 let new_entries = f(*cur_block_diag_idx..*next_block_diag_idx);
-                // Here, rows and cols are the same for diagonal blocks.
-                send_block_rows(
-                    &tx,
-                    new_entries,
-                    *cur_block_diag_idx,
-                    *cur_block_diag_idx,
-                    ncol,
-                    entry_size,
-                );
+                // This is secure because the modified entries are not overlapped among
+                // threads
+                unsafe {
+                    self.replace_block_entries(
+                        *cur_block_diag_idx..*next_block_diag_idx,
+                        *cur_block_diag_idx..*next_block_diag_idx,
+                        new_entries,
+                    );
+                }
             },
         );
+    }
 
-        drop(tx);
-        io_handle.join().expect("I/O thread panicked");
+    pub(crate) unsafe fn replace_block_entries(
+        &self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+        new_entries: Vec<Vec<T>>,
+    ) {
+        debug_assert_eq!(new_entries.len(), rows.end - rows.start);
+        debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
+        let entry_size = self.entry_size();
+        let row_start = rows.start;
+        parallel_iter!(rows).for_each(|i| {
+            let offset = entry_size * (i * self.ncol + cols.start);
+            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
+            let bytes = new_entries[i - row_start]
+                .iter()
+                .flat_map(|poly| poly.as_elem_to_bytes())
+                .collect::<Vec<_>>();
+            mmap.copy_from_slice(&bytes);
+            drop(mmap);
+        });
     }
 
     pub fn entry(&self, i: usize, j: usize) -> T {
@@ -375,20 +318,6 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
         let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
-        let (tx, rx) = channel::<(usize, Vec<u8>)>();
-        let file = new_matrix.file.try_clone().expect("failed to clone file");
-        let entry_size = new_matrix.entry_size();
-        let ncol = new_matrix.ncol;
-        let io_handle = thread::spawn(move || {
-            while let Ok((offset, data)) = rx.recv() {
-                unsafe {
-                    let mut mmap = map_file_mut(&file, offset, data.len());
-                    mmap.copy_from_slice(&data);
-                    drop(mmap);
-                }
-            }
-        });
-
         parallel_iter!(0..self.nrow).for_each(|i| {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
@@ -401,80 +330,24 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                                     *cur_block_row_idx..*next_block_row_idx,
                                     *cur_block_col_idx..*next_block_col_idx,
                                 );
-                                let global_row = i * sub_matrix.nrow + *cur_block_row_idx;
-                                let global_col = j * sub_matrix.ncol + *cur_block_col_idx;
-                                send_block_rows(
-                                    &tx,
-                                    sub_block_polys,
-                                    global_row,
-                                    global_col,
-                                    ncol,
-                                    entry_size,
-                                );
+                                // This is secure because the modified entries are not overlapped
+                                // among threads
+                                unsafe {
+                                    new_matrix.replace_block_entries(
+                                        i * sub_matrix.nrow + *cur_block_row_idx..
+                                            i * sub_matrix.nrow + *next_block_row_idx,
+                                        j * sub_matrix.ncol + *cur_block_col_idx..
+                                            j * sub_matrix.ncol + *next_block_col_idx,
+                                        sub_block_polys,
+                                    );
+                                }
                             },
                         );
                     },
                 );
             });
         });
-        drop(tx);
-        io_handle.join().expect("I/O thread panicked");
         new_matrix
-    }
-
-    fn add_block_matrices(&self, lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
-        let nrow = lhs.len();
-        let ncol = lhs[0].len();
-
-        self.buffer.resize(nrow, ncol, &self.params);
-        let buffer = self.buffer.get().clone();
-
-        let result: Vec<Vec<T>> = parallel_iter!(0..nrow)
-            .map(|i| parallel_iter!(0..ncol).map(|j| lhs[i][j].clone() + &rhs[i][j]).collect())
-            .collect();
-
-        *buffer.write().unwrap() = result.clone();
-        result
-    }
-
-    fn sub_block_matrices(&self, lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
-        let nrow = lhs.len();
-        let ncol = lhs[0].len();
-
-        self.buffer.resize(nrow, ncol, &self.params);
-        let buffer = self.buffer.get().clone();
-
-        let result: Vec<Vec<T>> = parallel_iter!(0..nrow)
-            .map(|i| parallel_iter!(0..ncol).map(|j| lhs[i][j].clone() - &rhs[i][j]).collect())
-            .collect();
-
-        *buffer.write().unwrap() = result.clone();
-        result
-    }
-
-    fn mul_block_matrices(&self, lhs: Vec<Vec<T>>, rhs: Vec<Vec<T>>) -> Vec<Vec<T>> {
-        let nrow = lhs.len();
-        let ncol = rhs[0].len();
-        let n_inner = lhs[0].len();
-
-        self.buffer.resize(nrow, ncol, &self.params);
-        let buffer = self.buffer.get().clone();
-
-        let result: Vec<Vec<T>> = parallel_iter!(0..nrow)
-            .map(|i| {
-                parallel_iter!(0..ncol)
-                    .map(|j| {
-                        (0..n_inner)
-                            .map(|k| lhs[i][k].clone() * &rhs[k][j])
-                            .reduce(|acc, prod| acc + prod)
-                            .unwrap()
-                    })
-                    .collect()
-            })
-            .collect();
-
-        *buffer.write().unwrap() = result.clone();
-        result
     }
 }
 
@@ -561,7 +434,7 @@ impl<T: MmapMatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
-            self.add_block_matrices(self_block_polys, &rhs_block_polys)
+            add_block_matrices(self_block_polys, &rhs_block_polys)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -600,7 +473,7 @@ impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
-            self.sub_block_matrices(self_block_polys, &rhs_block_polys)
+            sub_block_matrices(self_block_polys, &rhs_block_polys)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
         new_matrix
@@ -644,9 +517,9 @@ impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
                         .block_entries(row_offsets.clone(), *cur_block_ip_idx..*next_block_ip_idx);
                     let other_block_polys = rhs
                         .block_entries(*cur_block_ip_idx..*next_block_ip_idx, col_offsets.clone());
-                    self.mul_block_matrices(self_block_polys, other_block_polys)
+                    mul_block_matrices(self_block_polys, other_block_polys)
                 })
-                .reduce(|acc, muled| self.add_block_matrices(muled, &acc))
+                .reduce(|acc, muled| add_block_matrices(muled, &acc))
                 .unwrap()
         };
         new_matrix.replace_entries(0..self.nrow, 0..rhs.ncol, f);
@@ -720,7 +593,7 @@ fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     }
 }
 
-pub unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
+unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
     unsafe {
         MmapOptions::new()
             .offset(offset as u64)
@@ -759,19 +632,40 @@ pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec
     (row_offsets, col_offsets)
 }
 
-pub fn send_block_rows<T: MmapMatrixElem>(
-    tx: &std::sync::mpsc::Sender<(usize, Vec<u8>)>,
-    new_entries: Vec<Vec<T>>,
-    row_start: usize,
-    col_start: usize,
-    ncol: usize,
-    entry_size: usize,
-) {
-    // For each row in the block, flatten its entries to a Vec<u8> and send (offset, data)
-    for (i, row) in new_entries.into_iter().enumerate() {
-        let global_row = row_start + i;
-        let offset = entry_size * (global_row * ncol + col_start);
-        let bytes: Vec<u8> = row.into_iter().flat_map(|elem| elem.as_elem_to_bytes()).collect();
-        tx.send((offset, bytes)).expect("failed to send I/O batch");
-    }
+fn add_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
+    let nrow = lhs.len();
+    let ncol = lhs[0].len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            parallel_iter!(0..ncol).map(|j| lhs[i][j].clone() + &rhs[i][j]).collect::<Vec<T>>()
+        })
+        .collect::<Vec<Vec<T>>>()
+}
+
+fn sub_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
+    let nrow = lhs.len();
+    let ncol = lhs[0].len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            parallel_iter!(0..ncol).map(|j| lhs[i][j].clone() - &rhs[i][j]).collect::<Vec<T>>()
+        })
+        .collect::<Vec<Vec<T>>>()
+}
+
+fn mul_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: Vec<Vec<T>>) -> Vec<Vec<T>> {
+    let nrow = lhs.len();
+    let ncol = rhs[0].len();
+    let n_inner = lhs[0].len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            parallel_iter!(0..ncol)
+                .map(|j: usize| {
+                    (0..n_inner)
+                        .map(|k| lhs[i][k].clone() * &rhs[k][j])
+                        .reduce(|acc, prod| acc + prod)
+                        .unwrap()
+                })
+                .collect::<Vec<T>>()
+        })
+        .collect::<Vec<Vec<T>>>()
 }
