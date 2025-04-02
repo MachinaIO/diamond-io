@@ -53,13 +53,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let mut matrix = Self::new_empty(params, nrow, ncol);
         let vec = &vec;
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<Self::P>> {
-            let mut new_entries =
-                vec![vec![DCRTPoly::const_zero(params); col_offsets.len()]; row_offsets.len()];
-            let row_start = row_offsets.start;
-            for i in row_offsets {
-                new_entries[i - row_start].clone_from_slice(&vec[i][col_offsets.clone()]);
-            }
-            new_entries
+            row_offsets.into_iter().map(|i| vec[i][col_offsets.clone()].to_vec()).collect()
         };
         matrix.replace_entries(0..nrow, 0..ncol, f);
         matrix

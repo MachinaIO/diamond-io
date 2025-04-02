@@ -29,14 +29,13 @@ impl<P: Poly> Evaluable for P {
     }
 
     fn from_bits(params: &Self::Params, _: &Self, bits: &[bool]) -> Self {
-        let poly = Self::const_zero(params);
-        let one_elem = <P::Elem as PolyElem>::one(&params.modulus());
-        let mut coeffs = poly.coeffs();
-        for (coeff, &bit) in coeffs.iter_mut().zip(bits) {
-            if bit {
-                *coeff = one_elem.clone();
-            }
-        }
+        let modulus = params.modulus();
+        let one_elem = <P::Elem as PolyElem>::one(&modulus);
+        let zero_elem = <P::Elem as PolyElem>::zero(&modulus);
+        let coeffs: Vec<P::Elem> = bits
+            .iter()
+            .map(|&bit| if bit { one_elem.clone() } else { zero_elem.clone() })
+            .collect();
         Self::from_coeffs(params, &coeffs)
     }
 }

@@ -145,15 +145,6 @@ impl PolyCircuit {
     }
 
     pub fn const_bit_poly(&mut self, bits: &[bool]) -> usize {
-        // let zero = self.const_zero_gate();
-        // let one = self.const_one_gate();
-        // let mut sum = zero.clone();
-        // for (idx, bit_coeff) in coeffs.iter().enumerate() {
-        //     let bit = if *bit_coeff { one } else { zero };
-        //     let rotated = self.rotate_gate(bit, idx);
-        //     sum = self.add_gate(sum, rotated);
-        // }
-        // sum
         self.new_gate_generic(vec![], PolyGateType::Const { bits: bits.to_vec() })
     }
 
