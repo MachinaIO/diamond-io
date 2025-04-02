@@ -517,7 +517,7 @@ impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
                         .block_entries(row_offsets.clone(), *cur_block_ip_idx..*next_block_ip_idx);
                     let other_block_polys = rhs
                         .block_entries(*cur_block_ip_idx..*next_block_ip_idx, col_offsets.clone());
-                    mul_block_matrices(&self.params, self_block_polys, other_block_polys)
+                    mul_block_matrices(self_block_polys, other_block_polys)
                 })
                 .reduce(|acc, muled| add_block_matrices(muled, &acc))
                 .unwrap()
@@ -644,11 +644,7 @@ fn sub_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Ve
         .collect::<Vec<Vec<T>>>()
 }
 
-fn mul_block_matrices<T: MmapMatrixElem>(
-    params: &T::Params,
-    lhs: Vec<Vec<T>>,
-    rhs: Vec<Vec<T>>,
-) -> Vec<Vec<T>> {
+fn mul_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: Vec<Vec<T>>) -> Vec<Vec<T>> {
     let nrow = lhs.len();
     let ncol = rhs[0].len();
     let n_inner = lhs[0].len();
