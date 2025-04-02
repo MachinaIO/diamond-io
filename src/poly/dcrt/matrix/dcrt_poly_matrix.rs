@@ -196,13 +196,14 @@ impl PolyMatrix for DCRTPolyMatrix {
         debug_assert_eq!(self.ncol, other.nrow * identity_size);
         let slice_width = other.nrow;
 
-        let mut iter = (0..identity_size).map(|i| {
-            let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-            slice * other
-        });
+        let slice_results = (0..identity_size)
+            .map(|i| {
+                let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+                slice * other
+            })
+            .collect_vec();
 
-        let first = iter.next().unwrap();
-        iter.fold(first, |acc, slice| acc.concat_columns(&[&slice]))
+        slice_results[0].concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
     }
 
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
@@ -210,13 +211,14 @@ impl PolyMatrix for DCRTPolyMatrix {
         debug_assert_eq!(self.ncol, other.nrow * identity_size * log_q);
         let slice_width = other.nrow * log_q;
 
-        let mut pieces_iter = (0..identity_size).flat_map(|i| {
-            let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-            (0..other.ncol).map(move |j| slice.clone() * other.get_column_matrix_decompose(j))
-        });
+        let output = (0..identity_size)
+            .flat_map(|i| {
+                let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+                (0..other.ncol).map(move |j| slice.clone() * other.get_column_matrix_decompose(j))
+            })
+            .collect_vec();
 
-        let first_piece = pieces_iter.next().unwrap();
-        pieces_iter.fold(first_piece, |acc, piece| acc.concat_columns(&[&piece]))
+        output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
     fn get_column_matrix_decompose(&self, j: usize) -> Self {
