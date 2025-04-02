@@ -142,20 +142,24 @@ impl PolyMatrix for DCRTPolyMatrix {
                         );
                         let block_row_len = next_block_row_idx - cur_block_row_idx;
                         let block_col_len = next_block_col_idx - cur_block_col_idx;
-                        let mut new_entries =
-                            vec![
-                                vec![DCRTPoly::const_zero(&self.params); block_col_len];
-                                block_row_len * bit_length
-                            ];
-                        for j in 0..block_col_len {
-                            for i in 0..block_row_len {
-                                let poly = &self_block_polys[i][j];
-                                let decomposed_polys = poly.decompose(&self.params);
-                                for (k, poly) in decomposed_polys.into_iter().enumerate() {
-                                    new_entries[i * bit_length + k][j] = poly;
-                                }
-                            }
-                        }
+                        let new_entries: Vec<Vec<DCRTPoly>> = (0..block_row_len)
+                            .flat_map(|i| {
+                                let decompositions: Vec<Vec<DCRTPoly>> = (0..block_col_len)
+                                    .map(|j| {
+                                        let poly = &self_block_polys[i][j];
+                                        poly.decompose(&self.params)
+                                    })
+                                    .collect();
+                                (0..bit_length)
+                                    .map(move |k| {
+                                        decompositions
+                                            .iter()
+                                            .map(|decomposed| decomposed[k].clone())
+                                            .collect::<Vec<_>>()
+                                    })
+                                    .collect::<Vec<Vec<DCRTPoly>>>()
+                            })
+                            .collect();
                         // This is secure because the modified entries are not overlapped among
                         // threads
                         unsafe {

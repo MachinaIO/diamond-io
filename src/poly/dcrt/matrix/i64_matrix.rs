@@ -21,13 +21,12 @@ impl MmapMatrixElem for i64 {
     }
 
     fn from_bytes_to_elem(_: &Self::Params, bytes: &[u8]) -> Self {
-        let mut arr = [0; 8];
-        arr.copy_from_slice(bytes);
+        let arr: [u8; 8] = bytes.try_into().expect("slice length must be 8");
         i64::from_le_bytes(arr)
     }
 
     fn as_elem_to_bytes(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+        self.to_le_bytes().into()
     }
 }
 
