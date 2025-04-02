@@ -224,8 +224,7 @@ def find_p(
     circuit_norms: CircuitNorms,
 ):
     log_q = math.ceil(math.log2(q))
-    stddev_b = compute_stddev_b(n, log_q, d)
-
+    norm_b = compute_norm_b(n, log_q, d)
     final_err = bound_final_error(
         secpar,
         n,
@@ -234,7 +233,7 @@ def find_p(
         stddev_e_encoding,
         stddev_e_hardcode,
         stddev_e_p,
-        stddev_b,
+        norm_b,
         input_size,
         circuit_norms,
     )
@@ -286,7 +285,7 @@ def find_p(
     return p
 
 
-def compute_stddev_b(
+def compute_norm_b(
     n: int,
     log_q: int,
     d: int,
@@ -298,7 +297,7 @@ def compute_stddev_b(
         c_0
         * sigma
         * (3 * sigma)
-        * (sqrt_ceil((d + 1) * n * log_q) + sqrt_ceil(2 * n) + c_1)
+        * (sqrt_ceil(2 * (d + 1) * n * log_q) + sqrt_ceil(2 * n) + c_1)
     )
 
 
@@ -319,7 +318,7 @@ def bound_final_error(
     stddev_e_encoding: int,
     stddev_e_hardcode: int,
     stddev_e_p: int,
-    stddev_b: int,
+    norm_b: int,
     input_size: int,
     circuit_norms: CircuitNorms,
 ):
@@ -331,16 +330,18 @@ def bound_final_error(
     stddev_e_encoding_d = Decimal(stddev_e_encoding)
     stddev_e_hardcode_d = Decimal(stddev_e_hardcode)
     stddev_e_p_d = Decimal(stddev_e_p)
-    stddev_b_d = Decimal(stddev_b)
-    # [TODO] support multiple outputs
-    h_norm_d = Decimal(circuit_norms.compute_norms((d + 1) * log_q)[0])
-    # Calculate intermediate values with Decimal
+    b_norm_d = Decimal(norm_b)
+    print(f"b_norm_d: {b_norm_d}")
     m_d = (d_d + Decimal(1)) * log_q_d
+    h_norms_d = [Decimal(x) for x in circuit_norms.compute_norms(m_d)]
+    print(f"h_norms_d: {h_norms_d}")
+    h_norm_sum_d = sum(h_norms_d)
+    # Calculate intermediate values with Decimal
     m_b_d = Decimal(2) * (d_d + Decimal(1)) * (log_q_d + Decimal(2))
     sqrt_secpar_d = Decimal(sqrt_ceil(secpar))
 
     # Use Decimal for all calculations to maintain precision
-    scale_coeff_d = (n_d * m_b_d * stddev_b_d) ** Decimal(2) * sqrt_secpar_d
+    scale_coeff_d = b_norm_d ** Decimal(2)
     bound_p_d = stddev_e_p_d * sqrt_secpar_d
     bound_c_d = stddev_e_encoding_d * sqrt_secpar_d
 
@@ -364,8 +365,8 @@ def bound_final_error(
     # else:
     #     max_evaluated_poly_d = Decimal(1)  # Default if no polynomials
 
-    bound_c_final_d = bound_c_d * h_norm_d + stddev_b_d * sqrt_secpar_d
-    bound_v_final_d = bound_p_d * scale_coeff_d
+    bound_c_final_d = bound_c_d * h_norm_sum_d
+    bound_v_final_d = bound_p_d * b_norm_d
 
     # Return the final result as a Decimal
     return bound_c_final_d + bound_v_final_d + stddev_e_hardcode_d * sqrt_secpar_d
@@ -387,9 +388,8 @@ def compute_obf_size(
     p_init_size = log_q * n * m_b
     print("p_init_size GB", p_init_size / 8 / 10**9)
     size += p_init_size
-    stddev_b = Decimal(compute_stddev_b(n, log_q, d))
-    sqrt_secpar = Decimal(sqrt_ceil(secpar))
-    bound_b_log = math.ceil(math.log2(stddev_b * sqrt_secpar))
+    b_norm = Decimal(compute_norm_b(n, log_q, d))
+    bound_b_log = math.ceil(math.log2(b_norm))
     m_n_preimages_size = 2 * input_size * bound_b_log * n * m_b * m_b
     print("m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9)
     print(
