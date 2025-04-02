@@ -214,7 +214,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let output = (0..identity_size)
             .flat_map(|i| {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-                (0..other.ncol).map(move |j| slice * other.get_column_matrix_decompose(j))
+                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
             })
             .collect_vec();
 
