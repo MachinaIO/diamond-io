@@ -26,7 +26,7 @@ impl MmapMatrixElem for i64 {
         i64::from_le_bytes(arr)
     }
 
-    fn from_elem_to_bytes(&self) -> Vec<u8> {
+    fn as_elem_to_bytes(&self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
     }
 }

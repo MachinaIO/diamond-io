@@ -1,13 +1,13 @@
 use super::{
-    trapdoor::{DCRTTrapdoor, KARNEY_THRESHOLD},
     utils::{gen_dcrt_gadget_vector, split_int64_vec_alt_to_elems},
+    DCRTTrapdoor,
 };
 use crate::{
     parallel_iter,
     poly::{
         dcrt::{
             matrix::{i64_matrix::I64MatrixParams, I64Matrix},
-            sampler::DCRTPolyUniformSampler,
+            sampler::{trapdoor::KARNEY_THRESHOLD, DCRTPolyUniformSampler},
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
@@ -186,7 +186,7 @@ pub(crate) fn decompose_dcrt_gadget(
 ) -> DCRTPolyMatrix {
     let depth = params.crt_depth();
     let z_hat_bbi_blocks = parallel_iter!(0..depth)
-        .map(|tower_idx| gauss_samp_gq_arb_base(&syndrome, c, params, sigma, tower_idx))
+        .map(|tower_idx| gauss_samp_gq_arb_base(syndrome, c, params, sigma, tower_idx))
         .collect::<Vec<_>>();
     debug_mem("z_hat_bbi_blocks generated");
     let z_hat_bbi =

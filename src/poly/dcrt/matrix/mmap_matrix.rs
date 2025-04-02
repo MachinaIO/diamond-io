@@ -41,7 +41,7 @@ pub trait MmapMatrixElem:
     fn zero(params: &Self::Params) -> Self;
     fn one(params: &Self::Params) -> Self;
     fn from_bytes_to_elem(params: &Self::Params, bytes: &[u8]) -> Self;
-    fn from_elem_to_bytes(&self) -> Vec<u8>;
+    fn as_elem_to_bytes(&self) -> Vec<u8>;
 }
 
 pub struct MmapMatrix<T: MmapMatrixElem> {
@@ -145,7 +145,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
             let bytes = new_entries[i - row_start]
                 .iter()
-                .flat_map(|poly| poly.from_elem_to_bytes())
+                .flat_map(|poly| poly.as_elem_to_bytes())
                 .collect::<Vec<_>>();
             mmap.copy_from_slice(&bytes);
             drop(mmap);
@@ -181,8 +181,8 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let row_offsets = row_start + row_offsets.start..row_start + row_offsets.end;
             let col_offsets = col_start + col_offsets.start..col_start + col_offsets.end;
-            let new_entries = self.block_entries(row_offsets, col_offsets);
-            new_entries
+
+            self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..nrow, 0..ncol, f);
         new_matrix

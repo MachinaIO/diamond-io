@@ -58,7 +58,7 @@ pub(crate) fn gen_dgg_int_vec(
 
                     if tmp > 0.0f64 {
                         let sign = if seed > 0.0f64 { 1 } else { -1 };
-                        val = find_in_vec(&m_table, tmp) as i64 * sign;
+                        val = find_in_vec(m_table, tmp) as i64 * sign;
                     }
                     vec![val]
                 })

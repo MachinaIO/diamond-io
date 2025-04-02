@@ -37,7 +37,7 @@ impl MmapMatrixElem for DCRTPoly {
         <Self as Poly>::from_bytes(params, bytes)
     }
 
-    fn from_elem_to_bytes(&self) -> Vec<u8> {
+    fn as_elem_to_bytes(&self) -> Vec<u8> {
         self.to_bytes()
     }
 }
@@ -245,8 +245,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                 "{}_{}.{}_{}.{}.matrix",
                 block_size, row_offsets.start, row_offsets.end, col_offsets.start, col_offsets.end
             ));
-            let bytes =
-                std::fs::read(&path).expect(&format!("Failed to read matrix file {:?}", path));
+            let bytes = std::fs::read(&path)
+                .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
             let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
             parallel_iter!(0..row_offsets.len())
                 .map(|i| {
@@ -291,7 +291,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                             std::fs::File::create(&path).unwrap(),
                             &entries_bytes,
                         )
-                        .expect(format!("Failed to write matrix file {:?}", path).as_str());
+                        .unwrap_or_else(|_| panic!("Failed to write matrix file {:?}", path));
                     },
                 );
             },
