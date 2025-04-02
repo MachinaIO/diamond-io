@@ -1,4 +1,8 @@
-use super::{block_offsets, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::{
+    block_offsets,
+    mmap_matrix::{map_file_mut, send_block_rows},
+    MmapMatrix, MmapMatrixElem, MmapMatrixParams,
+};
 use crate::{
     parallel_iter,
     poly::{
@@ -14,7 +18,7 @@ use openfhe::{
     ffi::{GetMatrixCols, GetMatrixElement, GetMatrixRows, Matrix, MatrixGen, SetMatrixElement},
 };
 use rayon::prelude::*;
-use std::ops::Range;
+use std::{ops::Range, sync::mpsc::channel, thread};
 
 impl MmapMatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -131,6 +135,20 @@ impl PolyMatrix for DCRTPolyMatrix {
         let bit_length = self.params.modulus_bits();
         let new_nrow = self.nrow * bit_length;
         let new_matrix = Self::new_empty(&self.params, new_nrow, self.ncol);
+        let (tx, rx) = channel::<(usize, Vec<u8>)>();
+        let file = new_matrix.file.try_clone().expect("failed to clone file");
+        let entry_size = new_matrix.entry_size();
+        let ncol = new_matrix.ncol;
+        let io_handle = thread::spawn(move || {
+            while let Ok((offset, data)) = rx.recv() {
+                unsafe {
+                    let mut mmap = map_file_mut(&file, offset, data.len());
+                    mmap.copy_from_slice(&data);
+                    drop(mmap);
+                }
+            }
+        });
+
         let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
@@ -155,24 +173,27 @@ impl PolyMatrix for DCRTPolyMatrix {
                                         decompositions
                                             .iter()
                                             .map(|decomposed| decomposed[k].clone())
-                                            .collect::<Vec<_>>()
+                                            .collect::<Vec<DCRTPoly>>()
                                     })
                                     .collect::<Vec<Vec<DCRTPoly>>>()
                             })
                             .collect();
-                        // This is secure because the modified entries are not overlapped among
-                        // threads
-                        unsafe {
-                            new_matrix.replace_block_entries(
-                                cur_block_row_idx * bit_length..next_block_row_idx * bit_length,
-                                *cur_block_col_idx..*next_block_col_idx,
-                                new_entries,
-                            );
-                        }
+                        let global_row_start = *cur_block_row_idx * bit_length;
+                        send_block_rows(
+                            &new_matrix.file,
+                            &tx,
+                            new_entries,
+                            global_row_start,
+                            *cur_block_col_idx,
+                            ncol,
+                            entry_size,
+                        );
                     },
                 );
             },
         );
+        drop(tx);
+        io_handle.join().expect("I/O thread panicked");
         new_matrix
     }
 

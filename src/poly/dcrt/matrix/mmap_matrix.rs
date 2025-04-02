@@ -8,6 +8,8 @@ use std::{
     fmt::Debug,
     fs::File,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Range, Sub, SubAssign},
+    sync::mpsc::channel,
+    thread,
 };
 // use sysinfo::System;
 use tempfile::tempfile;
@@ -85,7 +87,23 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (row_offsets, col_offsets) = block_offsets(rows, cols);
+        let (row_offsets, col_offsets) = block_offsets(rows.clone(), cols.clone());
+        let entry_size = self.entry_size();
+        let ncol = self.ncol;
+
+        let (tx, rx) = channel::<(usize, Vec<u8>)>();
+
+        let file = self.file.try_clone().expect("failed to clone file");
+        let io_handle = thread::spawn(move || {
+            while let Ok((offset, data)) = rx.recv() {
+                unsafe {
+                    let mut mmap = map_file_mut(&file, offset, data.len());
+                    mmap.copy_from_slice(&data);
+                    drop(mmap);
+                }
+            }
+        });
+
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -94,62 +112,63 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
-                        // This is secure because the modified entries are not overlapped among
-                        // threads
-                        unsafe {
-                            self.replace_block_entries(
-                                *cur_block_row_idx..*next_block_row_idx,
-                                *cur_block_col_idx..*next_block_col_idx,
-                                new_entries,
-                            );
-                        }
+                        send_block_rows(
+                            &self.file,
+                            &tx,
+                            new_entries,
+                            *cur_block_row_idx,
+                            *cur_block_col_idx,
+                            ncol,
+                            entry_size,
+                        );
                     },
                 );
             },
         );
+        drop(tx);
+        io_handle.join().expect("I/O thread panicked");
     }
 
+    /// Replace diagonal entries using batching via a dedicated I/O thread.
     pub fn replace_entries_diag<F>(&mut self, diags: Range<usize>, f: F)
     where
         F: Fn(Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (offsets, _) = block_offsets(diags, 0..0);
+        let (offsets, _) = block_offsets(diags.clone(), 0..0);
+        let entry_size = self.entry_size();
+        let ncol = self.ncol;
+
+        let (tx, rx) = channel::<(usize, Vec<u8>)>();
+        let file = self.file.try_clone().expect("failed to clone file");
+
+        let io_handle = thread::spawn(move || {
+            while let Ok((offset, data)) = rx.recv() {
+                unsafe {
+                    let mut mmap = map_file_mut(&file, offset, data.len());
+                    mmap.copy_from_slice(&data);
+                    drop(mmap);
+                }
+            }
+        });
+
         parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_diag_idx, next_block_diag_idx)| {
                 let new_entries = f(*cur_block_diag_idx..*next_block_diag_idx);
-                // This is secure because the modified entries are not overlapped among
-                // threads
-                unsafe {
-                    self.replace_block_entries(
-                        *cur_block_diag_idx..*next_block_diag_idx,
-                        *cur_block_diag_idx..*next_block_diag_idx,
-                        new_entries,
-                    );
-                }
+                // Here, rows and cols are the same for diagonal blocks.
+                send_block_rows(
+                    &self.file,
+                    &tx,
+                    new_entries,
+                    *cur_block_diag_idx,
+                    *cur_block_diag_idx,
+                    ncol,
+                    entry_size,
+                );
             },
         );
-    }
 
-    pub(crate) unsafe fn replace_block_entries(
-        &self,
-        rows: Range<usize>,
-        cols: Range<usize>,
-        new_entries: Vec<Vec<T>>,
-    ) {
-        debug_assert_eq!(new_entries.len(), rows.end - rows.start);
-        debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
-        let entry_size = self.entry_size();
-        let row_start = rows.start;
-        parallel_iter!(rows).for_each(|i| {
-            let offset = entry_size * (i * self.ncol + cols.start);
-            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
-            let bytes = new_entries[i - row_start]
-                .iter()
-                .flat_map(|poly| poly.as_elem_to_bytes())
-                .collect::<Vec<_>>();
-            mmap.copy_from_slice(&bytes);
-            drop(mmap);
-        });
+        drop(tx);
+        io_handle.join().expect("I/O thread panicked");
     }
 
     pub fn entry(&self, i: usize, j: usize) -> T {
@@ -318,6 +337,20 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
         let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
+        let (tx, rx) = channel::<(usize, Vec<u8>)>();
+        let file = new_matrix.file.try_clone().expect("failed to clone file");
+        let entry_size = new_matrix.entry_size();
+        let ncol = new_matrix.ncol;
+        let io_handle = thread::spawn(move || {
+            while let Ok((offset, data)) = rx.recv() {
+                unsafe {
+                    let mut mmap = map_file_mut(&file, offset, data.len());
+                    mmap.copy_from_slice(&data);
+                    drop(mmap);
+                }
+            }
+        });
+
         parallel_iter!(0..self.nrow).for_each(|i| {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
@@ -330,23 +363,25 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                                     *cur_block_row_idx..*next_block_row_idx,
                                     *cur_block_col_idx..*next_block_col_idx,
                                 );
-                                // This is secure because the modified entries are not overlapped
-                                // among threads
-                                unsafe {
-                                    new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx..
-                                            i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx..
-                                            j * sub_matrix.ncol + *next_block_col_idx,
-                                        sub_block_polys,
-                                    );
-                                }
+                                let global_row = i * sub_matrix.nrow + *cur_block_row_idx;
+                                let global_col = j * sub_matrix.ncol + *cur_block_col_idx;
+                                send_block_rows(
+                                    &new_matrix.file,
+                                    &tx,
+                                    sub_block_polys,
+                                    global_row,
+                                    global_col,
+                                    ncol,
+                                    entry_size,
+                                );
                             },
                         );
                     },
                 );
             });
         });
+        drop(tx);
+        io_handle.join().expect("I/O thread panicked");
         new_matrix
     }
 }
@@ -593,7 +628,7 @@ fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     }
 }
 
-unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
+pub unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
     unsafe {
         MmapOptions::new()
             .offset(offset as u64)
@@ -668,4 +703,22 @@ fn mul_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: Vec<Vec<T>>) -> 
                 .collect::<Vec<T>>()
         })
         .collect::<Vec<Vec<T>>>()
+}
+
+pub fn send_block_rows<T: MmapMatrixElem>(
+    file: &File,
+    tx: &std::sync::mpsc::Sender<(usize, Vec<u8>)>,
+    new_entries: Vec<Vec<T>>,
+    row_start: usize,
+    col_start: usize,
+    ncol: usize,
+    entry_size: usize,
+) {
+    // For each row in the block, flatten its entries to a Vec<u8> and send (offset, data)
+    for (i, row) in new_entries.into_iter().enumerate() {
+        let global_row = row_start + i;
+        let offset = entry_size * (global_row * ncol + col_start);
+        let bytes: Vec<u8> = row.into_iter().flat_map(|elem| elem.as_elem_to_bytes()).collect();
+        tx.send((offset, bytes)).expect("failed to send I/O batch");
+    }
 }
