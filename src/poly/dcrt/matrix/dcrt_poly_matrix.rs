@@ -180,7 +180,6 @@ impl PolyMatrix for DCRTPolyMatrix {
                             .collect();
                         let global_row_start = *cur_block_row_idx * bit_length;
                         send_block_rows(
-                            &new_matrix.file,
                             &tx,
                             new_entries,
                             global_row_start,
