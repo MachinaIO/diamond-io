@@ -12,7 +12,7 @@ use crate::{
     utils::debug_mem,
 };
 use openfhe::ffi::SampleP1ForPertSquareMat;
-use rayon::iter::ParallelIterator;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 pub use sampler::DCRTPolyTrapdoorSampler;
 use std::ops::Range;
 use utils::{gen_dgg_int_vec, gen_int_karney, split_int64_vec_to_elems};
@@ -76,18 +76,19 @@ impl DCRTTrapdoor {
                 dgg_large_params.1,
                 dgg_large_params.2,
             );
-            let vecs = parallel_iter!(0..n * dk)
+            (0..n * dk)
+                .into_par_iter()
                 .map(|i| dgg_vectors.slice(i * d, (i + 1) * d, 0, 1))
-                .collect::<Vec<_>>();
-            vecs[0].concat_columns(&vecs[1..].iter().collect::<Vec<_>>())
+                .reduce_with(|left, right| left.concat_columns(&[&right]))
+                .unwrap()
         };
         debug_mem("p2z_vec generated");
         // create a matrix of d*k x d ring elements in coefficient representation
-        let p2_vecs = parallel_iter!(0..d)
+        let p2 = (0..d)
+            .into_par_iter()
             .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
-            .collect::<Vec<_>>();
-        debug_mem("p2_vecs are generated");
-        let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
+            .reduce_with(|left, right| left.concat_columns(&[&right]))
+            .expect("non-empty iterator");
         debug_mem("p2 generated");
         let a_mat = r.clone() * r.transpose(); // d * d
         let b_mat = r.clone() * e.transpose(); // d * d

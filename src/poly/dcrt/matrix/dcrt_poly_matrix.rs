@@ -194,32 +194,29 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     fn mul_tensor_identity(&self, other: &Self, identity_size: usize) -> Self {
         debug_assert_eq!(self.ncol, other.nrow * identity_size);
-
         let slice_width = other.nrow;
-        let mut slice_results = Vec::with_capacity(identity_size);
 
-        for i in 0..identity_size {
+        let mut iter = (0..identity_size).map(|i| {
             let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-            slice_results.push(slice * other);
-        }
-        slice_results[0].clone().concat_columns(&slice_results[1..].iter().collect::<Vec<_>>())
+            slice * other
+        });
+
+        let first = iter.next().unwrap();
+        iter.fold(first, |acc, slice| acc.concat_columns(&[&slice]))
     }
 
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
         let log_q = self.params.modulus_bits();
         debug_assert_eq!(self.ncol, other.nrow * identity_size * log_q);
         let slice_width = other.nrow * log_q;
-        let mut output = vec![DCRTPolyMatrix::zero(&self.params, 0, 0); other.ncol * identity_size];
 
-        for j in 0..other.ncol {
-            let jth_col_m_decompose = other.get_column_matrix_decompose(j);
-            for i in 0..identity_size {
-                let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-                output[i * other.ncol + j] = slice * &jth_col_m_decompose;
-            }
-        }
+        let mut pieces_iter = (0..identity_size).flat_map(|i| {
+            let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
+            (0..other.ncol).map(move |j| slice.clone() * other.get_column_matrix_decompose(j))
+        });
 
-        output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
+        let first_piece = pieces_iter.next().unwrap();
+        pieces_iter.fold(first_piece, |acc, piece| acc.concat_columns(&[&piece]))
     }
 
     fn get_column_matrix_decompose(&self, j: usize) -> Self {

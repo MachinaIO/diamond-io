@@ -85,7 +85,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (row_offsets, col_offsets) = block_offsets(rows.clone(), cols.clone());
+        let (row_offsets, col_offsets) = block_offsets(rows, cols);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -113,7 +113,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     where
         F: Fn(Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (offsets, _) = block_offsets(diags.clone(), 0..0);
+        let (offsets, _) = block_offsets(diags, 0..0);
         parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_diag_idx, next_block_diag_idx)| {
                 let new_entries = f(*cur_block_diag_idx..*next_block_diag_idx);
@@ -196,11 +196,14 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let mut new_matrix = Self::new_empty(params, size, size);
         let scalar = scalar.unwrap_or_else(|| T::one(params));
         let f = |offsets: Range<usize>| -> Vec<Vec<T>> {
-            let mut new_entries = vec![vec![T::zero(params); offsets.len()]; offsets.len()];
-            for i in offsets {
-                new_entries[i][i] = scalar.clone();
-            }
-            new_entries
+            let len = offsets.len();
+            (0..len)
+                .map(|i| {
+                    (0..len)
+                        .map(|j| if i == j { scalar.clone() } else { T::zero(params) })
+                        .collect()
+                })
+                .collect()
         };
         new_matrix.replace_entries_diag(0..size, f);
         new_matrix
@@ -209,15 +212,10 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     pub fn transpose(&self) -> Self {
         let mut new_matrix = Self::new_empty(&self.params, self.ncol, self.nrow);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            let mut new_entries =
-                vec![vec![T::zero(&self.params); col_offsets.len()]; row_offsets.len()];
             let cur_entries = self.block_entries(col_offsets.clone(), row_offsets.clone());
-            for i in row_offsets {
-                for j in col_offsets.clone() {
-                    new_entries[i][j] = cur_entries[j][i].clone();
-                }
-            }
-            new_entries
+            row_offsets
+                .map(|i| col_offsets.clone().map(|j| cur_entries[j][i].clone()).collect::<Vec<T>>())
+                .collect::<Vec<Vec<T>>>()
         };
         new_matrix.replace_entries(0..self.ncol, 0..self.nrow, f);
         new_matrix
