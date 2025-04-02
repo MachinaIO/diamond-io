@@ -2,7 +2,7 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
+            matrix::{block_size, i64_matrix::I64MatrixParams, I64Matrix},
             sampler::DCRTPolyUniformSampler,
             DCRTPolyMatrix, DCRTPolyParams,
         },
@@ -14,7 +14,7 @@ use crate::{
 use openfhe::ffi::SampleP1ForPertSquareMat;
 use rayon::iter::ParallelIterator;
 pub use sampler::DCRTPolyTrapdoorSampler;
-use std::ops::Range;
+use std::{cmp::min, ops::Range};
 use utils::{gen_dgg_int_vec, gen_int_karney, split_int64_vec_to_elems};
 
 pub mod sampler;
@@ -128,15 +128,17 @@ fn sample_p1_for_pert_square_mat(
     let n = params.ring_dimension();
     let depth = params.crt_depth();
     let k_res = params.modulus_bits() / depth;
-    let d = a_mat.row_size();
-    let num_blocks = padded_ncol / d;
+    let block_size = block_size();
+    let num_blocks = padded_ncol.div_ceil(block_size);
+    debug_mem("sample_p1_for_pert_square_mat parameters computed");
 
-    let p1_mat_blocks = (0..num_blocks)
+    let p1_mat_blocks = parallel_iter!(0..num_blocks)
         .map(|i| {
             let mut a_mat = a_mat.to_cpp_matrix_ptr();
             let mut b_mat = b_mat.to_cpp_matrix_ptr();
             let mut d_mat = d_mat.to_cpp_matrix_ptr();
-            let mut tp2 = tp2.slice_columns(i * d, (i + 1) * d).to_cpp_matrix_ptr();
+            let end_col = min((i + 1) * block_size, padded_ncol);
+            let mut tp2 = tp2.slice_columns(i * block_size, end_col).to_cpp_matrix_ptr();
             debug_mem("a_mat, b_mat, d_mat, tp2 are converted to cpp matrices");
             let cpp_matrix = SampleP1ForPertSquareMat(
                 a_mat.as_mut().unwrap(),
@@ -146,6 +148,7 @@ fn sample_p1_for_pert_square_mat(
                 n,
                 depth,
                 k_res,
+                end_col - i * block_size,
                 c,
                 s,
                 dgg_stddev,
