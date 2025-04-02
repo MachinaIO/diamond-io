@@ -321,7 +321,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         parallel_iter!(0..self.nrow).for_each(|i| {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
-                let sub_matrix = other * &scalar;
+                let sub_matrix = other * scalar;
                 parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_row_idx, next_block_row_idx)| {
                         parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -539,6 +539,14 @@ impl<T: MmapMatrixElem> Mul<&T> for MmapMatrix<T> {
 
     fn mul(self, rhs: &T) -> Self::Output {
         &self * rhs
+    }
+}
+
+impl<T: MmapMatrixElem> Mul<T> for &MmapMatrix<T> {
+    type Output = MmapMatrix<T>;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        self * &rhs
     }
 }
 
