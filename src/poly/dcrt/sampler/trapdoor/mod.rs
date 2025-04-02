@@ -93,7 +93,7 @@ impl DCRTTrapdoor {
         let b_mat = r.clone() * e.transpose(); // d * d
         let d_mat = e.clone() * e.transpose(); // d * d
         let tp2 = r.concat_rows(&[e]) * &p2;
-        let p1 = sample_p1_for_pert_square_mat(&a_mat, &b_mat, &d_mat, &tp2, params, c, s, dgg);
+        let p1 = sample_p1_for_pert_square_mat(a_mat, b_mat, d_mat, tp2, params, c, s, dgg);
         debug_mem("p1 generated");
         p1.concat_rows(&[&p2])
     }
@@ -101,10 +101,10 @@ impl DCRTTrapdoor {
 
 // A function to generate `p1` for the `sample_pert_square_mat` function, corresponding to lines 425-473 (except for the line 448) in the `SamplePertSquareMat` function in the trapdoor.h of OpenFHE. https://github.com/openfheorg/openfhe-development/blob/main/src/core/include/lattice/trapdoor.h#L425-L473
 fn sample_p1_for_pert_square_mat(
-    a_mat: &DCRTPolyMatrix,
-    b_mat: &DCRTPolyMatrix,
-    d_mat: &DCRTPolyMatrix,
-    tp2: &DCRTPolyMatrix,
+    a_mat: DCRTPolyMatrix,
+    b_mat: DCRTPolyMatrix,
+    d_mat: DCRTPolyMatrix,
+    tp2: DCRTPolyMatrix,
     params: &DCRTPolyParams,
     c: f64,
     s: f64,

@@ -118,10 +118,15 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self {
         let bit_length = params.modulus_bits();
+        let modulus = params.modulus();
         let mut poly_vec = Vec::with_capacity(bit_length);
-        for i in 0u32..(bit_length as u32) {
-            let value = BigInt::from(2).pow(i);
-            poly_vec.push(DCRTPoly::from_const(params, &FinRingElem::new(value, params.modulus())));
+        let mut value = BigInt::from(1);
+        for _ in 0..bit_length {
+            poly_vec.push(DCRTPoly::from_const(
+                params,
+                &FinRingElem::new(value.clone(), modulus.clone()),
+            ));
+            value *= 2;
         }
         let gadget_vector = Self::from_poly_vec(params, vec![poly_vec]);
         let identity = DCRTPolyMatrix::identity(params, size, None);
