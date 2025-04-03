@@ -44,7 +44,7 @@ pub(crate) fn gen_dgg_int_vec(
                 .map(|_| vec![gen_int_karney(0.0f64, m_std)])
                 .collect::<Vec<Vec<i64>>>()
         };
-        vec.replace_entries(0..size, 0..1, f);
+        vec.replace_entries_row(0..size, 0..1, f);
     } else {
         // Use Peikert's algorithm
         let distribution = Uniform::new(0.0f64, 1.0f64).unwrap();
@@ -64,7 +64,7 @@ pub(crate) fn gen_dgg_int_vec(
                 })
                 .collect::<Vec<Vec<i64>>>()
         };
-        vec.replace_entries(0..size, 0..1, f);
+        vec.replace_entries_row(0..size, 0..1, f);
     }
     vec
 }
@@ -80,7 +80,7 @@ pub(crate) fn split_int64_mat_to_elems(
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
         let col_offsets_len = col_offsets.len();
         let i64_values =
-            &matrix.block_entries(row_offsets.start * n..row_offsets.end * n, col_offsets);
+            &matrix.block_entries_row(row_offsets.start * n..row_offsets.end * n, col_offsets);
         parallel_iter!(0..row_offsets.len())
             .map(|i| {
                 parallel_iter!(0..col_offsets_len)
@@ -95,7 +95,7 @@ pub(crate) fn split_int64_mat_to_elems(
             })
             .collect::<Vec<Vec<DCRTPoly>>>()
     };
-    poly_vec.replace_entries(0..nrow, 0..1, f);
+    poly_vec.replace_entries_row(0..nrow, 0..1, f);
     poly_vec
 }
 
@@ -109,7 +109,7 @@ pub(crate) fn split_int64_vec_alt_to_elems(
     let mut poly_vec = DCRTPolyMatrix::new_empty(params, nrow, 1);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
         debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
-        let i64_values = &vec.block_entries(row_offsets.clone(), 0..n);
+        let i64_values = &vec.block_entries_row(row_offsets.clone(), 0..n);
         parallel_iter!(0..row_offsets.len())
             .map(|i| {
                 let coeffs = i64_values[i]
@@ -120,7 +120,7 @@ pub(crate) fn split_int64_vec_alt_to_elems(
             })
             .collect::<Vec<Vec<DCRTPoly>>>()
     };
-    poly_vec.replace_entries(0..nrow, 0..1, f);
+    poly_vec.replace_entries_row(0..nrow, 0..1, f);
     poly_vec
 }
 

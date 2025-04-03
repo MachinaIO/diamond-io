@@ -111,22 +111,36 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         log_mem("p_hat generated");
         let perturbed_syndrome = target - &(public_matrix * &p_hat);
         debug_mem("perturbed_syndrome generated");
-        let z_hat_vecs = parallel_iter!(0..d)
-            .map(|i| {
-                let row_vec = parallel_iter!(0..target_cols)
-                    .map(|j| {
-                        decompose_dcrt_gadget(
-                            &perturbed_syndrome.entry(i, j),
-                            self.c,
-                            params,
-                            self.sigma,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                row_vec[0].concat_columns(&row_vec[1..].iter().collect::<Vec<_>>())
+        let z_hat_mat = parallel_iter!(0..d * target_cols)
+            .map(|idx| {
+                let i = idx / target_cols;
+                let j = idx % target_cols;
+                decompose_dcrt_gadget(&perturbed_syndrome.entry(i, j), self.c, params, self.sigma)
+            })
+            .collect::<Vec<_>>()
+            .chunks(target_cols)
+            .map(|chunk| {
+                let mut matrices = Vec::with_capacity(chunk.len());
+                for matrix in chunk {
+                    matrices.push(matrix);
+                }
+                matrices
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|matrices| {
+                if matrices.len() == 1 {
+                    matrices[0].clone()
+                } else {
+                    matrices[0].concat_columns(&matrices[1..])
+                }
             })
             .collect::<Vec<_>>();
-        let z_hat_mat = z_hat_vecs[0].concat_rows(&z_hat_vecs[1..].iter().collect::<Vec<_>>());
+        let z_hat_mat = if z_hat_mat.len() == 1 {
+            z_hat_mat[0].clone()
+        } else {
+            z_hat_mat[0].concat_rows(&z_hat_mat[1..].iter().collect::<Vec<_>>())
+        };
         log_mem("z_hat_mat generated");
         let r_z_hat = &trapdoor.r * &z_hat_mat;
         debug_mem("r_z_hat generated");
@@ -181,7 +195,7 @@ pub(crate) fn gauss_samp_gq_arb_base(
             })
             .collect::<Vec<_>>()
     };
-    matrix.replace_entries(0..k_res, 0..n as usize, f);
+    matrix.replace_entries_row(0..k_res, 0..n as usize, f);
     matrix
 }
 

@@ -70,7 +70,7 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
                 })
                 .collect()
         };
-        new_matrix.replace_entries(0..nrow, 0..ncol, f);
+        new_matrix.replace_entries_row(0..nrow, 0..ncol, f);
         new_matrix
     }
 }
