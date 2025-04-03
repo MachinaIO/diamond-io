@@ -5,7 +5,9 @@ use crate::poly::{
 };
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
+use num_cpus;
 use num_traits::{One, Zero};
+use rayon::ThreadPoolBuilder;
 use tracing::{debug, info};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
@@ -100,6 +102,13 @@ pub fn debug_mem<T: Into<String>>(tag: T) {
 
 pub fn init_tracing() {
     tracing_subscriber::fmt::init();
+}
+
+pub fn init_thread_num() {
+    let logical_cores = num_cpus::get();
+    // todo: need to find optimal threads
+    let optimal_threads = logical_cores / 2;
+    ThreadPoolBuilder::new().num_threads(optimal_threads).build_global().unwrap();
 }
 
 #[macro_export]

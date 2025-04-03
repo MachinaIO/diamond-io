@@ -83,9 +83,13 @@ impl DCRTTrapdoor {
         };
         debug_mem("p2z_vec generated");
         // create a matrix of d*k x d ring elements in coefficient representation
-        let p2_vecs = parallel_iter!(0..d)
-            .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
-            .collect::<Vec<_>>();
+        let mut p2_vecs = Vec::with_capacity(d);
+        for i in 0..d {
+            let slice = p2z_vec.slice(0, n * dk, i, i + 1);
+            let elems = split_int64_vec_to_elems(&slice, params);
+            p2_vecs.push(elems);
+            debug_mem("p2_vecs generating");
+        }
         let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
         debug_mem("p2 generated");
         let a_mat = r.clone() * r.transpose(); // d * d
