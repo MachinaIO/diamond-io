@@ -8,6 +8,7 @@ use crate::{
         Poly, PolyParams,
     },
 };
+use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
 use rand::{rng, Rng};
 use rand_distr::Uniform;
@@ -69,25 +70,29 @@ pub(crate) fn gen_dgg_int_vec(
     vec
 }
 
-pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams) -> DCRTPolyMatrix {
-    debug_assert_eq!(vec.ncol, 1, "Matrix must be a column vector");
+pub(crate) fn split_int64_mat_to_elems(
+    matrix: &I64Matrix,
+    params: &DCRTPolyParams,
+) -> DCRTPolyMatrix {
     let n = params.ring_dimension() as usize;
-    let nrow = vec.nrow / n;
-    let mut poly_vec = DCRTPolyMatrix::new_empty(params, nrow, 1);
+    let nrow = matrix.nrow / n;
+    let ncol = matrix.ncol;
+    let mut poly_vec = DCRTPolyMatrix::new_empty(params, nrow, ncol);
     let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-        debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
-        let i64_values = &vec
-            .block_entries(row_offsets.start * n..row_offsets.end * n, col_offsets)
-            .into_iter()
-            .map(|vec| vec[0])
-            .collect::<Vec<_>>();
+        let col_offsets_len = col_offsets.len();
+        let i64_values =
+            &matrix.block_entries(row_offsets.start * n..row_offsets.end * n, col_offsets);
         parallel_iter!(0..row_offsets.len())
             .map(|i| {
-                let coeffs = i64_values[i * n..(i + 1) * n]
-                    .par_iter()
-                    .map(|x| FinRingElem::from_int64(*x, params.modulus()))
-                    .collect::<Vec<_>>();
-                vec![DCRTPoly::from_coeffs(params, &coeffs)]
+                parallel_iter!(0..col_offsets_len)
+                    .map(|j| {
+                        let coeffs = i64_values[i * n..(i + 1) * n]
+                            .par_iter()
+                            .map(|vec| FinRingElem::from_int64(vec[j], params.modulus()))
+                            .collect::<Vec<_>>();
+                        DCRTPoly::from_coeffs(params, &coeffs)
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<Vec<DCRTPoly>>>()
     };

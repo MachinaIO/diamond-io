@@ -21,7 +21,6 @@ mod test {
     const SIGMA: f64 = 4.578;
 
     #[test]
-    #[ignore]
     fn test_io_just_mul_enc_and_bit_middle_params() {
         init_tracing();
         let start_time = std::time::Instant::now();

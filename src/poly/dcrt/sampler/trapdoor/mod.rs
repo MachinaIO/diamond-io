@@ -17,7 +17,7 @@ use openfhe::ffi::{ExtractMatrixCols, FormatMatrixCoefficient, SampleP1ForPertMa
 use rayon::iter::ParallelIterator;
 pub use sampler::DCRTPolyTrapdoorSampler;
 use std::{cmp::min, ops::Range, sync::Arc};
-use utils::{gen_dgg_int_vec, gen_int_karney, split_int64_vec_to_elems};
+use utils::{gen_dgg_int_vec, gen_int_karney, split_int64_mat_to_elems};
 
 pub mod sampler;
 pub mod utils;
@@ -91,11 +91,12 @@ impl DCRTTrapdoor {
         };
         debug_mem("p2z_vec generated");
         // create a matrix of d*k x padded_ncol ring elements in coefficient representation
-        let p2_vecs = parallel_iter!(0..padded_ncol)
-            .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
-            .collect::<Vec<_>>();
-        debug_mem("p2_vecs generated");
-        let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
+        let p2 = split_int64_mat_to_elems(&p2z_vec, params);
+        // parallel_iter!(0..padded_ncol)
+        //     .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
+        //     .collect::<Vec<_>>();
+        // debug_mem("p2_vecs generated");
+        // let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
         debug_mem("p2 generated");
         let a_mat = r.clone() * r.transpose(); // d x d
         let b_mat = r.clone() * e.transpose(); // d x d
