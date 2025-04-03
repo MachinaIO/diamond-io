@@ -190,7 +190,6 @@ mod test {
         // 6. Decompose the ciphertext
         let enc_hardcoded_key_polys =
             enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
-        // println!("enc_hardcoded_key_polys {}", enc_hardcoded_key_polys);
 
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
         let a_decomposed_polys = a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);

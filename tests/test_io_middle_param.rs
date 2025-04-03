@@ -27,7 +27,7 @@ mod test {
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::new(1024, 4, 37);
         let log_q = params.modulus_bits();
-        let switched_modulus = Arc::new(BigUint::from_str_radix("71671831749689734737838152978190216899892655911508785116799651230841339877765150252187381844012976550000", 10).unwrap());
+        let switched_modulus = Arc::new(BigUint::from_str_radix("672178712", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();
         {
             let inputs = public_circuit.input(log_q + 1);
@@ -41,7 +41,7 @@ mod test {
         }
 
         let obf_params = ObfuscationParams {
-            params,
+            params: params.clone(),
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
@@ -53,7 +53,7 @@ mod test {
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let mut rng = rand::rng();
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),

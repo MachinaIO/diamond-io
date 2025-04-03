@@ -301,8 +301,33 @@ impl PolyMatrix for DCRTPolyMatrix {
     // }
 }
 
+pub(crate) struct CppMatrix {
+    pub(crate) inner: UniquePtr<Matrix>,
+}
+
+unsafe impl Send for CppMatrix {}
+unsafe impl Sync for CppMatrix {}
+
+impl CppMatrix {
+    pub fn new(inner: UniquePtr<Matrix>) -> Self {
+        CppMatrix { inner }
+    }
+
+    pub fn nrow(&self) -> usize {
+        GetMatrixRows(&self.inner)
+    }
+
+    pub fn ncol(&self) -> usize {
+        GetMatrixCols(&self.inner)
+    }
+
+    pub fn entry(&self, i: usize, j: usize) -> DCRTPoly {
+        DCRTPoly::new(GetMatrixElement(&self.inner, i, j))
+    }
+}
+
 impl DCRTPolyMatrix {
-    pub fn to_cpp_matrix_ptr(&self) -> UniquePtr<Matrix> {
+    pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
         let nrow = self.nrow;
         let ncol = self.ncol;
         let params = &self.params;
@@ -315,20 +340,15 @@ impl DCRTPolyMatrix {
             }
         }
         debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
-        matrix_ptr
+        CppMatrix::new(matrix_ptr)
     }
 
-    pub fn from_cpp_matrix_ptr(params: &DCRTPolyParams, matrix_ptr: UniquePtr<Matrix>) -> Self {
-        let nrow = GetMatrixRows(&matrix_ptr);
-        let ncol = GetMatrixCols(&matrix_ptr);
-        let mut matrix_inner = Vec::with_capacity(nrow);
-        for i in 0..nrow {
-            let mut row = Vec::with_capacity(ncol);
-            for j in 0..ncol {
-                row.push(DCRTPoly::new(GetMatrixElement(&matrix_ptr, i, j)));
-            }
-            matrix_inner.push(row);
-        }
+    pub(crate) fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
+        let nrow = cpp_matrix.nrow();
+        let ncol = cpp_matrix.ncol();
+        let matrix_inner = parallel_iter!(0..nrow)
+            .map(|i| parallel_iter!(0..ncol).map(|j| cpp_matrix.entry(i, j)).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
         debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
         DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }

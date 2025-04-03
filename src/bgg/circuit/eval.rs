@@ -1,4 +1,5 @@
 use crate::poly::{Poly, PolyElem, PolyParams};
+use rayon::prelude::*;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Sub},
@@ -33,7 +34,7 @@ impl<P: Poly> Evaluable for P {
         let one_elem = <P::Elem as PolyElem>::one(&modulus);
         let zero_elem = <P::Elem as PolyElem>::zero(&modulus);
         let coeffs: Vec<P::Elem> = bits
-            .iter()
+            .par_iter()
             .map(|&bit| if bit { one_elem.clone() } else { zero_elem.clone() })
             .collect();
         Self::from_coeffs(params, &coeffs)

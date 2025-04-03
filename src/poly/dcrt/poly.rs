@@ -46,7 +46,7 @@ impl DCRTPoly {
         debug_assert!(new_modulus < params.modulus());
         let coeffs = self.coeffs();
         let new_coeffs = coeffs
-            .iter()
+            .par_iter()
             .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
             .collect::<Vec<FinRingElem>>();
         DCRTPoly::from_coeffs(params, &new_coeffs)

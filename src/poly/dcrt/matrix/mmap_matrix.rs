@@ -1,4 +1,4 @@
-use crate::parallel_iter;
+use crate::{parallel_iter, utils::debug_mem};
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
@@ -86,6 +86,10 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
         let (row_offsets, col_offsets) = block_offsets(rows, cols);
+        // debug_mem(format!(
+        //     "replace_entries: row_offsets: {:?}, col_offsets: {:?}",
+        //     row_offsets, col_offsets
+        // ));
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -126,6 +130,49 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                         new_entries,
                     );
                 }
+            },
+        );
+    }
+
+    pub fn replace_entries_with_expand<F>(
+        &mut self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+        row_scale: usize,
+        col_scale: usize,
+        f: F,
+    ) where
+        F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
+    {
+        let block_size = block_size();
+        let row_block_size = block_size.div_ceil(row_scale);
+        let col_block_size = block_size.div_ceil(col_scale);
+        let (row_offsets, col_offsets) =
+            block_offsets_distinct_block_sizes(rows, cols, row_block_size, col_block_size);
+        // debug_mem(format!(
+        //     "replace_entries: row_offsets: {:?}, col_offsets: {:?}",
+        //     row_offsets, col_offsets
+        // ));
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let new_entries = f(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+
+                        unsafe {
+                            self.replace_block_entries(
+                                *cur_block_row_idx * row_scale..*next_block_row_idx * row_scale,
+                                *cur_block_col_idx * col_scale..*next_block_col_idx * col_scale,
+                                new_entries,
+                            );
+                        }
+                    },
+                );
             },
         );
     }
@@ -213,8 +260,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let mut new_matrix = Self::new_empty(&self.params, self.ncol, self.nrow);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let cur_entries = self.block_entries(col_offsets.clone(), row_offsets.clone());
-            row_offsets
-                .map(|i| col_offsets.clone().map(|j| cur_entries[j][i].clone()).collect::<Vec<T>>())
+            let row_offsets_len = row_offsets.len();
+            let col_offsets_len = col_offsets.len();
+            (0..row_offsets_len)
+                .into_par_iter()
+                .map(|i| {
+                    (0..col_offsets_len)
+                        .into_par_iter()
+                        .map(|j| cur_entries[j][i].clone())
+                        .collect::<Vec<T>>()
+                })
                 .collect::<Vec<Vec<T>>>()
         };
         new_matrix.replace_entries(0..self.ncol, 0..self.nrow, f);
@@ -238,13 +293,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_columns");
+
         let mut col_acc = self.ncol;
-        for other in others.iter() {
+        for (idx, other) in others.iter().enumerate() {
             let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
                 let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
                 other.block_entries(row_offsets, col_offsets)
             };
             new_matrix.replace_entries(0..self.nrow, col_acc..col_acc + other.ncol, other_f);
+            debug_mem(format!("the {}-th other replaced in concat_columns", idx));
             col_acc += other.ncol;
         }
         debug_assert_eq!(col_acc, updated_ncol);
@@ -269,14 +327,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_rows");
 
         let mut row_acc = self.nrow;
-        for other in others.iter() {
+        for (idx, other) in others.iter().enumerate() {
             let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
                 let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
                 other.block_entries(row_offsets, col_offsets)
             };
             new_matrix.replace_entries(row_acc..row_acc + other.nrow, 0..self.ncol, other_f);
+            debug_mem(format!("the {}-th other replaced in concat_rows", idx));
             row_acc += other.nrow;
         }
         debug_assert_eq!(row_acc, updated_nrow);
@@ -293,9 +353,11 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_diag");
+
         let mut row_acc = self.nrow;
         let mut col_acc = self.ncol;
-        for other in others.iter() {
+        for (idx, other) in others.iter().enumerate() {
             let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
                 let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
                 let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
@@ -306,6 +368,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                 col_acc..col_acc + other.ncol,
                 other_f,
             );
+            debug_mem(format!("the {}-th other replaced in concat_diag", idx));
             row_acc += other.nrow;
             col_acc += other.ncol;
         }
@@ -406,7 +469,9 @@ impl<T: MmapMatrixElem> Eq for MmapMatrix<T> {}
 
 impl<T: MmapMatrixElem> Drop for MmapMatrix<T> {
     fn drop(&mut self) {
+        // debug_mem("Drop MmapMatrix");
         self.file.set_len(0).expect("failed to truncate file");
+        // debug_mem("Truncate file");
     }
 }
 
@@ -605,28 +670,37 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
 }
 
 pub fn block_size() -> usize {
-    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(1000)
+    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(100)
 }
 
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {
     let block_size = block_size();
+    block_offsets_distinct_block_sizes(rows, cols, block_size, block_size)
+}
+
+pub fn block_offsets_distinct_block_sizes(
+    rows: Range<usize>,
+    cols: Range<usize>,
+    row_block_size: usize,
+    col_block_size: usize,
+) -> (Vec<usize>, Vec<usize>) {
     // *BLOCK_SIZE.get().unwrap();
     let nrow = rows.end - rows.start;
     let ncol = cols.end - cols.start;
-    let num_blocks_row = nrow.div_ceil(block_size);
-    let num_blocks_col = ncol.div_ceil(block_size);
+    let num_blocks_row = nrow.div_ceil(row_block_size);
+    let num_blocks_col = ncol.div_ceil(col_block_size);
     let mut row_offsets = vec![rows.start];
     for _ in 0..num_blocks_row {
         let last_row_offset = row_offsets.last().unwrap();
         let sub = rows.end - last_row_offset;
-        let len = if sub < block_size { sub } else { block_size };
+        let len = if sub < row_block_size { sub } else { row_block_size };
         row_offsets.push(last_row_offset + len);
     }
     let mut col_offsets = vec![cols.start];
     for _ in 0..num_blocks_col {
         let last_col_offset = col_offsets.last().unwrap();
         let sub = cols.end - last_col_offset;
-        let len = if sub < block_size { sub } else { block_size };
+        let len = if sub < col_block_size { sub } else { col_block_size };
         col_offsets.push(last_col_offset + len);
     }
     (row_offsets, col_offsets)
