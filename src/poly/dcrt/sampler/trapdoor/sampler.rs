@@ -23,15 +23,17 @@ const SIGMA: f64 = 4.578;
 const SPECTRAL_CONSTANT: f64 = 1.8;
 
 pub struct DCRTPolyTrapdoorSampler {
+    g_vec: DCRTPolyMatrix,
     sigma: f64,
     c: f64,
 }
 
 impl DCRTPolyTrapdoorSampler {
-    pub fn new(sigma: f64) -> Self {
+    pub fn new(params: &DCRTPolyParams, sigma: f64) -> Self {
+        let g_vec = gen_dcrt_gadget_vector(params);
         // base = 2
         let c = 3.0 * SIGMA;
-        Self { sigma, c }
+        Self { g_vec, sigma, c }
     }
 }
 
@@ -47,8 +49,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let trapdoor = DCRTTrapdoor::new(params, size, self.sigma);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let a_bar = uniform_sampler.sample_uniform(params, size, size, DistType::FinRingDist);
-        let g_vec = gen_dcrt_gadget_vector(params);
-        let g = g_vec.concat_diag(&vec![&g_vec; size - 1]);
+        let g = self.g_vec.concat_diag(&vec![&self.g_vec; size - 1]);
         let a0 = a_bar.concat_columns(&[&DCRTPolyMatrix::identity(params, size, None)]);
         let a1 = g - (a_bar * &trapdoor.r + &trapdoor.e);
         let a = a0.concat_columns(&[&a1]);
@@ -211,8 +212,8 @@ mod test {
     #[test]
     fn test_trapdoor_generation() {
         let size: usize = 3;
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
         let params = DCRTPolyParams::default();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
 
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -254,7 +255,7 @@ mod test {
         let params = DCRTPolyParams::default();
         let size = 3;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(0.0);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -288,7 +289,7 @@ mod test {
         let size = 4;
         let target_cols = 2;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols < size
@@ -326,7 +327,7 @@ mod test {
         let multiple = 2;
         let target_cols = size * multiple;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size
@@ -364,7 +365,7 @@ mod test {
         let size = 4;
         let target_cols = 6;
         let k = params.modulus_bits();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size

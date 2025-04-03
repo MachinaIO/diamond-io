@@ -21,7 +21,6 @@ mod test {
     const SIGMA: f64 = 4.578;
 
     #[test]
-    #[ignore]
     fn test_io_just_mul_enc_and_bit_middle_params() {
         init_tracing();
         let start_time = std::time::Instant::now();
@@ -41,7 +40,7 @@ mod test {
         }
 
         let obf_params = ObfuscationParams {
-            params,
+            params: params.clone(),
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
@@ -53,7 +52,7 @@ mod test {
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let mut rng = rand::rng();
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
