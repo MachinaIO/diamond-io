@@ -145,8 +145,8 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
         let block_size = block_size();
-        let row_block_size = block_size / row_scale;
-        let col_block_size = block_size / col_scale;
+        let row_block_size = block_size.div_ceil(row_scale);
+        let col_block_size = block_size.div_ceil(col_scale);
         let (row_offsets, col_offsets) =
             block_offsets_distinct_block_sizes(rows, cols, row_block_size, col_block_size);
         // debug_mem(format!(
