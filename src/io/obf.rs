@@ -95,7 +95,7 @@ where
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
 
-    let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+    let (b_star_trapdoor_cur, b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
     let p_init = {
@@ -141,7 +141,6 @@ where
     let mut pub_key_cur = pub_key_init;
 
     for idx in 0..obf_params.input_size {
-        let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
         log_mem("Sampled b_star trapdoor for idx");
 
         let pub_key_idx =
@@ -150,7 +149,7 @@ where
 
         #[cfg(feature = "test")]
         {
-            bs[idx + 1][2] = b_star_idx.clone();
+            bs[idx + 1][2] = b_star_cur.clone();
         }
 
         // Precomputation for k_preimage that are not bit dependent
@@ -159,14 +158,12 @@ where
         let inserted_coeff_index = idx % dim;
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
+        log_mem("Sampled b trapdoor for idx and bit");
 
         for bit in 0..=1 {
-            let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-            log_mem("Sampled b trapdoor for idx and bit");
-
             #[cfg(feature = "test")]
             {
-                bs[idx + 1][bit] = b_bit_idx.clone();
+                bs[idx + 1][bit] = b_star_cur.clone();
             }
             // let m_preimage_bit_id = format!("m_preimage_{}_{}", idx, bit);
             // let n_preimage_bit_id = format!("n_preimage_{}_{}", idx, bit);
@@ -176,22 +173,22 @@ where
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
-                &(u_bits[bit].clone() * &b_bit_idx),
+                &(u_bits[bit].clone() * &b_star_cur),
             );
 
             log_mem("Computed m_preimage_bit");
 
-            m_preimages[idx].push(m_preimage_bit);
+            m_preimages[idx].push(m_preimage_bit.clone());
 
-            let n_preimage_bit = sampler_trapdoor.preimage(
-                &params,
-                &b_bit_trapdoor_idx,
-                &b_bit_idx,
-                &(u_star.clone() * &b_star_idx.clone()),
-            );
+            // let n_preimage_bit = sampler_trapdoor.preimage(
+            //     &params,
+            //     &b_star_trapdoor_cur,
+            //     &b_star_cur,
+            //     &(u_star.clone() * &b_star_cur.clone()),
+            // );
             log_mem("Computed n_preimage_bit");
 
-            n_preimages[idx].push(n_preimage_bit);
+            n_preimages[idx].push(m_preimage_bit);
 
             let rg = &public_data.rgs[bit];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -200,29 +197,20 @@ where
             };
             let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             let inserted_poly_gadget = {
-                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
                 let zero = <M::P as Poly>::const_zero(params.as_ref());
-                let mut polys = vec![];
-                for _ in 0..(inserted_poly_index) {
-                    polys.push(zero.clone());
-                }
-                polys.push(inserted_poly);
-                for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
-                    polys.push(zero.clone());
-                }
+                let mut polys = vec![zero.clone(); packed_input_size + 1];
+                polys[inserted_poly_index] = inserted_poly;
+                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
             let bottom = pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
             let k_target = top.concat_rows(&[&bottom]);
             let k_preimage_bit =
-                sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
+                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
             log_mem("Computed k_preimage_bit");
-
             k_preimages[idx].push(k_preimage_bit);
         }
 
-        b_star_trapdoor_cur = b_star_trapdoor_idx;
-        b_star_cur = b_star_idx;
         pub_key_cur = pub_key_idx;
     }
 
