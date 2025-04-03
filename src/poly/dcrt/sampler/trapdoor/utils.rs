@@ -7,6 +7,7 @@ use crate::{
         },
         Poly, PolyParams,
     },
+    utils::debug_mem,
 };
 use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
 use rand::{rng, Rng};
@@ -70,6 +71,7 @@ pub(crate) fn gen_dgg_int_vec(
 }
 
 pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams) -> DCRTPolyMatrix {
+    debug_mem("split_int64_vec_to_elems");
     debug_assert_eq!(vec.ncol, 1, "Matrix must be a column vector");
     let n = params.ring_dimension() as usize;
     let nrow = vec.nrow / n;
