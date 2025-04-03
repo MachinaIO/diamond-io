@@ -64,6 +64,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         self.params.entry_size()
     }
 
+    /// read
     pub fn block_entries(&self, rows: Range<usize>, cols: Range<usize>) -> Vec<Vec<T>> {
         let entry_size = self.entry_size();
         parallel_iter!(rows)
@@ -140,9 +141,10 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
         let entry_size = self.entry_size();
         let row_start = rows.start;
-        parallel_iter!(rows).for_each(|i| {
+        (rows.start..rows.end).for_each(|i| {
             let offset = entry_size * (i * self.ncol + cols.start);
-            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
+            let mut mmap =
+                unsafe { map_file_mut(&self.file, offset, entry_size * (cols.end - cols.start)) };
             let bytes = new_entries[i - row_start]
                 .iter()
                 .flat_map(|poly| poly.as_elem_to_bytes())
