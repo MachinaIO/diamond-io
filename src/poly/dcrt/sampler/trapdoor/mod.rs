@@ -2,7 +2,9 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{block_size, i64_matrix::I64MatrixParams, I64Matrix},
+            matrix::{
+                block_size, dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix,
+            },
             sampler::DCRTPolyUniformSampler,
             DCRTPolyMatrix, DCRTPolyParams,
         },
@@ -11,10 +13,10 @@ use crate::{
     },
     utils::debug_mem,
 };
-use openfhe::ffi::SampleP1ForPertSquareMat;
+use openfhe::ffi::{ExtractMatrixCols, FormatMatrixCoefficient, SampleP1ForPertMat};
 use rayon::iter::ParallelIterator;
 pub use sampler::DCRTPolyTrapdoorSampler;
-use std::{cmp::min, ops::Range};
+use std::{cmp::min, ops::Range, sync::Arc};
 use utils::{gen_dgg_int_vec, gen_int_karney, split_int64_vec_to_elems};
 
 pub mod sampler;
@@ -130,31 +132,54 @@ fn sample_p1_for_pert_square_mat(
     let k_res = params.modulus_bits() / depth;
     let block_size = block_size();
     let num_blocks = padded_ncol.div_ceil(block_size);
+    let num_threads = rayon::current_num_threads();
+    let num_threads_for_cpp = num_threads / num_blocks;
     debug_mem("sample_p1_for_pert_square_mat parameters computed");
+    let mut a_mat = a_mat.to_cpp_matrix_ptr();
+    FormatMatrixCoefficient(a_mat.inner.as_mut().unwrap());
+    let a_mat_arc = Arc::new(a_mat);
+    let mut b_mat = b_mat.to_cpp_matrix_ptr();
+    FormatMatrixCoefficient(b_mat.inner.as_mut().unwrap());
+    let b_mat_arc = Arc::new(b_mat);
+    let mut d_mat = d_mat.to_cpp_matrix_ptr();
+    FormatMatrixCoefficient(d_mat.inner.as_mut().unwrap());
+    let d_mat_arc = Arc::new(d_mat);
+    debug_mem("a_mat, b_mat, d_mat are converted to cpp matrices");
 
     let p1_mat_blocks = parallel_iter!(0..num_blocks)
         .map(|i| {
-            let mut a_mat = a_mat.to_cpp_matrix_ptr();
-            let mut b_mat = b_mat.to_cpp_matrix_ptr();
-            let mut d_mat = d_mat.to_cpp_matrix_ptr();
             let end_col = min((i + 1) * block_size, padded_ncol);
             let mut tp2 = tp2.slice_columns(i * block_size, end_col).to_cpp_matrix_ptr();
-            debug_mem("a_mat, b_mat, d_mat, tp2 are converted to cpp matrices");
-            let cpp_matrix = SampleP1ForPertSquareMat(
-                a_mat.as_mut().unwrap(),
-                b_mat.as_mut().unwrap(),
-                d_mat.as_mut().unwrap(),
-                tp2.as_mut().unwrap(),
-                n,
-                depth,
-                k_res,
-                end_col - i * block_size,
-                c,
-                s,
-                dgg_stddev,
-            );
-            debug_mem("SampleP1ForPertSquareMat called");
-            DCRTPolyMatrix::from_cpp_matrix_ptr(params, cpp_matrix)
+            FormatMatrixCoefficient(tp2.inner.as_mut().unwrap());
+            let tp2_arc = Arc::new(tp2);
+            debug_mem("tp2 is converted to cpp matrices");
+            let ncol = end_col - i * block_size;
+            let ncol_per_thread = ncol.div_ceil(num_threads_for_cpp);
+            let p1_blocks = parallel_iter!(0..ncol.div_ceil(ncol_per_thread))
+                .map(|j| {
+                    let start_col = j * ncol_per_thread;
+                    let end_col = min((j + 1) * ncol_per_thread, ncol);
+                    let tp2_cols =
+                        ExtractMatrixCols(&Arc::clone(&tp2_arc).as_ref().inner, start_col, end_col);
+                    debug_mem("extracting rows from tp2");
+                    let cpp_matrix = SampleP1ForPertMat(
+                        &Arc::clone(&a_mat_arc).as_ref().inner,
+                        &Arc::clone(&b_mat_arc).as_ref().inner,
+                        &Arc::clone(&d_mat_arc).as_ref().inner,
+                        &tp2_cols,
+                        n,
+                        depth,
+                        k_res,
+                        end_col - start_col,
+                        c,
+                        s,
+                        dgg_stddev,
+                    );
+                    debug_mem("SampleP1ForPertSquareMat called");
+                    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(cpp_matrix))
+                })
+                .collect::<Vec<_>>();
+            p1_blocks[0].concat_columns(&p1_blocks[1..].iter().collect::<Vec<_>>())
         })
         .collect::<Vec<_>>();
 

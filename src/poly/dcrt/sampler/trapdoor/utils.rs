@@ -2,7 +2,7 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
+            matrix::{dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix},
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem,
         },
         Poly, PolyParams,
@@ -128,5 +128,5 @@ pub(crate) fn gen_dcrt_gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix 
         params.modulus_bits(),
         2,
     );
-    DCRTPolyMatrix::from_cpp_matrix_ptr(params, g_vec_cpp)
+    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
 }
