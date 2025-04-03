@@ -422,9 +422,9 @@ impl<T: MmapMatrixElem> Eq for MmapMatrix<T> {}
 
 impl<T: MmapMatrixElem> Drop for MmapMatrix<T> {
     fn drop(&mut self) {
-        debug_mem("Drop MmapMatrix");
+        // debug_mem("Drop MmapMatrix");
         self.file.set_len(0).expect("failed to truncate file");
-        debug_mem("Truncate file");
+        // debug_mem("Truncate file");
     }
 }
 

@@ -110,6 +110,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
         log_mem("p_hat generated");
         let perturbed_syndrome = target - &(public_matrix * &p_hat);
+        debug_mem("perturbed_syndrome generated");
         let z_hat_vecs = parallel_iter!(0..d)
             .map(|i| {
                 let row_vec = parallel_iter!(0..target_cols)
