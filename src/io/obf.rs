@@ -160,6 +160,14 @@ where
         let mut coeffs = vec![zero_coeff; dim];
         log_mem("Sampled b trapdoor for idx and bit");
 
+        let n_preimage_bit = sampler_trapdoor.preimage(
+            &params,
+            &b_star_trapdoor_cur,
+            &b_star_cur,
+            &(u_star.clone() * &b_star_cur),
+        );
+        log_mem("Computed n_preimage_bit");
+
         for bit in 0..=1 {
             #[cfg(feature = "test")]
             {
@@ -179,24 +187,15 @@ where
             log_mem("Computed m_preimage_bit");
 
             m_preimages[idx].push(m_preimage_bit);
-
-            let n_preimage_bit = sampler_trapdoor.preimage(
-                &params,
-                &b_star_trapdoor_cur,
-                &b_star_cur,
-                &(u_star.clone() * &b_star_cur),
-            );
-            log_mem("Computed n_preimage_bit");
-
-            n_preimages[idx].push(n_preimage_bit);
+            n_preimages[idx].push(n_preimage_bit.clone());
 
             let rg = &public_data.rgs[bit];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             if bit != 0 {
                 coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
-            };
-            let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
+            }
             let inserted_poly_gadget = {
+                let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
                 let zero = <M::P as Poly>::const_zero(params.as_ref());
                 let mut polys = vec![zero.clone(); packed_input_size + 1];
                 polys[inserted_poly_index] = inserted_poly;
