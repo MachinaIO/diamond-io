@@ -8,7 +8,6 @@ use crate::{
         Poly, PolyParams,
     },
 };
-use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
 use rand::{rng, Rng};
 use rand_distr::Uniform;

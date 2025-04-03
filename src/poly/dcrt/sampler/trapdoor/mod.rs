@@ -102,7 +102,9 @@ impl DCRTTrapdoor {
         let b_mat = r.clone() * e.transpose(); // d x d
         let d_mat = e.clone() * e.transpose(); // d x d
         debug_mem("a_mat, b_mat, d_mat generated");
-        let tp2 = r.concat_rows(&[e]) * &p2;
+        let re = r.concat_rows(&[e]);
+        debug_mem("re generated");
+        let tp2 = re * &p2;
         debug_mem("tp2 generated");
         let p1 =
             sample_p1_for_pert_square_mat(a_mat, b_mat, d_mat, tp2, params, c, s, dgg, padded_ncol);
@@ -134,7 +136,7 @@ fn sample_p1_for_pert_square_mat(
     let block_size = block_size();
     let num_blocks = padded_ncol.div_ceil(block_size);
     let num_threads = rayon::current_num_threads();
-    let num_threads_for_cpp = num_threads / num_blocks;
+    let num_threads_for_cpp = num_threads.div_ceil(num_blocks);
     debug_mem("sample_p1_for_pert_square_mat parameters computed");
     let mut a_mat = a_mat.to_cpp_matrix_ptr();
     FormatMatrixCoefficient(a_mat.inner.as_mut().unwrap());

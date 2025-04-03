@@ -1,4 +1,4 @@
-use crate::parallel_iter;
+use crate::{parallel_iter, utils::debug_mem};
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
@@ -213,8 +213,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let mut new_matrix = Self::new_empty(&self.params, self.ncol, self.nrow);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let cur_entries = self.block_entries(col_offsets.clone(), row_offsets.clone());
-            row_offsets
-                .map(|i| col_offsets.clone().map(|j| cur_entries[j][i].clone()).collect::<Vec<T>>())
+            let row_offsets_len = row_offsets.len();
+            let col_offsets_len = col_offsets.len();
+            (0..row_offsets_len)
+                .into_par_iter()
+                .map(|i| {
+                    (0..col_offsets_len)
+                        .into_par_iter()
+                        .map(|j| cur_entries[j][i].clone())
+                        .collect::<Vec<T>>()
+                })
                 .collect::<Vec<Vec<T>>>()
         };
         new_matrix.replace_entries(0..self.ncol, 0..self.nrow, f);
@@ -238,13 +246,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_columns");
+
         let mut col_acc = self.ncol;
-        for other in others.iter() {
+        for (idx, other) in others.iter().enumerate() {
             let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
                 let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
                 other.block_entries(row_offsets, col_offsets)
             };
             new_matrix.replace_entries(0..self.nrow, col_acc..col_acc + other.ncol, other_f);
+            debug_mem(format!("the {}-th other replaced in concat_columns", idx));
             col_acc += other.ncol;
         }
         debug_assert_eq!(col_acc, updated_ncol);
@@ -269,14 +280,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_rows");
 
         let mut row_acc = self.nrow;
-        for other in others.iter() {
+        for (idx, other) in others.iter().enumerate() {
             let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
                 let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
                 other.block_entries(row_offsets, col_offsets)
             };
             new_matrix.replace_entries(row_acc..row_acc + other.nrow, 0..self.ncol, other_f);
+            debug_mem(format!("the {}-th other replaced in concat_rows", idx));
             row_acc += other.nrow;
         }
         debug_assert_eq!(row_acc, updated_nrow);
@@ -293,9 +306,11 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             self.block_entries(row_offsets, col_offsets)
         };
         new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_diag");
+
         let mut row_acc = self.nrow;
         let mut col_acc = self.ncol;
-        for other in others.iter() {
+        for (idx, other) in others.iter().enumerate() {
             let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
                 let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
                 let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
@@ -306,6 +321,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                 col_acc..col_acc + other.ncol,
                 other_f,
             );
+            debug_mem(format!("the {}-th other replaced in concat_diag", idx));
             row_acc += other.nrow;
             col_acc += other.ncol;
         }
@@ -406,7 +422,9 @@ impl<T: MmapMatrixElem> Eq for MmapMatrix<T> {}
 
 impl<T: MmapMatrixElem> Drop for MmapMatrix<T> {
     fn drop(&mut self) {
+        debug_mem("Drop MmapMatrix");
         self.file.set_len(0).expect("failed to truncate file");
+        debug_mem("Truncate file");
     }
 }
 
@@ -605,7 +623,7 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
 }
 
 pub fn block_size() -> usize {
-    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(1000)
+    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(100)
 }
 
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {

@@ -7,8 +7,8 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
         PolyMatrix,
     },
+    utils::debug_mem,
 };
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -143,6 +143,7 @@ where
             .enumerate()
             .map(|(idx, plaintext)| {
                 let vector = all_vector.slice_columns(m * idx, m * (idx + 1));
+                debug_mem("before constructing BggEncoding");
                 BggEncoding {
                     vector,
                     pubkey: public_keys[idx].clone(),
