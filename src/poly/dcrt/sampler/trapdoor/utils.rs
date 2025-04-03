@@ -99,29 +99,20 @@ pub(crate) fn split_int64_mat_to_elems(
     poly_vec
 }
 
-pub(crate) fn split_int64_vec_alt_to_elems(
-    vec: &I64Matrix,
+pub(crate) fn split_int64_mat_alt_to_elems(
+    matrix: &Vec<Vec<i64>>,
     params: &DCRTPolyParams,
-) -> DCRTPolyMatrix {
-    let n = params.ring_dimension() as usize;
-    debug_assert_eq!(vec.ncol, n, "Matrix must have n columns");
-    let nrow = vec.nrow;
-    let mut poly_vec = DCRTPolyMatrix::new_empty(params, nrow, 1);
-    let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-        debug_assert_eq!(col_offsets.len(), 1, "Matrix must be a column vector");
-        let i64_values = &vec.block_entries(row_offsets.clone(), 0..n);
-        parallel_iter!(0..row_offsets.len())
-            .map(|i| {
-                let coeffs = i64_values[i]
-                    .par_iter()
-                    .map(|x| FinRingElem::from_int64(*x, params.modulus()))
-                    .collect::<Vec<_>>();
-                vec![DCRTPoly::from_coeffs(params, &coeffs)]
-            })
-            .collect::<Vec<Vec<DCRTPoly>>>()
-    };
-    poly_vec.replace_entries(0..nrow, 0..1, f);
-    poly_vec
+) -> Vec<Vec<DCRTPoly>> {
+    let nrow = matrix.len();
+    parallel_iter!(0..nrow)
+        .map(|i| {
+            let coeffs = matrix[i]
+                .par_iter()
+                .map(|x| FinRingElem::from_int64(*x, params.modulus()))
+                .collect::<Vec<_>>();
+            vec![DCRTPoly::from_coeffs(params, &coeffs)]
+        })
+        .collect::<Vec<Vec<DCRTPoly>>>()
 }
 
 pub(crate) fn gen_dcrt_gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix {
