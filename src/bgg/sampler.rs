@@ -8,7 +8,6 @@ use crate::{
         PolyMatrix,
     },
 };
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
 

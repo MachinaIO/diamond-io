@@ -1,4 +1,4 @@
-use crate::{parallel_iter, utils::debug_mem};
+use crate::parallel_iter;
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
@@ -138,30 +138,18 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     ) {
         debug_assert_eq!(new_entries.len(), rows.end - rows.start);
         debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
-
         let entry_size = self.entry_size();
-        let bytes_per_row = entry_size * cols.len();
-        let max_mapped_bytes: usize = 1 << 20; // 1MB
-        let dynamic_batch_size = std::cmp::max(max_mapped_bytes / bytes_per_row, 1);
-        debug_mem(format!("dynamic_batch_size {}", dynamic_batch_size));
-        let mut batch_start = rows.start;
-        while batch_start < rows.end {
-            let batch_end = (batch_start + dynamic_batch_size).min(rows.end);
-            let current_batch_size = batch_end - batch_start;
-            let offset = entry_size * (batch_start * self.ncol + cols.start);
-            let batch_bytes_len = entry_size * cols.len() * current_batch_size;
-            let mut mmap = unsafe { map_file_mut(&self.file, offset, batch_bytes_len) };
-            for (i, row_index) in (batch_start..batch_end).enumerate() {
-                let row_offset = i * entry_size * cols.len();
-                let bytes: Vec<_> = new_entries[row_index - rows.start]
-                    .iter()
-                    .flat_map(|poly| poly.as_elem_to_bytes())
-                    .collect();
-                mmap[row_offset..row_offset + bytes.len()].copy_from_slice(&bytes);
-            }
+        let row_start = rows.start;
+        parallel_iter!(rows).for_each(|i| {
+            let offset = entry_size * (i * self.ncol + cols.start);
+            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
+            let bytes = new_entries[i - row_start]
+                .iter()
+                .flat_map(|poly| poly.as_elem_to_bytes())
+                .collect::<Vec<_>>();
+            mmap.copy_from_slice(&bytes);
             drop(mmap);
-            batch_start = batch_end;
-        }
+        });
     }
 
     pub fn entry(&self, i: usize, j: usize) -> T {
@@ -334,9 +322,9 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
                 let sub_matrix = other * scalar;
-                parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+                row_offsets.iter().tuple_windows().for_each(
                     |(cur_block_row_idx, next_block_row_idx)| {
-                        parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                        col_offsets.iter().tuple_windows().for_each(
                             |(cur_block_col_idx, next_block_col_idx)| {
                                 let sub_block_polys = sub_matrix.block_entries(
                                     *cur_block_row_idx..*next_block_row_idx,

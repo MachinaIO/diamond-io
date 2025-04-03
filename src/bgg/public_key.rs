@@ -1,6 +1,5 @@
 use super::circuit::Evaluable;
 use crate::poly::{Poly, PolyMatrix};
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 

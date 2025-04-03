@@ -10,6 +10,7 @@ default = ["test"]
 test = []
 
 [dependencies]
+num_cpus = "1.0"
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/reimpl_trapdoor" }
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }

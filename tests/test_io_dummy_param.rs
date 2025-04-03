@@ -10,7 +10,7 @@ mod test {
             },
             Poly, PolyParams,
         },
-        utils::init_tracing,
+        utils::{init_thread_num, init_tracing},
     };
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
@@ -22,6 +22,7 @@ mod test {
     #[test]
     fn test_io_just_mul_enc_and_bit() {
         init_tracing();
+        init_thread_num();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::new(4, 2, 17);
         let log_q = params.modulus_bits();
