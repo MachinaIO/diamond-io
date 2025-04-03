@@ -84,7 +84,7 @@ pub(crate) fn split_int64_vec_to_elems(vec: &I64Matrix, params: &DCRTPolyParams)
         parallel_iter!(0..row_offsets.len())
             .map(|i| {
                 let coeffs = i64_values[i * n..(i + 1) * n]
-                    .iter()
+                    .par_iter()
                     .map(|x| FinRingElem::from_int64(*x, params.modulus()))
                     .collect::<Vec<_>>();
                 vec![DCRTPoly::from_coeffs(params, &coeffs)]
@@ -109,7 +109,7 @@ pub(crate) fn split_int64_vec_alt_to_elems(
         parallel_iter!(0..row_offsets.len())
             .map(|i| {
                 let coeffs = i64_values[i]
-                    .iter()
+                    .par_iter()
                     .map(|x| FinRingElem::from_int64(*x, params.modulus()))
                     .collect::<Vec<_>>();
                 vec![DCRTPoly::from_coeffs(params, &coeffs)]

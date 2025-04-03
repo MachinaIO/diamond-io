@@ -1,6 +1,7 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix};
 use itertools::Itertools;
+use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, Clone)]
@@ -20,7 +21,7 @@ impl<M: PolyMatrix> BggEncoding<M> {
     }
 
     pub fn concat_vector(&self, others: &[Self]) -> M {
-        self.vector.concat_columns(&others.iter().map(|x| &x.vector).collect_vec()[..])
+        self.vector.concat_columns(&others.par_iter().map(|x| &x.vector).collect::<Vec<_>>()[..])
     }
 }
 
