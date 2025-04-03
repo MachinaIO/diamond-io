@@ -178,17 +178,17 @@ where
 
             log_mem("Computed m_preimage_bit");
 
-            m_preimages[idx].push(m_preimage_bit.clone());
+            m_preimages[idx].push(m_preimage_bit);
 
-            // let n_preimage_bit = sampler_trapdoor.preimage(
-            //     &params,
-            //     &b_star_trapdoor_cur,
-            //     &b_star_cur,
-            //     &(u_star.clone() * &b_star_cur.clone()),
-            // );
+            let n_preimage_bit = sampler_trapdoor.preimage(
+                &params,
+                &b_star_trapdoor_cur,
+                &b_star_cur,
+                &(u_star.clone() * &b_star_cur),
+            );
             log_mem("Computed n_preimage_bit");
 
-            n_preimages[idx].push(m_preimage_bit);
+            n_preimages[idx].push(n_preimage_bit);
 
             let rg = &public_data.rgs[bit];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
