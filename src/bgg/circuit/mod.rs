@@ -470,6 +470,49 @@ mod tests {
     }
 
     #[test]
+    fn test_eval_rotate() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a random input polynomial
+        let poly = create_random_poly(&params);
+        let coeffs = poly.coeffs();
+
+        // Create a circuit with a Rotate operation with a shift of 3
+        let shift = 3;
+        let mut circuit = PolyCircuit::new();
+        let inputs = circuit.input(1);
+        let rotate_gate = circuit.rotate_gate(inputs[0], shift);
+        circuit.output(vec![rotate_gate]);
+
+        // Evaluate the circuit
+        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[poly.clone()]);
+
+        // Expected result: manually rotate the original polynomial
+        let mut expected_coeffs = coeffs.clone();
+        expected_coeffs.rotate_right(shift);
+        let expected = DCRTPoly::from_coeffs(&params, &expected_coeffs);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+
+        let result_coeffs = result[0].coeffs();
+        let n = params.ring_dimension() as usize;
+
+        assert_eq!(result_coeffs.len(), n);
+
+        for i in 0..n {
+            assert_eq!(
+                result_coeffs[i].value(),
+                coeffs[(i + n - shift) % n].value(),
+                "Coefficient at position {} doesn't match expected value after rotation",
+                i
+            );
+        }
+    }
+
+    #[test]
     fn test_eval_complex() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
