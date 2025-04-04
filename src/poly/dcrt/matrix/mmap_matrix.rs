@@ -191,6 +191,45 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         );
     }
 
+    pub fn replace_entries_with_expand<F>(
+        &mut self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+        row_scale: usize,
+        col_scale: usize,
+        f: F,
+    ) where
+        F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
+    {
+        let block_size = block_size();
+        let row_block_size = block_size.div_ceil(row_scale);
+        let col_block_size = block_size.div_ceil(col_scale);
+        let (row_offsets, col_offsets) =
+            block_offsets_distinct_block_sizes(rows, cols, row_block_size, col_block_size);
+        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+            |(cur_block_row_idx, next_block_row_idx)| {
+                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                    |(cur_block_col_idx, next_block_col_idx)| {
+                        let new_entries = f(
+                            *cur_block_row_idx..*next_block_row_idx,
+                            *cur_block_col_idx..*next_block_col_idx,
+                        );
+                        // This is secure because the modified entries are not overlapped among
+                        // threads
+
+                        unsafe {
+                            self.replace_block_entries(
+                                *cur_block_row_idx * row_scale..*next_block_row_idx * row_scale,
+                                *cur_block_col_idx * col_scale..*next_block_col_idx * col_scale,
+                                new_entries,
+                            );
+                        }
+                    },
+                );
+            },
+        );
+    }
+
     pub(crate) unsafe fn replace_block_entries(
         &self,
         rows: Range<usize>,
@@ -681,23 +720,32 @@ pub fn block_size() -> usize {
 
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {
     let block_size = block_size();
+    block_offsets_distinct_block_sizes(rows, cols, block_size, block_size)
+}
+
+pub fn block_offsets_distinct_block_sizes(
+    rows: Range<usize>,
+    cols: Range<usize>,
+    row_block_size: usize,
+    col_block_size: usize,
+) -> (Vec<usize>, Vec<usize>) {
     // *BLOCK_SIZE.get().unwrap();
     let nrow = rows.end - rows.start;
     let ncol = cols.end - cols.start;
-    let num_blocks_row = nrow.div_ceil(block_size);
-    let num_blocks_col = ncol.div_ceil(block_size);
+    let num_blocks_row = nrow.div_ceil(row_block_size);
+    let num_blocks_col = ncol.div_ceil(col_block_size);
     let mut row_offsets = vec![rows.start];
     for _ in 0..num_blocks_row {
         let last_row_offset = row_offsets.last().unwrap();
         let sub = rows.end - last_row_offset;
-        let len = if sub < block_size { sub } else { block_size };
+        let len = if sub < row_block_size { sub } else { row_block_size };
         row_offsets.push(last_row_offset + len);
     }
     let mut col_offsets = vec![cols.start];
     for _ in 0..num_blocks_col {
         let last_col_offset = col_offsets.last().unwrap();
         let sub = cols.end - last_col_offset;
-        let len = if sub < block_size { sub } else { block_size };
+        let len = if sub < col_block_size { sub } else { col_block_size };
         col_offsets.push(last_col_offset + len);
     }
     (row_offsets, col_offsets)
