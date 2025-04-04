@@ -1,39 +1,30 @@
-use crate::bgg::circuit::Evaluable;
-
 use super::PolyCircuit;
+use crate::bgg::circuit::{templates::ip_circuit, Evaluable};
 
-/// Build a circuit that takes as input a public circuit and a private input, and outputs inner
-/// products between the `num_priv_input`-sized output of the public circuit and the private input.
-pub fn build_circuit_ip_priv_and_pub_outputs<E: Evaluable>(
+/// Build a circuit that is a composition of two sub-circuits:
+/// 1. The first sub-circuit is a public circuit that takes public inputs and outputs public outputs
+/// 2. The second sub-circuit is an inner product circuit that takes private inputs and public
+///    outputs and outputs their inner product
+pub fn build_composite_circuit_from_public_and_ip<E: Evaluable>(
     public_circuit: PolyCircuit,
     num_priv_input: usize,
 ) -> PolyCircuit {
-    let num_pub_input = public_circuit.num_input();
-    debug_assert_eq!(public_circuit.num_output() % num_priv_input, 0);
-    let num_ip_outputs = public_circuit.num_output() / num_priv_input;
-    let num_input = num_pub_input + num_priv_input;
     let mut circuit = PolyCircuit::new();
+    let num_pub_input = public_circuit.num_input();
+    let num_input = num_pub_input + num_priv_input;
     let inputs = circuit.input(num_input);
     let pub_inputs = &inputs[0..num_pub_input];
     let priv_inputs = &inputs[num_pub_input..];
-    let circuit_id = circuit.register_sub_circuit(public_circuit);
-    let pub_outputs = circuit.call_sub_circuit(circuit_id, pub_inputs);
-    let mut ip_outputs = Vec::with_capacity(num_ip_outputs);
-    for out_idx in 0..num_ip_outputs {
-        let mut ip_output = 0;
-        for (priv_input, pub_output) in priv_inputs
-            .iter()
-            .zip(pub_outputs[(num_priv_input * out_idx)..(num_priv_input * (out_idx + 1))].iter())
-        {
-            let mul = circuit.mul_gate(*pub_output, *priv_input);
-            if ip_output == 0 {
-                ip_output = mul;
-            } else {
-                ip_output = circuit.add_gate(ip_output, mul);
-            }
-        }
-        ip_outputs.push(ip_output);
-    }
+
+    // register the public circuit as sub-circuit
+    let pub_circuit_id = circuit.register_sub_circuit(public_circuit);
+    let pub_outputs = circuit.call_sub_circuit(pub_circuit_id, pub_inputs);
+
+    // register the ip circuit as sub-circuit
+    let ip_circuit = ip_circuit(priv_inputs.len(), pub_outputs.len());
+    let ip_circuit_id = circuit.register_sub_circuit(ip_circuit);
+    let ip_inputs = [priv_inputs.to_vec(), pub_outputs].concat();
+    let ip_outputs = circuit.call_sub_circuit(ip_circuit_id, &ip_inputs);
     circuit.output(ip_outputs);
     circuit
 }
@@ -68,7 +59,7 @@ mod tests {
             create_random_poly(&params),
         ];
 
-        // Create a simple public circuit that adds its inputs
+        // Create a public circuit 
         let mut public_circuit = PolyCircuit::new();
         let pub_inputs = public_circuit.input(3);
 
@@ -82,22 +73,8 @@ mod tests {
 
         public_circuit.output(vec![out1, out2, out3, out4, out5, out6]);
 
-        // Number of private inputs (we'll have 2 inner products)
-        let num_priv_input = 3;
-
         // Create a copy of the public circuit for evaluation
-        let mut public_circuit_for_eval = PolyCircuit::new();
-        let pub_inputs_eval = public_circuit_for_eval.input(3);
-
-        let out1_eval = public_circuit_for_eval.add_gate(pub_inputs_eval[0], pub_inputs_eval[1]);
-        let out2_eval = public_circuit_for_eval.add_gate(pub_inputs_eval[1], pub_inputs_eval[2]);
-        let out3_eval = public_circuit_for_eval.add_gate(pub_inputs_eval[0], pub_inputs_eval[2]);
-        let out4_eval = public_circuit_for_eval.mul_gate(pub_inputs_eval[0], pub_inputs_eval[1]);
-        let out5_eval = public_circuit_for_eval.mul_gate(pub_inputs_eval[1], pub_inputs_eval[2]);
-        let out6_eval = public_circuit_for_eval.mul_gate(pub_inputs_eval[0], pub_inputs_eval[2]);
-
-        public_circuit_for_eval
-            .output(vec![out1_eval, out2_eval, out3_eval, out4_eval, out5_eval, out6_eval]);
+        let public_circuit_for_eval = public_circuit.clone();
 
         // Evaluate the public circuit to get its outputs
         let pub_circuit_outputs =
@@ -119,15 +96,19 @@ mod tests {
         assert_eq!(pub_circuit_outputs[4], expected_out5);
         assert_eq!(pub_circuit_outputs[5], expected_out6);
 
-        // Build the inner product circuit
-        let ip_circuit =
-            build_circuit_ip_priv_and_pub_outputs::<DCRTPoly>(public_circuit, num_priv_input);
+        // Build the main circuit as a composition of the public circuit and the inner product
+        // circuit
+        let num_priv_input = 3;
+        let main_circuit =
+            build_composite_circuit_from_public_and_ip::<DCRTPoly>(public_circuit, num_priv_input);
 
         // Verify the circuit structure
-        assert_eq!(ip_circuit.num_input(), 6); // 3 private + 3 public inputs
-        assert_eq!(ip_circuit.num_output(), 2); // 2 inner products
+        assert_eq!(main_circuit.num_input(), 6); // 3 private + 3 public inputs
+        assert_eq!(main_circuit.num_output(), 2); // 2 inner products
 
         // Manually calculate the expected inner products
+        // first inner product between the private inputs and the first 3 public outputs
+        // second inner product between the private inputs and the last 3 public outputs
         let mut expected_ip1 = DCRTPoly::const_zero(&params);
         let mut expected_ip2 = DCRTPoly::const_zero(&params);
 
@@ -136,9 +117,9 @@ mod tests {
             expected_ip2 += &pub_circuit_outputs[i + num_priv_input] * &priv_polys[i];
         }
 
-        // Evaluate the inner product circuit
+        // Evaluate the main circuit
         let all_inputs = [pub_polys, priv_polys].concat();
-        let result = ip_circuit.eval(&params, &DCRTPoly::const_one(&params), &all_inputs);
+        let result = main_circuit.eval(&params, &DCRTPoly::const_one(&params), &all_inputs);
 
         // Verify the results
         assert_eq!(result.len(), 2);

@@ -1,6 +1,6 @@
 use crate::{
     bgg::{
-        circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
+        circuit::{build_composite_circuit_from_public_and_ip, Evaluable, PolyCircuit},
         sampler::*,
         BggPublicKey,
     },
@@ -129,7 +129,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
         let mut inputs = circuit.input(packed_eval_input_size + 1);
         let minus_one = circuit.const_minus_one_gate();
         inputs.push(minus_one);
-        let sub_circuit = build_circuit_ip_priv_and_pub_outputs::<E>(ct_output_circuit, 2);
+        let sub_circuit = build_composite_circuit_from_public_and_ip::<E>(ct_output_circuit, 2);
         let circuit_id = circuit.register_sub_circuit(sub_circuit);
         let outputs = circuit.call_sub_circuit(circuit_id, &inputs);
         circuit.output(outputs);
@@ -167,16 +167,15 @@ mod test {
             public_circuit.output(inputs[0..log_q].to_vec());
         }
 
-        // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
+        // 3. Generate a random hardcoded key (similar to obf.rs line 69)
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
 
         // 4. Get the public polynomial a from PublicSampledData's sample function
         let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let a_rlwe_bar =
-            hash_sampler.sample_hash(&params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
+        let a = hash_sampler.sample_hash(&params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
 
-        // 5. Generate RLWE ciphertext for the hardcoded key
+        // 5. Generate RLWE ciphertext (a, b) for the hardcoded key
         let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
         let e = sampler_uniform.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0 });
 
@@ -184,19 +183,16 @@ mod test {
         let modulus = params.modulus();
         let half_q = FinRingElem::half_q(&modulus.clone());
         let scale = DCRTPoly::from_const(&params, &half_q);
-        let enc_hardcoded_key =
-            t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
+        let b = t_bar.clone() * &a + &e - &(hardcoded_key.clone() * &scale);
 
         // 6. Decompose the ciphertext
-        let enc_hardcoded_key_polys =
-            enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
-        // println!("enc_hardcoded_key_polys {}", enc_hardcoded_key_polys);
+        let b_decomposed = b.get_column_matrix_decompose(0).get_column(0);
 
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
+        let a_decomposed = a.get_column_matrix_decompose(0).get_column(0);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &a_decomposed_polys,
-            &enc_hardcoded_key_polys,
+            &a_decomposed,
+            &b_decomposed,
             public_circuit,
         );
 
@@ -205,6 +201,7 @@ mod test {
         let mut inputs = vec![one.clone()];
         inputs.push(t_bar.entry(0, 0).clone());
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
+
         // 9. Extract the hardcoded key bits
         let hardcoded_key_bits = hardcoded_key
             .entry(0, 0)
