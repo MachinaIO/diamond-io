@@ -302,23 +302,21 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             }
         }
         let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
-        let mut new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
-        let self_columns = self.block_entries_column(0..self.nrow, 0..self.ncol);
-        let mut combined_columns = self_columns;
+        let mut combined_data: Vec<Vec<T>> = Vec::with_capacity(updated_ncol);
+        combined_data.extend(self.block_entries_column(0..self.nrow, 0..self.ncol));
         for other in others {
-            let other_columns = other.block_entries_column(0..self.nrow, 0..other.ncol);
-            combined_columns.extend(other_columns);
+            combined_data.extend(other.block_entries_column(0..self.nrow, 0..other.ncol));
         }
+        let mut new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
         new_matrix.replace_entries_column(0..self.nrow, 0..updated_ncol, |row_range, col_range| {
             row_range
                 .map(|r| {
                     (col_range.start..col_range.end)
-                        .map(|j| combined_columns[j][r].clone())
+                        .map(|c| combined_data[c][r].clone())
                         .collect::<Vec<T>>()
                 })
                 .collect::<Vec<Vec<T>>>()
         });
-
         new_matrix
     }
 
