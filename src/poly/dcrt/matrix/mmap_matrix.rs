@@ -107,6 +107,14 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             .collect()
     }
 
+    /// # Output Interface Distinction
+    /// **Important:** This function differs from `replace_entries_row` in the expected layout of
+    /// the output from the closure `f`. For `replace_entries_column`, the returned 2D vector
+    /// should be arranged in a column-major format:
+    /// - The **first dimension** (outer vector) corresponds to the block’s **columns**.
+    /// - The **second dimension** (inner vector) corresponds to the block’s **rows**.
+    /// In other words, the first and second dimensions correspond to the column and row,
+    /// respectively.
     pub fn replace_entries_column<F>(&mut self, rows: Range<usize>, cols: Range<usize>, f: F)
     where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
