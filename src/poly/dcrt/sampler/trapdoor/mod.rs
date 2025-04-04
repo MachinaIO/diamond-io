@@ -72,7 +72,7 @@ impl DCRTTrapdoor {
                     })
                     .collect()
             };
-            matrix.replace_entries(0..n * dk, 0..padded_ncol, f);
+            matrix.replace_entries_row(0..n * dk, 0..padded_ncol, f);
             matrix
         } else {
             let dgg_vectors = gen_dgg_int_vec(

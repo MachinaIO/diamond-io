@@ -114,7 +114,8 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
             let nrow = row_offsets.len();
             let ncol = col_offsets.len();
-            let perturbed_syndromes = perturbed_syndrome.block_entries(row_offsets, col_offsets);
+            let perturbed_syndromes =
+                perturbed_syndrome.block_entries_row(row_offsets, col_offsets);
             let decomposed_results = parallel_iter!(0..nrow)
                 .map(|i| {
                     let row_results: Vec<_> = parallel_iter!(0..ncol)

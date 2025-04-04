@@ -55,7 +55,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<Self::P>> {
             row_offsets.into_iter().map(|i| vec[i][col_offsets.clone()].to_vec()).collect()
         };
-        matrix.replace_entries(0..nrow, 0..ncol, f);
+        matrix.replace_entries_row(0..nrow, 0..ncol, f);
         matrix
     }
 
@@ -136,7 +136,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             |(cur_block_row_idx, next_block_row_idx)| {
                 parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
                     |(cur_block_col_idx, next_block_col_idx)| {
-                        let self_block_polys = self.block_entries(
+                        let self_block_polys = self.block_entries_row(
                             *cur_block_row_idx..*next_block_row_idx,
                             *cur_block_col_idx..*next_block_col_idx,
                         );
@@ -182,7 +182,7 @@ impl PolyMatrix for DCRTPolyMatrix {
     ) -> Self {
         let mut new_matrix = Self::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<Self::P>> {
-            let self_block_polys = self.block_entries(row_offsets, col_offsets);
+            let self_block_polys = self.block_entries_row(row_offsets, col_offsets);
             self_block_polys
                 .iter()
                 .map(|row| {
@@ -192,7 +192,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                 })
                 .collect_vec()
         };
-        new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
+        new_matrix.replace_entries_row(0..self.nrow, 0..self.ncol, f);
         new_matrix
     }
 
