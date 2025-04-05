@@ -810,21 +810,9 @@ mod tests {
         assert_eq!(a_eval, &a * &x);
         assert_eq!(b_eval, &b * &x);
 
-        // decrypt the result
+        // decrypt the result and recover the bits
         let recovered = b_eval - (a_eval * t);
-
-        // Compute decision threshold values
-        let modulus = params.modulus();
-        let quarter_q = modulus.as_ref() >> 2; // q/4
-        let three_quarter_q = &quarter_q * 3u32; // 3q/4
-
-        // Decode plaintext directly into boolean vector
-        let recovered_bits: Vec<bool> = recovered
-            .coeffs()
-            .iter()
-            .map(|coeff| coeff.value())
-            .map(|coeff| coeff > &quarter_q && coeff <= &three_quarter_q)
-            .collect();
+        let recovered_bits = recovered.extract_bits_with_threshold(&params);
 
         // Verify correctness
         assert_eq!(recovered_bits, (k * x).to_bool_vec());

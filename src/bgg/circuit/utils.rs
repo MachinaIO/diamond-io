@@ -52,10 +52,13 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
 #[cfg(feature = "test")]
 mod tests {
     use super::*;
-    use crate::poly::{
-        dcrt::{params::DCRTPolyParams, poly::DCRTPoly, DCRTPolyUniformSampler, FinRingElem},
-        sampler::DistType,
-        Poly, PolyElem, PolyParams,
+    use crate::{
+        io::utils::encrypt_rlwe,
+        poly::{
+            dcrt::{params::DCRTPolyParams, poly::DCRTPoly, DCRTPolyUniformSampler},
+            sampler::DistType,
+            Poly, PolyParams,
+        },
     };
 
     #[test]
@@ -63,18 +66,12 @@ mod tests {
         let params = DCRTPolyParams::default();
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let log_q = params.modulus_bits();
+        let sigma = 3.0;
 
         // 1. Generate RLWE ciphertext (a, b) for input k
         // b = a * t - k * q/2 + e
         let k = sampler_uniform.sample_poly(&params, &DistType::BitDist);
-        let t = sampler_uniform.sample_poly(&params, &DistType::FinRingDist);
-        let a = sampler_uniform.sample_poly(&params, &DistType::FinRingDist);
-        let e = sampler_uniform.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 });
-
-        let modulus = params.modulus();
-        let half_q = FinRingElem::half_q(&modulus.clone());
-        let scale = DCRTPoly::from_const(&params, &half_q);
-        let b = a.clone() * t.clone() - &(k.clone() * &scale) + &e;
+        let (a, b, t) = encrypt_rlwe(&params, &sampler_uniform, sigma, &k);
 
         // decompose the polynomials a and b into bits
         let a_bits = a.decompose(&params);
@@ -166,18 +163,8 @@ mod tests {
         // Recompose the output
         let output_recomposed = DCRTPoly::from_decomposed(&params, &output);
 
-        // Compute decision threshold values
-        let modulus = params.modulus();
-        let quarter_q = modulus.as_ref() >> 2; // q/4
-        let three_quarter_q = &quarter_q * 3u32; // 3q/4
-
-        // Decode plaintext directly into boolean vector
-        let recovered_bits: Vec<bool> = output_recomposed
-            .coeffs()
-            .iter()
-            .map(|coeff| coeff.value())
-            .map(|coeff| coeff > &quarter_q && coeff <= &three_quarter_q)
-            .collect();
+        // recover the bits
+        let recovered_bits = output_recomposed.extract_bits_with_threshold(&params);
 
         // Verify correctness
         assert_eq!(recovered_bits.len(), params.ring_dimension() as usize);

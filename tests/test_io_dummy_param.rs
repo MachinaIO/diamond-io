@@ -2,13 +2,13 @@
 mod test {
     use diamond_io::{
         bgg::circuit::PolyCircuit,
-        io::{obf::obfuscate, params::ObfuscationParams},
+        io::{obf::obfuscate, params::ObfuscationParams, utils::encrypt_rlwe},
         poly::{
             dcrt::{
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
                 DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler, FinRingElem,
             },
-            sampler::{DistType, PolyUniformSampler},
+            sampler::DistType,
             Poly, PolyElem, PolyMatrix, PolyParams,
         },
         utils::init_tracing,
@@ -33,28 +33,19 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
 
-        let hardcoded_key_sigma = 0.0;
-
         // 1. Generate RLWE ciphertext (a, b) for input k
         // b = a * t - k * q/2 + e
-        let k = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
-        let t = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-        let a = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-        let e = sampler_uniform.sample_uniform(
-            &params,
-            1,
-            1,
-            DistType::GaussDist { sigma: hardcoded_key_sigma },
-        );
+        let rlwe_encryption_sigma = 3.0;
 
-        let modulus = params.modulus();
-        let half_q = FinRingElem::half_q(&modulus.clone());
-        let scale = DCRTPoly::from_const(&params, &half_q);
-        let b = a.clone() * t.clone() - &(k.clone() * &scale) + &e;
+        // Generate random plaintext bits
+        let k = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+
+        // Encrypt the plaintext
+        let (a, b, t) = encrypt_rlwe(&params, &sampler_uniform, rlwe_encryption_sigma, &k);
 
         // decompose the polynomials a and b into bits
-        let a_bits = a.get_column_matrix_decompose(0).get_column(0);
-        let b_bits = b.get_column_matrix_decompose(0).get_column(0);
+        let a_bits = a.decompose(&params);
+        let b_bits = b.decompose(&params);
 
         assert!(a_bits.len() == b_bits.len());
         assert!(a_bits.len() == log_q);
@@ -97,9 +88,12 @@ mod test {
             p_sigma: 0.0,
         };
         let mut rng = rand::rng();
+
+        let t_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t.clone()]);
+
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
-            &t,
+            &t_mat,
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
@@ -115,7 +109,7 @@ mod test {
         let output =
             obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
-        info!("k {:?}", k.entry(0, 0).coeffs());
+        info!("k {:?}", k.coeffs());
         info!("input {:?}", input);
         info!("output {:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);
@@ -127,6 +121,6 @@ mod test {
             &FinRingElem::constant(&params.modulus(), bool_in as u64),
         );
         #[cfg(feature = "test")]
-        assert_eq!(output, (k.entry(0, 0) * input_poly).to_bool_vec());
+        assert_eq!(output, (k * input_poly).to_bool_vec());
     }
 }

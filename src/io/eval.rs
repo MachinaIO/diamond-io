@@ -188,6 +188,7 @@ where
         let final_v = ps.last().unwrap().clone() * final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
         debug_assert_eq!(z.size(), (1, 1));
-        z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
+
+        z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
     }
 }
