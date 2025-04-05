@@ -23,7 +23,7 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     // build the FHE decryption circuit:
     // - inputs: a_decomposed[0], ... a_decomposed[logq-1] , b_decomposed[0], ...
     //   b_decomposed[logq-1], t (2 * logq + 1 inputs)
-    // - outputs: a'_decomposed[i] * t - b'_decomposed[i] (for i = 0, 1, ..., logq - 1)
+    // - outputs: b'_decomposed[i] - a'_decomposed[i] * t - (for i = 0, 1, ..., logq - 1)
     // (logq outputs)
     let mut dec_circuit = PolyCircuit::new();
     let dec_circuit_inputs = dec_circuit.input(pub_circuit_outputs.len() + 1);
@@ -34,8 +34,8 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
         let a_i = dec_circuit_inputs[i];
         let b_i = dec_circuit_inputs[i + num_output_dec_circuit];
         let a_i_times_t = dec_circuit.mul_gate(a_i, rhs);
-        let a_i_t_minus_b_i = dec_circuit.sub_gate(a_i_times_t, b_i);
-        lhs.push(a_i_t_minus_b_i);
+        let b_i_minus_a_i_times_t = dec_circuit.sub_gate(b_i, a_i_times_t);
+        lhs.push(b_i_minus_a_i_times_t);
     }
     dec_circuit.output(lhs.clone());
 
@@ -159,16 +159,28 @@ mod tests {
         for i in 0..a_bits_vecs.len() {
             let a_ith_bits = a_bits[i].clone();
             let b_ith_bits = b_bits[i].clone();
-            expected_output.push((a_ith_bits * x.clone()) * t.clone() - (b_ith_bits * x.clone()));
+            expected_output.push((b_ith_bits * x.clone()) - (a_ith_bits * x.clone()) * t.clone());
             assert_eq!(output[i], expected_output[i]);
         }
 
         // Recompose the output
         let output_recomposed = DCRTPoly::from_decomposed(&params, &output);
 
-        // decrypt the result
-        let plaintext_recovered = (output_recomposed).extract_highest_bits();
-        assert_eq!(plaintext_recovered.len(), params.ring_dimension() as usize);
-        assert_eq!(plaintext_recovered, (k * x.clone()).to_bool_vec());
+        // Compute decision threshold values
+        let modulus = params.modulus();
+        let quarter_q = modulus.as_ref() >> 2; // q/4
+        let three_quarter_q = &quarter_q * 3u32; // 3q/4
+
+        // Decode plaintext directly into boolean vector
+        let recovered_bits: Vec<bool> = output_recomposed
+            .coeffs()
+            .iter()
+            .map(|coeff| coeff.value())
+            .map(|coeff| coeff > &quarter_q && coeff <= &three_quarter_q)
+            .collect();
+
+        // Verify correctness
+        assert_eq!(recovered_bits.len(), params.ring_dimension() as usize);
+        assert_eq!(recovered_bits, (k * x).to_bool_vec());
     }
 }

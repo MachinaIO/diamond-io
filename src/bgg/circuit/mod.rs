@@ -321,13 +321,13 @@ impl PolyCircuit {
 mod tests {
     use super::*;
     use crate::{
+        io::utils::encrypt_rlwe,
         poly::{
             dcrt::{
                 params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
                 FinRingElem,
             },
-            sampler::DistType,
-            Poly, PolyElem, PolyParams,
+            Poly, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -766,18 +766,12 @@ mod tests {
         let params = DCRTPolyParams::default();
         let mut circuit = PolyCircuit::new();
         let uniform_sampler = DCRTPolyUniformSampler::new();
+        let sigma = 3.0;
 
         // encrypt a polynomial k using a RLWE secret key encryption
         // b = a * t - k * q/2 + e
         let k = create_bit_random_poly(&params);
-        let t = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-        let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 });
-        let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
-
-        let modulus = params.modulus();
-        let half_q = FinRingElem::half_q(&modulus.clone());
-        let scale = DCRTPoly::from_const(&params, &half_q);
-        let b = &a * t.clone() - &(k.clone() * &scale) + &e;
+        let (a, b, t) = encrypt_rlwe(&params, &uniform_sampler, sigma, &k);
 
         // x is a constant one monomial
         let x = DCRTPoly::const_one(&params);
@@ -817,8 +811,23 @@ mod tests {
         assert_eq!(b_eval, &b * &x);
 
         // decrypt the result
-        let plaintext = ((a_eval * t) - b_eval).extract_highest_bits();
-        assert_eq!(plaintext, (k * x).to_bool_vec());
+        let recovered = b_eval - (a_eval * t);
+
+        // Compute decision threshold values
+        let modulus = params.modulus();
+        let quarter_q = modulus.as_ref() >> 2; // q/4
+        let three_quarter_q = &quarter_q * 3u32; // 3q/4
+
+        // Decode plaintext directly into boolean vector
+        let recovered_bits: Vec<bool> = recovered
+            .coeffs()
+            .iter()
+            .map(|coeff| coeff.value())
+            .map(|coeff| coeff > &quarter_q && coeff <= &three_quarter_q)
+            .collect();
+
+        // Verify correctness
+        assert_eq!(recovered_bits, (k * x).to_bool_vec());
     }
 
     #[test]
