@@ -1,6 +1,11 @@
 use crate::{
     bgg::{sampler::*, BggPublicKey},
-    poly::{matrix::*, sampler::*, Poly, PolyParams},
+    poly::{
+        dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
+        matrix::*,
+        sampler::*,
+        Poly, PolyElem, PolyParams,
+    },
 };
 use std::marker::PhantomData;
 
@@ -69,6 +74,25 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
     }
 }
 
+/// Generate RLWE ciphertext (a, b) for input k from uniform bit distribution
+pub fn encrypt_rlwe(
+    params: &DCRTPolyParams,
+    sampler_uniform: &DCRTPolyUniformSampler,
+    sigma: f64,
+    k: &DCRTPoly,
+) -> (DCRTPoly, DCRTPoly, DCRTPoly) {
+    let t = sampler_uniform.sample_poly(params, &DistType::FinRingDist);
+    let a = sampler_uniform.sample_poly(params, &DistType::FinRingDist);
+    let e = sampler_uniform.sample_poly(params, &DistType::GaussDist { sigma });
+
+    let modulus = params.modulus();
+    let half_q = FinRingElem::half_q(&modulus.clone());
+    let scale = DCRTPoly::from_const(params, &half_q);
+    let b = a.clone() * t.clone() + &e + &(k * &scale);
+
+    (a, b, t)
+}
+
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod test {
@@ -104,4 +128,45 @@ mod test {
     //     let mut file = File::create("final_bits_norm.json").unwrap();
     //     file.write_all(norm_json.as_bytes()).unwrap();
     // }
+
+    use crate::{
+        io::utils::encrypt_rlwe,
+        poly::{
+            dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+            sampler::DistType,
+            Poly, PolyParams,
+        },
+    };
+
+    #[test]
+    fn test_encrypt_rlwe_decrypts_correctly() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+        let sigma = 3.0;
+
+        // Generate random plaintext bits
+        let k = sampler.sample_poly(&params, &DistType::BitDist);
+
+        // Encrypt the plaintext
+        let (a, b, t) = encrypt_rlwe(&params, &sampler, sigma, &k);
+
+        // Decrypt ciphertext
+        let recovered = b - (a * t);
+
+        // Compute decision threshold values
+        let modulus = params.modulus();
+        let quarter_q = modulus.as_ref() >> 2; // q/4
+        let three_quarter_q = &quarter_q * 3u32; // 3q/4
+
+        // Decode plaintext directly into boolean vector
+        let recovered_bits: Vec<bool> = recovered
+            .coeffs()
+            .iter()
+            .map(|coeff| coeff.value())
+            .map(|coeff| coeff > &quarter_q && coeff < &three_quarter_q)
+            .collect();
+
+        // Verify correctness
+        assert_eq!(recovered_bits, k.to_bool_vec());
+    }
 }
