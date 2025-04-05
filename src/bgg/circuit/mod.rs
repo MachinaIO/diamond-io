@@ -769,7 +769,7 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // encrypt a polynomial k using a RLWE secret key encryption
-        // b = a*t - half_q * k + e
+        // b = a * t - k * q/2 + e
         let k = create_bit_random_poly(&params);
         let t = uniform_sampler.sample_poly(&params, &DistType::BitDist);
         let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 });
