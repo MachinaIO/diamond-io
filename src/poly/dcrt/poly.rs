@@ -261,6 +261,35 @@ impl Poly for DCRTPoly {
 
         result
     }
+
+    fn to_bool_vec(&self) -> Vec<bool> {
+        self.coeffs()
+            .into_iter()
+            .map(|c| {
+                let v = c.value();
+                if v == &BigUint::from(0u32) {
+                    false
+                } else if v == &BigUint::from(1u32) {
+                    true
+                } else {
+                    panic!("Coefficient is not 0 or 1: {}", v);
+                }
+            })
+            .collect()
+    }
+
+    /// Recover bits from a polynomial using decision thresholds q/4 and 3q/4
+    fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool> {
+        let modulus = params.modulus();
+        let quarter_q = modulus.as_ref() >> 2; // q/4
+        let three_quarter_q = &quarter_q * 3u32; // 3q/4
+
+        self.coeffs()
+            .iter()
+            .map(|coeff| coeff.value())
+            .map(|coeff| coeff > &quarter_q && coeff <= &three_quarter_q)
+            .collect()
+    }
 }
 
 impl PartialEq for DCRTPoly {
@@ -528,5 +557,36 @@ mod tests {
             original_poly, reconstructed_poly,
             "Reconstructed polynomial does not match original (GaussDist)"
         );
+    }
+    #[test]
+    fn test_dcrtpoly_to_bool_vec_valid() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+        let poly = sampler.sample_poly(&params, &DistType::BitDist);
+        let coeffs = poly.coeffs();
+        let poly_bool_vec = poly.to_bool_vec();
+        assert_eq!(
+            poly_bool_vec.len(),
+            coeffs.len(),
+            "Length mismatch between bool vector and coefficients"
+        );
+        for (i, coeff) in coeffs.iter().enumerate() {
+            let expected_value = coeff.value() != &BigUint::from(0u32);
+            assert_eq!(
+                poly_bool_vec[i], expected_value,
+                "Mismatch at index {}: expected {}, got {}",
+                i, expected_value, poly_bool_vec[i]
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Coefficient is not 0 or 1")]
+    fn test_dcrtpoly_to_bool_vec_panic() {
+        let params = DCRTPolyParams::default();
+        let q = params.modulus();
+        let coeffs = [FinRingElem::new(0u32, q.clone()), FinRingElem::new(2u32, q.clone())];
+        let poly = DCRTPoly::from_coeffs(&params, &coeffs);
+        let _ = poly.to_bool_vec();
     }
 }

@@ -69,4 +69,6 @@ pub trait Poly:
         bytes
     }
     fn to_compact_bytes(&self) -> Vec<u8>;
+    fn to_bool_vec(&self) -> Vec<bool>;
+    fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool>;
 }

@@ -11,6 +11,5 @@ pub struct ObfuscationParams<M: PolyMatrix> {
     pub public_circuit: PolyCircuit,
     pub d: usize,
     pub encoding_sigma: f64,
-    pub hardcoded_key_sigma: f64,
     pub p_sigma: f64,
 }

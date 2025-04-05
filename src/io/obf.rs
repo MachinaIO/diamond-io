@@ -1,10 +1,11 @@
 use super::{params::ObfuscationParams, utils::sample_public_key_by_idx, Obfuscation};
 use crate::{
     bgg::{
+        circuit::build_composite_circuit_from_public_and_fhe_dec,
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         BggPublicKey, BitToInt,
     },
-    io::utils::{build_final_bits_circuit, PublicSampledData},
+    io::utils::PublicSampledData,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
@@ -17,6 +18,7 @@ use std::sync::Arc;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
+    t: &M,
     sampler_uniform: SU,
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
@@ -29,10 +31,8 @@ where
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
 {
-    let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
-    debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
@@ -53,7 +53,6 @@ where
 
     let params = Arc::new(obf_params.params);
     let packed_input_size = public_data.packed_input_size;
-    let packed_output_size = public_data.packed_output_size;
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
     let bgg_encode_sampler = BGGEncodingSampler::new(
@@ -63,34 +62,11 @@ where
         obf_params.encoding_sigma,
     );
     let s_init = &bgg_encode_sampler.secret_vec;
-    let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-    log_mem("Sampled t_bar_matrix");
-
-    let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
-    log_mem("Sampled hardcoded_key_matrix");
-
-    let enc_hardcoded_key = {
-        let e = sampler_uniform.sample_uniform(
-            &params,
-            1,
-            1,
-            DistType::GaussDist { sigma: obf_params.hardcoded_key_sigma },
-        );
-        let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        t_bar_matrix.clone() * &public_data.a_rlwe_bar + &e -
-            &(hardcoded_key_matrix.clone() * &scale)
-    };
-    let enc_hardcoded_key_polys = enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
-    log_mem("Sampled enc_hardcoded_key_polys");
-
-    let t_bar = t_bar_matrix.entry(0, 0);
-    #[cfg(feature = "test")]
-    let hardcoded_key = hardcoded_key_matrix.entry(0, 0);
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
-    plaintexts.push(t_bar.clone());
+    plaintexts.push(t.entry(0, 0).clone());
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
@@ -168,9 +144,6 @@ where
             {
                 bs[idx + 1][bit] = b_bit_idx.clone();
             }
-            // let m_preimage_bit_id = format!("m_preimage_{}_{}", idx, bit);
-            // let n_preimage_bit_id = format!("n_preimage_{}_{}", idx, bit);
-            // let k_preimage_bit_id = format!("k_preimage_{}_{}", idx, bit);
 
             let m_preimage_bit = sampler_trapdoor.preimage(
                 &params,
@@ -227,27 +200,24 @@ where
     }
 
     let final_preimage_target = {
-        let a_decomposed_polys =
-            public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
-        let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
-            &a_decomposed_polys,
-            &enc_hardcoded_key_polys,
-            public_circuit.clone(),
-        );
+        let public_circuit = obf_params.public_circuit;
+        debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
+        let final_circuit =
+            build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(public_circuit);
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         log_mem("Evaluated outputs");
-        assert_eq!(eval_outputs.len(), log_q * packed_output_size);
+        assert_eq!(eval_outputs.len(), log_q);
         let output_ints = eval_outputs
             .chunks(log_q)
             .map(|bits| BggPublicKey::bits_to_int(bits, &params))
             .collect_vec();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
-        debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
+        debug_assert_eq!(eval_outputs_matrix.col_size(), 1);
         (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             d + 1,
-            packed_output_size,
+            1,
         )])
     };
     log_mem("Computed final_preimage_target");
@@ -262,7 +232,6 @@ where
 
     Obfuscation {
         hash_key,
-        enc_hardcoded_key,
         encodings_init,
         p_init,
         m_preimages,
@@ -272,11 +241,9 @@ where
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
-        t_bar: t_bar.clone(),
+        t: t.entry(0, 0).clone(),
         #[cfg(feature = "test")]
         bs,
-        #[cfg(feature = "test")]
-        hardcoded_key: hardcoded_key.clone(),
         #[cfg(feature = "test")]
         final_preimage_target,
     }
