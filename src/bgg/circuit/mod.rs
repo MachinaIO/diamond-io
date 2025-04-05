@@ -1,7 +1,6 @@
 pub mod eval;
 pub mod gate;
 pub mod serde;
-pub mod templates;
 pub mod utils;
 pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};

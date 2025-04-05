@@ -1,6 +1,9 @@
 use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggEncoding, BitToInt},
+    bgg::{
+        circuit::build_composite_circuit_from_public_and_fhe_dec, sampler::BGGPublicKeySampler,
+        BggEncoding, BggPublicKey, BitToInt,
+    },
     poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
 };
 use itertools::Itertools;
@@ -29,7 +32,6 @@ where
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
         let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
         let packed_input_size = public_data.packed_input_size;
-        let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
@@ -51,10 +53,7 @@ where
             .collect_vec();
 
         #[cfg(feature = "test")]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
-        {
+        if obf_params.encoding_sigma == 0.0 && obf_params.p_sigma == 0.0 {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
                 s_connect * &self.bs[0][2]
@@ -69,7 +68,7 @@ where
                 for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
                     polys.push(zero.clone());
                 }
-                polys.push(self.t_bar.clone());
+                polys.push(self.t.clone());
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
@@ -120,10 +119,7 @@ where
             ps.push(p.clone());
             encodings.push(new_encodings);
             #[cfg(feature = "test")]
-            if obf_params.encoding_sigma == 0.0 &&
-                obf_params.hardcoded_key_sigma == 0.0 &&
-                obf_params.p_sigma == 0.0
-            {
+            if obf_params.encoding_sigma == 0.0 && obf_params.p_sigma == 0.0 {
                 let mut cur_s = self.s_init.clone();
                 for bit in inputs[0..idx].iter() {
                     let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
@@ -163,7 +159,7 @@ where
                             .map(|coeffs| M::P::from_coeffs(&params, coeffs))
                             .collect_vec();
                         polys.extend(input_polys);
-                        polys.push(self.t_bar.clone());
+                        polys.push(self.t.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
                     let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);
@@ -172,15 +168,10 @@ where
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
-        let enc_hardcoded_key_decomposed =
-            &self.enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
-        let a_decomposed_polys =
-            public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
-        let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
-            &a_decomposed_polys,
-            enc_hardcoded_key_decomposed,
-            obf_params.public_circuit.clone(),
-        );
+        let public_circuit = obf_params.public_circuit;
+        debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
+        let final_circuit =
+            build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(public_circuit);
         let last_input_encodings = encodings.last().unwrap();
         let output_encodings = final_circuit.eval::<BggEncoding<M>>(
             params.as_ref(),
@@ -196,35 +187,7 @@ where
         let final_preimage = &self.final_preimage;
         let final_v = ps.last().unwrap().clone() * final_preimage;
         let z = output_encodings_vec.clone() - final_v.clone();
-        debug_assert_eq!(z.size(), (1, packed_output_size));
-        #[cfg(feature = "test")]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
-        {
-            let mut last_s = self.s_init.clone();
-            for bit in inputs.iter() {
-                let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
-                last_s = last_s * r;
-            }
-
-            let output_plaintext =
-                output_encoding_ints[0].plaintext.as_ref().unwrap().extract_highest_bits();
-            let hardcoded_key_bits = self
-                .hardcoded_key
-                .coeffs()
-                .iter()
-                .map(|elem| elem != &<M::P as Poly>::Elem::zero(&params.modulus()))
-                .collect::<Vec<_>>();
-            debug_assert_eq!(output_plaintext, hardcoded_key_bits);
-            {
-                let expcted = last_s *
-                    (output_encoding_ints[0].pubkey.matrix.clone() -
-                        M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
-                            output_encoding_ints[0].plaintext.clone().unwrap());
-                debug_assert_eq!(output_encoding_ints[0].vector, expcted);
-            }
-        }
+        debug_assert_eq!(z.size(), (1, 1));
         z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
     }
 }
