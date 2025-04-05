@@ -328,7 +328,7 @@ mod tests {
                 FinRingElem,
             },
             sampler::DistType,
-            Poly, PolyParams,
+            Poly, PolyElem, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -769,15 +769,19 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // encrypt a polynomial k using a RLWE secret key encryption
-        // b = a*t + e + k
+        // b = a*t - half_q * k + e
         let k = create_bit_random_poly(&params);
         let t = uniform_sampler.sample_poly(&params, &DistType::BitDist);
         let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 });
         let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
-        let b = a.clone() * t.clone() + e + k.clone();
 
-        // x is a polynomial from bit distribution
-        let x = uniform_sampler.sample_poly(&params, &DistType::BitDist);
+        let modulus = params.modulus();
+        let half_q = FinRingElem::half_q(&modulus.clone());
+        let scale = DCRTPoly::from_const(&params, &half_q);
+        let b = &a * t.clone() - &(k.clone() * &scale) + &e;
+
+        // x is a constant one monomial
+        let x = DCRTPoly::const_one(&params);
 
         let a_bits = a.decompose(&params);
         let b_bits = b.decompose(&params);
@@ -814,8 +818,8 @@ mod tests {
         assert_eq!(b_eval, &b * &x);
 
         // decrypt the result
-        let plaintext = b_eval - (a_eval * t);
-        assert_eq!(plaintext, k * x);
+        let plaintext = ((a_eval * t) - b_eval).extract_highest_bits();
+        assert_eq!(plaintext, (k * x).to_bool_vec());
     }
 
     #[test]
