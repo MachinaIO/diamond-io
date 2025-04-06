@@ -407,32 +407,33 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
 
     // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
     pub fn concat_diag(&self, others: &[&Self]) -> Self {
-        let updated_nrow = others.iter().fold(self.nrow, |acc, other| acc + other.nrow);
-        let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
+        let updated_nrow = self.nrow + others.iter().map(|other| other.nrow).sum::<usize>();
+        let updated_ncol = self.ncol + others.iter().map(|other| other.ncol).sum::<usize>();
 
         let mut new_matrix = Self::new_empty(&self.params, updated_nrow, updated_ncol);
-        let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            self.block_entries_row(row_offsets, col_offsets)
-        };
-        new_matrix.replace_entries_row(0..self.nrow, 0..self.ncol, self_f);
-        debug_mem("self replaced in concat_diag");
 
-        let mut row_acc = self.nrow;
-        let mut col_acc = self.ncol;
-        for (idx, other) in others.iter().enumerate() {
-            let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-                let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
-                let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
-                other.block_entries_row(row_offsets, col_offsets)
-            };
+        let mut row_acc = 0;
+        let mut col_acc = 0;
+        let matrices = std::iter::once(self).chain(others.iter().copied());
+        for (idx, matrix) in matrices.enumerate() {
+            let nrow = matrix.nrow;
+            let ncol = matrix.ncol;
+            let cur_row = row_acc;
+            let cur_col = col_acc;
+            let block_f =
+                move |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                    let adjusted_row = (row_offsets.start - cur_row)..(row_offsets.end - cur_row);
+                    let adjusted_col = (col_offsets.start - cur_col)..(col_offsets.end - cur_col);
+                    matrix.block_entries_row(adjusted_row, adjusted_col)
+                };
             new_matrix.replace_entries_row(
-                row_acc..row_acc + other.nrow,
-                col_acc..col_acc + other.ncol,
-                other_f,
+                cur_row..cur_row + nrow,
+                cur_col..cur_col + ncol,
+                block_f,
             );
-            debug_mem(format!("the {}-th other replaced in concat_diag", idx));
-            row_acc += other.nrow;
-            col_acc += other.ncol;
+            debug_mem(format!("matrix {} replaced in concat_diag", idx));
+            row_acc += nrow;
+            col_acc += ncol;
         }
         debug_assert_eq!(row_acc, updated_nrow);
         debug_assert_eq!(col_acc, updated_ncol);
