@@ -355,28 +355,30 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         for (idx, other) in others.iter().enumerate() {
             if self.nrow != other.nrow {
                 panic!(
-                    "Concat error: while the shape of the first matrix is ({}, {}), \
-                     that of the {}-th matrix is ({},{})",
+                    "Concat error: while the shape of the first matrix is ({}, {}), that of the {}-th matrix is ({},{})",
                     self.nrow, self.ncol, idx, other.nrow, other.ncol
                 );
             }
         }
         let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
-        let mut combined_data: Vec<Vec<T>> = Vec::with_capacity(updated_ncol);
-        combined_data.extend(self.block_entries_column(0..self.nrow, 0..self.ncol));
-        for other in others {
-            combined_data.extend(other.block_entries_column(0..self.nrow, 0..other.ncol));
-        }
         let mut new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
-        new_matrix.replace_entries_column(0..self.nrow, 0..updated_ncol, |row_range, col_range| {
-            row_range
-                .map(|r| {
-                    (col_range.start..col_range.end)
-                        .map(|c| combined_data[c][r].clone())
-                        .collect::<Vec<T>>()
-                })
-                .collect::<Vec<Vec<T>>>()
-        });
+        let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+            self.block_entries_row(row_offsets, col_offsets)
+        };
+        new_matrix.replace_entries_row(0..self.nrow, 0..self.ncol, self_f);
+        debug_mem("self replaced in concat_columns");
+
+        let mut col_acc = self.ncol;
+        for (idx, other) in others.iter().enumerate() {
+            let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
+                other.block_entries_row(row_offsets, col_offsets)
+            };
+            new_matrix.replace_entries_row(0..self.nrow, col_acc..col_acc + other.ncol, other_f);
+            debug_mem(format!("the {}-th other replaced in concat_columns", idx));
+            col_acc += other.ncol;
+        }
+        debug_assert_eq!(col_acc, updated_ncol);
         new_matrix
     }
 
