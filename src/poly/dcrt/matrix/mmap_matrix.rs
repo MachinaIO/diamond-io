@@ -70,8 +70,12 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         let nrows = rows.end - rows.start;
         let start_offset = entry_size * (rows.start * total_cols);
         let total_bytes = entry_size * (nrows * total_cols);
-        let mmap = map_file(&self.file, start_offset, total_bytes);
-        let data = mmap.to_vec();
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
+        let aligned_offset = start_offset - (start_offset % page_size);
+        let offset_in_page = start_offset - aligned_offset;
+        let mapping_len = ((offset_in_page + total_bytes + page_size - 1) / page_size) * page_size;
+        let mmap = map_file(&self.file, aligned_offset, mapping_len);
+        let data = mmap[offset_in_page..offset_in_page + total_bytes].to_vec();
         drop(mmap);
         let columns: Vec<Vec<T>> = (cols.start..cols.end)
             .into_par_iter()
@@ -92,11 +96,18 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     pub fn block_entries_row(&self, rows: Range<usize>, cols: Range<usize>) -> Vec<Vec<T>> {
         let entry_size = self.entry_size();
         let num_cols = cols.end - cols.start;
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
+
         parallel_iter!(rows)
             .map(|i| {
-                let offset = entry_size * (i * self.ncol + cols.start);
-                let mmap = map_file(&self.file, offset, entry_size * num_cols);
-                let row_bytes = mmap.to_vec();
+                let desired_offset = entry_size * (i * self.ncol + cols.start);
+                let desired_len = entry_size * num_cols;
+                let aligned_offset = desired_offset - (desired_offset % page_size);
+                let offset_in_page = desired_offset - aligned_offset;
+                let mapping_len =
+                    ((offset_in_page + desired_len + page_size - 1) / page_size) * page_size;
+                let mmap = map_file(&self.file, aligned_offset, mapping_len);
+                let row_bytes = mmap[offset_in_page..offset_in_page + desired_len].to_vec();
                 let row_entries = row_bytes
                     .chunks(entry_size)
                     .map(|entry| T::from_bytes_to_elem(&self.params, entry))
@@ -240,14 +251,24 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
         let entry_size = self.entry_size();
         let row_start = rows.start;
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
         parallel_iter!(rows).for_each(|i| {
-            let offset = entry_size * (i * self.ncol + cols.start);
-            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
+            let desired_offset = entry_size * (i * self.ncol + cols.start);
+            let aligned_offset = desired_offset - (desired_offset % page_size);
+            let offset_in_page = desired_offset - aligned_offset;
+            let desired_len = entry_size * cols.len();
+            let mapping_len = {
+                // Calculate the total bytes needed, then round up to a multiple of page_size.
+                let total = offset_in_page + desired_len;
+                (total + page_size - 1) / page_size * page_size
+            };
+            let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
+            let region = &mut mmap[offset_in_page..offset_in_page + desired_len];
             let bytes = new_entries[i - row_start]
                 .iter()
                 .flat_map(|poly| poly.as_elem_to_bytes())
                 .collect::<Vec<_>>();
-            mmap.copy_from_slice(&bytes);
+            region.copy_from_slice(&bytes);
             drop(mmap);
         });
     }
