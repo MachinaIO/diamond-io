@@ -231,7 +231,7 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let params = DCRTPolyParams::new(4096, 12, 51);
+        let params = DCRTPolyParams::new(4096, 12, 51, 1048576);
         let log_q = params.modulus_bits();
 
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly

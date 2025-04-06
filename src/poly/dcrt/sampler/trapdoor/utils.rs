@@ -114,14 +114,3 @@ pub(crate) fn split_int64_mat_alt_to_elems(
         })
         .collect::<Vec<Vec<DCRTPoly>>>()
 }
-
-pub(crate) fn gen_dcrt_gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix {
-    let g_vec_cpp = DCRTPolyGadgetVector(
-        params.ring_dimension(),
-        params.crt_depth(),
-        params.crt_bits(),
-        params.modulus_bits(),
-        2,
-    );
-    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
-}

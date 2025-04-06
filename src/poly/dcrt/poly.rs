@@ -357,7 +357,7 @@ mod tests {
         let x = rng.random_range(12..20);
         let size = rng.random_range(1..20);
         let n = 2_i32.pow(x) as u32;
-        let params = DCRTPolyParams::new(n, size, 51);
+        let params = DCRTPolyParams::new(n, size, 51, 2);
         let q = params.modulus();
         let mut coeffs: Vec<FinRingElem> = Vec::new();
         for _ in 0..n {
