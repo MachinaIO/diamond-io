@@ -81,7 +81,7 @@ def find_params(
     min_q_k = target_secpar + 2
     max_q_k = max_log_q
     middle_q_k = math.floor((min_q_k + max_q_k) // 2)
-    min_alpha_ks = [-middle_q_k+1 for _ in range(3)]
+    min_alpha_ks = [-1000 for _ in range(3)]
     max_alpha_ks = [-1 for _ in range(3)]
     circuit_norms = CircuitNorms.load_from_file(norms_path, max_log_q)
     found_alphas = [[] for _ in range(3)]
@@ -122,9 +122,15 @@ def find_params(
                 max_alpha_ks[i] = alpha_k
         if len(found_alphas[i]) == 0:
             raise ValueError(f"the {i}-th alpha is not found after binary search")
-    alpha_encoding = 2 ** min(found_alphas[0])
-    alpha_hardcode = 2 ** min(found_alphas[1])
-    alpha_p = 2 ** min(found_alphas[2])
+    alpha_encoding_k = min(found_alphas[0])
+    alpha_hardcode_k = min(found_alphas[1])
+    alpha_p_k = min(found_alphas[2])
+    print(f"found alpha_encoding_k: {alpha_encoding_k}")
+    print(f"found alpha_hardcode_k: {alpha_hardcode_k}")
+    print(f"found alpha_p_k: {alpha_p_k}")
+    alpha_encoding = 2 ** alpha_encoding_k
+    alpha_hardcode = 2 ** alpha_hardcode_k
+    alpha_p = 2 ** alpha_p_k
     # print(f"found alpha: {alpha}")
     print(f"found alpha_encoding: {alpha_encoding}")
     print(f"found alpha_hardcode: {alpha_hardcode}")
@@ -138,15 +144,15 @@ def find_params(
         print(f"min_q_k: {min_q_k}")
         print(f"max_q_k: {max_q_k}")
         print(f"q_k: {q_k}")
-        if q_k + alpha_encoding < 1:
+        if q_k + alpha_encoding_k < 1:
             print(f"q_k + alpha_encoding < 1")
             min_q_k = q_k
             continue
-        elif q_k + alpha_hardcode < 1:
+        elif q_k + alpha_hardcode_k < 1:
             print(f"q_k + alpha_hardcode < 1")
             min_q_k = q_k
             continue
-        elif q_k + alpha_p < 1:
+        elif q_k + alpha_p_k < 1:
             print(f"q_k + alpha_p < 1")
             min_q_k = q_k
             continue
@@ -366,7 +372,11 @@ def bound_final_error(
     bound_p_d = stddev_e_p_d * sqrt_secpar_d
     print(f"stddev_e_p_d: {stddev_e_p_d}")
     print(f"sqrt_secpar_d: {sqrt_secpar_d}")
+    print(f"stddev_e_encoding_d : {stddev_e_encoding_d}")
     bound_c_d = stddev_e_encoding_d * sqrt_secpar_d
+    print(f"init bound_c_d: {bound_c_d}")
+    if bound_c_d < 0:
+        raise ValueError(f"bound_c_d should be non-negative: {bound_c_d}")
 
     for _ in range(input_size):
         bound_v_d = (b_norm_d ** Decimal(2)) * bound_p_d
@@ -448,9 +458,9 @@ if __name__ == "__main__":
     n = 2**13
     d = 2
     base = 2**20
-    max_log_q = 612
-    input_size = 1
-    norms_path = "final_bits_norm_n_13_q_612.json"
+    max_log_q = 1020
+    input_size = 8
+    norms_path = "final_bits_norm_n_13_q_1020.json"
     (
         q,
         stddev_e_encoding,
