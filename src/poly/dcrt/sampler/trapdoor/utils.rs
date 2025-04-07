@@ -2,13 +2,13 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix},
+            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem,
         },
         Poly, PolyParams,
     },
 };
-use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
+use openfhe::ffi::GenerateIntegerKarney;
 use rand::{rng, Rng};
 use rand_distr::Uniform;
 use rayon::prelude::*;

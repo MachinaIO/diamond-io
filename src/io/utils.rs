@@ -100,6 +100,14 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
     let log_q = a_decomposed_polys.len();
     debug_assert_eq!(b_decomposed_polys.len(), log_q);
     let packed_eval_input_size = public_circuit.num_input() - log_q;
+    println!(
+        "a_decomposed_polys: {:?}",
+        a_decomposed_polys.iter().map(|poly| poly.coeffs()).collect_vec()
+    );
+    println!(
+        "b_decomposed_polys: {:?}",
+        b_decomposed_polys.iter().map(|poly| poly.coeffs()).collect_vec()
+    );
 
     // circuit outputs the cipertext
     let mut ct_output_circuit = PolyCircuit::new();
@@ -189,10 +197,10 @@ mod test {
 
         // 6. Decompose the ciphertext
         let enc_hardcoded_key_polys =
-            enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
+            enc_hardcoded_key.get_column_matrix_decompose(0, Some(1)).get_column(0);
 
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
+        let a_decomposed_polys = a_rlwe_bar.get_column_matrix_decompose(0, Some(1)).get_column(0);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &enc_hardcoded_key_polys,
@@ -203,7 +211,11 @@ mod test {
         let one = DCRTPoly::const_one(&params);
         let mut inputs = vec![one.clone()];
         inputs.push(t_bar.entry(0, 0).clone());
+
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
+        for output in circuit_outputs.iter() {
+            println!("final_circuit output: {:?}", output.coeffs());
+        }
         // 9. Extract the hardcoded key bits
         let hardcoded_key_bits = hardcoded_key
             .entry(0, 0)
@@ -231,7 +243,7 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let params = DCRTPolyParams::new(4096, 12, 51, 20);
+        let params = DCRTPolyParams::new(4096, 12, 51, 1);
         let log_q = params.modulus_bits();
 
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly

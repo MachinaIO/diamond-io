@@ -173,9 +173,9 @@ where
             }
         }
         let enc_hardcoded_key_decomposed =
-            &self.enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
+            &self.enc_hardcoded_key.get_column_matrix_decompose(0, Some(1)).get_column(0);
         let a_decomposed_polys =
-            public_data.a_rlwe_bar.get_column_matrix_decompose(0).get_column(0);
+            public_data.a_rlwe_bar.get_column_matrix_decompose(0, Some(1)).get_column(0);
         let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed_polys,
             enc_hardcoded_key_decomposed,
@@ -225,6 +225,8 @@ where
                             output_encoding_ints[0].plaintext.clone().unwrap());
                 debug_assert_eq!(output_encoding_ints[0].vector, expcted);
             }
+            debug_assert_eq!(z.size(), (1, packed_output_size));
+            debug_assert_eq!(z.entry(0, 0), output_encoding_ints[0].plaintext.clone().unwrap());
         }
         z.get_row(0).into_iter().flat_map(|p| p.extract_highest_bits()).collect_vec()
     }

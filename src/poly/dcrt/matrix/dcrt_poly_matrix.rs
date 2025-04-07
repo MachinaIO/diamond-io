@@ -186,19 +186,19 @@ impl PolyMatrix for DCRTPolyMatrix {
         let output = (0..identity_size)
             .flat_map(|i| {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
+                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j, None))
             })
             .collect_vec();
 
         output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
-    fn get_column_matrix_decompose(&self, j: usize) -> Self {
+    fn get_column_matrix_decompose(&self, j: usize, base_bits: Option<u32>) -> Self {
         Self::from_poly_vec(
             &self.params,
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
-        .decompose(None)
+        .decompose(base_bits)
     }
 
     // fn read_from_files<P: AsRef<Path> + Send + Sync>(
