@@ -167,7 +167,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                             *cur_block_col_idx..*next_block_col_idx,
                         );
                         // This is secure because the modified entries are not overlapped among
-                        // threads
+                        // threads.
                         unsafe {
                             self.replace_block_entries(
                                 *cur_block_row_idx..*next_block_row_idx,
@@ -250,24 +250,47 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         debug_assert_eq!(new_entries.len(), rows.end - rows.start);
         debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
         let entry_size = self.entry_size();
-        let row_start = rows.start;
+        let file_len = self.file.metadata().unwrap().len() as usize;
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
+        let row_start = rows.start;
         parallel_iter!(rows).for_each(|i| {
             let desired_offset = entry_size * (i * self.ncol + cols.start);
+            let desired_len = entry_size * cols.len();
+            let write_end = desired_offset + desired_len;
+            assert!(
+                write_end <= file_len,
+                "Row {}: write region ends at {} which exceeds file length {}",
+                i,
+                write_end,
+                file_len
+            );
+
             let aligned_offset = desired_offset - (desired_offset % page_size);
             let offset_in_page = desired_offset - aligned_offset;
-            let desired_len = entry_size * cols.len();
-            let mapping_len = {
-                // Calculate the total bytes needed, then round up to a multiple of page_size.
-                let total = offset_in_page + desired_len;
-                (total + page_size - 1) / page_size * page_size
-            };
+            let mapping_len =
+                ((offset_in_page + desired_len) + page_size - 1) / page_size * page_size;
+            let mapping_end = aligned_offset + mapping_len;
+            assert!(
+                mapping_end <= file_len,
+                "Row {}: mapping region ends at {} which exceeds file length {}",
+                i,
+                mapping_end,
+                file_len
+            );
+
             let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
             let region = &mut mmap[offset_in_page..offset_in_page + desired_len];
             let bytes = new_entries[i - row_start]
                 .iter()
                 .flat_map(|poly| poly.as_elem_to_bytes())
                 .collect::<Vec<_>>();
+            assert_eq!(
+                region.len(),
+                bytes.len(),
+                "Region length {} doesn't match bytes length {}",
+                region.len(),
+                bytes.len()
+            );
             region.copy_from_slice(&bytes);
             drop(mmap);
         });
@@ -400,6 +423,13 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             combined_data.extend(other.block_entries_row(0..other.nrow, 0..self.ncol));
         }
         let mut new_matrix = Self::new_empty(&self.params, updated_nrow, self.ncol);
+        let expected_len = self.params.entry_size() * updated_nrow * self.ncol;
+        let actual_len = new_matrix.file.metadata().unwrap().len();
+        assert_eq!(
+            actual_len, expected_len as u64,
+            "File length mismatch: expected {}, got {}",
+            expected_len, actual_len
+        );
         new_matrix.replace_entries_row(0..updated_nrow, 0..self.ncol, |row_range, col_range| {
             row_range.map(|r| combined_data[r][col_range.clone()].to_vec()).collect()
         });
@@ -732,7 +762,7 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
         MmapOptions::new()
             .offset(offset as u64)
             .len(len)
-            .populate()
+            // .populate()
             .map_mut(file)
             .expect("failed to map file")
     }
