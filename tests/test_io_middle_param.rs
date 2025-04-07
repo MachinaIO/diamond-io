@@ -31,7 +31,6 @@ mod test {
         let log_q = params.modulus_bits();
         let switched_modulus = Arc::new(BigUint::from_str_radix("672178712", 10).unwrap());
 
-
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
@@ -90,7 +89,6 @@ mod test {
             encoding_sigma: 3.477984925390326e-48,
             p_sigma: 1.550677652781115e-169,
         };
-
 
         let mut rng = rand::rng();
 
