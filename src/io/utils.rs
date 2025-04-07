@@ -231,7 +231,7 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let params = DCRTPolyParams::new(4096, 12, 51, 1048576);
+        let params = DCRTPolyParams::new(4096, 12, 51, 20);
         let log_q = params.modulus_bits();
 
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
@@ -244,16 +244,19 @@ mod test {
         let a_rlwe_bar = DCRTPoly::const_max(&params);
         let enc_hardcoded_key = DCRTPoly::const_max(&params);
 
-        let a_decomposed_polys = a_rlwe_bar.decompose(&params);
-        let b_decomposed_polys = enc_hardcoded_key.decompose(&params);
+        let a_decomposed_polys = a_rlwe_bar.decompose_bits(&params);
+        let b_decomposed_polys = enc_hardcoded_key.decompose_bits(&params);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &b_decomposed_polys,
             public_circuit,
         );
 
-        let norms = final_circuit
-            .simulate_bgg_norm(params.ring_dimension(), params.ring_dimension() as usize + 1);
+        let norms = final_circuit.simulate_bgg_norm(
+            params.ring_dimension(),
+            params.base_bits(),
+            1 + params.ring_dimension() as usize,
+        );
         let norm_json = serde_json::to_string(&norms).unwrap();
         println!("norms: {}", norm_json);
         use std::{fs::File, io::Write};

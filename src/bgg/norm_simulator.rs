@@ -7,8 +7,18 @@ use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul, Sub};
 
 impl PolyCircuit {
-    pub fn simulate_bgg_norm(&self, dim: u32, unpacked_input_size: usize) -> NormBounds {
-        let one = NormSimulator::new(MPolyCoeffs::new(vec![BigUint::one()]), BigUint::one(), dim);
+    pub fn simulate_bgg_norm(
+        &self,
+        dim: u32,
+        base_bits: u32,
+        unpacked_input_size: usize,
+    ) -> NormBounds {
+        let one = NormSimulator::new(
+            MPolyCoeffs::new(vec![BigUint::one()]),
+            BigUint::one(),
+            dim,
+            base_bits,
+        );
         let mut inputs = vec![];
         let mut remaining_inputs = unpacked_input_size;
         let n = dim as usize;
@@ -18,6 +28,7 @@ impl PolyCircuit {
                 MPolyCoeffs::new(vec![BigUint::from(num_bits)]),
                 BigUint::from(num_bits),
                 dim,
+                base_bits,
             ));
             remaining_inputs -= num_bits;
         }
@@ -49,11 +60,13 @@ pub struct NormSimulator {
     pub h_norm: MPolyCoeffs,
     pub plaintext_norm: BigUint,
     pub dim: u32,
+    pub base: u32,
 }
 
 impl NormSimulator {
-    pub fn new(h_norm: MPolyCoeffs, plaintext_norm: BigUint, dim: u32) -> Self {
-        Self { h_norm, plaintext_norm, dim }
+    pub fn new(h_norm: MPolyCoeffs, plaintext_norm: BigUint, dim: u32, base_bits: u32) -> Self {
+        let base = 1 << base_bits;
+        Self { h_norm, plaintext_norm, dim, base }
     }
 }
 
@@ -62,6 +75,7 @@ impl_binop_with_refs!(NormSimulator => Add::add(self, rhs: &NormSimulator) -> No
         h_norm: &self.h_norm + &rhs.h_norm,
         plaintext_norm: &self.plaintext_norm + &rhs.plaintext_norm,
         dim: self.dim,
+        base: self.base,
     }
 });
 
@@ -72,14 +86,16 @@ impl_binop_with_refs!(NormSimulator => Sub::sub(self, rhs: &NormSimulator) -> No
         h_norm: &self.h_norm + &rhs.h_norm,
         plaintext_norm: &self.plaintext_norm + &rhs.plaintext_norm,
         dim: self.dim,
+        base: self.base,
     }
 });
 
 impl_binop_with_refs!(NormSimulator => Mul::mul(self, rhs: &NormSimulator) -> NormSimulator {
     NormSimulator {
-        h_norm: self.h_norm.right_rotate(self.dim) + &rhs.h_norm * &self.plaintext_norm,
+        h_norm: self.h_norm.right_rotate(self.dim * (self.base - 1)) + &rhs.h_norm * &self.plaintext_norm,
         plaintext_norm: &self.plaintext_norm * &rhs.plaintext_norm,
         dim: self.dim,
+        base: self.base,
     }
 });
 
@@ -93,7 +109,8 @@ impl Evaluable for NormSimulator {
         let h_norm = one.h_norm.clone() * &n;
         let plaintext_norm = n;
         let dim = one.dim;
-        Self { h_norm, plaintext_norm, dim }
+        let base = one.base;
+        Self { h_norm, plaintext_norm, dim, base }
     }
 }
 
@@ -161,7 +178,7 @@ mod tests {
     ) -> NormSimulator {
         let h_norm = MPolyCoeffs::new(h_norm_values.into_iter().map(BigUint::from).collect());
         let plaintext_norm = BigUint::from(plaintext_norm);
-        NormSimulator::new(h_norm, plaintext_norm, ring_dim)
+        NormSimulator::new(h_norm, plaintext_norm, ring_dim, 1)
     }
 
     #[test]
@@ -229,12 +246,16 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Simulate norm using the circuit
-        let norms = circuit.simulate_bgg_norm(8, 3 * 8);
+        let norms = circuit.simulate_bgg_norm(8, 1, 3 * 8);
 
         // Manually calculate the expected norm
         // Create NormSimulator instances for inputs
-        let input1 =
-            NormSimulator::new(MPolyCoeffs::new(vec![BigUint::from(8u8)]), BigUint::from(8u8), 8);
+        let input1 = NormSimulator::new(
+            MPolyCoeffs::new(vec![BigUint::from(8u8)]),
+            BigUint::from(8u8),
+            8,
+            1,
+        );
         let input2 = input1.clone();
         let input3 = input1.clone();
 

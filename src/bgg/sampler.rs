@@ -231,7 +231,10 @@ mod tests {
                 let multiplication = a.clone() * b.clone();
                 assert_eq!(multiplication.matrix.row_size(), d + 1);
                 assert_eq!(multiplication.matrix.col_size(), columns);
-                assert_eq!(multiplication.matrix, (a.matrix.clone() * b.matrix.decompose().clone()))
+                assert_eq!(
+                    multiplication.matrix,
+                    (a.matrix.clone() * b.matrix.decompose(None).clone())
+                )
             }
         }
     }

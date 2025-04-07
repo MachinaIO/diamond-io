@@ -738,8 +738,8 @@ mod tests {
         // k is a polynomial from bit distribution
         let k = uniform_sampler.sample_poly(&params, &DistType::BitDist);
 
-        let c0_bits = c0.decompose(&params);
-        let c1_bits = c1.decompose(&params);
+        let c0_bits = c0.decompose_bits(&params);
+        let c1_bits = c1.decompose_bits(&params);
 
         let inputs = circuit.input(c0_bits.len() + c1_bits.len() + 1);
         assert_eq!(inputs.len(), params.modulus_bits() * 2 + 1);

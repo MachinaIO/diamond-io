@@ -177,7 +177,7 @@ impl Poly for DCRTPoly {
     /// where b_{j, h} is the h-th bit of the j-th coefficient of the polynomial.
     /// Return a vector of polynomials, where the h-th polynomial is defined as
     /// b_{0, h} + b_{1, h} * x + b_{2, h} * x^2 + ... + b_{n-1, h} * x^{n-1}.
-    fn decompose(&self, params: &Self::Params) -> Vec<Self> {
+    fn decompose_bits(&self, params: &Self::Params) -> Vec<Self> {
         let coeffs = self.coeffs();
         let bit_length = params.modulus_bits();
         parallel_iter!(0..bit_length)
@@ -443,7 +443,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
-        let decomposed = poly.decompose(&params);
+        let decomposed = poly.decompose_bits(&params);
         assert_eq!(decomposed.len(), params.modulus_bits());
     }
 

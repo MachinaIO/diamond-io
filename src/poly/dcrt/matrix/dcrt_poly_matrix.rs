@@ -118,8 +118,9 @@ impl PolyMatrix for DCRTPolyMatrix {
         gadget_vector.concat_diag(&vec![&gadget_vector; size - 1])
     }
 
-    fn decompose(&self) -> Self {
-        let digits_len = self.params.modulus_digits();
+    fn decompose(&self, base_bits: Option<u32>) -> Self {
+        let base_bits = base_bits.unwrap_or(self.params.base_bits());
+        let digits_len = self.params.modulus_bits().div_ceil(base_bits as usize);
         let new_nrow = self.nrow * digits_len;
         let mut new_matrix = Self::new_empty(&self.params, new_nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
@@ -130,7 +131,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             let mut new_entries = vec![vec![DCRTPoly::zero(&self.params); ncol]; new_nrow];
             for i in 0..nrow {
                 for j in 0..ncol {
-                    let decomposed = self.dcrt_decompose_poly(&entries[i][j]);
+                    let decomposed = self.dcrt_decompose_poly(&entries[i][j], base_bits);
                     debug_assert_eq!(decomposed.len(), digits_len);
                     for k in 0..digits_len {
                         new_entries[i * digits_len + k][j] = decomposed[k].clone();
@@ -197,7 +198,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             &self.params,
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
-        .decompose()
+        .decompose(None)
     }
 
     // fn read_from_files<P: AsRef<Path> + Send + Sync>(
@@ -332,8 +333,8 @@ impl DCRTPolyMatrix {
         DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
     }
 
-    pub(crate) fn dcrt_decompose_poly(&self, poly: &DCRTPoly) -> Vec<DCRTPoly> {
-        let decomposed = poly.get_poly().Decompose(self.params.base_bits());
+    pub(crate) fn dcrt_decompose_poly(&self, poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
+        let decomposed = poly.get_poly().Decompose(base_bits);
         let cpp_decomposed = CppMatrix::new(decomposed);
         parallel_iter!(0..cpp_decomposed.ncol()).map(|idx| cpp_decomposed.entry(0, idx)).collect()
     }
@@ -396,7 +397,7 @@ mod tests {
         assert_eq!(gadget_matrix.size().0, 2);
         assert_eq!(gadget_matrix.size().1, 2 * bit_length);
 
-        let decomposed = matrix.decompose();
+        let decomposed = matrix.decompose(None);
         assert_eq!(decomposed.size().0, 2 * bit_length);
         assert_eq!(decomposed.size().1, 8);
 
@@ -441,7 +442,7 @@ mod tests {
         assert_eq!(gadget_matrix.size().0, 2);
         assert_eq!(gadget_matrix.size().1, 2 * digits_length);
 
-        let decomposed = matrix.decompose();
+        let decomposed = matrix.decompose(None);
         assert_eq!(decomposed.size().0, 2 * digits_length);
         assert_eq!(decomposed.size().1, 8);
 
@@ -664,7 +665,7 @@ mod tests {
             sampler.sample_uniform(&params, 2, 13, crate::poly::sampler::DistType::FinRingDist);
 
         // Decompose 'other' matrix
-        let other_decompose = other.decompose();
+        let other_decompose = other.decompose(None);
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
         // Check dimensions
@@ -701,7 +702,7 @@ mod tests {
         assert_eq!(result.size().1, 481);
 
         // Check result
-        let decomposed = other.decompose();
+        let decomposed = other.decompose(None);
         let tensor = identity_tensor_matrix(37, &decomposed);
         let expected_result_1 = s.clone() * tensor;
         let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);

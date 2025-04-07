@@ -80,7 +80,7 @@ where
                 expected_encoding_init
             );
         }
-        let log_q = params.as_ref().modulus_bits();
+        let log_base_q = params.as_ref().modulus_digits();
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
             let m = if *input { &self.m_preimages[idx][1] } else { &self.m_preimages[idx][0] };
@@ -98,7 +98,7 @@ where
             let mut new_encodings = vec![];
             let inserted_poly_index = 1 + idx / dim;
             for (j, encode) in encodings[idx].iter().enumerate() {
-                let m = d1 * log_q;
+                let m = d1 * log_base_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
                 let plaintext = if j == inserted_poly_index {
                     let inserted_coeff_index = idx % dim;
@@ -187,6 +187,7 @@ where
             &last_input_encodings[0],
             &last_input_encodings[1..],
         );
+        let log_q = params.as_ref().modulus_bits();
         let output_encoding_ints = output_encodings
             .chunks(log_q)
             .map(|bits| BggEncoding::bits_to_int(bits, &params))

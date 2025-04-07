@@ -90,7 +90,7 @@ pub trait PolyMatrix:
     /// A matrix of dimension n×(n·bit_length), in which each block row is a scaled identity
     /// under the ring modulus.
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
-    fn decompose(&self) -> Self;
+    fn decompose(&self, base_bits: Option<u32>) -> Self;
     fn modulus_switch(
         &self,
         new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,

@@ -59,7 +59,7 @@ impl<M: PolyMatrix> Mul for BggPublicKey<M> {
 impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn mul(self, other: &Self) -> Self {
-        let decomposed = other.matrix.decompose();
+        let decomposed = other.matrix.decompose(None);
         let matrix = self.matrix.clone() * decomposed;
         let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
         Self { matrix, reveal_plaintext }
