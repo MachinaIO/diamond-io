@@ -267,8 +267,16 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
 
             let aligned_offset = desired_offset - (desired_offset % page_size);
             let offset_in_page = desired_offset - aligned_offset;
-            let mapping_len =
+            let calculated_mapping_len =
                 ((offset_in_page + desired_len) + page_size - 1) / page_size * page_size;
+            let mapping_len = std::cmp::min(calculated_mapping_len, file_len - aligned_offset);
+            assert!(
+                offset_in_page + desired_len <= mapping_len,
+                "Row {}: desired region isn't fully covered by mapping_len {}",
+                i,
+                mapping_len
+            );
+
             let mapping_end = aligned_offset + mapping_len;
             assert!(
                 mapping_end <= file_len,
@@ -762,7 +770,7 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
         MmapOptions::new()
             .offset(offset as u64)
             .len(len)
-            // .populate()
+            .populate()
             .map_mut(file)
             .expect("failed to map file")
     }
