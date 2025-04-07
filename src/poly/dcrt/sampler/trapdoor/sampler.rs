@@ -179,20 +179,22 @@ pub(crate) fn gauss_samp_gq_arb_base(
 ) -> Vec<Vec<i64>> {
     let n = params.ring_dimension();
     let depth = params.crt_depth();
-    let k_res = params.modulus_digits() / depth;
+    let k_res_bits = params.crt_bits();
+    let k_res_digits = params.modulus_digits() / depth;
     let result = DCRTGaussSampGqArbBase(
         syndrome.get_poly(),
         c,
         n,
         depth,
-        k_res,
+        k_res_bits,
+        k_res_digits,
         base as i64,
         sigma,
         tower_idx,
     );
-    debug_assert_eq!(result.len(), n as usize * k_res);
+    debug_assert_eq!(result.len(), n as usize * k_res_digits);
     // let mut matrix = I64Matrix::new_empty(&I64MatrixParams, k_res, n as usize);
-    parallel_iter!(0..k_res)
+    parallel_iter!(0..k_res_digits)
         .map(|i| {
             parallel_iter!(0..n as usize).map(|j| result[i * n as usize + j]).collect::<Vec<_>>()
         })
@@ -427,6 +429,44 @@ mod test {
     #[test]
     fn test_preimage_generation_base_8() {
         let params = DCRTPolyParams::new(4, 2, 17, 3);
+        let size = 4;
+        let target_cols = 6;
+        let k = params.modulus_digits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size
+        // target_cols is not a multiple of size
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target =
+            uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+
+        let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+
+        let expected_rows = size * (k + 2);
+        let expected_cols = target_cols;
+
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
+
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns (equal to target columns)"
+        );
+
+        // public_matrix * preimage should be equal to target
+        let product = public_matrix * &preimage;
+
+        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    }
+
+    #[test]
+    fn test_preimage_generation_base_1024() {
+        let params = DCRTPolyParams::new(4, 2, 17, 10);
         let size = 4;
         let target_cols = 6;
         let k = params.modulus_digits();

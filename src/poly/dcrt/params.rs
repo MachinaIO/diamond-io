@@ -50,8 +50,7 @@ impl PolyParams for DCRTPolyParams {
     }
 
     fn modulus_digits(&self) -> usize {
-        let modulus_bits = self.modulus_bits();
-        modulus_bits.div_ceil(self.base_bits as usize)
+        self.crt_bits.div_ceil(self.base_bits as usize) * self.crt_depth
     }
 }
 

@@ -115,12 +115,14 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self {
         let gadget_vector = Self::gen_dcrt_gadget_vector(params);
+        debug_assert_eq!(gadget_vector.col_size(), params.modulus_digits());
         gadget_vector.concat_diag(&vec![&gadget_vector; size - 1])
     }
 
     fn decompose(&self, base_bits: Option<u32>) -> Self {
         let base_bits = base_bits.unwrap_or(self.params.base_bits());
-        let digits_len = self.params.modulus_bits().div_ceil(base_bits as usize);
+        let digits_len =
+            self.params.crt_bits().div_ceil(base_bits as usize) * self.params.crt_depth();
         let new_nrow = self.nrow * digits_len;
         let mut new_matrix = Self::new_empty(&self.params, new_nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
@@ -179,9 +181,9 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
-        let log_q = self.params.modulus_bits();
-        debug_assert_eq!(self.ncol, other.nrow * identity_size * log_q);
-        let slice_width = other.nrow * log_q;
+        let log_base_q = self.params.modulus_digits();
+        debug_assert_eq!(self.ncol, other.nrow * identity_size * log_base_q);
+        let slice_width = other.nrow * log_base_q;
 
         let output = (0..identity_size)
             .flat_map(|i| {
