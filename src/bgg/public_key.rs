@@ -1,6 +1,6 @@
 use super::circuit::Evaluable;
 use crate::poly::{Poly, PolyMatrix};
-use itertools::Itertools;
+use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +15,7 @@ impl<M: PolyMatrix> BggPublicKey<M> {
     }
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
-        self.matrix.concat_columns(&others.iter().map(|x| &x.matrix).collect_vec()[..])
+        self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
     }
 }
 

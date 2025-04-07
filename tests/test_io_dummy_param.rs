@@ -87,6 +87,7 @@ mod test {
             encoding_sigma: 0.0,
             p_sigma: 0.0,
         };
+
         let mut rng = rand::rng();
 
         let t_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t.clone()]);

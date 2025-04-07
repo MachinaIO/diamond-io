@@ -40,7 +40,7 @@ Arc::new(BigUint::from_str_radix("
 
         // 1. Generate RLWE ciphertext (a, b) for input k
         // b = a * t - k * q/2 + e
-        let rlwe_encryption_sigma = 754_896_427_200_485e16;
+        let rlwe_encryption_sigma = 7.754_896_427_200_485e16;
 
         // Generate random plaintext bits
         let k = sampler_uniform.sample_poly(&params, &DistType::BitDist);

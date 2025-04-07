@@ -7,8 +7,8 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
         PolyMatrix,
     },
+    utils::debug_mem,
 };
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -130,7 +130,7 @@ where
         );
         let all_public_key_matrix: S::M = public_keys[0]
             .matrix
-            .concat_columns(&public_keys[1..].iter().map(|pk| &pk.matrix).collect_vec());
+            .concat_columns(&public_keys[1..].par_iter().map(|pk| &pk.matrix).collect::<Vec<_>>());
         let first_term = secret_vec.clone() * all_public_key_matrix;
 
         let gadget = S::M::gadget_matrix(params, secret_vec_size);
@@ -143,6 +143,7 @@ where
             .enumerate()
             .map(|(idx, plaintext)| {
                 let vector = all_vector.slice_columns(m * idx, m * (idx + 1));
+                debug_mem("before constructing BggEncoding");
                 BggEncoding {
                     vector,
                     pubkey: public_keys[idx].clone(),
