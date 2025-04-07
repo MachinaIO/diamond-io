@@ -250,33 +250,46 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
         cols: Range<usize>,
         new_entries: Vec<Vec<T>>,
     ) {
-        debug_assert_eq!(new_entries.len(), rows.end - rows.start);
-        debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
+        if new_entries.len() != (rows.end - rows.start) {
+            panic!(
+                "replace_block_entries: new_entries row count {} doesn't match expected {}",
+                new_entries.len(),
+                rows.end - rows.start
+            );
+        }
+        if new_entries.get(0).map(|r| r.len()) != Some(cols.end - cols.start) {
+            panic!(
+                "replace_block_entries: new_entries col count {} doesn't match expected {}",
+                new_entries.get(0).map(|r| r.len()).unwrap_or(0),
+                cols.end - cols.start
+            );
+        }
+
         let entry_size = self.entry_size();
         let file_len = self.file.metadata().unwrap().len() as usize;
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
         let row_start = rows.start;
-        parallel_iter!(rows).for_each(|i| {
+
+        for i in rows.clone() {
             let desired_offset = entry_size * (i * self.ncol + cols.start);
             let desired_len = entry_size * cols.len();
             let write_end = desired_offset + desired_len;
-            assert!(
-                write_end <= file_len,
-                "Row {}: write region ends at {} which exceeds file length {}",
-                i,
-                write_end,
-                file_len
-            );
-    
+            if write_end > file_len {
+                panic!(
+                    "Row {}: write region ends at {} which exceeds file length {}",
+                    i, write_end, file_len
+                );
+            }
+
             let aligned_offset = desired_offset - (desired_offset % page_size);
             let offset_in_page = desired_offset - aligned_offset;
             let needed = offset_in_page + desired_len;
             let rounded_needed = ((needed + page_size - 1) / page_size) * page_size;
             let mapping_len = std::cmp::min(rounded_needed, file_len - aligned_offset);
-    
+
             if needed > mapping_len {
                 eprintln!(
-                    "Row {}: needed {} but mapping_len is {} (aligned_offset: {}, file_len: {}, page_size: {})",
+                    "replace_block_entries: Row {}: needed {} but mapping_len is {} (aligned_offset: {}, file_len: {}, page_size: {})",
                     i, needed, mapping_len, aligned_offset, file_len, page_size
                 );
             }
@@ -287,8 +300,14 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                 needed,
                 mapping_len
             );
-    
+
             let mapping_end = aligned_offset + mapping_len;
+            if mapping_end > file_len {
+                eprintln!(
+                    "replace_block_entries: Row {}: mapping region ends at {} which exceeds file length {}",
+                    i, mapping_end, file_len
+                );
+            }
             assert!(
                 mapping_end <= file_len,
                 "Row {}: mapping region ends at {} which exceeds file length {}",
@@ -296,24 +315,59 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                 mapping_end,
                 file_len
             );
-    
             let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
-            let region = &mut mmap[offset_in_page..offset_in_page + desired_len];
-            let bytes = new_entries[i - row_start]
-                .iter()
-                .flat_map(|poly| poly.as_elem_to_bytes())
-                .collect::<Vec<_>>();
+            let region_range = offset_in_page..(offset_in_page + desired_len);
+            if region_range.end > mmap.len() {
+                eprintln!(
+                    "replace_block_entries: Row {}: region_range {:?} exceeds mmap.len() {}",
+                    i,
+                    region_range,
+                    mmap.len()
+                );
+            }
+            assert!(
+                region_range.end <= mmap.len(),
+                "Row {}: region_range {:?} exceeds mmap.len() {}",
+                i,
+                region_range,
+                mmap.len()
+            );
+
+            let region = &mut mmap[region_range.clone()];
+            let row_index = i - row_start;
+            let mut bytes: Vec<u8> = Vec::with_capacity(desired_len);
+            for (j, elem) in new_entries[row_index].iter().enumerate() {
+                let elem_bytes = elem.as_elem_to_bytes();
+                if elem_bytes.len() != entry_size {
+                    panic!(
+                        "Row {}: Element {} returned {} bytes, expected {}",
+                        i,
+                        j,
+                        elem_bytes.len(),
+                        entry_size
+                    );
+                }
+                bytes.extend_from_slice(&elem_bytes);
+            }
+            if region.len() != bytes.len() {
+                eprintln!(
+                    "Row {}: region length {} doesn't match computed bytes length {}",
+                    i,
+                    region.len(),
+                    bytes.len()
+                );
+            }
             assert_eq!(
                 region.len(),
                 bytes.len(),
-                "Row {}: Region length {} doesn't match bytes length {}",
+                "Row {}: region length {} doesn't match bytes length {}",
                 i,
                 region.len(),
                 bytes.len()
             );
+
             region.copy_from_slice(&bytes);
-            drop(mmap);
-        });
+        }
     }
 
     pub fn entry(&self, i: usize, j: usize) -> T {
