@@ -23,6 +23,7 @@ mod test {
     const SIGMA: f64 = 4.578;
 
     #[test]
+    #[allow(clippy::needless_range_loop)]
     #[ignore]
     fn test_io_just_mul_enc_and_bit_real_params() {
         init_tracing();
@@ -36,7 +37,7 @@ Arc::new(BigUint::from_str_radix("
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(SIGMA);
+        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
 
         // 1. Generate RLWE ciphertext (a, b) for input k
         // b = a * t - k * q/2 + e
