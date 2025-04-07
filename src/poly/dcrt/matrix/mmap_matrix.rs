@@ -54,7 +54,10 @@ pub struct MmapMatrix<T: MmapMatrixElem> {
 impl<T: MmapMatrixElem> MmapMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
         let entry_size = params.entry_size();
-        let len = entry_size * nrow * ncol;
+        let len = entry_size
+            .checked_mul(nrow)
+            .and_then(|v| v.checked_mul(ncol))
+            .expect("Matrix dimensions are too large");
         let file = tempfile().expect("failed to open file");
         file.set_len(len as u64).expect("failed to set file length");
         Self { params: params.clone(), file, nrow, ncol }
@@ -264,19 +267,27 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                 write_end,
                 file_len
             );
-
+    
             let aligned_offset = desired_offset - (desired_offset % page_size);
             let offset_in_page = desired_offset - aligned_offset;
-            let calculated_mapping_len =
-                ((offset_in_page + desired_len) + page_size - 1) / page_size * page_size;
-            let mapping_len = std::cmp::min(calculated_mapping_len, file_len - aligned_offset);
+            let needed = offset_in_page + desired_len;
+            let rounded_needed = ((needed + page_size - 1) / page_size) * page_size;
+            let mapping_len = std::cmp::min(rounded_needed, file_len - aligned_offset);
+    
+            if needed > mapping_len {
+                eprintln!(
+                    "Row {}: needed {} but mapping_len is {} (aligned_offset: {}, file_len: {}, page_size: {})",
+                    i, needed, mapping_len, aligned_offset, file_len, page_size
+                );
+            }
             assert!(
-                offset_in_page + desired_len <= mapping_len,
-                "Row {}: desired region isn't fully covered by mapping_len {}",
+                needed <= mapping_len,
+                "Row {}: desired region ({} bytes) isn't fully covered by mapping_len {}",
                 i,
+                needed,
                 mapping_len
             );
-
+    
             let mapping_end = aligned_offset + mapping_len;
             assert!(
                 mapping_end <= file_len,
@@ -285,7 +296,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
                 mapping_end,
                 file_len
             );
-
+    
             let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
             let region = &mut mmap[offset_in_page..offset_in_page + desired_len];
             let bytes = new_entries[i - row_start]
@@ -295,7 +306,8 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             assert_eq!(
                 region.len(),
                 bytes.len(),
-                "Region length {} doesn't match bytes length {}",
+                "Row {}: Region length {} doesn't match bytes length {}",
+                i,
                 region.len(),
                 bytes.len()
             );
@@ -431,7 +443,12 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
             combined_data.extend(other.block_entries_row(0..other.nrow, 0..self.ncol));
         }
         let mut new_matrix = Self::new_empty(&self.params, updated_nrow, self.ncol);
-        let expected_len = self.params.entry_size() * updated_nrow * self.ncol;
+        let expected_len = self
+            .params
+            .entry_size()
+            .checked_mul(updated_nrow)
+            .and_then(|v| v.checked_mul(self.ncol))
+            .expect("Matrix dimensions too large");
         let actual_len = new_matrix.file.metadata().unwrap().len();
         assert_eq!(
             actual_len, expected_len as u64,
@@ -759,7 +776,7 @@ fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
         MmapOptions::new()
             .offset(offset as u64)
             .len(len)
-            .populate()
+            // .populate()
             .map(file)
             .expect("failed to map file")
     }
@@ -770,7 +787,7 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
         MmapOptions::new()
             .offset(offset as u64)
             .len(len)
-            .populate()
+            // .populate()
             .map_mut(file)
             .expect("failed to map file")
     }
