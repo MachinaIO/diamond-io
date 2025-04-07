@@ -128,9 +128,9 @@ def find_params(
     print(f"found alpha_encoding_k: {alpha_encoding_k}")
     print(f"found alpha_hardcode_k: {alpha_hardcode_k}")
     print(f"found alpha_p_k: {alpha_p_k}")
-    alpha_encoding = 2 ** alpha_encoding_k
-    alpha_hardcode = 2 ** alpha_hardcode_k
-    alpha_p = 2 ** alpha_p_k
+    alpha_encoding = 2**alpha_encoding_k
+    alpha_hardcode = 2**alpha_hardcode_k
+    alpha_p = 2**alpha_p_k
     # print(f"found alpha: {alpha}")
     print(f"found alpha_encoding: {alpha_encoding}")
     print(f"found alpha_hardcode: {alpha_hardcode}")
@@ -164,9 +164,7 @@ def find_params(
         estimated_secpar_encoding = estimate_secpar(
             (d + 1) * n, q, Binary, stddev_e_encoding
         )
-        estimated_secpar_hardcode = estimate_secpar(
-            n, q, Binary, stddev_e_hardcode
-        )
+        estimated_secpar_hardcode = estimate_secpar(n, q, Binary, stddev_e_hardcode)
         estimated_secpar_p = estimate_secpar(2 * ((d + 1) * n), q, Binary, stddev_e_p)
         min_estimated_secpar = min(
             estimated_secpar_encoding, estimated_secpar_hardcode, estimated_secpar_p
@@ -307,7 +305,7 @@ def compute_norm_b(
     n: int,
     log_t_q: int,
     d: int,
-    base:int,
+    base: int,
 ):
     c_0 = 1.8
     c_1 = 4.7
@@ -316,7 +314,7 @@ def compute_norm_b(
         6.0
         * c_0
         * sigma
-        * ((base+1) * sigma)
+        * ((base + 1) * sigma)
         * (sqrt_ceil(2 * (d + 1) * n * log_t_q) + sqrt_ceil(2 * n) + c_1)
     )
 
@@ -380,7 +378,7 @@ def bound_final_error(
 
     for _ in range(input_size):
         bound_v_d = (b_norm_d ** Decimal(2)) * bound_p_d
-        bound_c_d = n_d * (base_d-1) * m_d * bound_c_d + bound_v_d
+        bound_c_d = n_d * (base_d - 1) * m_d * bound_c_d + bound_v_d
         print(f"base_d: {base_d}")
         print(f"m_d: {m_d}")
         print(f"bound_c_d: {bound_c_d}")
@@ -420,9 +418,9 @@ def compute_obf_size(
     size = 256
     packed_input_size = math.ceil(input_size / n)
     log_t_q = math.ceil(log_q / math.log2(base))
-    m = (d+1) * log_t_q
+    m = (d + 1) * log_t_q
     print("m", m)
-    m_b = 2*(d+1) * (log_t_q + 2)
+    m_b = 2 * (d + 1) * (log_t_q + 2)
     print("m_b", m_b)
     encoding_init_size = log_q * n * packed_input_size * m
     print("encoding_init_size GB", encoding_init_size / 8 / 10**9)
@@ -456,11 +454,11 @@ def sqrt_ceil(x):
 if __name__ == "__main__":
     secpar = 80
     n = 2**13
-    d = 2
-    base = 2**20
-    max_log_q = 1020
-    input_size = 8
-    norms_path = "final_bits_norm_n_13_q_1020.json"
+    d = 1
+    base = 2**16
+    max_log_q = 612
+    input_size = 1
+    norms_path = "final_bits_norm_n_13_q_612.json"
     (
         q,
         stddev_e_encoding,

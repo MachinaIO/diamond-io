@@ -239,7 +239,7 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let params = DCRTPolyParams::new(4096, 12, 51, 1);
+        let params = DCRTPolyParams::new(8192, 12, 51, 16);
         let log_q = params.modulus_bits();
 
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
@@ -266,7 +266,7 @@ mod test {
             1 + params.ring_dimension() as usize,
         );
         let norm_json = serde_json::to_string(&norms).unwrap();
-        println!("norms: {}", norm_json);
+        // println!("norms: {}", norm_json);
         use std::{fs::File, io::Write};
         let mut file = File::create("final_bits_norm.json").unwrap();
         file.write_all(norm_json.as_bytes()).unwrap();

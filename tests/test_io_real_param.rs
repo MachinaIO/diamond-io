@@ -21,13 +21,12 @@ mod test {
     const SIGMA: f64 = 4.578;
 
     #[test]
-    #[ignore]
     fn test_io_just_mul_enc_and_bit_real_params() {
         init_tracing();
         let start_time = std::time::Instant::now();
-        let params = DCRTPolyParams::new(8192, 7, 51, 20);
+        let params = DCRTPolyParams::new(8192, 12, 51, 16);
         let log_q = params.modulus_bits();
-        let switched_modulus = Arc::new(BigUint::from_str_radix("71671831749689734737838152978190216899892655911508785116799651230841339877765150252187381844012976550000", 10).unwrap());
+        let switched_modulus = Arc::new(BigUint::from_str_radix("15829145694278690179872161345257420162248406342477557754500035589945422364945084658438108187108114830000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();
         {
             let inputs = public_circuit.input(log_q + 1);
@@ -45,10 +44,10 @@ mod test {
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
-            d: 2,
-            encoding_sigma: 3.477984925390326e-48,
-            hardcoded_key_sigma: 7.754_896_427_200_485e16,
-            p_sigma: 1.550677652781115e-169,
+            d: 1,
+            encoding_sigma: 7.26009020373352e+51,
+            hardcoded_key_sigma: 4.652550537829127e+102,
+            p_sigma: 2.9297574882928115,
         };
 
         let sampler_uniform = DCRTPolyUniformSampler::new();

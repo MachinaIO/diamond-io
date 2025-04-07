@@ -92,7 +92,7 @@ impl_binop_with_refs!(NormSimulator => Sub::sub(self, rhs: &NormSimulator) -> No
 
 impl_binop_with_refs!(NormSimulator => Mul::mul(self, rhs: &NormSimulator) -> NormSimulator {
     NormSimulator {
-        h_norm: self.h_norm.right_rotate(self.dim * (self.base - 1)) + &rhs.h_norm * &self.plaintext_norm,
+        h_norm: self.h_norm.right_rotate(self.dim as u64 * (self.base as u64 - 1)) + &rhs.h_norm * &self.plaintext_norm,
         plaintext_norm: &self.plaintext_norm * &rhs.plaintext_norm,
         dim: self.dim,
         base: self.base,
@@ -122,7 +122,7 @@ impl MPolyCoeffs {
         Self(coeffs)
     }
 
-    pub fn right_rotate(&self, scale: u32) -> Self {
+    pub fn right_rotate(&self, scale: u64) -> Self {
         let mut coeffs = vec![BigUint::zero()];
         coeffs.extend(self.0.iter().map(|coeff| coeff * scale).collect_vec());
         Self(coeffs)
