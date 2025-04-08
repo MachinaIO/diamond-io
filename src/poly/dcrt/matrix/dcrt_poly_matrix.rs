@@ -114,7 +114,7 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self {
-        let gadget_vector = Self::gen_dcrt_gadget_vector(params);
+        let gadget_vector = Self::gadget_vector(params);
         debug_assert_eq!(gadget_vector.col_size(), params.modulus_digits());
         gadget_vector.concat_diag(&vec![&gadget_vector; size - 1])
     }
@@ -133,7 +133,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             let mut new_entries = vec![vec![DCRTPoly::zero(&self.params); ncol]; new_nrow];
             for i in 0..nrow {
                 for j in 0..ncol {
-                    let decomposed = self.dcrt_decompose_poly(&entries[i][j], base_bits);
+                    let decomposed = Self::dcrt_decompose_poly(&entries[i][j], base_bits);
                     debug_assert_eq!(decomposed.len(), digits_len);
                     for k in 0..digits_len {
                         new_entries[i * digits_len + k][j] = decomposed[k].clone();
@@ -323,7 +323,7 @@ impl DCRTPolyMatrix {
         DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 
-    pub(crate) fn gen_dcrt_gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix {
+    pub(crate) fn gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix {
         let base = 1 << params.base_bits();
         let g_vec_cpp = DCRTPolyGadgetVector(
             params.ring_dimension(),
@@ -335,7 +335,7 @@ impl DCRTPolyMatrix {
         DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
     }
 
-    pub(crate) fn dcrt_decompose_poly(&self, poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
+    pub(crate) fn dcrt_decompose_poly(poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
         let decomposed = poly.get_poly().Decompose(base_bits);
         let cpp_decomposed = CppMatrix::new(decomposed);
         parallel_iter!(0..cpp_decomposed.ncol()).map(|idx| cpp_decomposed.entry(0, idx)).collect()

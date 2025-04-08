@@ -47,9 +47,9 @@ where
         tag: &[u8],
         reveal_plaintexts: &[bool],
     ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
-        let log_digits_q = params.modulus_digits();
+        let log_base_q = params.modulus_digits();
         let secret_vec_size = self.d + 1;
-        let columns = secret_vec_size * log_digits_q;
+        let columns = secret_vec_size * log_base_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         let all_matrix = self.sampler.sample_hash(
             params,
