@@ -54,15 +54,13 @@ mod test {
         // Input: BITS(a), BITS(b) x
         // Output: BITS(a) AND x, BITS(b) AND x
         // BITS(a) and BITS(b) are hardcoded inside the circuit
-        let a_bits_vecs = a_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
-        let b_bits_vecs = b_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
-
         let mut public_circuit = PolyCircuit::new();
-        let pub_circuit_inputs = public_circuit.input(2);
-        let x = pub_circuit_inputs[0];
-        let y = pub_circuit_inputs[1];
+        let x_id = public_circuit.input(1)[0];
 
         let mut public_circuit_outputs = Vec::new();
+
+        let a_bits_vecs = a_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
+        let b_bits_vecs = b_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
 
         let a_bits_consts =
             a_bits_vecs.iter().map(|vec| public_circuit.const_bit_poly(vec)).collect::<Vec<_>>();
@@ -70,11 +68,9 @@ mod test {
         let b_bits_consts =
             b_bits_vecs.iter().map(|vec| public_circuit.const_bit_poly(vec)).collect::<Vec<_>>();
 
-        for input in [x, y] {
-            for bits_vec in [&a_bits_consts, &b_bits_consts] {
-                for bit in bits_vec.iter() {
-                    public_circuit_outputs.push(public_circuit.and_gate(*bit, input));
-                }
+        for bits_consts in [&a_bits_consts, &b_bits_consts] {
+            for &bit_const in bits_consts {
+                public_circuit_outputs.push(public_circuit.and_gate(bit_const, x_id));
             }
         }
         public_circuit.output(public_circuit_outputs);
