@@ -171,8 +171,10 @@ where
         }
         let public_circuit = obf_params.public_circuit;
         debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
-        let final_circuit =
-            build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(public_circuit);
+        let final_circuit = build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(
+            public_circuit,
+            log_q,
+        );
         let last_input_encodings = encodings.last().unwrap();
         let output_encodings = final_circuit.eval::<BggEncoding<M>>(
             params.as_ref(),

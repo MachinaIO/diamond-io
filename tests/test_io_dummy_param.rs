@@ -84,7 +84,7 @@ mod test {
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
-            d: 3,
+            d: 1,
             encoding_sigma: 0.0,
             p_sigma: 0.0,
         };

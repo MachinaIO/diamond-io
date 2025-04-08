@@ -203,8 +203,10 @@ where
     let final_preimage_target = {
         let public_circuit = obf_params.public_circuit;
         debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
-        let final_circuit =
-            build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(public_circuit);
+        let final_circuit = build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(
+            public_circuit,
+            log_q,
+        );
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         log_mem("Evaluated outputs");

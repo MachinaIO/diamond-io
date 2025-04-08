@@ -2,14 +2,18 @@ use super::PolyCircuit;
 use crate::bgg::circuit::Evaluable;
 
 /// Build a circuit that is a composition of two sub-circuits:
-/// 1. A public circuit that it is assumed to return a ciphertext in its bit decomposed form
-///    (a_decomposed[0], ... a_decomposed[logq-1] , b_decomposed[0], ... b_decomposed[logq-1])
-/// 2. An FHE decryption circuit that takes the ciphertext and the RLWE secret key t as inputs and
-///    returns the bit decomposed plaintext
+/// 1. A public circuit that it is assumed to return ciphertexts where each ciphertext is bit
+///    decomposed (a_decomposed[0], ... a_decomposed[logq-1] , b_decomposed[0], ...
+///    b_decomposed[logq-1])
+/// 2. An FHE decryption circuit that takes each ciphertext and the RLWE secret key t as inputs and
+///    returns the bit decomposed plaintext for each cipheretxt
 pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     public_circuit: PolyCircuit,
+    log_q: usize,
 ) -> PolyCircuit {
     let num_input_pub_circuit = public_circuit.num_input();
+    let num_output_pub_circuit = public_circuit.num_output();
+    assert_eq!(num_output_pub_circuit % (2 * log_q), 0);
 
     let mut circuit = PolyCircuit::new();
     let inputs = circuit.input(num_input_pub_circuit + 1); // the extra input is the secret key t
@@ -20,28 +24,35 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     let pub_circuit_id = circuit.register_sub_circuit(public_circuit);
     let pub_circuit_outputs = circuit.call_sub_circuit(pub_circuit_id, pub_circuit_inputs);
 
+    let num_ciphertexts = pub_circuit_outputs.len() / (2 * log_q);
+
     // build the FHE decryption circuit:
     // - inputs: a_decomposed[0], ... a_decomposed[logq-1] , b_decomposed[0], ...
-    //   b_decomposed[logq-1], t (2 * logq + 1 inputs)
-    // - outputs: b'_decomposed[i] - a'_decomposed[i] * t - (for i = 0, 1, ..., logq - 1)
-    // (logq outputs)
+    //   b_decomposed[logq-1] for each ciphertext, t ((2 * logq * num_ciphertexts + 1 inputs))
+    // - outputs: b'_decomposed[i] - a'_decomposed[i] * t - (for i = 0, 1, ..., logq - 1) for each
+    //   ciphertext
+    // (logq * num_ciphertexts outputs)
     let mut dec_circuit = PolyCircuit::new();
-    let dec_circuit_inputs = dec_circuit.input(pub_circuit_outputs.len() + 1);
-    let num_output_dec_circuit = pub_circuit_outputs.len() / 2;
-    let mut lhs = Vec::with_capacity(num_output_dec_circuit);
-    let rhs = dec_circuit_inputs[2 * num_output_dec_circuit];
-    for i in 0..num_output_dec_circuit {
-        let a_i = dec_circuit_inputs[i];
-        let b_i = dec_circuit_inputs[i + num_output_dec_circuit];
-        let a_i_times_t = dec_circuit.mul_gate(a_i, rhs);
-        let b_i_minus_a_i_times_t = dec_circuit.sub_gate(b_i, a_i_times_t);
-        lhs.push(b_i_minus_a_i_times_t);
+    let dec_circuit_inputs = dec_circuit.input(num_output_pub_circuit + 1);
+    let mut output = Vec::with_capacity(log_q * num_ciphertexts);
+    let t = dec_circuit_inputs[num_output_pub_circuit];
+    for ct_idx in 0..num_ciphertexts {
+        let offset = ct_idx * log_q;
+        let a_start = offset;
+        let b_start = log_q * num_ciphertexts + offset;
+        for bit_idx in 0..log_q {
+            let a_i = dec_circuit_inputs[a_start + bit_idx];
+            let b_i = dec_circuit_inputs[b_start + bit_idx];
+            let a_i_times_t = dec_circuit.mul_gate(a_i, t);
+            let b_i_minus_a_i_times_t = dec_circuit.sub_gate(b_i, a_i_times_t);
+            output.push(b_i_minus_a_i_times_t);
+        }
     }
-    dec_circuit.output(lhs.clone());
+    dec_circuit.output(output);
 
     // register the decryption circuit as sub-circuit
     let dec_circuit_id = circuit.register_sub_circuit(dec_circuit);
-    let dec_inputs = [pub_circuit_outputs.clone(), vec![t_in]].concat();
+    let dec_inputs = [pub_circuit_outputs, vec![t_in]].concat();
     let dec_outputs = circuit.call_sub_circuit(dec_circuit_id, &dec_inputs);
 
     circuit.output(dec_outputs);
@@ -81,28 +92,45 @@ mod tests {
         assert!(a_bits.len() == log_q);
 
         // 2. Create a public circuit
-        // Input: a_bits[0], ..., a_bits[logq - 1], b_bits[0], ..., b_bits[logq - 1], x
-        // Output: a_bits[0] AND x, ..., a_bits[logq - 1] AND x, b_bits[0] AND x, ..., b_bits[logq -
-        // 1] AND x
+        // Input: a_bits[0], ..., a_bits[logq - 1], b_bits[0], ..., b_bits[logq - 1], x, y
+        // Output: a_bits[0] AND x, ..., a_bits[logq - 1] AND x, a_bits[0] AND y, ..., a_bits[logq -
+        // 1] AND y, b_bits[0] AND x, ..., b_bits[logq - 1] AND x, b_bits[0] AND y, ..., b_bits[logq
+        // - 1] AND y
         // a_bits and b_bits are hardcoded inside the circuit
 
         let a_bits_vecs = a_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
         let b_bits_vecs = b_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
         let mut public_circuit = PolyCircuit::new();
-        let x_id = public_circuit.input(1)[0];
+        let pub_circuit_inputs = public_circuit.input(2);
+        let x = pub_circuit_inputs[0];
+        let y = pub_circuit_inputs[1];
 
         let mut public_circuit_outputs = Vec::new();
 
+        let a_bits_consts =
+            a_bits_vecs.iter().map(|poly| public_circuit.const_bit_poly(poly)).collect::<Vec<_>>();
+
+        let b_bits_consts =
+            b_bits_vecs.iter().map(|poly| public_circuit.const_bit_poly(poly)).collect::<Vec<_>>();
+
         for i in 0..a_bits_vecs.len() {
-            let a_ith_bits_const = public_circuit.const_bit_poly(&a_bits_vecs[i]);
-            let a_ith_bits_and_x = public_circuit.and_gate(a_ith_bits_const, x_id);
+            let a_ith_bits_and_x = public_circuit.and_gate(a_bits_consts[i], x);
             public_circuit_outputs.push(a_ith_bits_and_x);
         }
 
+        for i in 0..a_bits_vecs.len() {
+            let a_ith_bits_and_y = public_circuit.and_gate(a_bits_consts[i], y);
+            public_circuit_outputs.push(a_ith_bits_and_y);
+        }
+
         for i in 0..b_bits_vecs.len() {
-            let b_ith_bits_const = public_circuit.const_bit_poly(&b_bits_vecs[i]);
-            let b_ith_bits_and_x = public_circuit.and_gate(b_ith_bits_const, x_id);
+            let b_ith_bits_and_x = public_circuit.and_gate(b_bits_consts[i], x);
             public_circuit_outputs.push(b_ith_bits_and_x);
+        }
+
+        for i in 0..b_bits_vecs.len() {
+            let b_ith_bits_and_y = public_circuit.and_gate(b_bits_consts[i], y);
+            public_circuit_outputs.push(b_ith_bits_and_y);
         }
 
         public_circuit.output(public_circuit_outputs);
@@ -112,25 +140,36 @@ mod tests {
 
         // Evaluate the copied public circuit
         let x = DCRTPoly::const_one(&params);
-        let public_output =
-            public_circuit_copy.eval(&params, &DCRTPoly::const_one(&params), &[x.clone()]);
+        let y = DCRTPoly::const_zero(&params);
+        let public_output = public_circuit_copy.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[x.clone(), y.clone()],
+        );
 
         // Check output length
-        assert_eq!(public_circuit_copy.num_input(), 1);
-        assert_eq!(public_output.len(), 2 * log_q);
+        assert_eq!(public_circuit_copy.num_input(), 2);
+        assert_eq!(public_output.len(), (2 * log_q) * 2);
 
-        // Compute expected output manually
+        // Compute expected output manually and verify
         let mut expected_output = Vec::new();
         for i in 0..a_bits_vecs.len() {
             let a_ith_bits = a_bits[i].clone();
             expected_output.push(a_ith_bits * x.clone());
         }
+        for i in 0..a_bits_vecs.len() {
+            let a_ith_bits = a_bits[i].clone();
+            expected_output.push(a_ith_bits * y.clone());
+        }
         for i in 0..b_bits_vecs.len() {
             let b_ith_bits = b_bits[i].clone();
             expected_output.push(b_ith_bits * x.clone());
         }
+        for i in 0..b_bits_vecs.len() {
+            let b_ith_bits = b_bits[i].clone();
+            expected_output.push(b_ith_bits * y.clone());
+        }
 
-        // Compare each output
         for (actual, expected) in public_output.iter().zip(expected_output.iter()) {
             assert_eq!(actual, expected);
         }
@@ -138,18 +177,18 @@ mod tests {
         // 3. Build the main circuit as a composition of the public circuit and the FHE decryption
         //    circuit
         let main_circuit =
-            build_composite_circuit_from_public_and_fhe_dec::<DCRTPoly>(public_circuit);
+            build_composite_circuit_from_public_and_fhe_dec::<DCRTPoly>(public_circuit, log_q);
 
         // Verify the circuit structure
-        assert_eq!(main_circuit.num_input(), 2); // 1 public input (x) and 1 private input (t)
-        assert_eq!(main_circuit.num_output(), log_q); // log_q outputs
+        assert_eq!(main_circuit.num_input(), 3); // 2 public inputs (x, y) and 1 private input (t)
+        assert_eq!(main_circuit.num_output(), 2 * log_q); // 2 * log_q outputs
 
         // Evaluate the main circuit
-        let all_inputs = [x.clone(), t.clone()];
+        let all_inputs = [x.clone(), y.clone(), t.clone()];
         let output = main_circuit.eval(&params, &DCRTPoly::const_one(&params), &all_inputs);
 
         // Verify the results
-        assert_eq!(output.len(), log_q);
+        assert_eq!(output.len(), 2 * log_q);
 
         // Compute expected output manually
         let mut expected_output = Vec::new();
@@ -157,17 +196,32 @@ mod tests {
             let a_ith_bits = a_bits[i].clone();
             let b_ith_bits = b_bits[i].clone();
             expected_output.push((b_ith_bits * x.clone()) - (a_ith_bits * x.clone()) * t.clone());
-            assert_eq!(output[i], expected_output[i]);
+        }
+        for i in 0..a_bits_vecs.len() {
+            let a_ith_bits = a_bits[i].clone();
+            let b_ith_bits = b_bits[i].clone();
+            expected_output.push((b_ith_bits * y.clone()) - (a_ith_bits * y.clone()) * t.clone());
         }
 
-        // Recompose the output
-        let output_recomposed = DCRTPoly::from_decomposed(&params, &output);
+        // Verify the output
+        for (actual, expected) in output.iter().zip(expected_output.iter()) {
+            assert_eq!(actual, expected);
+        }
+        // 5. Recompose the outputs
+        let output_one = output[..log_q].to_vec();
+        let output_two = output[log_q..].to_vec();
+
+        let output_one_recomposed = DCRTPoly::from_decomposed(&params, &output_one);
+        let output_two_recomposed = DCRTPoly::from_decomposed(&params, &output_two);
 
         // recover the bits
-        let recovered_bits = output_recomposed.extract_bits_with_threshold(&params);
+        let recovered_bits_one = output_one_recomposed.extract_bits_with_threshold(&params);
+        let recovered_bits_two = output_two_recomposed.extract_bits_with_threshold(&params);
 
         // Verify correctness
-        assert_eq!(recovered_bits.len(), params.ring_dimension() as usize);
-        assert_eq!(recovered_bits, (k * x).to_bool_vec());
+        assert_eq!(recovered_bits_one.len(), params.ring_dimension() as usize);
+        assert_eq!(recovered_bits_two.len(), params.ring_dimension() as usize);
+        assert_eq!(recovered_bits_one, (k.clone() * x).to_bool_vec());
+        assert_eq!(recovered_bits_two, (k * y).to_bool_vec());
     }
 }
