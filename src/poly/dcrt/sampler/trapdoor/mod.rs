@@ -2,10 +2,8 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{
-                block_size, dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix,
-            },
-            sampler::DCRTPolyUniformSampler,
+            cpp_matrix::CppMatrix,
+            matrix::disk::{block_size, i64_matrix::I64MatrixParams, I64Matrix},
             DCRTPolyMatrix, DCRTPolyParams,
         },
         sampler::{DistType, PolyUniformSampler},
@@ -18,6 +16,8 @@ use rayon::iter::ParallelIterator;
 pub use sampler::DCRTPolyTrapdoorSampler;
 use std::{cmp::min, ops::Range, sync::Arc};
 use utils::{gen_dgg_int_vec, gen_int_karney, split_int64_mat_to_elems};
+
+use super::DCRTPolyUniformSampler;
 
 pub mod sampler;
 pub mod utils;

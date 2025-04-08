@@ -2,7 +2,7 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
+            matrix::disk::{i64_matrix::I64MatrixParams, I64Matrix},
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem,
         },
         Poly, PolyParams,

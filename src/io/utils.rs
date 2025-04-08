@@ -145,8 +145,7 @@ mod test {
         bgg::BitToInt,
         poly::{
             dcrt::{
-                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
-                DCRTPolyUniformSampler, FinRingElem,
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
             element::PolyElem,
             sampler::DistType,
@@ -154,7 +153,6 @@ mod test {
     };
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
-    use tracing_subscriber::field::debug;
 
     #[test]
     fn test_build_final_step_circuit() {

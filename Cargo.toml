@@ -6,8 +6,10 @@ rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["test"]
+default = ["test", "disk"]
 test = []
+disk = []
+memory = []
 
 [dependencies]
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/reimpl_trapdoor" }

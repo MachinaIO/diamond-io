@@ -1,21 +1,14 @@
-use super::{block_offsets, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyParams, FinRingElem},
+        dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams},
         Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
 use itertools::Itertools;
-use num_bigint::BigInt;
-use openfhe::{
-    cxx::UniquePtr,
-    ffi::{
-        DCRTPolyGadgetVector, GetMatrixCols, GetMatrixElement, GetMatrixRows, Matrix, MatrixGen,
-        SetMatrixElement,
-    },
-};
+use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::ops::Range;
 
@@ -133,7 +126,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             let mut new_entries = vec![vec![DCRTPoly::zero(&self.params); ncol]; new_nrow];
             for i in 0..nrow {
                 for j in 0..ncol {
-                    let decomposed = self.dcrt_decompose_poly(&entries[i][j], base_bits);
+                    let decomposed = Self::dcrt_decompose_poly(&entries[i][j], base_bits);
                     debug_assert_eq!(decomposed.len(), digits_len);
                     for k in 0..digits_len {
                         new_entries[i * digits_len + k][j] = decomposed[k].clone();
@@ -271,31 +264,6 @@ impl PolyMatrix for DCRTPolyMatrix {
     // }
 }
 
-pub(crate) struct CppMatrix {
-    pub(crate) inner: UniquePtr<Matrix>,
-}
-
-unsafe impl Send for CppMatrix {}
-unsafe impl Sync for CppMatrix {}
-
-impl CppMatrix {
-    pub fn new(inner: UniquePtr<Matrix>) -> Self {
-        CppMatrix { inner }
-    }
-
-    pub fn nrow(&self) -> usize {
-        GetMatrixRows(&self.inner)
-    }
-
-    pub fn ncol(&self) -> usize {
-        GetMatrixCols(&self.inner)
-    }
-
-    pub fn entry(&self, i: usize, j: usize) -> DCRTPoly {
-        DCRTPoly::new(GetMatrixElement(&self.inner, i, j))
-    }
-}
-
 impl DCRTPolyMatrix {
     pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
         let nrow = self.nrow;
@@ -335,7 +303,7 @@ impl DCRTPolyMatrix {
         DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
     }
 
-    pub(crate) fn dcrt_decompose_poly(&self, poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
+    pub(crate) fn dcrt_decompose_poly(poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
         let decomposed = poly.get_poly().Decompose(base_bits);
         let cpp_decomposed = CppMatrix::new(decomposed);
         parallel_iter!(0..cpp_decomposed.ncol()).map(|idx| cpp_decomposed.entry(0, idx)).collect()
@@ -351,7 +319,7 @@ mod tests {
 
     use super::*;
     use crate::poly::{
-        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
         sampler::PolyUniformSampler,
     };
 

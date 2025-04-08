@@ -3,8 +3,8 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            sampler::{trapdoor::KARNEY_THRESHOLD, DCRTPolyUniformSampler},
-            DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
+            sampler::trapdoor::KARNEY_THRESHOLD, DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
+            DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -206,7 +206,7 @@ pub(crate) fn gauss_samp_gq_arb_base(
 mod test {
     use super::*;
     use crate::poly::{
-        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyMatrix, DCRTPolyParams},
+        dcrt::{DCRTPolyMatrix, DCRTPolyParams},
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     };
