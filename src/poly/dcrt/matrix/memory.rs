@@ -1,11 +1,13 @@
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyParams, FinRingElem},
+        dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams, FinRingElem},
         Poly, PolyMatrix, PolyParams,
     },
+    utils::debug_mem,
 };
 use num_bigint::BigInt;
+use openfhe::ffi::{MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
@@ -88,6 +90,32 @@ impl DCRTPolyMatrix {
                 self.inner[i][cols.clone()].to_vec()
             })
             .collect()
+    }
+
+    pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
+        let nrow = self.nrow;
+        let ncol = self.ncol;
+        let params = &self.params;
+        let mut matrix_ptr =
+            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), nrow, ncol);
+        debug_mem(format!("matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
+        for i in 0..nrow {
+            for j in 0..ncol {
+                SetMatrixElement(matrix_ptr.as_mut().unwrap(), i, j, self.entry(i, j).get_poly());
+            }
+        }
+        debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
+        CppMatrix::new(matrix_ptr)
+    }
+
+    pub(crate) fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
+        let nrow = cpp_matrix.nrow();
+        let ncol = cpp_matrix.ncol();
+        let matrix_inner = parallel_iter!(0..nrow)
+            .map(|i| parallel_iter!(0..ncol).map(|j| cpp_matrix.entry(i, j)).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
+        DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 }
 
