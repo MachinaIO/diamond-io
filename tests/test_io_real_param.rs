@@ -36,7 +36,7 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
 
-        // 1. Generate RLWE ciphertext (a, b) for input k
+        // 1. Generate RLWE ciphertext ct=(a, b) for input k
         // b = a * t_bar - k * q/2 + e
         let rlwe_encryption_sigma = 4.652550537829127e+102;
 
@@ -54,10 +54,9 @@ mod test {
         assert!(a_bits.len() == log_q);
 
         // 2. Create a public circuit
-        // Input: a_bits[0], ..., a_bits[logq - 1], b_bits[0], ..., b_bits[logq - 1], x
-        // Output: a_bits[0] AND x, ..., a_bits[logq - 1] AND x, b_bits[0] AND x, ..., b_bits[logq -
-        // 1] AND x
-        // a_bits and b_bits are hardcoded inside the circuit
+        // Input: BITS(a), BITS(b) x
+        // Output: BITS(a) AND x, BITS(b) AND x
+        // BITS(a) and BITS(b) are hardcoded inside the circuit
         let mut public_circuit = PolyCircuit::new();
         let x_id = public_circuit.input(1)[0];
 
@@ -66,18 +65,17 @@ mod test {
         let a_bits_vecs = a_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
         let b_bits_vecs = b_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
 
-        for i in 0..a_bits_vecs.len() {
-            let a_ith_bits_const = public_circuit.const_bit_poly(&a_bits_vecs[i]);
-            let a_ith_bits_and_x = public_circuit.and_gate(a_ith_bits_const, x_id);
-            public_circuit_outputs.push(a_ith_bits_and_x);
-        }
+        let a_bits_consts =
+            a_bits_vecs.iter().map(|vec| public_circuit.const_bit_poly(vec)).collect::<Vec<_>>();
 
-        for i in 0..b_bits_vecs.len() {
-            let b_ith_bits_const = public_circuit.const_bit_poly(&b_bits_vecs[i]);
-            let b_ith_bits_and_x = public_circuit.and_gate(b_ith_bits_const, x_id);
-            public_circuit_outputs.push(b_ith_bits_and_x);
-        }
+        let b_bits_consts =
+            b_bits_vecs.iter().map(|vec| public_circuit.const_bit_poly(vec)).collect::<Vec<_>>();
 
+        for bits_consts in [&a_bits_consts, &b_bits_consts] {
+            for &bit_const in bits_consts {
+                public_circuit_outputs.push(public_circuit.and_gate(bit_const, x_id));
+            }
+        }
         public_circuit.output(public_circuit_outputs);
 
         // 3. Obfuscate the circuit

@@ -110,3 +110,71 @@ pub fn encrypt_rlwe(
 
     (a, b, t_bar)
 }
+
+#[cfg(test)]
+#[cfg(feature = "test")]
+mod test {
+    use crate::{
+        io::utils::encrypt_rlwe,
+        poly::{
+            dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+            sampler::DistType,
+            Poly,
+        },
+    };
+
+    // #[test]
+    // fn test_simulate_norm_final_bits_circuit() {
+    //     // 1. Set up parameters
+    //     let params = DCRTPolyParams::new(8192, 12, 51, 16);
+    //     let log_q = params.modulus_bits();
+
+    //     // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
+    //     let mut public_circuit = PolyCircuit::new();
+    //     {
+    //         let inputs = public_circuit.input(log_q + 1);
+    //         public_circuit.output(inputs[0..log_q].to_vec());
+    //     }
+
+    //     let a_rlwe_bar = DCRTPoly::const_max(&params);
+    //     let enc_hardcoded_key = DCRTPoly::const_max(&params);
+
+    //     let a_decomposed_polys = a_rlwe_bar.decompose_bits(&params);
+    //     let b_decomposed_polys = enc_hardcoded_key.decompose_bits(&params);
+    //     let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
+    //         &a_decomposed_polys,
+    //         &b_decomposed_polys,
+    //         public_circuit,
+    //     );
+
+    //     let norms = final_circuit.simulate_bgg_norm(
+    //         params.ring_dimension(),
+    //         params.base_bits(),
+    //         1 + params.ring_dimension() as usize,
+    //     );
+    //     let norm_json = serde_json::to_string(&norms).unwrap();
+    //     // println!("norms: {}", norm_json);
+    //     use std::{fs::File, io::Write};
+    //     let mut file = File::create("final_bits_norm.json").unwrap();
+    //     file.write_all(norm_json.as_bytes()).unwrap();
+    // }
+    #[test]
+    fn test_encrypt_rlwe_decrypts_correctly() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+        let sigma = 3.0;
+
+        // Generate random plaintext bits
+        let k = sampler.sample_poly(&params, &DistType::BitDist);
+
+        // Encrypt the plaintext
+        let (a, b, t_bar) = encrypt_rlwe(&params, &sampler, sigma, &k);
+
+        // decrypt the ciphertext and recover the bits
+        let recovered = b - (a * t_bar);
+        let recovered_bits = recovered.extract_bits_with_threshold(&params);
+
+        // Verify correctness
+        assert_eq!(recovered_bits, k.to_bool_vec());
+    }
+}
