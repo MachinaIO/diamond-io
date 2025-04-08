@@ -145,11 +145,13 @@ unsafe impl Sync for DCRTMatrixPtr {}
 
 pub struct DCRTPolyTrapdoorSampler {
     sigma: f64,
+    base: u32,
 }
 
 impl DCRTPolyTrapdoorSampler {
     pub fn new(params: &DCRTPolyParams, sigma: f64) -> Self {
-        Self { sigma }
+        let base = 1 << params.base_bits();
+        Self { sigma, base }
     }
 }
 
@@ -180,7 +182,7 @@ impl DCRTPolyTrapdoorSampler {
                 &public_matrix.ptr_matrix,
                 &trapdoor.ptr_trapdoor,
                 &target_matrix.ptr_matrix,
-                2_i64,
+                self.base.into(),
                 self.sigma,
             )
             .into(),
