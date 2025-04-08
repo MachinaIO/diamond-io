@@ -210,12 +210,9 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 #[cfg(feature = "test")]
 mod tests {
     use super::*;
-    use crate::{
-        poly::{
-            dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
-            sampler::{DistType, PolyUniformSampler},
-        },
-        utils::init_tracing,
+    use crate::poly::{
+        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyParams},
+        sampler::{DistType, PolyUniformSampler},
     };
 
     const SIGMA: f64 = 4.578;
@@ -256,7 +253,7 @@ mod tests {
     fn test_preimage_generation() {
         let params = DCRTPolyParams::default();
         let size = 4;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -290,7 +287,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let size = 4;
         let target_cols = 2;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -330,7 +327,7 @@ mod tests {
         let size = 4;
         let multiple = 2;
         let target_cols = size * multiple;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -370,7 +367,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let size = 4;
         let target_cols = 6;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -421,6 +418,44 @@ mod tests {
             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
 
         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+        let expected_rows = size * (k + 2);
+        let expected_cols = target_cols;
+
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
+
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns (equal to target columns)"
+        );
+
+        // public_matrix * preimage should be equal to target
+        let product = public_matrix * &preimage;
+
+        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    }
+
+    #[test]
+    fn test_preimage_generation_base_1024() {
+        let params = DCRTPolyParams::new(4, 2, 17, 10);
+        let size = 4;
+        let target_cols = 6;
+        let k = params.modulus_digits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size
+        // target_cols is not a multiple of size
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target =
+            uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+
+        let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+
         let expected_rows = size * (k + 2);
         let expected_cols = target_cols;
 

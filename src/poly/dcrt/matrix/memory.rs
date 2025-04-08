@@ -406,7 +406,7 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
-        assert_eq!(self.ncol, other.nrow * identity_size * self.params.modulus_bits());
+        assert_eq!(self.ncol, other.nrow * identity_size * self.params.modulus_digits());
         let slice_width = other.ncol;
         let mut output = vec![DCRTPolyMatrix::zero(&self.params, 0, 0); other.ncol * identity_size];
 
