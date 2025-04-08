@@ -42,6 +42,7 @@ where
     log_mem("Sampled public data");
 
     let packed_input_size = public_data.packed_input_size;
+    let packed_output_size = public_data.packed_output_size;
     #[cfg(feature = "test")]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
     #[cfg(not(feature = "test"))]
@@ -207,17 +208,17 @@ where
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         log_mem("Evaluated outputs");
-        assert_eq!(eval_outputs.len(), log_q);
+        assert_eq!(eval_outputs.len(), (packed_output_size / 2) * log_q);
         let output_ints = eval_outputs
             .chunks(log_q)
             .map(|bits| BggPublicKey::bits_to_int(bits, &params))
             .collect_vec();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
-        debug_assert_eq!(eval_outputs_matrix.col_size(), 1);
+        debug_assert_eq!(eval_outputs_matrix.col_size(), (packed_output_size / 2));
         (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             d + 1,
-            1,
+            packed_output_size / 2,
         )])
     };
     log_mem("Computed final_preimage_target");

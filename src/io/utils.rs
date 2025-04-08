@@ -42,6 +42,7 @@ pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub rgs: [S::M; 2],
     pub a_prf: S::M,
     pub packed_input_size: usize,
+    pub packed_output_size: usize,
     _s: PhantomData<S>,
 }
 
@@ -60,17 +61,34 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let r_0 = r_0_bar.concat_diag(&[&one]);
         let r_1 = r_1_bar.concat_diag(&[&one]);
         let dim = params.ring_dimension() as usize;
+        let log_q = params.modulus_bits();
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1; // input bits + poly of the RLWE key
+        let packed_output_size = obf_params.public_circuit.num_output() / log_q;
+        assert_eq!(packed_output_size % 2, 0);
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
         let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
             [(r_0.clone() * &gadget_d_plus_1), (r_1.clone() * &gadget_d_plus_1)];
 
-        let a_prf_raw =
-            hash_sampler.sample_hash(params, TAG_A_PRF, d + 1, 1, DistType::FinRingDist);
+        let a_prf_raw = hash_sampler.sample_hash(
+            params,
+            TAG_A_PRF,
+            d + 1,
+            packed_output_size / 2,
+            DistType::FinRingDist,
+        );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        Self { r_0, r_1, a_rlwe_bar, rgs, a_prf, packed_input_size, _s: PhantomData }
+        Self {
+            r_0,
+            r_1,
+            a_rlwe_bar,
+            rgs,
+            a_prf,
+            packed_input_size,
+            packed_output_size,
+            _s: PhantomData,
+        }
     }
 }
 
