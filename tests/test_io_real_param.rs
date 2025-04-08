@@ -28,12 +28,9 @@ mod test {
     fn test_io_just_mul_enc_and_bit_real_params() {
         init_tracing();
         let start_time = std::time::Instant::now();
-        let params = DCRTPolyParams::new(8192, 7, 51);
+        let params = DCRTPolyParams::new(8192, 12, 51, 16);
         let log_q = params.modulus_bits();
-        let switched_modulus =
-Arc::new(BigUint::from_str_radix("
-71671831749689734737838152978190216899892655911508785116799651230841339877765150252187381844012976550000"
-, 10).unwrap());
+        let switched_modulus = Arc::new(BigUint::from_str_radix("15829145694278690179872161345257420162248406342477557754500035589945422364945084658438108187108114830000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap());
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
@@ -41,7 +38,7 @@ Arc::new(BigUint::from_str_radix("
 
         // 1. Generate RLWE ciphertext (a, b) for input k
         // b = a * t - k * q/2 + e
-        let rlwe_encryption_sigma = 7.754_896_427_200_485e16;
+        let rlwe_encryption_sigma = 4.652550537829127e+102;
 
         // Generate random plaintext bits
         let k = sampler_uniform.sample_poly(&params, &DistType::BitDist);
@@ -89,9 +86,9 @@ Arc::new(BigUint::from_str_radix("
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
-            d: 2,
-            encoding_sigma: 3.477984925390326e-48,
-            p_sigma: 1.550677652781115e-169,
+            d: 1,
+            encoding_sigma: 7.26009020373352e+51,
+            p_sigma: 2.9297574882928115,
         };
 
         let mut rng = rand::rng();

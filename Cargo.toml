@@ -11,6 +11,8 @@ test = []
 
 [dependencies]
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", rev = "29763cb" }
+libc = "0.2"
+openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/reimpl_trapdoor" }
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
 num-traits = "0.2"

@@ -78,7 +78,7 @@ mod tests {
 
         // Generate bit polynomials (each coefficient is either 0 or 1)
         let random_poly = create_random_poly(&params);
-        let bit_polys = random_poly.decompose(&params);
+        let bit_polys = random_poly.decompose_bits(&params);
 
         // Compute the integer representation
         let result = DCRTPoly::bits_to_int(&bit_polys, &params);
@@ -94,7 +94,7 @@ mod tests {
         // Create bit polynomials with known values
         let bit_polys =
             DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), 13))
-                .decompose(&params);
+                .decompose_bits(&params);
 
         // Compute the integer representation
         let result = DCRTPoly::bits_to_int(&bit_polys, &params);
@@ -169,7 +169,7 @@ mod tests {
         // Create secret and plaintexts (bit polynomials)
         let secrets = vec![create_bit_random_poly(&params); d];
         let int_poly = DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), 13));
-        let plaintexts = int_poly.decompose(&params);
+        let plaintexts = int_poly.decompose_bits(&params);
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
@@ -207,7 +207,7 @@ mod tests {
         // Create secret and plaintexts (bit polynomials)
         let secrets = vec![create_bit_random_poly(&params); d];
         let int_poly = create_bit_random_poly(&params);
-        let plaintexts = int_poly.decompose(&params);
+        let plaintexts = int_poly.decompose_bits(&params);
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);

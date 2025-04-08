@@ -79,15 +79,15 @@ pub trait PolyMatrix:
     }
     /// Constructs a gadget matrix Gₙ
     ///
-    /// Gadget vector g = (2^0, 2^1, ..., 2^{log(q)-1}),
-    /// where g ∈ Z_q^{log(q)}.
+    /// Gadget vector g = (b^0, b^1, ..., b^{log_b(q)-1}),
+    /// where g ∈ Z_q^{log_b(q)} and b is the base defined in `params`.
     ///
     /// Gₙ = Iₙ ⊗ gᵀ
     ///
-    /// * `params` - Parameters describing the modulus and other ring characteristics.
+    /// * `params` - Parameters describing the modulus, the base, and other ring characteristics.
     /// * `size` - The size of the identity block (n), dictating the final matrix dimensions.
     ///
-    /// A matrix of dimension n×(n·bit_length), in which each block row is a scaled identity
+    /// A matrix of dimension n×(n·log_b(q)), in which each block row is a scaled identity
     /// under the ring modulus.
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
     fn decompose(&self) -> Self;

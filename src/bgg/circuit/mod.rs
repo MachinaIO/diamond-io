@@ -776,8 +776,8 @@ mod tests {
         // x is a constant one monomial
         let x = DCRTPoly::const_one(&params);
 
-        let a_bits = a.decompose(&params);
-        let b_bits = b.decompose(&params);
+        let a_bits = a.decompose_bits(&params);
+        let b_bits = b.decompose_bits(&params);
 
         // inputs are a_bits, b_bits, x
         let inputs = circuit.input(a_bits.len() + b_bits.len() + 1);

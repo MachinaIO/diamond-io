@@ -2,13 +2,13 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix},
+            matrix::{i64_matrix::I64MatrixParams, I64Matrix},
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem,
         },
         Poly, PolyParams,
     },
 };
-use openfhe::ffi::{DCRTPolyGadgetVector, GenerateIntegerKarney};
+use openfhe::ffi::GenerateIntegerKarney;
 use rand::{rng, Rng};
 use rand_distr::Uniform;
 use rayon::prelude::*;
@@ -113,15 +113,4 @@ pub(crate) fn split_int64_mat_alt_to_elems(
             vec![DCRTPoly::from_coeffs(params, &coeffs)]
         })
         .collect::<Vec<Vec<DCRTPoly>>>()
-}
-
-pub(crate) fn gen_dcrt_gadget_vector(params: &DCRTPolyParams) -> DCRTPolyMatrix {
-    let g_vec_cpp = DCRTPolyGadgetVector(
-        params.ring_dimension(),
-        params.crt_depth(),
-        params.crt_bits(),
-        params.modulus_bits(),
-        2,
-    );
-    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
 }

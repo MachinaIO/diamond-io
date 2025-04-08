@@ -60,7 +60,7 @@ pub trait Poly:
         }
         bits
     }
-    fn decompose(&self, params: &Self::Params) -> Vec<Self>;
+    fn decompose_bits(&self, params: &Self::Params) -> Vec<Self>;
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for elem in self.coeffs() {

@@ -33,6 +33,8 @@ where
 {
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
+    let log_base_q = obf_params.params.modulus_digits();
+    debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
@@ -76,7 +78,7 @@ where
     log_mem("b star trapdoor init sampled");
 
     let p_init = {
-        let m_b = (2 * (d + 1)) * (2 + log_q);
+        let m_b = (2 * (d + 1)) * (2 + log_base_q);
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &b_star_cur;
         let error = sampler_uniform.sample_uniform(

@@ -47,9 +47,9 @@ where
         tag: &[u8],
         reveal_plaintexts: &[bool],
     ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
-        let log_q = params.modulus_bits();
+        let log_base_q = params.modulus_digits();
         let secret_vec_size = self.d + 1;
-        let columns = secret_vec_size * log_q;
+        let columns = secret_vec_size * log_base_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         let all_matrix = self.sampler.sample_hash(
             params,
@@ -115,13 +115,13 @@ where
         plaintexts: &[<S::M as PolyMatrix>::P],
     ) -> Vec<BggEncoding<S::M>> {
         let secret_vec = &self.secret_vec;
-        let log_q = params.modulus_bits();
+        let log_base_q = params.modulus_digits();
         let packed_input_size = 1 + plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         let plaintexts: Vec<<S::M as PolyMatrix>::P> =
             [&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
                 .concat();
         let secret_vec_size = self.secret_vec.col_size();
-        let columns = secret_vec_size * log_q * packed_input_size;
+        let columns = secret_vec_size * log_base_q * packed_input_size;
         let error: S::M = self.error_sampler.sample_uniform(
             params,
             1,
@@ -138,7 +138,7 @@ where
         let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
         let all_vector = first_term - second_term + error;
 
-        let m = secret_vec_size * log_q;
+        let m = secret_vec_size * log_base_q;
         parallel_iter!(plaintexts)
             .enumerate()
             .map(|(idx, plaintext)| {
@@ -198,8 +198,8 @@ mod tests {
         let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        let log_q = params.modulus_bits();
-        let columns = (d + 1) * log_q;
+        let log_base_q = params.modulus_digits();
+        let columns = (d + 1) * log_base_q;
 
         for pair in sampled_pub_keys[1..].chunks(2) {
             if let [a, b] = pair {
@@ -223,8 +223,8 @@ mod tests {
         let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        let log_q = params.modulus_bits();
-        let columns = (d + 1) * log_q;
+        let log_base_q = params.modulus_digits();
+        let columns = (d + 1) * log_base_q;
 
         for pair in sampled_pub_keys[1..].chunks(2) {
             if let [a, b] = pair {

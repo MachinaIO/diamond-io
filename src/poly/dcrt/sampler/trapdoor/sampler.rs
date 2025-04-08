@@ -1,7 +1,4 @@
-use super::{
-    utils::{gen_dcrt_gadget_vector, split_int64_mat_alt_to_elems},
-    DCRTTrapdoor,
-};
+use super::{utils::split_int64_mat_alt_to_elems, DCRTTrapdoor};
 use crate::{
     parallel_iter,
     poly::{
@@ -22,17 +19,16 @@ const SIGMA: f64 = 4.578;
 const SPECTRAL_CONSTANT: f64 = 1.8;
 
 pub struct DCRTPolyTrapdoorSampler {
-    g_vec: DCRTPolyMatrix,
     sigma: f64,
+    base: u32,
     c: f64,
 }
 
 impl DCRTPolyTrapdoorSampler {
     pub fn new(params: &DCRTPolyParams, sigma: f64) -> Self {
-        let g_vec = gen_dcrt_gadget_vector(params);
-        // base = 2
-        let c = 3.0 * SIGMA;
-        Self { g_vec, sigma, c }
+        let base = 1 << params.base_bits();
+        let c = (base as f64 + 1.0) * SIGMA;
+        Self { sigma, base, c }
     }
 }
 
@@ -48,7 +44,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let trapdoor = DCRTTrapdoor::new(params, size, self.sigma);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let a_bar = uniform_sampler.sample_uniform(params, size, size, DistType::FinRingDist);
-        let g = self.g_vec.concat_diag(&vec![&self.g_vec; size - 1]);
+        let g = DCRTPolyMatrix::gadget_matrix(params, size);
         let a0 = a_bar.concat_columns(&[&DCRTPolyMatrix::identity(params, size, None)]);
         let a1 = g - (a_bar * &trapdoor.r + &trapdoor.e);
         let a = a0.concat_columns(&[&a1]);
@@ -71,15 +67,17 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         let n = params.ring_dimension() as usize;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let s = SPECTRAL_CONSTANT *
-            3.0 *
+            (self.base as f64 + 1.0) *
             SIGMA *
             SIGMA *
             (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
         let dgg_large_std = (s * s - self.c * self.c).sqrt();
         let peikert = dgg_large_std < KARNEY_THRESHOLD;
-        let (dgg_large_mean, dgg_large_table) = {
+        let (dgg_large_mean, dgg_large_table) = if dgg_large_std > KARNEY_THRESHOLD {
+            (None, None)
+        } else {
             let acc: f64 = 5e-32;
             let m = (-2.0 * acc.ln()).sqrt();
             let fin = (dgg_large_std * m).ceil() as usize;
@@ -95,9 +93,10 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             for i in 0..fin {
                 m_vals[i] *= m_a;
             }
-            (m_a, m_vals)
+            (Some(m_a), Some(m_vals))
         };
-        let dgg_large_params = (dgg_large_mean, dgg_large_std, &dgg_large_table[..]);
+        let dgg_large_params =
+            (dgg_large_mean, dgg_large_std, dgg_large_table.as_ref().map(|v| &v[..]));
         log_mem("preimage parameters computed");
         let p_hat = trapdoor.sample_pert_square_mat(
             s,
@@ -123,6 +122,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                                 &perturbed_syndromes[i][j],
                                 self.c,
                                 params,
+                                self.base,
                                 self.sigma,
                             );
                             (i, j, decomposed)
@@ -160,11 +160,12 @@ pub(crate) fn decompose_dcrt_gadget(
     syndrome: &DCRTPoly,
     c: f64,
     params: &DCRTPolyParams,
+    base: u32,
     sigma: f64,
 ) -> Vec<Vec<DCRTPoly>> {
     let depth = params.crt_depth();
     let z_hat_bbi = parallel_iter!(0..depth)
-        .flat_map(|tower_idx| gauss_samp_gq_arb_base(syndrome, c, params, sigma, tower_idx))
+        .flat_map(|tower_idx| gauss_samp_gq_arb_base(syndrome, c, params, base, sigma, tower_idx))
         .collect::<Vec<_>>();
     split_int64_mat_alt_to_elems(&z_hat_bbi, params)
 }
@@ -175,17 +176,28 @@ pub(crate) fn gauss_samp_gq_arb_base(
     syndrome: &DCRTPoly,
     c: f64,
     params: &DCRTPolyParams,
+    base: u32,
     sigma: f64,
     tower_idx: usize,
 ) -> Vec<Vec<i64>> {
     let n = params.ring_dimension();
     let depth = params.crt_depth();
-    let k_res = params.modulus_bits() / depth;
-    let result =
-        DCRTGaussSampGqArbBase(syndrome.get_poly(), c, n, depth, k_res, 2, sigma, tower_idx);
-    debug_assert_eq!(result.len(), n as usize * k_res);
+    let k_res_bits = params.crt_bits();
+    let k_res_digits = params.modulus_digits() / depth;
+    let result = DCRTGaussSampGqArbBase(
+        syndrome.get_poly(),
+        c,
+        n,
+        depth,
+        k_res_bits,
+        k_res_digits,
+        base as i64,
+        sigma,
+        tower_idx,
+    );
+    debug_assert_eq!(result.len(), n as usize * k_res_digits);
     // let mut matrix = I64Matrix::new_empty(&I64MatrixParams, k_res, n as usize);
-    parallel_iter!(0..k_res)
+    parallel_iter!(0..k_res_digits)
         .map(|i| {
             parallel_iter!(0..n as usize).map(|j| result[i * n as usize + j]).collect::<Vec<_>>()
         })
@@ -197,10 +209,7 @@ pub(crate) fn gauss_samp_gq_arb_base(
 mod test {
     use super::*;
     use crate::poly::{
-        dcrt::{
-            sampler::{trapdoor::utils::gen_dcrt_gadget_vector, DCRTPolyUniformSampler},
-            DCRTPolyMatrix, DCRTPolyParams,
-        },
+        dcrt::{sampler::DCRTPolyUniformSampler, DCRTPolyMatrix, DCRTPolyParams},
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     };
@@ -214,9 +223,22 @@ mod test {
         let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
         let decomposed = DCRTPolyMatrix::from_poly_vec(
             &params,
-            decompose_dcrt_gadget(&target.entry(0, 0), 3.0 * SIGMA, &params, SIGMA),
+            decompose_dcrt_gadget(&target.entry(0, 0), 3.0 * SIGMA, &params, 2, SIGMA),
         );
-        let gadget_vec = gen_dcrt_gadget_vector(&params);
+        let gadget_vec = DCRTPolyMatrix::gadget_matrix(&params, 1);
+        assert_eq!(gadget_vec * decomposed, target);
+    }
+
+    #[test]
+    fn test_decompose_dcrt_gadget_base_8() {
+        let params = DCRTPolyParams::new(4, 2, 17, 3);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+        let decomposed = DCRTPolyMatrix::from_poly_vec(
+            &params,
+            decompose_dcrt_gadget(&target.entry(0, 0), (8.0 + 1.0) * SIGMA, &params, 8, SIGMA),
+        );
+        let gadget_vec = DCRTPolyMatrix::gadget_matrix(&params, 1);
         assert_eq!(gadget_vec * decomposed, target);
     }
 
@@ -229,7 +251,7 @@ mod test {
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
         let expected_rows = size;
-        let expected_cols = (&params.modulus_bits() + 2) * size;
+        let expected_cols = (&params.modulus_digits() + 2) * size;
 
         assert_eq!(
             public_matrix.row_size(),
@@ -251,13 +273,12 @@ mod test {
         }
 
         let muled = {
-            let k = params.modulus_bits();
+            let k = params.modulus_digits();
             let identity = DCRTPolyMatrix::identity(&params, size * k, None);
             let trapdoor_matrix = trapdoor.r.concat_rows(&[&trapdoor.e, &identity]);
             public_matrix * trapdoor_matrix
         };
-        let gadget_vec = gen_dcrt_gadget_vector(&params);
-        let gadget_matrix = gadget_vec.concat_diag(&vec![&gadget_vec; size - 1]);
+        let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, size);
         assert_eq!(muled, gadget_matrix);
     }
 
@@ -265,7 +286,7 @@ mod test {
     fn test_preimage_generation_square() {
         let params = DCRTPolyParams::default();
         let size = 3;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -299,7 +320,7 @@ mod test {
         let params = DCRTPolyParams::default();
         let size = 4;
         let target_cols = 2;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -337,7 +358,7 @@ mod test {
         let size = 4;
         let multiple = 2;
         let target_cols = size * multiple;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 
@@ -375,7 +396,83 @@ mod test {
         let params = DCRTPolyParams::default();
         let size = 4;
         let target_cols = 6;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size
+        // target_cols is not a multiple of size
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target =
+            uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+
+        let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+
+        let expected_rows = size * (k + 2);
+        let expected_cols = target_cols;
+
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
+
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns (equal to target columns)"
+        );
+
+        // public_matrix * preimage should be equal to target
+        let product = public_matrix * &preimage;
+
+        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    }
+
+    #[test]
+    fn test_preimage_generation_base_8() {
+        let params = DCRTPolyParams::new(4, 2, 17, 3);
+        let size = 4;
+        let target_cols = 6;
+        let k = params.modulus_digits();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+        let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+
+        // Create a non-square target matrix (size x target_cols) such that target_cols > size
+        // target_cols is not a multiple of size
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let target =
+            uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+
+        let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+
+        let expected_rows = size * (k + 2);
+        let expected_cols = target_cols;
+
+        assert_eq!(
+            preimage.row_size(),
+            expected_rows,
+            "Preimage matrix should have the correct number of rows"
+        );
+
+        assert_eq!(
+            preimage.col_size(),
+            expected_cols,
+            "Preimage matrix should have the correct number of columns (equal to target columns)"
+        );
+
+        // public_matrix * preimage should be equal to target
+        let product = public_matrix * &preimage;
+
+        assert_eq!(product, target, "Product of public matrix and preimage should equal target");
+    }
+
+    #[test]
+    fn test_preimage_generation_base_1024() {
+        let params = DCRTPolyParams::new(4, 2, 17, 10);
+        let size = 4;
+        let target_cols = 6;
+        let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
 

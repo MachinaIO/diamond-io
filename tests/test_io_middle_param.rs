@@ -28,7 +28,7 @@ mod test {
     fn test_io_just_mul_enc_and_bit_middle_params() {
         init_tracing();
         let start_time = std::time::Instant::now();
-        let params = DCRTPolyParams::new(1024, 4, 37);
+        let params = DCRTPolyParams::new(1024, 4, 37, 20);
         let log_q = params.modulus_bits();
         let switched_modulus = Arc::new(BigUint::from_str_radix("672178712", 10).unwrap());
 

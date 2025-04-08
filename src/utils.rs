@@ -6,6 +6,7 @@ use crate::poly::{
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
+use sysinfo::{CpuRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
@@ -73,10 +74,14 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
 }
 
 pub fn log_mem<T: Into<String>>(tag: T) {
+    let s =
+        System::new_with_specifics(RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()));
+    let cpu_usage_sum = s.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>();
     if let Some(usage) = memory_stats() {
         info!(
-            "{} || Current physical/virtural memory usage: {} | {}",
+            "{} || Cpu usage {} || Current physical/virtural memory usage: {} | {}",
             tag.into(),
+            cpu_usage_sum,
             usage.physical_mem,
             usage.virtual_mem
         );
@@ -86,10 +91,14 @@ pub fn log_mem<T: Into<String>>(tag: T) {
 }
 
 pub fn debug_mem<T: Into<String>>(tag: T) {
+    let s =
+        System::new_with_specifics(RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()));
+    let cpu_usage_sum = s.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>();
     if let Some(usage) = memory_stats() {
         debug!(
-            "{} || Current physical/virtural memory usage: {} | {}",
+            "{} || Cpu usage {} || Current physical/virtural memory usage: {} | {}",
             tag.into(),
+            cpu_usage_sum,
             usage.physical_mem,
             usage.virtual_mem
         );

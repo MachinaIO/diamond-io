@@ -33,10 +33,10 @@ pub struct DCRTTrapdoor {
 impl DCRTTrapdoor {
     pub fn new(params: &DCRTPolyParams, size: usize, sigma: f64) -> Self {
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let log_q = params.modulus_bits();
+        let log_base_q = params.modulus_digits();
         let dist = DistType::GaussDist { sigma };
-        let r = uniform_sampler.sample_uniform(params, size, size * log_q, dist);
-        let e = uniform_sampler.sample_uniform(params, size, size * log_q, dist);
+        let r = uniform_sampler.sample_uniform(params, size, size * log_base_q, dist);
+        let e = uniform_sampler.sample_uniform(params, size, size * log_base_q, dist);
         Self { r, e }
     }
 
@@ -45,7 +45,7 @@ impl DCRTTrapdoor {
         s: f64,
         c: f64,
         dgg: f64,
-        dgg_large_params: (f64, f64, &[f64]),
+        dgg_large_params: (Option<f64>, f64, Option<&[f64]>),
         peikert: bool,
         total_ncol: usize,
     ) -> DCRTPolyMatrix {
@@ -54,7 +54,7 @@ impl DCRTTrapdoor {
         let params = &r.params;
         let n = params.ring_dimension() as usize;
         let (d, dk) = r.size();
-        let sigma_large = (s * s - c * c).sqrt();
+        let sigma_large = dgg_large_params.1;
         let num_blocks = total_ncol.div_ceil(d);
         let padded_ncol = num_blocks * d;
         let padding_ncol = padded_ncol - total_ncol;
@@ -78,9 +78,9 @@ impl DCRTTrapdoor {
             let dgg_vectors = gen_dgg_int_vec(
                 n * dk * padded_ncol,
                 peikert,
-                dgg_large_params.0,
+                dgg_large_params.0.unwrap(),
                 dgg_large_params.1,
-                dgg_large_params.2,
+                dgg_large_params.2.unwrap(),
             );
             let vecs = parallel_iter!(0..n * dk)
                 .map(|i| {
@@ -106,8 +106,7 @@ impl DCRTTrapdoor {
         debug_mem("re generated");
         let tp2 = re * &p2;
         debug_mem("tp2 generated");
-        let p1 =
-            sample_p1_for_pert_square_mat(a_mat, b_mat, d_mat, tp2, params, c, s, dgg, padded_ncol);
+        let p1 = sample_p1_for_pert_mat(a_mat, b_mat, d_mat, tp2, params, c, s, dgg, padded_ncol);
         debug_mem("p1 generated");
         let mut p = p1.concat_rows(&[&p2]);
         debug_mem("p1 and p2 concatenated");
@@ -118,8 +117,8 @@ impl DCRTTrapdoor {
     }
 }
 
-// A function to generate `p1` for the `sample_pert_square_mat` function, corresponding to lines 425-473 (except for the line 448) in the `SamplePertSquareMat` function in the trapdoor.h of OpenFHE. https://github.com/openfheorg/openfhe-development/blob/main/src/core/include/lattice/trapdoor.h#L425-L473
-fn sample_p1_for_pert_square_mat(
+// A function corresponding to lines 425-473 (except for the line 448) in the `SamplePertSquareMat` function in the trapdoor.h of OpenFHE. https://github.com/openfheorg/openfhe-development/blob/main/src/core/include/lattice/trapdoor.h#L425-L473
+fn sample_p1_for_pert_mat(
     a_mat: DCRTPolyMatrix,
     b_mat: DCRTPolyMatrix,
     d_mat: DCRTPolyMatrix,
@@ -132,7 +131,7 @@ fn sample_p1_for_pert_square_mat(
 ) -> DCRTPolyMatrix {
     let n = params.ring_dimension();
     let depth = params.crt_depth();
-    let k_res = params.modulus_bits() / depth;
+    let k_res = params.crt_bits();
     let block_size = block_size();
     let num_blocks = padded_ncol.div_ceil(block_size);
     let num_threads = rayon::current_num_threads();
