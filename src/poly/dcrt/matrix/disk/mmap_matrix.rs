@@ -40,12 +40,22 @@ impl<T: MatrixElem> MmapMatrix<T> {
 
     pub fn block_entries(&self, rows: Range<usize>, cols: Range<usize>) -> Vec<Vec<T>> {
         let entry_size = self.entry_size();
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
         parallel_iter!(rows)
             .map(|i| {
-                let offset = entry_size * (i * self.ncol + cols.start);
-                let mmap = map_file(&self.file, offset, entry_size * cols.len());
-                let row_vec = mmap.to_vec();
-                let row_col_vec = row_vec
+                let raw_offset = entry_size * (i * self.ncol + cols.start);
+                let aligned_offset = raw_offset - (raw_offset % page_size);
+                let offset_adjustment = raw_offset - aligned_offset;
+                let required_size = offset_adjustment + entry_size * cols.len();
+                let mapping_size = if required_size % page_size == 0 {
+                    required_size
+                } else {
+                    ((required_size / page_size) + 1) * page_size
+                };
+                let mmap = map_file(&self.file, aligned_offset, mapping_size);
+                let row_data =
+                    &mmap[offset_adjustment..offset_adjustment + entry_size * cols.len()];
+                let row_col_vec = row_data
                     .chunks(entry_size)
                     .map(|entry| T::from_bytes_to_elem(&self.params, entry))
                     .collect_vec();
@@ -160,15 +170,21 @@ impl<T: MatrixElem> MmapMatrix<T> {
         debug_assert_eq!(new_entries.len(), rows.end - rows.start);
         debug_assert_eq!(new_entries[0].len(), cols.end - cols.start);
         let entry_size = self.entry_size();
+        let num_cols = cols.end - cols.start;
         let row_start = rows.start;
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
         parallel_iter!(rows).for_each(|i| {
-            let offset = entry_size * (i * self.ncol + cols.start);
-            let mut mmap = unsafe { map_file_mut(&self.file, offset, entry_size * cols.len()) };
+            let desired_offset = entry_size * (i * self.ncol + cols.start);
+            let aligned_offset = desired_offset - (desired_offset % page_size);
+            let offset_in_page = desired_offset - aligned_offset;
+            let required_len = offset_in_page + entry_size * num_cols;
+            let mapping_len = ((required_len + page_size - 1) / page_size) * page_size;
+            let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
             let bytes = new_entries[i - row_start]
                 .iter()
                 .flat_map(|poly| poly.as_elem_to_bytes())
                 .collect::<Vec<_>>();
-            mmap.copy_from_slice(&bytes);
+            mmap[offset_in_page..offset_in_page + entry_size * num_cols].copy_from_slice(&bytes);
             drop(mmap);
         });
     }
