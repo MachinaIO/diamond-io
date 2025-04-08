@@ -3,14 +3,10 @@
 
 pub mod dcrt;
 pub mod matrix;
-pub mod matrix_element;
-pub mod params;
-pub mod poly_element;
-pub mod polynomial;
+pub mod poly;
+pub mod poly_matrix;
 pub mod sampler;
 
-pub use matrix::PolyMatrix;
-pub use matrix_element::{MatrixElem, MatrixParams};
-pub use params::PolyParams;
-pub use poly_element::PolyElem;
-pub use polynomial::Poly;
+pub use matrix::{MatrixElem, MatrixParams};
+pub use poly::{Poly, PolyElem, PolyParams};
+pub use poly_matrix::PolyMatrix;

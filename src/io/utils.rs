@@ -4,7 +4,7 @@ use crate::{
         sampler::*,
         BggPublicKey,
     },
-    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
 };
 use itertools::Itertools;
 use std::marker::PhantomData;
@@ -147,7 +147,6 @@ mod test {
             dcrt::{
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
-            poly_element::PolyElem,
             sampler::DistType,
         },
     };

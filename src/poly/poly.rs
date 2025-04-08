@@ -1,10 +1,60 @@
-use super::PolyElem;
-use crate::poly::params::PolyParams;
-use itertools::Itertools;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
+use itertools::Itertools;
+
+pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
+    type Modulus: Debug + Clone;
+    /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n -
+    /// 1)`.
+    fn modulus(&self) -> Self::Modulus;
+    /// A size of the base value used for a gadget vector and decomposition, i.e., `base =
+    /// 2^base_bits`.
+    fn base_bits(&self) -> u32;
+    /// Fewest bits necessary to represent the modulus value `q`.
+    fn modulus_bits(&self) -> usize;
+    /// Fewest digits necessary to represent the modulus value `q` in the given base.
+    fn modulus_digits(&self) -> usize;
+    /// Returns the integer `n` that specifies the size of the polynomial ring used in this
+    /// polynomial. Specifically, this is the degree parameter for the ring `Z_q[x]/(x^n - 1)`.
+    fn ring_dimension(&self) -> u32;
+}
+
+pub trait PolyElem:
+    Sized
+    + Debug
+    + Eq
+    + Ord
+    + Send
+    + Sync
+    + Clone
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Neg<Output = Self>
+    + AddAssign
+    + SubAssign
+    + MulAssign
+    + for<'a> Add<&'a Self, Output = Self>
+    + for<'a> Sub<&'a Self, Output = Self>
+    + for<'a> Mul<&'a Self, Output = Self>
+{
+    type Modulus: Debug + Clone;
+    fn zero(modulus: &Self::Modulus) -> Self;
+    fn one(modulus: &Self::Modulus) -> Self;
+    fn minus_one(modulus: &Self::Modulus) -> Self;
+    fn constant(modulus: &Self::Modulus, value: u64) -> Self;
+    fn to_bit(&self) -> bool;
+    fn half_q(modulus: &Self::Modulus) -> Self;
+    fn max_q(modulus: &Self::Modulus) -> Self;
+    fn extract_highest_bits(&self) -> bool;
+    fn modulus(&self) -> &Self::Modulus;
+    fn from_bytes(modulus: &Self::Modulus, bytes: &[u8]) -> Self;
+    fn to_bytes(&self) -> Vec<u8>;
+    fn to_biguint(&self) -> &num_bigint::BigUint;
+}
 
 pub trait Poly:
     Sized

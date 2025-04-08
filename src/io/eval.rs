@@ -1,7 +1,7 @@
 use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, BitToInt},
-    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
 };
 use itertools::Itertools;
 use std::sync::Arc;

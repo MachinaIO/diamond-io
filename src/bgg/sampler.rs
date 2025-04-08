@@ -2,10 +2,8 @@ use super::{BggEncoding, BggPublicKey};
 use crate::{
     parallel_iter,
     poly::{
-        params::PolyParams,
-        polynomial::Poly,
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
-        PolyMatrix,
+        Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
