@@ -96,10 +96,9 @@ pub fn debug_mem<T: Into<String>>(tag: T) {
     let cpu_usage_sum = s.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>();
     if let Some(usage) = memory_stats() {
         debug!(
-            "{} || Cpu usage 
-            
-             || Current physical/virtural memory usage: {} | {}",
+   "{} || Cpu usage {} || Current physical/virtural memory usage: {} | {}",
             tag.into(),
+            cpu_usage_sum,
             usage.physical_mem,
             usage.virtual_mem
         );
