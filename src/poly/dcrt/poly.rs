@@ -287,7 +287,7 @@ impl Poly for DCRTPoly {
         self.coeffs()
             .iter()
             .map(|coeff| coeff.value())
-            .map(|coeff| coeff > &quarter_q && coeff <= &three_quarter_q)
+            .map(|coeff| coeff >= &quarter_q && coeff < &three_quarter_q)
             .collect()
     }
 }

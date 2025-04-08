@@ -5,8 +5,8 @@ use crate::bgg::circuit::Evaluable;
 /// 1. A public circuit that it is assumed to return ciphertexts where each ciphertext is bit
 ///    decomposed (a_decomposed[0], ... a_decomposed[logq-1] , b_decomposed[0], ...
 ///    b_decomposed[logq-1])
-/// 2. An FHE decryption circuit that takes each ciphertext and the RLWE secret key t as inputs and
-///    returns the bit decomposed plaintext for each cipheretxt
+/// 2. An FHE decryption circuit that takes each ciphertext and the RLWE secret key t_bar as inputs
+///    and returns the bit decomposed plaintext for each cipheretxt
 pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     public_circuit: PolyCircuit,
     log_q: usize,
@@ -16,7 +16,7 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     assert_eq!(num_output_pub_circuit % (2 * log_q), 0);
 
     let mut circuit = PolyCircuit::new();
-    let inputs = circuit.input(num_input_pub_circuit + 1); // the extra input is the secret key t
+    let inputs = circuit.input(num_input_pub_circuit + 1); // the extra input is the secret key t_bar
     let t_in = inputs[num_input_pub_circuit];
     let pub_circuit_inputs = &inputs[0..num_input_pub_circuit];
 
@@ -28,14 +28,14 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
 
     // build the FHE decryption circuit:
     // - inputs: a_decomposed[0], ... a_decomposed[logq-1] , b_decomposed[0], ...
-    //   b_decomposed[logq-1] for each ciphertext, t ((2 * logq * num_ciphertexts + 1 inputs))
-    // - outputs: b'_decomposed[i] - a'_decomposed[i] * t - (for i = 0, 1, ..., logq - 1) for each
-    //   ciphertext
+    //   b_decomposed[logq-1] for each ciphertext, t_bar ((2 * logq * num_ciphertexts + 1 inputs))
+    // - outputs: b'_decomposed[i] - a'_decomposed[i] * t_bar - (for i = 0, 1, ..., logq - 1) for
+    //   each ciphertext
     // (logq * num_ciphertexts outputs)
     let mut dec_circuit = PolyCircuit::new();
     let dec_circuit_inputs = dec_circuit.input(num_output_pub_circuit + 1);
     let mut output = Vec::with_capacity(log_q * num_ciphertexts);
-    let t = dec_circuit_inputs[num_output_pub_circuit];
+    let t_bar = dec_circuit_inputs[num_output_pub_circuit];
     for ct_idx in 0..num_ciphertexts {
         let offset = ct_idx * log_q;
         let a_start = offset;
@@ -43,7 +43,7 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
         for bit_idx in 0..log_q {
             let a_i = dec_circuit_inputs[a_start + bit_idx];
             let b_i = dec_circuit_inputs[b_start + bit_idx];
-            let a_i_times_t = dec_circuit.mul_gate(a_i, t);
+            let a_i_times_t = dec_circuit.mul_gate(a_i, t_bar);
             let b_i_minus_a_i_times_t = dec_circuit.sub_gate(b_i, a_i_times_t);
             output.push(b_i_minus_a_i_times_t);
         }
@@ -80,13 +80,13 @@ mod tests {
         let sigma = 3.0;
 
         // 1. Generate RLWE ciphertext (a, b) for input k
-        // b = a * t - k * q/2 + e
+        // b = a * t_bar - k * q/2 + e
         let k = sampler_uniform.sample_poly(&params, &DistType::BitDist);
-        let (a, b, t) = encrypt_rlwe(&params, &sampler_uniform, sigma, &k);
+        let (a, b, t_bar) = encrypt_rlwe(&params, &sampler_uniform, sigma, &k);
 
         // decompose the polynomials a and b into bits
-        let a_bits = a.decompose(&params);
-        let b_bits = b.decompose(&params);
+        let a_bits = a.decompose_bits(&params);
+        let b_bits = b.decompose_bits(&params);
 
         assert!(a_bits.len() == b_bits.len());
         assert!(a_bits.len() == log_q);
@@ -180,11 +180,11 @@ mod tests {
             build_composite_circuit_from_public_and_fhe_dec::<DCRTPoly>(public_circuit, log_q);
 
         // Verify the circuit structure
-        assert_eq!(main_circuit.num_input(), 3); // 2 public inputs (x, y) and 1 private input (t)
+        assert_eq!(main_circuit.num_input(), 3); // 2 public inputs (x, y) and 1 private input (t_bar)
         assert_eq!(main_circuit.num_output(), 2 * log_q); // 2 * log_q outputs
 
         // Evaluate the main circuit
-        let all_inputs = [x.clone(), y.clone(), t.clone()];
+        let all_inputs = [x.clone(), y.clone(), t_bar.clone()];
         let output = main_circuit.eval(&params, &DCRTPoly::const_one(&params), &all_inputs);
 
         // Verify the results
@@ -195,12 +195,14 @@ mod tests {
         for i in 0..a_bits_vecs.len() {
             let a_ith_bits = a_bits[i].clone();
             let b_ith_bits = b_bits[i].clone();
-            expected_output.push((b_ith_bits * x.clone()) - (a_ith_bits * x.clone()) * t.clone());
+            expected_output
+                .push((b_ith_bits * x.clone()) - (a_ith_bits * x.clone()) * t_bar.clone());
         }
         for i in 0..a_bits_vecs.len() {
             let a_ith_bits = a_bits[i].clone();
             let b_ith_bits = b_bits[i].clone();
-            expected_output.push((b_ith_bits * y.clone()) - (a_ith_bits * y.clone()) * t.clone());
+            expected_output
+                .push((b_ith_bits * y.clone()) - (a_ith_bits * y.clone()) * t_bar.clone());
         }
 
         // Verify the output

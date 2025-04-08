@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
-    t: &M,
+    t_bar: &M,
     sampler_uniform: SU,
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
@@ -31,6 +31,7 @@ where
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
 {
+    let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
     let log_base_q = obf_params.params.modulus_digits();
@@ -69,7 +70,7 @@ where
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
-    plaintexts.push(t.entry(0, 0).clone());
+    plaintexts.push(t_bar.entry(0, 0).clone());
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
@@ -203,10 +204,9 @@ where
     }
 
     let final_preimage_target = {
-        let public_circuit = obf_params.public_circuit;
         debug_assert_eq!(public_circuit.num_input(), obf_params.input_size);
         let final_circuit = build_composite_circuit_from_public_and_fhe_dec::<BggPublicKey<M>>(
-            public_circuit,
+            public_circuit.clone(),
             log_q,
         );
         log_mem("Computed final_circuit");
@@ -246,7 +246,7 @@ where
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
-        t: t.entry(0, 0).clone(),
+        t_bar: t_bar.entry(0, 0).clone(),
         #[cfg(feature = "test")]
         bs,
         #[cfg(feature = "test")]

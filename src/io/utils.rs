@@ -99,14 +99,14 @@ pub fn encrypt_rlwe(
     sigma: f64,
     k: &DCRTPoly,
 ) -> (DCRTPoly, DCRTPoly, DCRTPoly) {
-    let t = sampler_uniform.sample_poly(params, &DistType::FinRingDist);
+    let t_bar = sampler_uniform.sample_poly(params, &DistType::FinRingDist);
     let a = sampler_uniform.sample_poly(params, &DistType::FinRingDist);
     let e = sampler_uniform.sample_poly(params, &DistType::GaussDist { sigma });
 
     let modulus = params.modulus();
     let half_q = FinRingElem::half_q(&modulus.clone());
     let scale = DCRTPoly::from_const(params, &half_q);
-    let b = a.clone() * t.clone() + &e + &(k * &scale);
+    let b = a.clone() * t_bar.clone() + &e + &(k * &scale);
 
-    (a, b, t)
+    (a, b, t_bar)
 }

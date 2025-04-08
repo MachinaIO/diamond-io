@@ -35,18 +35,18 @@ mod test {
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
 
         // 1. Generate RLWE ciphertext (a, b) for input k
-        // b = a * t - k * q/2 + e
+        // b = a * t_bar - k * q/2 + e
         let rlwe_encryption_sigma = 3.0;
 
         // Generate random plaintext bits
         let k = sampler_uniform.sample_poly(&params, &DistType::BitDist);
 
         // Encrypt the plaintext
-        let (a, b, t) = encrypt_rlwe(&params, &sampler_uniform, rlwe_encryption_sigma, &k);
+        let (a, b, t_bar) = encrypt_rlwe(&params, &sampler_uniform, rlwe_encryption_sigma, &k);
 
         // decompose the polynomials a and b into bits
-        let a_bits = a.decompose(&params);
-        let b_bits = b.decompose(&params);
+        let a_bits = a.decompose_bits(&params);
+        let b_bits = b.decompose_bits(&params);
 
         assert!(a_bits.len() == b_bits.len());
         assert!(a_bits.len() == log_q);
@@ -84,14 +84,14 @@ mod test {
             switched_modulus,
             input_size: 1,
             public_circuit: public_circuit.clone(),
-            d: 1,
+            d: 3,
             encoding_sigma: 0.0,
             p_sigma: 0.0,
         };
 
         let mut rng = rand::rng();
 
-        let t_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t.clone()]);
+        let t_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t_bar.clone()]);
 
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),

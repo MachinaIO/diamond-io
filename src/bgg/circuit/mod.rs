@@ -769,9 +769,9 @@ mod tests {
         let sigma = 3.0;
 
         // encrypt a polynomial k using a RLWE secret key encryption
-        // b = a * t - k * q/2 + e
+        // b = a * t_bar - k * q/2 + e
         let k = create_bit_random_poly(&params);
-        let (a, b, t) = encrypt_rlwe(&params, &uniform_sampler, sigma, &k);
+        let (a, b, t_bar) = encrypt_rlwe(&params, &uniform_sampler, sigma, &k);
 
         // x is a constant one monomial
         let x = DCRTPoly::const_one(&params);
@@ -811,7 +811,7 @@ mod tests {
         assert_eq!(b_eval, &b * &x);
 
         // decrypt the result and recover the bits
-        let recovered = b_eval - (a_eval * t);
+        let recovered = b_eval - (a_eval * t_bar);
         let recovered_bits = recovered.extract_bits_with_threshold(&params);
 
         // Verify correctness

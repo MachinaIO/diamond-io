@@ -69,7 +69,7 @@ where
                 for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
                     polys.push(zero.clone());
                 }
-                polys.push(self.t.clone());
+                polys.push(self.t_bar.clone());
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
@@ -81,6 +81,7 @@ where
             );
         }
         let log_base_q = params.as_ref().modulus_digits();
+        let log_q = params.as_ref().modulus_bits();
         let dim = params.as_ref().ring_dimension() as usize;
         for (idx, input) in inputs.iter().enumerate() {
             let m = if *input { &self.m_preimages[idx][1] } else { &self.m_preimages[idx][0] };
@@ -160,7 +161,7 @@ where
                             .map(|coeffs| M::P::from_coeffs(&params, coeffs))
                             .collect_vec();
                         polys.extend(input_polys);
-                        polys.push(self.t.clone());
+                        polys.push(self.t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
                     let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);
