@@ -356,7 +356,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         identity.tensor(&gadget_vector)
     }
 
-    fn decompose(&self, base_bits: Option<u32>) -> Self {
+    fn decompose(&self) -> Self {
         let bit_length = self.params.modulus_bits();
 
         Self {
@@ -411,7 +411,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         let mut output = vec![DCRTPolyMatrix::zero(&self.params, 0, 0); other.ncol * identity_size];
 
         for j in 0..other.ncol {
-            let jth_col_m_decompose = other.get_column_matrix_decompose(j, None);
+            let jth_col_m_decompose = other.get_column_matrix_decompose(j);
             for i in 0..identity_size {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
                 output[i * other.ncol + j] = slice * &jth_col_m_decompose;
@@ -421,12 +421,12 @@ impl PolyMatrix for DCRTPolyMatrix {
         output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
-    fn get_column_matrix_decompose(&self, j: usize, base_bits: Option<u32>) -> Self {
+    fn get_column_matrix_decompose(&self, j: usize) -> Self {
         DCRTPolyMatrix::from_poly_vec(
             &self.params,
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
-        .decompose(base_bits)
+        .decompose()
     }
 }
 
@@ -643,7 +643,7 @@ mod tests {
         let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, 2);
         assert_eq!(gadget_matrix.row_size(), 2);
         assert_eq!(gadget_matrix.col_size(), 2 * bit_length);
-        let decomposed = matrix.decompose(Some(params.base_bits()));
+        let decomposed = matrix.decompose();
         assert_eq!(decomposed.row_size(), 2 * bit_length);
         assert_eq!(decomposed.col_size(), 8);
 
@@ -840,7 +840,7 @@ mod tests {
             sampler.sample_uniform(&params, 2, 68, crate::poly::sampler::DistType::FinRingDist);
 
         // Decompose 'other' matrix
-        let other_decompose = other.decompose(None);
+        let other_decompose = other.decompose();
 
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
@@ -882,8 +882,8 @@ mod tests {
         let identity = DCRTPolyMatrix::identity(&params, 37, None);
 
         // Check result
-        let expected_result = s.clone() * (identity.tensor(&other.decompose(None)));
-        let expected_result_2 = s.mul_tensor_identity(&other.decompose(None), 37);
+        let expected_result = s.clone() * (identity.tensor(&other.decompose()));
+        let expected_result_2 = s.mul_tensor_identity(&other.decompose(), 37);
 
         assert_eq!(expected_result.row_size(), 2);
         assert_eq!(expected_result.col_size(), 2516);
