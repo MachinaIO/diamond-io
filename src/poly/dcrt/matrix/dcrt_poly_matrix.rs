@@ -1,14 +1,13 @@
-use super::{block_offsets, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyParams, FinRingElem},
+        dcrt::{DCRTPoly, DCRTPolyParams},
         Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
 use itertools::Itertools;
-use num_bigint::BigInt;
 use openfhe::{
     cxx::UniquePtr,
     ffi::{
@@ -119,30 +118,30 @@ impl PolyMatrix for DCRTPolyMatrix {
         gadget_vector.concat_diag(&vec![&gadget_vector; size - 1])
     }
 
-    fn decompose(&self, base_bits: Option<u32>) -> Self {
-        let base_bits = base_bits.unwrap_or(self.params.base_bits());
-        let digits_len =
+    fn decompose(&self) -> Self {
+        let base_bits = self.params.base_bits();
+        let log_base_q =
             self.params.crt_bits().div_ceil(base_bits as usize) * self.params.crt_depth();
-        let new_nrow = self.nrow * digits_len;
+        let new_nrow = self.nrow * log_base_q;
         let mut new_matrix = Self::new_empty(&self.params, new_nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
             let nrow = row_offsets.len();
-            let new_nrow = row_offsets.len() * digits_len;
+            let new_nrow = row_offsets.len() * log_base_q;
             let ncol = col_offsets.len();
             let entries = self.block_entries(row_offsets, col_offsets);
             let mut new_entries = vec![vec![DCRTPoly::zero(&self.params); ncol]; new_nrow];
             for i in 0..nrow {
                 for j in 0..ncol {
                     let decomposed = Self::dcrt_decompose_poly(&entries[i][j], base_bits);
-                    debug_assert_eq!(decomposed.len(), digits_len);
-                    for k in 0..digits_len {
-                        new_entries[i * digits_len + k][j] = decomposed[k].clone();
+                    debug_assert_eq!(decomposed.len(), log_base_q);
+                    for k in 0..log_base_q {
+                        new_entries[i * log_base_q + k][j] = decomposed[k].clone();
                     }
                 }
             }
             new_entries
         };
-        new_matrix.replace_entries_with_expand(0..self.nrow, 0..self.ncol, digits_len, 1, f);
+        new_matrix.replace_entries_with_expand(0..self.nrow, 0..self.ncol, log_base_q, 1, f);
         new_matrix
     }
 
@@ -188,19 +187,19 @@ impl PolyMatrix for DCRTPolyMatrix {
         let output = (0..identity_size)
             .flat_map(|i| {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j, None))
+                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
             })
             .collect_vec();
 
         output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
-    fn get_column_matrix_decompose(&self, j: usize, base_bits: Option<u32>) -> Self {
+    fn get_column_matrix_decompose(&self, j: usize) -> Self {
         Self::from_poly_vec(
             &self.params,
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
-        .decompose(base_bits)
+        .decompose()
     }
 
     // fn read_from_files<P: AsRef<Path> + Send + Sync>(
@@ -351,7 +350,7 @@ mod tests {
 
     use super::*;
     use crate::poly::{
-        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler},
+        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
         sampler::PolyUniformSampler,
     };
 
@@ -399,7 +398,7 @@ mod tests {
         assert_eq!(gadget_matrix.size().0, 2);
         assert_eq!(gadget_matrix.size().1, 2 * bit_length);
 
-        let decomposed = matrix.decompose(None);
+        let decomposed = matrix.decompose();
         assert_eq!(decomposed.size().0, 2 * bit_length);
         assert_eq!(decomposed.size().1, 8);
 
@@ -444,7 +443,7 @@ mod tests {
         assert_eq!(gadget_matrix.size().0, 2);
         assert_eq!(gadget_matrix.size().1, 2 * digits_length);
 
-        let decomposed = matrix.decompose(None);
+        let decomposed = matrix.decompose();
         assert_eq!(decomposed.size().0, 2 * digits_length);
         assert_eq!(decomposed.size().1, 8);
 
@@ -667,7 +666,7 @@ mod tests {
             sampler.sample_uniform(&params, 2, 13, crate::poly::sampler::DistType::FinRingDist);
 
         // Decompose 'other' matrix
-        let other_decompose = other.decompose(None);
+        let other_decompose = other.decompose();
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
         // Check dimensions
@@ -704,7 +703,7 @@ mod tests {
         assert_eq!(result.size().1, 481);
 
         // Check result
-        let decomposed = other.decompose(None);
+        let decomposed = other.decompose();
         let tensor = identity_tensor_matrix(37, &decomposed);
         let expected_result_1 = s.clone() * tensor;
         let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);

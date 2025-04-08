@@ -79,18 +79,18 @@ pub trait PolyMatrix:
     }
     /// Constructs a gadget matrix Gₙ
     ///
-    /// Gadget vector g = (2^0, 2^1, ..., 2^{log(q)-1}),
-    /// where g ∈ Z_q^{log(q)}.
+    /// Gadget vector g = (b^0, b^1, ..., b^{log_b(q)-1}),
+    /// where g ∈ Z_q^{log_b(q)} and b is the base defined in `params`.
     ///
     /// Gₙ = Iₙ ⊗ gᵀ
     ///
-    /// * `params` - Parameters describing the modulus and other ring characteristics.
+    /// * `params` - Parameters describing the modulus, the base, and other ring characteristics.
     /// * `size` - The size of the identity block (n), dictating the final matrix dimensions.
     ///
-    /// A matrix of dimension n×(n·bit_length), in which each block row is a scaled identity
+    /// A matrix of dimension n×(n·log_b(q)), in which each block row is a scaled identity
     /// under the ring modulus.
     fn gadget_matrix(params: &<Self::P as Poly>::Params, size: usize) -> Self;
-    fn decompose(&self, base_bits: Option<u32>) -> Self;
+    fn decompose(&self) -> Self;
     fn modulus_switch(
         &self,
         new_modulus: &<<Self::P as Poly>::Params as PolyParams>::Modulus,
@@ -101,7 +101,7 @@ pub trait PolyMatrix:
     /// where G^-1(other) is bit decomposition of other matrix
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
     /// j is column and return decomposed matrix of target column
-    fn get_column_matrix_decompose(&self, j: usize, base_bits: Option<u32>) -> Self;
+    fn get_column_matrix_decompose(&self, j: usize) -> Self;
     // /// Reads a matrix from files under the given directory.
     // fn read_from_files<P: AsRef<Path> + Send + Sync>(
     //     params: &<Self::P as Poly>::Params,
