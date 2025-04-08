@@ -5,7 +5,7 @@ use diamond_io::poly::{
 };
 
 fn bench_matrix_operation(c: &mut Criterion) {
-    let params = DCRTPolyParams::new(4, 2, 17);
+    let params = DCRTPolyParams::new(4, 2, 17, 1);
     let size = 3;
     let matrix_a = DCRTPolyMatrix::identity(&params, size, None);
     let matrix_b = DCRTPolyMatrix::identity(&params, size, None);
@@ -24,7 +24,7 @@ fn bench_matrix_operation(c: &mut Criterion) {
 }
 
 fn bench_matrix_tensor(c: &mut Criterion) {
-    let params = DCRTPolyParams::new(4, 2, 17);
+    let params = DCRTPolyParams::new(4, 2, 17, 1);
     let shape_a = (2, 2);
     let shape_b = (3, 3);
 
