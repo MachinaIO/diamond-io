@@ -1,22 +1,17 @@
-use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyParams},
-        Poly, PolyMatrix, PolyParams,
+        dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams},
+        MatrixElem, MatrixParams, Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
 use itertools::Itertools;
-use openfhe::{
-    cxx::UniquePtr,
-    ffi::{
-        DCRTPolyGadgetVector, GetMatrixCols, GetMatrixElement, GetMatrixRows, Matrix, MatrixGen,
-        SetMatrixElement,
-    },
-};
+use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::ops::Range;
+
+use super::MmapMatrix;
 
 impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -191,19 +186,19 @@ impl PolyMatrix for DCRTPolyMatrix {
         let output = (0..identity_size)
             .flat_map(|i| {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j, None))
+                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
             })
             .collect_vec();
 
         output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
-    fn get_column_matrix_decompose(&self, j: usize, base_bits: Option<u32>) -> Self {
+    fn get_column_matrix_decompose(&self, j: usize) -> Self {
         Self::from_poly_vec(
             &self.params,
             self.get_column(j).into_iter().map(|poly| vec![poly]).collect(),
         )
-        .decompose(base_bits)
+        .decompose()
     }
 
     // fn read_from_files<P: AsRef<Path> + Send + Sync>(
@@ -377,7 +372,7 @@ mod tests {
         assert_eq!(gadget_matrix.size().0, 2);
         assert_eq!(gadget_matrix.size().1, 2 * bit_length);
 
-        let decomposed = matrix.decompose(None);
+        let decomposed = matrix.decompose();
         assert_eq!(decomposed.size().0, 2 * bit_length);
         assert_eq!(decomposed.size().1, 8);
 
@@ -645,7 +640,7 @@ mod tests {
             sampler.sample_uniform(&params, 2, 13, crate::poly::sampler::DistType::FinRingDist);
 
         // Decompose 'other' matrix
-        let other_decompose = other.decompose(None);
+        let other_decompose = other.decompose();
         // Perform S * (I_37 ⊗ G^-1(other))
         let result: DCRTPolyMatrix = s.mul_tensor_identity(&other_decompose, 37);
         // Check dimensions
@@ -682,7 +677,7 @@ mod tests {
         assert_eq!(result.size().1, 481);
 
         // Check result
-        let decomposed = other.decompose(None);
+        let decomposed = other.decompose();
         let tensor = identity_tensor_matrix(37, &decomposed);
         let expected_result_1 = s.clone() * tensor;
         let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);

@@ -27,7 +27,7 @@ impl<M: PolyMatrix> BitToInt<M::P> for BggPublicKey<M> {
         let d1 = self.matrix.row_size();
         let unit_vector = M::unit_column_vector(params, d1, d1 - 1);
         let scalared = unit_vector * scalar;
-        let decomposed = scalared.decompose(None);
+        let decomposed = scalared.decompose();
         let matrix = self.matrix.clone() * decomposed;
         Self { matrix, reveal_plaintext: self.reveal_plaintext }
     }
@@ -40,7 +40,7 @@ impl<M: PolyMatrix> BitToInt<M::P> for BggEncoding<M> {
         let d1 = self.pubkey.matrix.row_size();
         let unit_vector = M::unit_column_vector(params, d1, d1 - 1);
         let scalared = unit_vector * &scalar;
-        let decomposed = scalared.decompose(None);
+        let decomposed = scalared.decompose();
         let vector = self.vector.clone() * decomposed;
         let pubkey = self.pubkey.power_of_two(params, k);
         let plaintext = self.plaintext.clone().map(|plaintext| plaintext * scalar);
