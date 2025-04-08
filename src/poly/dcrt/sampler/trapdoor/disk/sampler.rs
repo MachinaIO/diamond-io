@@ -447,8 +447,9 @@ mod test {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let target =
             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
-
+        println!("target :{} {}", target.col_size(), target.row_size());
         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
+        println!("preimage :{} {}", preimage.col_size(), preimage.row_size());
 
         let expected_rows = size * (k + 2);
         let expected_cols = target_cols;

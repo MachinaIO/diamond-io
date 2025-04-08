@@ -165,7 +165,7 @@ impl DCRTPolyTrapdoorSampler {
         size: usize,
     ) -> DCRTPolyMatrix {
         let n = params.ring_dimension() as usize;
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         let target_cols = target_block.col_size();
 
         debug_mem(format!("Processing preimage block, target_cols={}, size={}", target_cols, size));
@@ -259,7 +259,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
 
         let num_block = target_cols.div_ceil(size);
-        let k = params.modulus_bits();
+        let k = params.modulus_digits();
         debug_mem(format!("preimage before loop processing out of {}", num_block));
 
         let public_matrix = DCRTMatrixPtr::new_public_matrix(
@@ -501,9 +501,10 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let target =
             uniform_sampler.sample_uniform(&params, size, target_cols, DistType::FinRingDist);
+        println!("target :{} {}", target.col_size(), target.row_size());
 
         let preimage = trapdoor_sampler.preimage(&params, &trapdoor, &public_matrix, &target);
-
+        println!("preimage :{} {}", preimage.col_size(), preimage.row_size());
         let expected_rows = size * (k + 2);
         let expected_cols = target_cols;
 
