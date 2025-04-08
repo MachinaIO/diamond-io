@@ -236,7 +236,7 @@ mod test {
         let target = uniform_sampler.sample_uniform(&params, 1, 1, DistType::FinRingDist);
         let decomposed = DCRTPolyMatrix::from_poly_vec(
             &params,
-            decompose_dcrt_gadget(&target.entry(0, 0), 3.0 * SIGMA, &params, 8, SIGMA),
+            decompose_dcrt_gadget(&target.entry(0, 0), (8.0 + 1.0) * SIGMA, &params, 8, SIGMA),
         );
         let gadget_vec = DCRTPolyMatrix::gadget_matrix(&params, 1);
         assert_eq!(gadget_vec * decomposed, target);
