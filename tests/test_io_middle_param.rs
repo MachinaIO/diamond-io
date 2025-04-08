@@ -78,7 +78,6 @@ mod test {
         }
         public_circuit.output(public_circuit_outputs);
 
-
         // 3. Obfuscate the circuit
         let obf_params = ObfuscationParams {
             params: params.clone(),
@@ -92,11 +91,11 @@ mod test {
 
         let mut rng = rand::rng();
 
-        let t_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t_bar.clone()]);
+        let t_bar_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t_bar.clone()]);
 
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
-            &t_mat,
+            &t_bar_mat,
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
@@ -117,7 +116,6 @@ mod test {
         info!("output {:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);
         info!("Total time: {:?}", total_time);
-        #[cfg(feature = "test")]
         #[cfg(feature = "test")]
         let input_poly = DCRTPoly::from_const(
             &params,

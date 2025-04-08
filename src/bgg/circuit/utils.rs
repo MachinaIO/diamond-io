@@ -89,9 +89,9 @@ mod tests {
         assert!(a_bits.len() == log_q);
 
         // 2. Create a public circuit
-        // Input: BITS(ct), x, y
-        // Output: BITS(ct) AND x, BITS(ct) AND y
-        // BITS(ct) are hardcoded inside the circuit
+        // Input: BITS(a), BITS(b), x, y
+        // Output: BITS(a) AND x, BITS(b) AND x, BITS(a) AND y, BITS(b) AND y
+        // BITS(a) and BITS(b) are hardcoded inside the circuit
         let a_bits_vecs = a_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
         let b_bits_vecs = b_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
 
@@ -179,8 +179,8 @@ mod tests {
         for (actual, expected) in output.iter().zip(expected_output.iter()) {
             assert_eq!(actual, expected);
         }
-        
-        // 5. Recompose the outputs
+
+        // 4. Recompose the outputs
         let output_one = output[..log_q].to_vec();
         let output_two = output[log_q..].to_vec();
 

@@ -22,7 +22,6 @@ mod test {
     const SIGMA: f64 = 4.578;
 
     #[test]
-    #[allow(clippy::needless_range_loop)]
     fn test_io_just_mul_enc_and_bit() {
         init_tracing();
         let start_time = std::time::Instant::now();
@@ -55,13 +54,15 @@ mod test {
         // Input: BITS(a), BITS(b) x
         // Output: BITS(a) AND x, BITS(b) AND x
         // BITS(a) and BITS(b) are hardcoded inside the circuit
-        let mut public_circuit = PolyCircuit::new();
-        let x_id = public_circuit.input(1)[0];
-
-        let mut public_circuit_outputs = Vec::new();
-
         let a_bits_vecs = a_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
         let b_bits_vecs = b_bits.iter().map(|poly| poly.to_bool_vec()).collect::<Vec<_>>();
+
+        let mut public_circuit = PolyCircuit::new();
+        let pub_circuit_inputs = public_circuit.input(2);
+        let x = pub_circuit_inputs[0];
+        let y = pub_circuit_inputs[1];
+
+        let mut public_circuit_outputs = Vec::new();
 
         let a_bits_consts =
             a_bits_vecs.iter().map(|vec| public_circuit.const_bit_poly(vec)).collect::<Vec<_>>();
@@ -69,9 +70,11 @@ mod test {
         let b_bits_consts =
             b_bits_vecs.iter().map(|vec| public_circuit.const_bit_poly(vec)).collect::<Vec<_>>();
 
-        for bits_consts in [&a_bits_consts, &b_bits_consts] {
-            for &bit_const in bits_consts {
-                public_circuit_outputs.push(public_circuit.and_gate(bit_const, x_id));
+        for input in [x, y] {
+            for bits_vec in [&a_bits_consts, &b_bits_consts] {
+                for bit in bits_vec.iter() {
+                    public_circuit_outputs.push(public_circuit.and_gate(*bit, input));
+                }
             }
         }
         public_circuit.output(public_circuit_outputs);
@@ -89,11 +92,11 @@ mod test {
 
         let mut rng = rand::rng();
 
-        let t_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t_bar.clone()]);
+        let t_bar_mat = DCRTPolyMatrix::from_poly_vec_column(&params, vec![t_bar.clone()]);
 
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
-            &t_mat,
+            &t_bar_mat,
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
@@ -114,7 +117,6 @@ mod test {
         info!("output {:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);
         info!("Total time: {:?}", total_time);
-
         #[cfg(feature = "test")]
         let input_poly = DCRTPoly::from_const(
             &params,
