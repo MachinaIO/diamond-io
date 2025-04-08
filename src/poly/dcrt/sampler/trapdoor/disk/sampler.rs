@@ -3,7 +3,7 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            sampler::trapdoor::KARNEY_THRESHOLD, DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
+            sampler::trapdoor::disk::KARNEY_THRESHOLD, DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
             DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
