@@ -48,6 +48,7 @@ impl DCRTPolyMatrix {
         &self.params
     }
 
+    // todo this inefficient
     pub fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
         let inner = vec![vec![DCRTPoly::const_zero(params); ncol]; nrow];
         Self { inner, params: params.clone(), nrow, ncol }

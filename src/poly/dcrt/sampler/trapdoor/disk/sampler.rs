@@ -441,7 +441,7 @@ mod test {
         let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
-
+        println!("public_matrix :{} {}", public_matrix.col_size(), public_matrix.row_size());
         // Create a non-square target matrix (size x target_cols) such that target_cols > size
         // target_cols is not a multiple of size
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -479,6 +479,7 @@ mod test {
         let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+        println!("public_matrix :{} {}", public_matrix.col_size(), public_matrix.row_size());
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size
         // target_cols is not a multiple of size

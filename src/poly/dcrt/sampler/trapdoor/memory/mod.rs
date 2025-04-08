@@ -223,7 +223,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
         let rlwe_trapdoor = dcrt_trapdoor.get_trapdoor_pair();
         let nrow = size;
-        let ncol = (&params.modulus_bits() + 2) * size;
+        let ncol = (&params.modulus_digits() + 2) * size;
         let public_matrix = DCRTPolyMatrix::from_poly_vec(
             params,
             parallel_iter!(0..nrow)
@@ -493,6 +493,8 @@ mod tests {
         let k = params.modulus_digits();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let (trapdoor, public_matrix) = trapdoor_sampler.trapdoor(&params, size);
+
+        println!("public_matrix :{} {}", public_matrix.col_size(), public_matrix.row_size());
 
         // Create a non-square target matrix (size x target_cols) such that target_cols > size
         // target_cols is not a multiple of size
