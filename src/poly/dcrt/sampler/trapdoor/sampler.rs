@@ -75,7 +75,9 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
         let dgg_large_std = (s * s - self.c * self.c).sqrt();
         let peikert = dgg_large_std < KARNEY_THRESHOLD;
-        let (dgg_large_mean, dgg_large_table) = {
+        let (dgg_large_mean, dgg_large_table) = if dgg_large_std > KARNEY_THRESHOLD {
+            (None, None)
+        } else {
             let acc: f64 = 5e-32;
             let m = (-2.0 * acc.ln()).sqrt();
             let fin = (dgg_large_std * m).ceil() as usize;
@@ -91,9 +93,10 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             for i in 0..fin {
                 m_vals[i] *= m_a;
             }
-            (m_a, m_vals)
+            (Some(m_a), Some(m_vals))
         };
-        let dgg_large_params = (dgg_large_mean, dgg_large_std, &dgg_large_table[..]);
+        let dgg_large_params =
+            (dgg_large_mean, dgg_large_std, dgg_large_table.as_ref().map(|v| &v[..]));
         log_mem("preimage parameters computed");
         let p_hat = trapdoor.sample_pert_square_mat(
             s,

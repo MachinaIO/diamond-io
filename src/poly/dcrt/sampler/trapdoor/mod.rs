@@ -45,7 +45,7 @@ impl DCRTTrapdoor {
         s: f64,
         c: f64,
         dgg: f64,
-        dgg_large_params: (f64, f64, &[f64]),
+        dgg_large_params: (Option<f64>, f64, Option<&[f64]>),
         peikert: bool,
         total_ncol: usize,
     ) -> DCRTPolyMatrix {
@@ -78,9 +78,9 @@ impl DCRTTrapdoor {
             let dgg_vectors = gen_dgg_int_vec(
                 n * dk * padded_ncol,
                 peikert,
-                dgg_large_params.0,
+                dgg_large_params.0.unwrap(),
                 dgg_large_params.1,
-                dgg_large_params.2,
+                dgg_large_params.2.unwrap(),
             );
             let vecs = parallel_iter!(0..n * dk)
                 .map(|i| {
