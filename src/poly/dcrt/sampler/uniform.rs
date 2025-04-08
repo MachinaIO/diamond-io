@@ -1,6 +1,3 @@
-use rayon::prelude::*;
-use std::ops::Range;
-
 use crate::{
     parallel_iter,
     poly::{
@@ -10,6 +7,9 @@ use crate::{
     },
 };
 use openfhe::ffi;
+use rayon::prelude::*;
+#[cfg(feature = "disk")]
+use std::ops::Range;
 
 pub struct DCRTPolyUniformSampler {}
 

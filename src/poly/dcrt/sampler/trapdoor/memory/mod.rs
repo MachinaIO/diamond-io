@@ -230,6 +230,13 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
                 })
                 .collect(),
         );
+        log_mem(format!(
+            "public matrix: {} {} || {} {}",
+            public_matrix.col_size(),
+            public_matrix.row_size(),
+            nrow,
+            ncol
+        ));
         (rlwe_trapdoor, public_matrix)
     }
 

@@ -100,7 +100,9 @@ where
     log_mem("b star trapdoor init sampled");
 
     let p_init = {
+        log_mem("p_init");
         let m_b = (2 * (d + 1)) * (2 + log_base_q);
+        log_mem("m_b");
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &b_star_cur;
         let error = sampler_uniform.sample_uniform(
@@ -109,6 +111,13 @@ where
             m_b,
             DistType::GaussDist { sigma: obf_params.p_sigma },
         );
+        log_mem(format!(
+            "error : {} {} | {} {}",
+            s_b.col_size(),
+            s_b.row_size(),
+            error.col_size(),
+            error.row_size()
+        ));
         s_b + error
     };
     log_mem("Computed p_init");

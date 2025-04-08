@@ -48,6 +48,13 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         let a0 = a_bar.concat_columns(&[&DCRTPolyMatrix::identity(params, size, None)]);
         let a1 = g - (a_bar * &trapdoor.r + &trapdoor.e);
         let a = a0.concat_columns(&[&a1]);
+        log_mem(format!(
+            "public matrix: {} {}  || {} {}",
+            a.col_size(),
+            a.row_size(),
+            size,
+            (&params.modulus_bits() + 2) * size
+        ));
         (trapdoor, a)
     }
 
