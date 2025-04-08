@@ -1,4 +1,8 @@
-use crate::{parallel_iter, utils::debug_mem};
+use crate::{
+    parallel_iter,
+    poly::{MatrixElem, MatrixParams},
+    utils::debug_mem,
+};
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
@@ -7,51 +11,21 @@ use std::{
     env,
     fmt::Debug,
     fs::File,
-    ops::{Add, AddAssign, Mul, MulAssign, Neg, Range, Sub, SubAssign},
+    ops::{Add, Mul, Neg, Range, Sub},
 };
 // use sysinfo::System;
 use tempfile::tempfile;
 
 // static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
 
-pub trait MmapMatrixParams: Debug + Clone + PartialEq + Eq + Send + Sync {
-    fn entry_size(&self) -> usize;
-}
-
-pub trait MmapMatrixElem:
-    Sized
-    + Clone
-    + Debug
-    + PartialEq
-    + Eq
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + Neg<Output = Self>
-    + AddAssign
-    + SubAssign
-    + MulAssign
-    + for<'a> Add<&'a Self, Output = Self>
-    + for<'a> Sub<&'a Self, Output = Self>
-    + for<'a> Mul<&'a Self, Output = Self>
-    + Send
-    + Sync
-{
-    type Params: MmapMatrixParams;
-    fn zero(params: &Self::Params) -> Self;
-    fn one(params: &Self::Params) -> Self;
-    fn from_bytes_to_elem(params: &Self::Params, bytes: &[u8]) -> Self;
-    fn as_elem_to_bytes(&self) -> Vec<u8>;
-}
-
-pub struct MmapMatrix<T: MmapMatrixElem> {
+pub struct MmapMatrix<T: MatrixElem> {
     pub params: T::Params,
     pub file: File,
     pub nrow: usize,
     pub ncol: usize,
 }
 
-impl<T: MmapMatrixElem> MmapMatrix<T> {
+impl<T: MatrixElem> MmapMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
         let entry_size = params.entry_size();
         let len = entry_size * nrow * ncol;
@@ -414,7 +388,7 @@ impl<T: MmapMatrixElem> MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Debug for MmapMatrix<T> {
+impl<T: MatrixElem> Debug for MmapMatrix<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MmapMatrix")
             .field("params", &self.params)
@@ -425,7 +399,7 @@ impl<T: MmapMatrixElem> Debug for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Clone for MmapMatrix<T> {
+impl<T: MatrixElem> Clone for MmapMatrix<T> {
     fn clone(&self) -> Self {
         let mut new_matrix = Self::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
@@ -436,7 +410,7 @@ impl<T: MmapMatrixElem> Clone for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> PartialEq for MmapMatrix<T> {
+impl<T: MatrixElem> PartialEq for MmapMatrix<T> {
     fn eq(&self, other: &Self) -> bool {
         if self.params != other.params || self.nrow != other.nrow || self.ncol != other.ncol {
             return false;
@@ -465,9 +439,9 @@ impl<T: MmapMatrixElem> PartialEq for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Eq for MmapMatrix<T> {}
+impl<T: MatrixElem> Eq for MmapMatrix<T> {}
 
-impl<T: MmapMatrixElem> Drop for MmapMatrix<T> {
+impl<T: MatrixElem> Drop for MmapMatrix<T> {
     fn drop(&mut self) {
         // debug_mem("Drop MmapMatrix");
         self.file.set_len(0).expect("failed to truncate file");
@@ -475,7 +449,7 @@ impl<T: MmapMatrixElem> Drop for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Add for MmapMatrix<T> {
+impl<T: MatrixElem> Add for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -483,7 +457,7 @@ impl<T: MmapMatrixElem> Add for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
+impl<T: MatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn add(self, rhs: &MmapMatrix<T>) -> Self::Output {
@@ -506,7 +480,7 @@ impl<T: MmapMatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Sub<MmapMatrix<T>> for MmapMatrix<T> {
+impl<T: MatrixElem> Sub<MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -514,7 +488,7 @@ impl<T: MmapMatrixElem> Sub<MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
+impl<T: MatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn sub(self, rhs: &Self) -> Self::Output {
@@ -522,7 +496,7 @@ impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
+impl<T: MatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn sub(self, rhs: &MmapMatrix<T>) -> Self::Output {
@@ -545,7 +519,7 @@ impl<T: MmapMatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul<MmapMatrix<T>> for MmapMatrix<T> {
+impl<T: MatrixElem> Mul<MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -553,7 +527,7 @@ impl<T: MmapMatrixElem> Mul<MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for MmapMatrix<T> {
+impl<T: MatrixElem> Mul<&MmapMatrix<T>> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: &Self) -> Self::Output {
@@ -561,7 +535,7 @@ impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
+impl<T: MatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: &MmapMatrix<T>) -> Self::Output {
@@ -592,14 +566,14 @@ impl<T: MmapMatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul<T> for MmapMatrix<T> {
+impl<T: MatrixElem> Mul<T> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
     fn mul(self, rhs: T) -> Self::Output {
         self * &rhs
     }
 }
 
-impl<T: MmapMatrixElem> Mul<&T> for MmapMatrix<T> {
+impl<T: MatrixElem> Mul<&T> for MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: &T) -> Self::Output {
@@ -607,7 +581,7 @@ impl<T: MmapMatrixElem> Mul<&T> for MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul<T> for &MmapMatrix<T> {
+impl<T: MatrixElem> Mul<T> for &MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: T) -> Self::Output {
@@ -615,7 +589,7 @@ impl<T: MmapMatrixElem> Mul<T> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Mul<&T> for &MmapMatrix<T> {
+impl<T: MatrixElem> Mul<&T> for &MmapMatrix<T> {
     type Output = MmapMatrix<T>;
 
     fn mul(self, rhs: &T) -> Self::Output {
@@ -631,7 +605,7 @@ impl<T: MmapMatrixElem> Mul<&T> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MmapMatrixElem> Neg for MmapMatrix<T> {
+impl<T: MatrixElem> Neg for MmapMatrix<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -706,7 +680,7 @@ pub fn block_offsets_distinct_block_sizes(
     (row_offsets, col_offsets)
 }
 
-fn add_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
+fn add_block_matrices<T: MatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
     let nrow = lhs.len();
     let ncol = lhs[0].len();
     parallel_iter!(0..nrow)
@@ -716,7 +690,7 @@ fn add_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Ve
         .collect::<Vec<Vec<T>>>()
 }
 
-fn sub_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
+fn sub_block_matrices<T: MatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Vec<Vec<T>> {
     let nrow = lhs.len();
     let ncol = lhs[0].len();
     parallel_iter!(0..nrow)
@@ -726,7 +700,7 @@ fn sub_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: &[Vec<T>]) -> Ve
         .collect::<Vec<Vec<T>>>()
 }
 
-fn mul_block_matrices<T: MmapMatrixElem>(lhs: Vec<Vec<T>>, rhs: Vec<Vec<T>>) -> Vec<Vec<T>> {
+fn mul_block_matrices<T: MatrixElem>(lhs: Vec<Vec<T>>, rhs: Vec<Vec<T>>) -> Vec<Vec<T>> {
     let nrow = lhs.len();
     let ncol = rhs[0].len();
     let n_inner = lhs[0].len();

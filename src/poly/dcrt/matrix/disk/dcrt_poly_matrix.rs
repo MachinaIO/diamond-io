@@ -1,9 +1,9 @@
-use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::MmapMatrix;
 use crate::{
     parallel_iter,
     poly::{
         dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams},
-        Poly, PolyMatrix, PolyParams,
+        MatrixElem, MatrixParams, Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
@@ -12,7 +12,7 @@ use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::ops::Range;
 
-impl MmapMatrixParams for DCRTPolyParams {
+impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
         let log_q_bytes = self.modulus_bits().div_ceil(8);
         let dim = self.ring_dimension() as usize;
@@ -20,7 +20,7 @@ impl MmapMatrixParams for DCRTPolyParams {
     }
 }
 
-impl MmapMatrixElem for DCRTPoly {
+impl MatrixElem for DCRTPoly {
     type Params = DCRTPolyParams;
 
     fn zero(params: &Self::Params) -> Self {

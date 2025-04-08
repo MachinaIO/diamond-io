@@ -2,7 +2,7 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams, FinRingElem},
-        Poly, PolyMatrix, PolyParams,
+        MatrixElem, Poly, PolyMatrix, PolyParams,
     },
 };
 use num_bigint::BigInt;
@@ -293,24 +293,23 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn decompose(&self, base_bits: Option<u32>) -> Self {
-        let bit_length = self.params.modulus_bits();
         let base_bits = base_bits.unwrap_or(self.params.base_bits());
-
+        let digits_len =
+            self.params.crt_bits().div_ceil(base_bits as usize) * self.params.crt_depth();
         Self {
-            nrow: self.nrow * bit_length,
+            nrow: self.nrow * digits_len,
             ncol: self.ncol,
             inner: parallel_iter!(0..self.nrow)
                 .flat_map(|i| {
-                    let decompositions: Vec<_> = parallel_iter!(0..self.ncol)
-                        .map(|j| Self::dcrt_decompose_poly(&self.inner[i][j], base_bits))
-                        .collect();
-                    let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
-                    for col_decomp in decompositions {
-                        for bit in 0..bit_length {
-                            decomposed_rows[bit].push(col_decomp[bit].clone());
+                    let mut new_entries =
+                        vec![vec![DCRTPoly::zero(&self.params); self.ncol]; self.nrow * digits_len];
+                    for j in 0..self.ncol {
+                        let decomposed = Self::dcrt_decompose_poly(&self.inner[i][j], base_bits);
+                        for k in 0..digits_len {
+                            new_entries[i * digits_len + k][j] = decomposed[k].clone();
                         }
                     }
-                    decomposed_rows
+                    new_entries
                 })
                 .collect(),
             params: self.params.clone(),
@@ -570,7 +569,7 @@ mod tests {
         let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, 2);
         assert_eq!(gadget_matrix.row_size(), 2);
         assert_eq!(gadget_matrix.col_size(), 2 * bit_length);
-        let decomposed = matrix.decompose(None);
+        let decomposed = matrix.decompose(Some(params.base_bits()));
         assert_eq!(decomposed.row_size(), 2 * bit_length);
         assert_eq!(decomposed.col_size(), 8);
 

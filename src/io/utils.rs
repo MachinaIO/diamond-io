@@ -147,7 +147,7 @@ mod test {
             dcrt::{
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
-            element::PolyElem,
+            poly_element::PolyElem,
             sampler::DistType,
         },
     };

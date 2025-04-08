@@ -1,15 +1,17 @@
-use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use crate::poly::{MatrixElem, MatrixParams};
+
+use super::MmapMatrix;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;
 
-impl MmapMatrixParams for I64MatrixParams {
+impl MatrixParams for I64MatrixParams {
     fn entry_size(&self) -> usize {
         std::mem::size_of::<i64>()
     }
 }
 
-impl MmapMatrixElem for i64 {
+impl MatrixElem for i64 {
     type Params = I64MatrixParams;
 
     fn zero(_: &Self::Params) -> Self {

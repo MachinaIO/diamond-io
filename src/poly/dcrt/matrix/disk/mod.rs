@@ -4,4 +4,4 @@ pub mod mmap_matrix;
 
 pub use dcrt_poly_matrix::DCRTPolyMatrix;
 pub use i64_matrix::I64Matrix;
-pub use mmap_matrix::{block_offsets, block_size, MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+pub use mmap_matrix::{block_offsets, block_size, MmapMatrix};
