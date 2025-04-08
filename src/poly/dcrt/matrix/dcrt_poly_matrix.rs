@@ -129,17 +129,21 @@ impl PolyMatrix for DCRTPolyMatrix {
             let new_nrow = row_offsets.len() * log_base_q;
             let ncol = col_offsets.len();
             let entries = self.block_entries(row_offsets, col_offsets);
-            let mut new_entries = vec![vec![DCRTPoly::zero(&self.params); ncol]; new_nrow];
-            for i in 0..nrow {
-                for j in 0..ncol {
-                    let decomposed = Self::dcrt_decompose_poly(&entries[i][j], base_bits);
-                    debug_assert_eq!(decomposed.len(), log_base_q);
-                    for k in 0..log_base_q {
-                        new_entries[i * log_base_q + k][j] = decomposed[k].clone();
-                    }
-                }
-            }
-            new_entries
+            let decomposed_entries: Vec<Vec<Vec<DCRTPoly>>> = parallel_iter!(0..nrow)
+                .map(|i| {
+                    (0..ncol)
+                        .map(|j| Self::dcrt_decompose_poly(&entries[i][j], base_bits))
+                        .collect()
+                })
+                .collect();
+            parallel_iter!(0..new_nrow)
+                .map(|idx| {
+                    let i = idx / log_base_q;
+                    let k = idx % log_base_q;
+
+                    (0..ncol).map(|j| decomposed_entries[i][j][k].clone()).collect()
+                })
+                .collect()
         };
         new_matrix.replace_entries_with_expand(0..self.nrow, 0..self.ncol, log_base_q, 1, f);
         new_matrix
