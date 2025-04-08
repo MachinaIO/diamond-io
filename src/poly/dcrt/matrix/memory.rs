@@ -2,20 +2,22 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams, FinRingElem},
-        MatrixElem, Poly, PolyMatrix, PolyParams,
+        Poly, PolyMatrix, PolyParams,
     },
+    utils::debug_mem,
 };
 use num_bigint::BigInt;
+use openfhe::ffi::{MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Mul, Neg, Range, Sub},
 };
 
 #[derive(Clone)]
 pub struct DCRTPolyMatrix {
     inner: Vec<Vec<DCRTPoly>>,
-    params: DCRTPolyParams,
+    pub params: DCRTPolyParams,
     nrow: usize,
     ncol: usize,
 }
@@ -48,10 +50,107 @@ impl DCRTPolyMatrix {
         &self.params
     }
 
-    pub(crate) fn dcrt_decompose_poly(poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
-        let decomposed = poly.get_poly().Decompose(base_bits);
-        let cpp_decomposed = CppMatrix::new(decomposed);
-        parallel_iter!(0..cpp_decomposed.ncol()).map(|idx| cpp_decomposed.entry(0, idx)).collect()
+    pub fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
+        let inner = vec![vec![DCRTPoly::const_zero(params); ncol]; nrow];
+        Self { inner, params: params.clone(), nrow, ncol }
+    }
+
+    pub fn replace_entries<F>(&mut self, rows: Range<usize>, cols: Range<usize>, f: F)
+    where
+        F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<DCRTPoly>> + Send + Sync,
+    {
+        let new_entries = f(rows.clone(), cols.clone());
+        assert_eq!(
+            new_entries.len(),
+            rows.end - rows.start,
+            "Returned number of rows does not match the provided row range"
+        );
+        for (i, row_vec) in new_entries.iter().enumerate() {
+            assert_eq!(
+                row_vec.len(),
+                cols.end - cols.start,
+                "Returned number of columns does not match the provided column range at row {}",
+                i
+            );
+        }
+        for (i, row_entries) in new_entries.into_iter().enumerate() {
+            let row_idx = rows.start + i;
+            for (j, entry) in row_entries.into_iter().enumerate() {
+                let col_idx = cols.start + j;
+                self.inner[row_idx][col_idx] = entry;
+            }
+        }
+    }
+
+    pub fn replace_entries_with_expand<F>(
+        &mut self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+        row_scale: usize,
+        col_scale: usize,
+        f: F,
+    ) where
+        F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<DCRTPoly>> + Send + Sync,
+    {
+        let logical_rows = rows.end - rows.start;
+        let logical_cols = cols.end - cols.start;
+        let logical_submatrix = f(rows.clone(), cols.clone());
+
+        // Replace each logical cell by expanding it in the physical matrix.
+        // The physical matrix is assumed to be laid out such that logical row i
+        // corresponds to physical rows (rows.start + i) * row_scale .. (rows.start + i + 1) *
+        // row_scale, and similarly for columns.
+        for i in 0..logical_rows {
+            // The starting index in the physical matrix for the current logical row.
+            let physical_row_start = (rows.start + i) * row_scale;
+            for j in 0..logical_cols {
+                // The starting index for the current logical column.
+                let physical_col_start = (cols.start + j) * col_scale;
+                // Get the logical value and clone it (assumes DCRTPoly is Clone).
+                let value = logical_submatrix[i][j].clone();
+                // Fill the corresponding physical block with the cloned value.
+                for r in physical_row_start..(physical_row_start + row_scale) {
+                    for c in physical_col_start..(physical_col_start + col_scale) {
+                        self.inner[r][c] = value.clone();
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
+        let nrow = self.nrow;
+        let ncol = self.ncol;
+        let params = &self.params;
+        let mut matrix_ptr =
+            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), nrow, ncol);
+        debug_mem(format!("matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
+        for i in 0..nrow {
+            for j in 0..ncol {
+                SetMatrixElement(matrix_ptr.as_mut().unwrap(), i, j, self.entry(i, j).get_poly());
+            }
+        }
+        debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
+        CppMatrix::new(matrix_ptr)
+    }
+
+    pub(crate) fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
+        let nrow = cpp_matrix.nrow();
+        let ncol = cpp_matrix.ncol();
+        let matrix_inner = parallel_iter!(0..nrow)
+            .map(|i| parallel_iter!(0..ncol).map(|j| cpp_matrix.entry(i, j)).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
+        DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
+    }
+
+    pub fn block_entries(&self, rows: Range<usize>, cols: Range<usize>) -> Vec<Vec<DCRTPoly>> {
+        rows.into_par_iter()
+            .map(|i| {
+                // Use slice indexing on the row. The slice is converted into a Vec by `.to_vec()`.
+                self.inner[i][cols.clone()].to_vec()
+            })
+            .collect()
     }
 }
 
@@ -293,23 +392,23 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn decompose(&self, base_bits: Option<u32>) -> Self {
-        let base_bits = base_bits.unwrap_or(self.params.base_bits());
-        let digits_len =
-            self.params.crt_bits().div_ceil(base_bits as usize) * self.params.crt_depth();
+        let bit_length = self.params.modulus_bits();
+
         Self {
-            nrow: self.nrow * digits_len,
+            nrow: self.nrow * bit_length,
             ncol: self.ncol,
             inner: parallel_iter!(0..self.nrow)
                 .flat_map(|i| {
-                    let mut new_entries =
-                        vec![vec![DCRTPoly::zero(&self.params); self.ncol]; self.nrow * digits_len];
-                    for j in 0..self.ncol {
-                        let decomposed = Self::dcrt_decompose_poly(&self.inner[i][j], base_bits);
-                        for k in 0..digits_len {
-                            new_entries[i * digits_len + k][j] = decomposed[k].clone();
+                    let decompositions: Vec<_> = parallel_iter!(0..self.ncol)
+                        .map(|j| self.inner[i][j].decompose_bits(&self.params))
+                        .collect();
+                    let mut decomposed_rows = vec![Vec::with_capacity(self.ncol); bit_length];
+                    for col_decomp in decompositions {
+                        for bit in 0..bit_length {
+                            decomposed_rows[bit].push(col_decomp[bit].clone());
                         }
                     }
-                    new_entries
+                    decomposed_rows
                 })
                 .collect(),
             params: self.params.clone(),
@@ -511,9 +610,17 @@ impl Sub for DCRTPolyMatrix {
     }
 }
 
-// Implement subtraction of a matrix by a matrix reference
 impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
     type Output = Self;
+
+    fn sub(self, rhs: &DCRTPolyMatrix) -> Self::Output {
+        &self - rhs
+    }
+}
+
+// Implement subtraction of a matrix by a matrix reference
+impl Sub<&DCRTPolyMatrix> for &DCRTPolyMatrix {
+    type Output = DCRTPolyMatrix;
 
     fn sub(self, rhs: &DCRTPolyMatrix) -> Self::Output {
         #[cfg(debug_assertions)]
@@ -526,7 +633,7 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
 
         let nrow = self.row_size();
         let ncol = self.col_size();
-        let mut result = self.inner;
+        let mut result = self.inner.clone();
 
         for i in 0..nrow {
             for j in 0..ncol {
@@ -534,7 +641,7 @@ impl Sub<&DCRTPolyMatrix> for DCRTPolyMatrix {
             }
         }
 
-        Self { inner: result, params: self.params, ncol, nrow }
+        DCRTPolyMatrix { inner: result, params: self.params.clone(), ncol, nrow }
     }
 }
 

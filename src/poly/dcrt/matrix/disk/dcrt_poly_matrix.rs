@@ -596,6 +596,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "disk")]
     fn test_matrix_mul_tensor_identity_simple() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
@@ -622,6 +623,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "disk")]
     fn test_matrix_mul_tensor_identity_decompose_naive() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
@@ -652,6 +654,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "disk")]
     fn test_matrix_mul_tensor_identity_decompose_optimal() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
@@ -686,13 +689,5 @@ mod tests {
 
         assert_eq!(result, expected_result_1);
         assert_eq!(result, expected_result_2);
-    }
-
-    fn identity_tensor_matrix(identity_size: usize, matrix: &DCRTPolyMatrix) -> DCRTPolyMatrix {
-        let mut others = vec![];
-        for _ in 1..identity_size {
-            others.push(matrix);
-        }
-        matrix.concat_diag(&others[..])
     }
 }
