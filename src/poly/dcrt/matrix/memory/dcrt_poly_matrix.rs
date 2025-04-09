@@ -2,7 +2,7 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams},
-        Poly, PolyMatrix, PolyParams,
+        MatrixElem, Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
@@ -15,14 +15,14 @@ use std::{
 };
 
 #[derive(Clone)]
-pub struct DCRTPolyMatrix {
-    inner: Vec<Vec<DCRTPoly>>,
+pub struct DCRTPolyMatrix<T: MatrixElem> {
+    inner: Vec<Vec<T>>,
     pub params: DCRTPolyParams,
     nrow: usize,
     ncol: usize,
 }
 
-impl Debug for DCRTPolyMatrix {
+impl<T: MatrixElem> Debug for DCRTPolyMatrix<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DCRTPolyMatrix")
             .field("nrow", &self.nrow)
@@ -33,26 +33,22 @@ impl Debug for DCRTPolyMatrix {
     }
 }
 
-impl PartialEq for DCRTPolyMatrix {
+impl<T: MatrixElem> PartialEq for DCRTPolyMatrix<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner && self.nrow == other.nrow && self.ncol == other.ncol
     }
 }
 
-impl Eq for DCRTPolyMatrix {}
+impl<T: MatrixElem> Eq for DCRTPolyMatrix<T> {}
 
 // Add getter methods for inner and params
-impl DCRTPolyMatrix {
-    pub fn inner(&self) -> &Vec<Vec<DCRTPoly>> {
+impl<T: MatrixElem> DCRTPolyMatrix<T> {
+    pub fn inner(&self) -> &Vec<Vec<T>> {
         &self.inner
     }
-    pub fn params(&self) -> &DCRTPolyParams {
-        &self.params
-    }
 
-    // todo this inefficient
     pub fn new_empty(params: &DCRTPolyParams, nrow: usize, ncol: usize) -> Self {
-        let inner = vec![vec![DCRTPoly::const_zero(params); ncol]; nrow];
+        let inner = vec![vec![T::new_empty(); ncol]; nrow];
         Self { inner, params: params.clone(), nrow, ncol }
     }
 

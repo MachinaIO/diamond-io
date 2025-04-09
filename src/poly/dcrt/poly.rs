@@ -34,6 +34,10 @@ impl DCRTPoly {
         Self { ptr_poly: ptr_poly.into() }
     }
 
+    pub fn new_empty() -> Self {
+        Self { ptr_poly: UniquePtr::<DCRTPolyCxx>::null().into() }
+    }
+
     pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
         &self.ptr_poly
     }
