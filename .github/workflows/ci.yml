@@ -76,8 +76,11 @@ jobs:
         env:
           RUSTFLAGS: -A unused
 
-      - name: Run test
-        run: cargo test
+      - name: Run test for memory
+        run: cargo test -r
+
+      - name: Run test for disk
+        run: cargo test -r --no-default-features --features="disk, test"
   
   ci-success:
     name: ci success

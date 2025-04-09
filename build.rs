@@ -1,4 +1,7 @@
 fn main() {
+    if cfg!(feature = "disk") && cfg!(feature = "memory") {
+        panic!("Cannot enable both 'disk' and 'memory' features simultaneously");
+    }
     println!("cargo::rerun-if-changed=src/main.rs");
 
     // linking openFHE
