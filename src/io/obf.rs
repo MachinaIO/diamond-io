@@ -110,13 +110,6 @@ where
             m_b,
             DistType::GaussDist { sigma: obf_params.p_sigma },
         );
-        log_mem(format!(
-            "error : {} {} | {} {}",
-            s_b.col_size(),
-            s_b.row_size(),
-            error.col_size(),
-            error.row_size()
-        ));
         s_b + error
     };
     log_mem("Computed p_init");

@@ -34,10 +34,6 @@ impl DCRTPoly {
         Self { ptr_poly: ptr_poly.into() }
     }
 
-    pub fn new_empty(params: &DCRTPolyParams) -> Self {
-        Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
-    }
-
     pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
         &self.ptr_poly
     }

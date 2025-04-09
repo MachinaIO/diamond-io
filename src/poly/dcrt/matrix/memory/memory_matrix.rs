@@ -26,7 +26,10 @@ impl<T: MatrixElem> Debug for MemoryMatrix<T> {
 
 impl<T: MatrixElem> PartialEq for MemoryMatrix<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner && self.nrow == other.nrow && self.ncol == other.ncol
+        self.inner == other.inner &&
+            self.params == other.params &&
+            self.nrow == other.nrow &&
+            self.ncol == other.ncol
     }
 }
 
