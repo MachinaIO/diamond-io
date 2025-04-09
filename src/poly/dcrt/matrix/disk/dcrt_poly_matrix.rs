@@ -37,6 +37,10 @@ impl MatrixElem for DCRTPoly {
     fn as_elem_to_bytes(&self) -> Vec<u8> {
         self.to_bytes()
     }
+
+    fn new_empty() -> Self {
+        todo!()
+    }
 }
 
 pub type DCRTPolyMatrix = MmapMatrix<DCRTPoly>;

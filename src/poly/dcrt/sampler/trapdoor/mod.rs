@@ -2,16 +2,15 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{
-                block_size, dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix,
-            },
+            cpp_matrix::CppMatrix,
+            matrix::{I64Matrix, I64MatrixParams},
             sampler::DCRTPolyUniformSampler,
             DCRTPolyMatrix, DCRTPolyParams,
         },
         sampler::{DistType, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
-    utils::debug_mem,
+    utils::{block_size, debug_mem},
 };
 use openfhe::ffi::{ExtractMatrixCols, FormatMatrixCoefficient, SampleP1ForPertMat};
 use rayon::iter::ParallelIterator;

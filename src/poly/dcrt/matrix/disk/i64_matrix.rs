@@ -30,6 +30,10 @@ impl MatrixElem for i64 {
     fn as_elem_to_bytes(&self) -> Vec<u8> {
         self.to_le_bytes().into()
     }
+
+    fn new_empty() -> Self {
+        todo!()
+    }
 }
 
 pub type I64Matrix = MmapMatrix<i64>;

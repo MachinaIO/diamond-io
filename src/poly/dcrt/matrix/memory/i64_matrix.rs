@@ -1,5 +1,7 @@
 use crate::poly::{MatrixElem, MatrixParams};
 
+use super::memory_matrix::MemoryMatrix;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;
 
@@ -11,6 +13,10 @@ impl MatrixParams for I64MatrixParams {
 
 impl MatrixElem for i64 {
     type Params = I64MatrixParams;
+
+    fn new_empty() -> Self {
+        0
+    }
 
     fn zero(_: &Self::Params) -> Self {
         0
@@ -30,4 +36,4 @@ impl MatrixElem for i64 {
     }
 }
 
-pub type I64Matrix = MmapMatrix<i64>;
+pub type I64Matrix = MemoryMatrix<i64>;

@@ -1,14 +1,13 @@
 use crate::{
     parallel_iter,
     poly::{MatrixElem, MatrixParams},
-    utils::debug_mem,
+    utils::{block_size, debug_mem},
 };
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
 use rayon::prelude::*;
 use std::{
-    env,
     fmt::Debug,
     fs::File,
     ops::{Add, Mul, Neg, Range, Sub},
@@ -657,10 +656,6 @@ unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
             .map_mut(file)
             .expect("failed to map file")
     }
-}
-
-pub fn block_size() -> usize {
-    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(100)
 }
 
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {

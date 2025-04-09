@@ -4,6 +4,6 @@ pub mod disk;
 pub mod memory;
 
 #[cfg(feature = "disk")]
-pub use disk::DCRTPolyMatrix;
+pub use disk::{DCRTPolyMatrix, I64Matrix, I64MatrixParams};
 #[cfg(feature = "memory")]
-pub use memory::DCRTPolyMatrix;
+pub use memory::{DCRTPolyMatrix, I64Matrix, I64MatrixParams};
