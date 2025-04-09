@@ -274,6 +274,22 @@ impl Poly for DCRTPoly {
             .map(|coeff| coeff >= &quarter_q && coeff < &three_quarter_q)
             .collect()
     }
+
+    fn to_bool_vec(&self) -> Vec<bool> {
+        self.coeffs()
+            .into_iter()
+            .map(|c| {
+                let v = c.value();
+                if v == &BigUint::from(0u32) {
+                    false
+                } else if v == &BigUint::from(1u32) {
+                    true
+                } else {
+                    panic!("Coefficient is not 0 or 1: {}", v);
+                }
+            })
+            .collect()
+    }
 }
 
 impl PartialEq for DCRTPoly {

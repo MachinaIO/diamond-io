@@ -44,3 +44,42 @@ where
     // Compute RLWE encryption: t * a + e - (m * scale)
     t.clone() * a + &e - &(m.clone() * &scale)
 }
+
+#[cfg(test)]
+#[cfg(feature = "test")]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::poly::{
+        dcrt::{DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler},
+        rlwe_encrypt,
+        sampler::DistType,
+        Poly, PolyMatrix,
+    };
+
+    #[test]
+    fn test_rlwe_encrypt_decrypt() {
+        let params = Arc::new(DCRTPolyParams::default());
+        let sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let sigma = 3.0;
+
+        // Generate random message bits
+        let m = sampler.sample_poly(&params, &DistType::BitDist);
+
+        // Encrypt the message
+        let a = sampler.sample_poly(&params, &DistType::BitDist);
+        let t = sampler.sample_poly(&params, &DistType::BitDist);
+
+        let m_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![m.clone()]);
+        let a_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![a.clone()]);
+        let t_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![t.clone()]);
+        let b = rlwe_encrypt(&params, &sampler, &t_mat, &a_mat, &m_mat, sigma);
+
+        // Decrypt the ciphertext and recover the message bits
+        let recovered = (b - (a_mat * t_mat)).entry(0, 0);
+        let recovered_bits = recovered.extract_bits_with_threshold(&params);
+
+        // Verify correctness
+        assert_eq!(recovered_bits, m.to_bool_vec());
+    }
+}

@@ -69,5 +69,6 @@ pub trait Poly:
         }
         bytes
     }
+    fn to_bool_vec(&self) -> Vec<bool>;
     fn to_compact_bytes(&self) -> Vec<u8>;
 }
