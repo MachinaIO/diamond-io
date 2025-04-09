@@ -1,12 +1,11 @@
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams, FinRingElem},
+        dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams},
         Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
-use num_bigint::BigInt;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::{
@@ -627,7 +626,10 @@ impl Sub<&DCRTPolyMatrix> for &DCRTPolyMatrix {
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
-    use crate::poly::{dcrt::DCRTPolyUniformSampler, sampler::PolyUniformSampler};
+    use crate::poly::{
+        dcrt::{DCRTPolyUniformSampler, FinRingElem},
+        sampler::PolyUniformSampler,
+    };
 
     use super::*;
     use num_bigint::BigUint;
