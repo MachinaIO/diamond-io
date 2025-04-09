@@ -319,15 +319,18 @@ impl PolyCircuit {
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::{
         poly::{
             dcrt::{
                 params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
-                FinRingElem,
+                DCRTPolyMatrix, FinRingElem,
             },
+            enc::rlwe_encrypt,
             sampler::DistType,
-            Poly, PolyParams,
+            Poly, PolyMatrix, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -721,59 +724,66 @@ mod tests {
 
     #[test]
     fn test_mul_fhe_poly_bits_mul_by_poly_circuit() {
-        let params = DCRTPolyParams::default();
         let mut circuit = PolyCircuit::new();
-        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let params = Arc::new(DCRTPolyParams::default());
+        let sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let sigma = 3.0;
+        let log_q = params.modulus_bits();
 
-        // encrypt a polynomial m using a RLWE secret key encryption
-        // c0 = a*s + e + m (where m is the plaintext polynomial)
-        // c1 = -a
-        let m = create_bit_random_poly(&params);
-        let s = uniform_sampler.sample_poly(&params, &DistType::BitDist);
-        let e = uniform_sampler.sample_poly(&params, &DistType::GaussDist { sigma: 0.0 });
-        let a = uniform_sampler.sample_poly(&params, &DistType::FinRingDist);
-        let c0 = -a.clone();
-        let c1 = a * s.clone() + e + m.clone();
+        // encrypt a polynomial m using RLWE secret key encryption
+        // Generate random message bits
+        let m = sampler.sample_poly(&params, &DistType::BitDist);
 
-        // k is a polynomial from bit distribution
-        let k = uniform_sampler.sample_poly(&params, &DistType::BitDist);
+        // Encrypt the message
+        let a = sampler.sample_poly(&params, &DistType::BitDist);
+        let t = sampler.sample_poly(&params, &DistType::BitDist);
 
-        let c0_bits = c0.decompose_bits(&params);
-        let c1_bits = c1.decompose_bits(&params);
+        let m_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![m.clone()]);
+        let a_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![a.clone()]);
+        let t_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![t.clone()]);
+        let b_mat = rlwe_encrypt(&params, &sampler, &t_mat, &a_mat, &m_mat, sigma);
+        let b = b_mat.entry(0, 0);
 
-        let inputs = circuit.input(c0_bits.len() + c1_bits.len() + 1);
+        // ct = (a, b)
+        let a_bits = a.decompose_bits(&params);
+        let b_bits = b.decompose_bits(&params);
+
+        let x = DCRTPoly::const_one(&params);
+
+        let inputs = circuit.input(a_bits.len() + b_bits.len() + 1);
         assert_eq!(inputs.len(), params.modulus_bits() * 2 + 1);
 
-        // Input: c0_bits[0], ..., c0_bits[modulus_bits - 1], c1_bits[0], ..., c1_bits[modulus_bits
-        // - 1], k Output: c0_bits[0] * k, ..., c0_bits[modulus_bits - 1] * k, c1_bits[0] *
-        // k, ..., c1_bits[modulus_bits - 1] * k
-        let k_id = inputs[inputs.len() - 1];
+        // Input: ct[bits], x
+        // Output: ct[bits] * x
+        let x_id = inputs[inputs.len() - 1];
         let output_ids = inputs
             .iter()
             .take(inputs.len() - 1)
-            .map(|&input_id| circuit.mul_gate(input_id, k_id))
+            .map(|&input_id| circuit.mul_gate(input_id, x_id))
             .collect();
 
         circuit.output(output_ids);
 
-        // concatenate decomposed_c0 and decomposed_c1 and k
-        let input = [c0_bits, c1_bits, vec![k.clone()]].concat();
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &input);
+        // concatenate decomposed_c0 and decomposed_c1 and x
+        let input = [a_bits, b_bits, vec![x.clone()]].concat();
+        let result = circuit.eval(params.as_ref(), &DCRTPoly::const_one(&params), &input);
 
-        assert_eq!(result.len(), params.modulus_bits() * 2);
+        assert_eq!(result.len(), log_q * 2);
 
-        let c0_bits_eval = result[..params.modulus_bits()].to_vec();
-        let c1_bits_eval = result[params.modulus_bits()..].to_vec();
+        let a_bits_eval = result[..params.modulus_bits()].to_vec();
+        let b_bits_eval = result[params.modulus_bits()..].to_vec();
 
-        let c0_eval = DCRTPoly::from_decomposed(&params, &c0_bits_eval);
-        let c1_eval = DCRTPoly::from_decomposed(&params, &c1_bits_eval);
+        let a_eval = DCRTPoly::from_decomposed(&params, &a_bits_eval);
+        let b_eval = DCRTPoly::from_decomposed(&params, &b_bits_eval);
 
-        assert_eq!(c0_eval, &c0 * &k);
-        assert_eq!(c1_eval, &c1 * &k);
+        assert_eq!(a_eval, &a * &x);
+        assert_eq!(b_eval, &b * &x);
 
         // decrypt the result
-        let plaintext = c1_eval + c0_eval * s;
-        assert_eq!(plaintext, m * k);
+        let plaintext = b_eval - a_eval * t;
+        // recover the message bits
+        let plaintext_bits = plaintext.extract_bits_with_threshold(&params);
+        assert_eq!(plaintext_bits, (m * x).to_bool_vec());
     }
 
     #[test]

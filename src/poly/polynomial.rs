@@ -5,6 +5,8 @@ use std::{
 
 use itertools::Itertools;
 
+use super::element::PolyElem;
+
 pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
     type Modulus: Debug + Clone;
     /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n -
@@ -20,40 +22,6 @@ pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
     /// Returns the integer `n` that specifies the size of the polynomial ring used in this
     /// polynomial. Specifically, this is the degree parameter for the ring `Z_q[x]/(x^n - 1)`.
     fn ring_dimension(&self) -> u32;
-}
-
-pub trait PolyElem:
-    Sized
-    + Debug
-    + Eq
-    + Ord
-    + Send
-    + Sync
-    + Clone
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + Neg<Output = Self>
-    + AddAssign
-    + SubAssign
-    + MulAssign
-    + for<'a> Add<&'a Self, Output = Self>
-    + for<'a> Sub<&'a Self, Output = Self>
-    + for<'a> Mul<&'a Self, Output = Self>
-{
-    type Modulus: Debug + Clone;
-    fn zero(modulus: &Self::Modulus) -> Self;
-    fn one(modulus: &Self::Modulus) -> Self;
-    fn minus_one(modulus: &Self::Modulus) -> Self;
-    fn constant(modulus: &Self::Modulus, value: u64) -> Self;
-    fn to_bit(&self) -> bool;
-    fn half_q(modulus: &Self::Modulus) -> Self;
-    fn max_q(modulus: &Self::Modulus) -> Self;
-    fn extract_highest_bits(&self) -> bool;
-    fn modulus(&self) -> &Self::Modulus;
-    fn from_bytes(modulus: &Self::Modulus, bytes: &[u8]) -> Self;
-    fn to_bytes(&self) -> Vec<u8>;
-    fn to_biguint(&self) -> &num_bigint::BigUint;
 }
 
 pub trait Poly:
@@ -110,6 +78,7 @@ pub trait Poly:
         }
         bits
     }
+    fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool>;
     fn decompose_bits(&self, params: &Self::Params) -> Vec<Self>;
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -118,5 +87,6 @@ pub trait Poly:
         }
         bytes
     }
+    fn to_bool_vec(&self) -> Vec<bool>;
     fn to_compact_bytes(&self) -> Vec<u8>;
 }

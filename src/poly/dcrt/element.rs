@@ -1,4 +1,3 @@
-use crate::poly::PolyElem;
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt};
 use num_traits::Signed;
 use std::{
@@ -6,6 +5,8 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+use crate::poly::element::PolyElem;
 
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct FinRingElem {
