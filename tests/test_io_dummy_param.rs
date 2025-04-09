@@ -93,7 +93,6 @@ mod test {
 
     #[test]
     fn test_io_just_mul_enc_and_and_bit() {
-        init_tracing();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::new(4, 2, 17, 10);
         let log_q = params.modulus_bits();

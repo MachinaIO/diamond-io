@@ -8,7 +8,6 @@ use crate::{
 };
 use itertools::Itertools;
 use std::marker::PhantomData;
-use tracing::info;
 
 use super::params::ObfuscationParams;
 
