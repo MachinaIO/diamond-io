@@ -6,6 +6,7 @@ use crate::{
     },
     utils::debug_mem,
 };
+use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::{
@@ -419,19 +420,18 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self {
-        assert_eq!(self.ncol, other.nrow * identity_size * self.params.modulus_digits());
-        let slice_width = other.ncol;
-        let mut output = vec![DCRTPolyMatrix::zero(&self.params, 0, 0); other.ncol * identity_size];
+        let log_base_q = self.params.modulus_digits();
+        debug_assert_eq!(self.ncol, other.nrow * identity_size * log_base_q);
+        let slice_width = other.nrow * log_base_q;
 
-        for j in 0..other.ncol {
-            let jth_col_m_decompose = other.get_column_matrix_decompose(j);
-            for i in 0..identity_size {
+        let output = (0..identity_size)
+            .flat_map(|i| {
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
-                output[i * other.ncol + j] = slice * &jth_col_m_decompose;
-            }
-        }
+                (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
+            })
+            .collect_vec();
 
-        output[0].clone().concat_columns(&output[1..].iter().collect::<Vec<_>>())
+        output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
     fn get_column_matrix_decompose(&self, j: usize) -> Self {
@@ -966,43 +966,40 @@ mod tests {
         assert_eq!(result, expected_result)
     }
 
-    // #[test]
-    // fn test_matrix_mul_tensor_identity_decompose_optimal() {
-    //     let params = DCRTPolyParams::default();
-    //     let sampler = DCRTPolyUniformSampler::new();
+    #[test]
+    fn test_matrix_mul_tensor_identity_decompose_optimal() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
 
-    //     // Create matrix S (2x2516)
-    //     let s =
-    //         sampler.sample_uniform(&params, 2, 2516,
-    // crate::poly::sampler::DistType::FinRingDist);
+        // Create matrix S (2x2516)
+        let s =
+            sampler.sample_uniform(&params, 2, 2516, crate::poly::sampler::DistType::FinRingDist);
+        // Create 'other' matrix (2x13)
+        let other =
+            sampler.sample_uniform(&params, 2, 13, crate::poly::sampler::DistType::FinRingDist);
+        // Perform S * (I_37 ⊗ G^-1(other))
+        let result: DCRTPolyMatrix = s.mul_tensor_identity_decompose(&other, 37);
 
-    //     // Create 'other' matrix (2x13)
-    //     let other =
-    //         sampler.sample_uniform(&params, 2, 13, crate::poly::sampler::DistType::FinRingDist);
+        // Check dimensions
+        assert_eq!(result.size().0, 2);
+        assert_eq!(result.size().1, 481);
 
-    //     // Perform S * (I_37 ⊗ G^-1(other))
-    //     let result: DCRTPolyMatrix = s.mul_tensor_identity_decompose(&other, 37);
+        // Check result
+        let decomposed = other.decompose();
+        let tensor = identity_tensor_matrix(37, &decomposed);
+        let expected_result_1 = s.clone() * tensor;
+        let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);
+        assert_eq!(expected_result_1, expected_result_2);
 
-    //     // Check dimensions
-    //     assert_eq!(result.size().0, 2);
-    //     assert_eq!(result.size().1, 481);
+        assert_eq!(expected_result_1.size().0, 2);
+        assert_eq!(expected_result_1.size().1, 481);
 
-    //     // Check result
-    //     let decomposed = other.decompose();
-    //     let tensor = identity_tensor_matrix(37, &decomposed);
-    //     let expected_result_1 = s.clone() * tensor;
-    //     let expected_result_2 = s.mul_tensor_identity(&decomposed, 37);
-    //     assert_eq!(expected_result_1, expected_result_2);
+        assert_eq!(expected_result_2.size().0, 2);
+        assert_eq!(expected_result_2.size().1, 481);
 
-    //     assert_eq!(expected_result_1.size().0, 2);
-    //     assert_eq!(expected_result_1.size().1, 481);
-
-    //     assert_eq!(expected_result_2.size().0, 2);
-    //     assert_eq!(expected_result_2.size().1, 481);
-
-    //     assert_eq!(result, expected_result_1);
-    //     assert_eq!(result, expected_result_2);
-    // }
+        assert_eq!(result, expected_result_1);
+        assert_eq!(result, expected_result_2);
+    }
 
     fn identity_tensor_matrix(identity_size: usize, matrix: &DCRTPolyMatrix) -> DCRTPolyMatrix {
         let mut others = vec![];
