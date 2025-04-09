@@ -147,7 +147,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
         let rlwe_trapdoor = trapdoor.get_trapdoor_pair();
         let public_matrix =
-            DCRTPolyMatrix::from_cpp_matrix_ptr(&params, &trapdoor.get_public_matrix());
+            DCRTPolyMatrix::from_cpp_matrix_ptr(params, &trapdoor.get_public_matrix());
         (rlwe_trapdoor, public_matrix)
     }
 

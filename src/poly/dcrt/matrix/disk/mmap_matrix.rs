@@ -178,7 +178,7 @@ impl<T: MatrixElem> MmapMatrix<T> {
             let aligned_offset = desired_offset - (desired_offset % page_size);
             let offset_in_page = desired_offset - aligned_offset;
             let required_len = offset_in_page + entry_size * num_cols;
-            let mapping_len = ((required_len + page_size - 1) / page_size) * page_size;
+            let mapping_len = required_len.div_ceil(page_size) * page_size;
             let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
             let bytes = new_entries[i - row_start]
                 .iter()
