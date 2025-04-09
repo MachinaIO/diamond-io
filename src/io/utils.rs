@@ -256,8 +256,8 @@ mod test {
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
         {
-            let inputs = public_circuit.input(log_q + 1);
-            public_circuit.output(inputs[0..log_q].to_vec());
+            let inputs = public_circuit.input((2 * log_q) + 1);
+            public_circuit.output(inputs[0..(2 * log_q)].to_vec());
         }
 
         let a_rlwe_bar = DCRTPoly::const_max(&params);
