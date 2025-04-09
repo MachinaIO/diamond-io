@@ -165,7 +165,6 @@ mod test {
         },
     };
     use keccak_asm::Keccak256;
-    use num_bigint::BigUint;
 
     #[test]
     fn test_build_final_step_circuit() {
@@ -173,11 +172,11 @@ mod test {
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
 
-        // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
+        // 2. Create a simple public circuit that takes 2*log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
         {
-            let inputs = public_circuit.input(log_q + 1);
-            public_circuit.output(inputs[0..log_q].to_vec());
+            let inputs = public_circuit.input(2 * log_q + 1);
+            public_circuit.output(inputs[0..2 * log_q].to_vec());
         }
 
         // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
@@ -221,30 +220,21 @@ mod test {
         inputs.push(t_bar.entry(0, 0).clone());
 
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
-        // 9. Extract the hardcoded key bits
-        let hardcoded_key_bits = hardcoded_key
-            .entry(0, 0)
-            .coeffs()
-            .iter()
-            .map(|elem| elem.value() != &BigUint::from(0u8))
-            .collect::<Vec<_>>();
 
-        // 10. Extract the output bits
+        // 9. Extract the output bits
         let output_ints: Vec<DCRTPoly> = circuit_outputs
             .chunks(log_q)
             .map(|bits| DCRTPoly::bits_to_int(bits, &params))
             .collect_vec();
         assert_eq!(output_ints.len(), 1);
-        assert_eq!(output_ints[0], (hardcoded_key.clone() * &scale).entry(0, 0));
-        let output_bits =
-            output_ints.iter().flat_map(|output| output.extract_highest_bits()).collect::<Vec<_>>();
-        // 11. Verify that the output matches the hardcoded key bits
-        assert_eq!(output_bits.len(), hardcoded_key_bits.len());
-        for (i, (output_bit, key_bit)) in
-            output_bits.iter().zip(hardcoded_key_bits.iter()).enumerate()
-        {
-            assert_eq!(output_bit, key_bit, "Bit mismatch at position {}", i);
-        }
+        let output_bits = output_ints
+            .iter()
+            .flat_map(|output| output.extract_bits_with_threshold(&params))
+            .collect::<Vec<_>>();
+
+        // 10. Verify that the output matches the hardcoded key bits
+        assert_eq!(output_bits.len(), params.ring_dimension() as usize);
+        assert_eq!(output_bits, hardcoded_key.entry(0, 0).to_bool_vec());
     }
 
     #[test]
