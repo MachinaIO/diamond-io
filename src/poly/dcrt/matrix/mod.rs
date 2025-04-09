@@ -1,9 +1,9 @@
+pub mod dcrt_poly;
 #[cfg(feature = "disk")]
 pub mod disk;
+pub mod i64;
 #[cfg(feature = "memory")]
 pub mod memory;
 
-#[cfg(feature = "disk")]
-pub use disk::{DCRTPolyMatrix, I64Matrix, I64MatrixParams};
-#[cfg(feature = "memory")]
-pub use memory::{DCRTPolyMatrix, I64Matrix, I64MatrixParams};
+pub use dcrt_poly::DCRTPolyMatrix;
+pub use i64::{I64Matrix, I64MatrixParams};

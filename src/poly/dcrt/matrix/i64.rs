@@ -1,6 +1,9 @@
 use crate::poly::{MatrixElem, MatrixParams};
 
-use super::memory_matrix::MemoryMatrix;
+#[cfg(feature = "disk")]
+use super::disk::MmapMatrix;
+#[cfg(feature = "memory")]
+use super::memory::MemoryMatrix;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;
@@ -30,10 +33,9 @@ impl MatrixElem for i64 {
     fn as_elem_to_bytes(&self) -> Vec<u8> {
         self.to_le_bytes().into()
     }
-
-    fn new_empty(_params: &Self::Params) -> Self {
-        todo!()
-    }
 }
 
+#[cfg(feature = "disk")]
+pub type I64Matrix = MmapMatrix<i64>;
+#[cfg(feature = "memory")]
 pub type I64Matrix = MemoryMatrix<i64>;
