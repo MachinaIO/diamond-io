@@ -10,7 +10,7 @@ import os
 from decimal import Decimal, getcontext
 from norms import CircuitNorms
 
-getcontext().prec = 100
+getcontext().prec = 300
 
 
 def log_params_to_file(
@@ -77,90 +77,92 @@ def find_params(
     input_size: int,
     norms_path: str,
 ):
-
     min_q_k = target_secpar + 2
     max_q_k = max_log_q
-    middle_q_k = math.floor((min_q_k + max_q_k) // 2)
-    min_alpha_ks = [-1000 for _ in range(3)]
-    max_alpha_ks = [-1 for _ in range(3)]
+    # middle_q_k = math.floor((min_q_k + max_q_k) // 2)
     circuit_norms = CircuitNorms.load_from_file(norms_path, max_log_q)
-    found_alphas = [[] for _ in range(3)]
-    # Binary search for alphas
-    for i in range(3):
-        q = 2 ** (middle_q_k)
-        total_n = 0
-        dist = Binary
-        if i == 0:
-            # encoding sigma
-            total_n = n * (d + 1)
-        elif i == 1:
-            # hardcoded key sigma
-            total_n = n
-            # dist = UniformMod(q)
-        else:
-            # p sigma
-            total_n = 2 * (n * (d + 1))
-        while min_alpha_ks[i] + 1 < max_alpha_ks[i]:
-            min_alpha_k = min_alpha_ks[i]
-            max_alpha_k = max_alpha_ks[i]
-            alpha_k = (min_alpha_k + max_alpha_k) / 2
-            print(f"min_alpha_k: {min_alpha_k}")
-            print(f"max_alpha_k: {max_alpha_k}")
-            print(f"alpha_k: {alpha_k}")
-            stddev_e = 2 ** (middle_q_k + alpha_k)
-            estimated_secpar = estimate_secpar(total_n, q, dist, stddev_e)
-            print("target_secpar:", target_secpar)
-            print("estimated_secpar:", estimated_secpar)
-            if target_secpar > estimated_secpar:
-                print(
-                    f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
-                )
-                min_alpha_ks[i] = alpha_k
-            else:
-                found_alphas[i].append(alpha_k)
-                print(f"found alpha_k: {alpha_k}")
-                max_alpha_ks[i] = alpha_k
-        if len(found_alphas[i]) == 0:
-            raise ValueError(f"the {i}-th alpha is not found after binary search")
-    alpha_encoding_k = min(found_alphas[0])
-    alpha_hardcode_k = min(found_alphas[1])
-    alpha_p_k = min(found_alphas[2])
-    print(f"found alpha_encoding_k: {alpha_encoding_k}")
-    print(f"found alpha_hardcode_k: {alpha_hardcode_k}")
-    print(f"found alpha_p_k: {alpha_p_k}")
-    alpha_encoding = 2**alpha_encoding_k
-    alpha_hardcode = 2**alpha_hardcode_k
-    alpha_p = 2**alpha_p_k
-    # print(f"found alpha: {alpha}")
-    print(f"found alpha_encoding: {alpha_encoding}")
-    print(f"found alpha_hardcode: {alpha_hardcode}")
-    print(f"found alpha_p: {alpha_p}")
-
     found_params = []
     iters = 0
     while min_q_k + 1 < max_q_k and iters < 100:
         iters += 1
         q_k = math.floor((min_q_k + max_q_k) // 2)
+        q = 2 ** (q_k)
         print(f"min_q_k: {min_q_k}")
         print(f"max_q_k: {max_q_k}")
         print(f"q_k: {q_k}")
-        if q_k + alpha_encoding_k < 1:
-            print(f"q_k + alpha_encoding < 1")
-            min_q_k = q_k
-            continue
-        elif q_k + alpha_hardcode_k < 1:
-            print(f"q_k + alpha_hardcode < 1")
-            min_q_k = q_k
-            continue
-        elif q_k + alpha_p_k < 1:
-            print(f"q_k + alpha_p < 1")
-            min_q_k = q_k
-            continue
-        q = 2**q_k
         print(f"q: {q}")
-        stddev_e_encoding = alpha_encoding * q
-        stddev_e_hardcode = alpha_hardcode * q
-        stddev_e_p = alpha_p * q
+
+        min_alpha_ks = []
+        for i in range(3):
+            found_alpha_ks = []
+            dist = Binary
+            min_alpha_k = -q_k + 2
+            max_alpha_k = -1
+            if i == 0:
+                # encoding sigma
+                total_n = n * (d + 1)
+            elif i == 1:
+                # hardcoded key sigma
+                total_n = n
+                # dist = UniformMod(q)
+            else:
+                # p sigma
+                total_n = 2 * (n * (d + 1))
+            while min_alpha_k + 1 < max_alpha_k:
+                alpha_k = (min_alpha_k + max_alpha_k) / 2
+                print(f"min_alpha_k: {min_alpha_k}")
+                print(f"max_alpha_k: {max_alpha_k}")
+                print(f"alpha_k: {alpha_k}")
+                stddev_e = Decimal(2 ** Decimal(q_k + alpha_k))
+                estimated_secpar = estimate_secpar(total_n, q, dist, stddev_e)
+                print("target_secpar:", target_secpar)
+                print("estimated_secpar:", estimated_secpar)
+                if target_secpar > estimated_secpar:
+                    print(
+                        f"target_secpar {target_secpar} > estimated_secpar {estimated_secpar}"
+                    )
+                    min_alpha_k = alpha_k
+                else:
+                    found_alpha_ks.append(alpha_k)
+                    print(f"found alpha_k: {alpha_k}")
+                    max_alpha_k = alpha_k
+                # raise ValueError(f"the {i}-th alpha is not found after binary search")
+            if len(found_alpha_ks) == 0:
+                continue
+            min_alpha_ks.append(min(found_alpha_ks))
+        if len(min_alpha_ks) < 3:
+            print("not enough alpha_ks")
+            max_q_k = q_k
+            continue
+        alpha_encoding_k = Decimal(min_alpha_ks[0])
+        alpha_hardcode_k = Decimal(min_alpha_ks[1])
+        alpha_p_k = Decimal(min_alpha_ks[2])
+        print(f"found alpha_encoding_k: {alpha_encoding_k}")
+        print(f"found alpha_hardcode_k: {alpha_hardcode_k}")
+        print(f"found alpha_p_k: {alpha_p_k}")
+        alpha_encoding = Decimal(2**alpha_encoding_k)
+        alpha_hardcode = Decimal(2**alpha_hardcode_k)
+        alpha_p = Decimal(2**alpha_p_k)
+        # print(f"found alpha: {alpha}")
+        print(f"found alpha_encoding: {alpha_encoding}")
+        print(f"found alpha_hardcode: {alpha_hardcode}")
+        print(f"found alpha_p: {alpha_p}")
+
+        # if q_k + alpha_encoding_k < 1:
+        #     print(f"q_k + alpha_encoding < 1")
+        #     min_q_k = q_k
+        #     continue
+        # elif q_k + alpha_hardcode_k < 1:
+        #     print(f"q_k + alpha_hardcode < 1")
+        #     min_q_k = q_k
+        #     continue
+        # elif q_k + alpha_p_k < 1:
+        #     print(f"q_k + alpha_p < 1")
+        #     min_q_k = q_k
+        #     continue
+        stddev_e_encoding = alpha_encoding * Decimal(q)
+        stddev_e_hardcode = alpha_hardcode * Decimal(q)
+        stddev_e_p = alpha_p * Decimal(q)
         estimated_secpar_encoding = estimate_secpar(
             (d + 1) * n, q, Binary, stddev_e_encoding
         )
@@ -323,7 +325,10 @@ def estimate_secpar(n: int, q: int, s_dist: NoiseDistribution, stddev: int):
     params = LWEParameters(n, q, s_dist, DiscreteGaussian(stddev))
     estim = LWE.estimate.rough(params)
     # print(estim)
-    min_rop_log = math.log2(min(val["rop"] for val in estim.values()))
+    vals = estim.values()
+    if len(vals) == 0:
+        return 0
+    min_rop_log = math.log2(min(val["rop"] for val in vals))
     print(f"min_rop_log: {min_rop_log}")
     if min_rop_log == float("inf"):
         return 100000
@@ -379,10 +384,10 @@ def bound_final_error(
     for _ in range(input_size):
         bound_v_d = (b_norm_d ** Decimal(2)) * bound_p_d
         bound_c_d = n_d * (base_d - 1) * m_d * bound_c_d + bound_v_d
-        print(f"base_d: {base_d}")
-        print(f"m_d: {m_d}")
-        print(f"bound_c_d: {bound_c_d}")
-        print(f"base-dependent error: {n_d * (base_d-1) * m_d * bound_c_d }")
+        # print(f"base_d: {base_d}")
+        # print(f"m_d: {m_d}")
+        # print(f"bound_c_d: {bound_c_d}")
+        # print(f"base-dependent error: {n_d * (base_d-1) * m_d * bound_c_d }")
         bound_p_d = bound_v_d
 
     # Evaluate each polynomial in m_polys at the value of m using Decimal
@@ -453,12 +458,12 @@ def sqrt_ceil(x):
 
 if __name__ == "__main__":
     secpar = 80
-    n = 2**13
-    d = 1
-    base = 2**16
-    max_log_q = 612
-    input_size = 1
-    norms_path = "final_bits_norm_n_13_q_612.json"
+    n = 2**14
+    d = 3
+    base = 2**20
+    max_log_q = 1530
+    input_size = 8
+    norms_path = "final_bits_norm_n_14_q_1530.json"
     (
         q,
         stddev_e_encoding,
