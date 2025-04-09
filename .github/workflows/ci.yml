@@ -67,7 +67,8 @@ jobs:
         run: ls -lah /usr/local/lib | grep OpenFHE
 
       - name: Run clippy
-        run: cargo +nightly clippy --workspace --all-targets --all-features
+        run: cargo +nightly clippy --workspace --all-targets --no-default-features --features disk
+        run: cargo +nightly clippy --workspace --all-targets --no-default-features --features memory
         env:
           RUSTFLAGS: -A unused
 
