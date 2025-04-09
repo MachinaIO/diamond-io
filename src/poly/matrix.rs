@@ -27,7 +27,7 @@ pub trait MatrixElem:
     + Sync
 {
     type Params: MatrixParams;
-    fn new_empty() -> Self;
+    fn new_empty(params: &Self::Params) -> Self;
     fn zero(params: &Self::Params) -> Self;
     fn one(params: &Self::Params) -> Self;
     fn from_bytes_to_elem(params: &Self::Params, bytes: &[u8]) -> Self;

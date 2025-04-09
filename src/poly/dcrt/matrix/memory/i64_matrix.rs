@@ -14,10 +14,6 @@ impl MatrixParams for I64MatrixParams {
 impl MatrixElem for i64 {
     type Params = I64MatrixParams;
 
-    fn new_empty() -> Self {
-        0
-    }
-
     fn zero(_: &Self::Params) -> Self {
         0
     }
@@ -33,6 +29,10 @@ impl MatrixElem for i64 {
 
     fn as_elem_to_bytes(&self) -> Vec<u8> {
         self.to_le_bytes().into()
+    }
+
+    fn new_empty(_params: &Self::Params) -> Self {
+        todo!()
     }
 }
 

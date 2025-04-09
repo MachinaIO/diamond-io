@@ -35,7 +35,7 @@ impl<T: MatrixElem> Eq for MemoryMatrix<T> {}
 // Add getter methods for inner and params
 impl<T: MatrixElem> MemoryMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
-        let inner = vec![vec![T::new_empty(); ncol]; nrow];
+        let inner = vec![vec![T::zero(params); ncol]; nrow];
         Self { inner, params: params.clone(), nrow, ncol }
     }
 

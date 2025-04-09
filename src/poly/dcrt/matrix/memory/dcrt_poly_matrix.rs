@@ -39,8 +39,8 @@ impl MatrixElem for DCRTPoly {
         self.to_bytes()
     }
 
-    fn new_empty() -> Self {
-        Self::new_empty()
+    fn new_empty(params: &Self::Params) -> Self {
+        <Self as Poly>::const_zero(params)
     }
 }
 
