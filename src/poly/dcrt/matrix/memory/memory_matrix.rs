@@ -136,16 +136,16 @@ impl<T: MatrixElem> MemoryMatrix<T> {
         &self,
         row_start: usize,
         row_end: usize,
-        column_start: usize,
-        column_end: usize,
+        col_start: usize,
+        col_end: usize,
     ) -> Self {
         let nrow = row_end - row_start;
-        let ncol = column_end - column_start;
+        let ncol = col_end - col_start;
 
         let mut c = Vec::with_capacity(nrow);
         for i in row_start..row_end {
             let mut row = Vec::with_capacity(ncol);
-            for j in column_start..column_end {
+            for j in col_start..col_end {
                 row.push(self.inner[i][j].clone());
             }
             c.push(row);
@@ -409,7 +409,7 @@ impl<T: MatrixElem> Mul<&MemoryMatrix<T>> for &MemoryMatrix<T> {
     fn mul(self, rhs: &MemoryMatrix<T>) -> Self::Output {
         let nrow = self.nrow;
         let ncol = rhs.ncol;
-        #[cfg(debug_assertions)]
+
         if rhs.nrow != self.ncol {
             panic!(
                 "Multiplication condition failed: rhs.nrow ({}) must equal self.ncol ({})",
@@ -492,7 +492,6 @@ impl<T: MatrixElem> Sub<&MemoryMatrix<T>> for &MemoryMatrix<T> {
     type Output = MemoryMatrix<T>;
 
     fn sub(self, rhs: &MemoryMatrix<T>) -> Self::Output {
-        #[cfg(debug_assertions)]
         if self.nrow != rhs.nrow || self.ncol != rhs.ncol {
             panic!(
                 "Subtraction requires matrices of same dimensions: self({}, {}) != rhs({}, {})",

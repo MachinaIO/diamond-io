@@ -66,7 +66,7 @@ mod test {
         let obfuscation_time = start_time.elapsed();
         info!("Time to obfuscate: {:?}", obfuscation_time);
 
-        let input = [true];
+        let input = [false];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         #[cfg(feature = "test")]
         let hardcoded_key = obfuscation
