@@ -1,7 +1,6 @@
 use crate::{parallel_iter, poly::MatrixElem};
 use rayon::prelude::*;
 use std::{
-    env,
     fmt::Debug,
     ops::{Add, Mul, Neg, Range, Sub},
 };
@@ -67,6 +66,44 @@ impl<T: MatrixElem> MemoryMatrix<T> {
             for (j, entry) in row_entries.into_iter().enumerate() {
                 let col_idx = cols.start + j;
                 self.inner[row_idx][col_idx] = entry;
+            }
+        }
+    }
+
+    pub fn replace_entries_with_expand<F>(
+        &mut self,
+        rows: Range<usize>,
+        cols: Range<usize>,
+        row_scale: usize,
+        col_scale: usize,
+        f: F,
+    ) where
+        F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
+    {
+        let target_rows = (rows.start * row_scale)..(rows.end * row_scale);
+        let target_cols = (cols.start * col_scale)..(cols.end * col_scale);
+
+        let new_entries = f(rows, cols);
+
+        assert_eq!(
+            new_entries.len(),
+            target_rows.end - target_rows.start,
+            "Returned number of rows does not match the expanded target range"
+        );
+        for (i, row_vec) in new_entries.iter().enumerate() {
+            assert_eq!(
+                row_vec.len(),
+                target_cols.end - target_cols.start,
+                "Returned number of columns does not match the expanded target range at row {}",
+                i
+            );
+        }
+
+        for (i, new_row) in new_entries.into_iter().enumerate() {
+            let row_idx = target_rows.start + i;
+            for (j, new_elem) in new_row.into_iter().enumerate() {
+                let col_idx = target_cols.start + j;
+                self.inner[row_idx][col_idx] = new_elem;
             }
         }
     }

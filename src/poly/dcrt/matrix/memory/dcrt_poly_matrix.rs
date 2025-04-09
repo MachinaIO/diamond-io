@@ -46,7 +46,7 @@ impl MatrixElem for DCRTPoly {
 
 // Add getter methods for inner and params
 impl DCRTPolyMatrix {
-    pub fn to_cpp_matrix_ptr(&self) -> CppMatrix {
+    pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
         let nrow = self.nrow;
         let ncol = self.ncol;
         let params = &self.params;
@@ -62,7 +62,7 @@ impl DCRTPolyMatrix {
         CppMatrix::new(matrix_ptr)
     }
 
-    pub fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
+    pub(crate) fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
         let nrow = cpp_matrix.nrow();
         let ncol = cpp_matrix.ncol();
         let matrix_inner = parallel_iter!(0..nrow)
