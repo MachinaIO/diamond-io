@@ -20,6 +20,7 @@ pub fn obfuscate<M, SU, SH, ST, R>(
     sampler_uniform: SU,
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
+    hardcoded_key: M::P,
     rng: &mut R,
 ) -> Obfuscation<M>
 where
@@ -67,7 +68,7 @@ where
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
 
-    let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
     log_mem("Sampled hardcoded_key_matrix");
 
     let enc_hardcoded_key = {

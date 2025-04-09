@@ -261,6 +261,19 @@ impl Poly for DCRTPoly {
 
         result
     }
+
+    /// Recover bits from a polynomial using decision thresholds q/4 and 3q/4
+    fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool> {
+        let modulus = params.modulus();
+        let quarter_q = modulus.as_ref() >> 2; // q/4
+        let three_quarter_q = &quarter_q * 3u32; // 3q/4
+
+        self.coeffs()
+            .iter()
+            .map(|coeff| coeff.value())
+            .map(|coeff| coeff >= &quarter_q && coeff < &three_quarter_q)
+            .collect()
+    }
 }
 
 impl PartialEq for DCRTPoly {
