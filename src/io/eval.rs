@@ -172,12 +172,11 @@ where
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
-        let enc_hardcoded_key_decomposed =
-            &self.enc_hardcoded_key.entry(0, 0).decompose_bits(params.as_ref());
-        let a_decomposed_polys = public_data.a_rlwe_bar.entry(0, 0).decompose_bits(params.as_ref());
+        let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_bits(params.as_ref());
+        let b_decomposed = &self.ct_b.entry(0, 0).decompose_bits(params.as_ref());
         let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
-            &a_decomposed_polys,
-            enc_hardcoded_key_decomposed,
+            &a_decomposed,
+            b_decomposed,
             obf_params.public_circuit.clone(),
         );
         let last_input_encodings = encodings.last().unwrap();

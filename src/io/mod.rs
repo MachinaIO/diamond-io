@@ -8,7 +8,7 @@ use crate::{bgg::BggEncoding, poly::PolyMatrix};
 #[derive(Debug, Clone)]
 pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
-    pub enc_hardcoded_key: M,
+    pub ct_b: M,
     pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
     pub m_preimages: Vec<Vec<M>>,
@@ -26,8 +26,3 @@ pub struct Obfuscation<M: PolyMatrix> {
     #[cfg(feature = "test")]
     pub final_preimage_target: M,
 }
-
-// impl<M: PolyMatrix> Obfuscation<M> {
-//     pub fn read_from_files
-// }
-// [TODO] Add a function to read/write the obfuscation to/from files

@@ -780,7 +780,7 @@ mod tests {
         assert_eq!(b_eval, &b * &x);
 
         // decrypt the result
-        let plaintext = b_eval - a_eval * t;
+        let plaintext = a_eval * t - b_eval;
         // recover the message bits
         let plaintext_bits = plaintext.extract_bits_with_threshold(&params);
         assert_eq!(plaintext_bits, (m * x).to_bool_vec());
