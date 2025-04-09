@@ -122,10 +122,13 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
         let mut outputs = Vec::with_capacity(pc_outputs.len());
         // n is the number of ciphertexts
         let n = pc_outputs.len() / (2 * log_q);
-        for j in 0..log_q {
-            for i in 0..n {
-                let a_bit = pc_outputs[i * log_q + j];
-                let b_bit = pc_outputs[(i + 1) * log_q + j];
+        for ct_idx in 0..n {
+            let ct_offset = ct_idx * 2 * log_q;
+            for bit_idx in 0..log_q {
+                let a_index = ct_offset + bit_idx;
+                let b_index = ct_offset + log_q + bit_idx;
+                let a_bit = pc_outputs[a_index];
+                let b_bit = pc_outputs[b_index];
                 outputs.push(a_bit);
                 outputs.push(b_bit);
             }
