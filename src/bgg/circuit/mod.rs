@@ -328,7 +328,7 @@ mod tests {
                 params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
                 DCRTPolyMatrix, FinRingElem,
             },
-            rlwe_encrypt,
+            enc::rlwe_encrypt,
             sampler::DistType,
             Poly, PolyMatrix, PolyParams,
         },

@@ -6,7 +6,7 @@ use crate::{
     },
     io::utils::{build_final_bits_circuit, PublicSampledData},
     poly::{
-        rlwe_encrypt,
+        enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
     },
