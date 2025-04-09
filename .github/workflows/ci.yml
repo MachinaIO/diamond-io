@@ -66,8 +66,12 @@ jobs:
       - name: Verify OpenFHE installation
         run: ls -lah /usr/local/lib | grep OpenFHE
 
-      - name: Run clippy
+      - name: Run clippy disk
         run: cargo +nightly clippy --workspace --all-targets --no-default-features --features disk
+        env:
+          RUSTFLAGS: -A unused
+
+      - name: Run clippy memory
         run: cargo +nightly clippy --workspace --all-targets --no-default-features --features memory
         env:
           RUSTFLAGS: -A unused
