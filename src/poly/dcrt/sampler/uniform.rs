@@ -8,7 +8,6 @@ use crate::{
 };
 use openfhe::ffi;
 use rayon::prelude::*;
-#[cfg(feature = "disk")]
 use std::ops::Range;
 
 pub struct DCRTPolyUniformSampler {}
@@ -60,39 +59,18 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
         ncol: usize,
         dist: DistType,
     ) -> Self::M {
-        #[cfg(feature = "disk")]
-        {
-            let mut new_matrix = DCRTPolyMatrix::new_empty(params, nrow, ncol);
-            let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-                parallel_iter!(row_offsets)
-                    .map(|_| {
-                        parallel_iter!(col_offsets.clone())
-                            .map(|_| self.sample_poly(params, &dist))
-                            .collect()
-                    })
-                    .collect()
-            };
-            new_matrix.replace_entries(0..nrow, 0..ncol, f);
-            new_matrix
-        }
-        #[cfg(feature = "memory")]
-        {
-            let c: Vec<Vec<DCRTPoly>> = parallel_iter!(0..nrow)
+        let mut new_matrix = DCRTPolyMatrix::new_empty(params, nrow, ncol);
+        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            parallel_iter!(row_offsets)
                 .map(|_| {
-                    parallel_iter!(0..ncol)
-                        .map(|_| {
-                            let sampled_poly = self.sample_poly(params, &dist);
-                            if sampled_poly.get_poly().is_null() {
-                                panic!("Attempted to dereference a null pointer");
-                            }
-                            sampled_poly
-                        })
+                    parallel_iter!(col_offsets.clone())
+                        .map(|_| self.sample_poly(params, &dist))
                         .collect()
                 })
-                .collect();
-
-            DCRTPolyMatrix::from_poly_vec(params, c)
-        }
+                .collect()
+        };
+        new_matrix.replace_entries(0..nrow, 0..ncol, f);
+        new_matrix
     }
 }
 

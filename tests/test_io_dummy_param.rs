@@ -46,7 +46,7 @@ mod test {
             public_circuit: public_circuit.clone(),
             d: 3,
             encoding_sigma: 0.0,
-            hardcoded_key_sigma: 3.0,
+            hardcoded_key_sigma: 0.0,
             p_sigma: 0.0,
         };
 

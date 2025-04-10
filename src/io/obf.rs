@@ -74,8 +74,8 @@ where
     log_mem("Sampled hardcoded_key_matrix");
 
     let enc_hardcoded_key = rlwe_encrypt(
-        &params,
-        &sampler_uniform,
+        params.as_ref(),
+        sampler_uniform.as_ref(),
         &t_bar_matrix,
         &public_data.a_rlwe_bar,
         &hardcoded_key_matrix,

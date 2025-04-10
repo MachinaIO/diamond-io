@@ -95,12 +95,12 @@ pub(crate) fn split_int64_mat_to_elems(
             })
             .collect::<Vec<Vec<DCRTPoly>>>()
     };
-    poly_vec.replace_entries(0..nrow, 0..1, f);
+    poly_vec.replace_entries(0..nrow, 0..ncol, f);
     poly_vec
 }
 
 pub(crate) fn split_int64_mat_alt_to_elems(
-    matrix: &Vec<Vec<i64>>,
+    matrix: &[Vec<i64>],
     params: &DCRTPolyParams,
 ) -> Vec<Vec<DCRTPoly>> {
     let nrow = matrix.len();

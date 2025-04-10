@@ -71,13 +71,6 @@ pub trait Poly:
         Self::from_coeffs(params, &coeffs)
     }
     fn const_max(params: &Self::Params) -> Self;
-    fn extract_highest_bits(&self) -> Vec<bool> {
-        let mut bits = Vec::with_capacity(self.coeffs().len());
-        for elem in self.coeffs() {
-            bits.push(elem.extract_highest_bits());
-        }
-        bits
-    }
     fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool>;
     fn decompose_bits(&self, params: &Self::Params) -> Vec<Self>;
     fn to_bytes(&self) -> Vec<u8> {

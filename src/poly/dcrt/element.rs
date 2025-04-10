@@ -96,12 +96,6 @@ impl PolyElem for FinRingElem {
         Self::new(modulus.as_ref() - &BigUint::from(1u8), modulus.clone())
     }
 
-    fn extract_highest_bits(&self) -> bool {
-        let bits = self.modulus.bits();
-        let half_q_value = BigUint::from(1u8) << (bits - 1);
-        self.value >= half_q_value
-    }
-
     fn modulus(&self) -> &Self::Modulus {
         &self.modulus
     }
@@ -292,15 +286,6 @@ mod tests {
         let minus_one = FinRingElem::minus_one(&modulus);
         assert_eq!(minus_one.value(), &BigUint::from((10000 - 1) as usize));
         assert_eq!(minus_one.modulus(), modulus.as_ref());
-    }
-
-    #[test]
-    fn test_element_higest_bit() {
-        let modulus = Arc::new(BigUint::from(17u8));
-        let small = FinRingElem::new(3, modulus.clone());
-        let large = FinRingElem::new(16, modulus.clone());
-        assert!(!small.extract_highest_bits()); // 3 < 16
-        assert!(large.extract_highest_bits()); // 16 >= 16
     }
 
     #[test]

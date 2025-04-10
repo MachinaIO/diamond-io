@@ -1,9 +1,5 @@
+use super::generic_matrix::GenericMatrix;
 use crate::poly::{MatrixElem, MatrixParams};
-
-#[cfg(feature = "disk")]
-use super::disk::MmapMatrix;
-#[cfg(feature = "memory")]
-use super::memory::MemoryMatrix;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;
@@ -35,7 +31,4 @@ impl MatrixElem for i64 {
     }
 }
 
-#[cfg(feature = "disk")]
-pub type I64Matrix = MmapMatrix<i64>;
-#[cfg(feature = "memory")]
-pub type I64Matrix = MemoryMatrix<i64>;
+pub type I64Matrix = GenericMatrix<i64>;
