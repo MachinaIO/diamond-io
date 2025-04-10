@@ -1,4 +1,4 @@
-use super::mmap_matrix::MmapMatrix;
+use super::generic_matrix::GenericMatrix;
 
 use crate::{
     parallel_iter,
@@ -39,7 +39,7 @@ impl MatrixElem for DCRTPoly {
     }
 }
 
-pub type DCRTPolyMatrix = MmapMatrix<DCRTPoly>;
+pub type DCRTPolyMatrix = GenericMatrix<DCRTPoly>;
 
 impl PolyMatrix for DCRTPolyMatrix {
     type P = DCRTPoly;

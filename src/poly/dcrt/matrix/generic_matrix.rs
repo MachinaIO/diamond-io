@@ -22,7 +22,7 @@ use tempfile::tempfile;
 
 // static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
 
-pub struct MmapMatrix<T: MatrixElem> {
+pub struct GenericMatrix<T: MatrixElem> {
     pub params: T::Params,
     #[cfg(feature = "disk")]
     file: File,
@@ -32,7 +32,7 @@ pub struct MmapMatrix<T: MatrixElem> {
     pub ncol: usize,
 }
 
-impl<T: MatrixElem> MmapMatrix<T> {
+impl<T: MatrixElem> GenericMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
         #[cfg(feature = "disk")]
         {
@@ -538,11 +538,11 @@ impl<T: MatrixElem> MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Debug for MmapMatrix<T> {
+impl<T: MatrixElem> Debug for GenericMatrix<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(feature = "disk")]
         let fmt = f
-            .debug_struct("MmapMatrix")
+            .debug_struct("GenericMatrix")
             .field("params", &self.params)
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
@@ -550,7 +550,7 @@ impl<T: MatrixElem> Debug for MmapMatrix<T> {
             .finish();
         #[cfg(not(feature = "disk"))]
         let fmt = f
-            .debug_struct("MmapMatrix")
+            .debug_struct("GenericMatrix")
             .field("params", &self.params)
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
@@ -560,7 +560,7 @@ impl<T: MatrixElem> Debug for MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Clone for MmapMatrix<T> {
+impl<T: MatrixElem> Clone for GenericMatrix<T> {
     fn clone(&self) -> Self {
         let mut new_matrix = Self::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
@@ -571,7 +571,7 @@ impl<T: MatrixElem> Clone for MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> PartialEq for MmapMatrix<T> {
+impl<T: MatrixElem> PartialEq for GenericMatrix<T> {
     fn eq(&self, other: &Self) -> bool {
         if self.params != other.params || self.nrow != other.nrow || self.ncol != other.ncol {
             return false;
@@ -600,29 +600,29 @@ impl<T: MatrixElem> PartialEq for MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Eq for MmapMatrix<T> {}
+impl<T: MatrixElem> Eq for GenericMatrix<T> {}
 
-impl<T: MatrixElem> Drop for MmapMatrix<T> {
+impl<T: MatrixElem> Drop for GenericMatrix<T> {
     fn drop(&mut self) {
-        // debug_mem("Drop MmapMatrix");
+        // debug_mem("Drop GenericMatrix");
         #[cfg(feature = "disk")]
         self.file.set_len(0).expect("failed to truncate file");
         // debug_mem("Truncate file");
     }
 }
 
-impl<T: MatrixElem> Add for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Add for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn add(self, rhs: Self) -> Self::Output {
         self + &rhs
     }
 }
 
-impl<T: MatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Add<&GenericMatrix<T>> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
-    fn add(self, rhs: &MmapMatrix<T>) -> Self::Output {
+    fn add(self, rhs: &GenericMatrix<T>) -> Self::Output {
         debug_assert!(
             self.nrow == rhs.nrow && self.ncol == rhs.ncol,
             "Addition requires matrices of same dimensions: self({}, {}) != rhs({}, {})",
@@ -631,7 +631,7 @@ impl<T: MatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
             rhs.nrow,
             rhs.ncol
         );
-        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
@@ -642,26 +642,26 @@ impl<T: MatrixElem> Add<&MmapMatrix<T>> for MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Sub<MmapMatrix<T>> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Sub<GenericMatrix<T>> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         self - &rhs
     }
 }
 
-impl<T: MatrixElem> Sub<&MmapMatrix<T>> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Sub<&GenericMatrix<T>> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn sub(self, rhs: &Self) -> Self::Output {
         &self - rhs
     }
 }
 
-impl<T: MatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Sub<&GenericMatrix<T>> for &GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
-    fn sub(self, rhs: &MmapMatrix<T>) -> Self::Output {
+    fn sub(self, rhs: &GenericMatrix<T>) -> Self::Output {
         debug_assert!(
             self.nrow == rhs.nrow && self.ncol == rhs.ncol,
             "Addition requires matrices of same dimensions: self({}, {}) != rhs({}, {})",
@@ -670,7 +670,7 @@ impl<T: MatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
             rhs.nrow,
             rhs.ncol
         );
-        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
             let rhs_block_polys = rhs.block_entries(row_offsets, col_offsets);
@@ -681,33 +681,33 @@ impl<T: MatrixElem> Sub<&MmapMatrix<T>> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Mul<MmapMatrix<T>> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<GenericMatrix<T>> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         self * &rhs
     }
 }
 
-impl<T: MatrixElem> Mul<&MmapMatrix<T>> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<&GenericMatrix<T>> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn mul(self, rhs: &Self) -> Self::Output {
         &self * rhs
     }
 }
 
-impl<T: MatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<&GenericMatrix<T>> for &GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
-    fn mul(self, rhs: &MmapMatrix<T>) -> Self::Output {
+    fn mul(self, rhs: &GenericMatrix<T>) -> Self::Output {
         debug_assert!(
             self.ncol == rhs.nrow,
             "Multiplication condition failed: self.ncol ({}) must equal rhs.nrow ({})",
             self.ncol,
             rhs.nrow
         );
-        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
+        let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
         let (_, ip_offsets) = block_offsets(0..0, 0..self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             ip_offsets
@@ -728,34 +728,34 @@ impl<T: MatrixElem> Mul<&MmapMatrix<T>> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Mul<T> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<T> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
     fn mul(self, rhs: T) -> Self::Output {
         self * &rhs
     }
 }
 
-impl<T: MatrixElem> Mul<&T> for MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<&T> for GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn mul(self, rhs: &T) -> Self::Output {
         &self * rhs
     }
 }
 
-impl<T: MatrixElem> Mul<T> for &MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<T> for &GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn mul(self, rhs: T) -> Self::Output {
         self * &rhs
     }
 }
 
-impl<T: MatrixElem> Mul<&T> for &MmapMatrix<T> {
-    type Output = MmapMatrix<T>;
+impl<T: MatrixElem> Mul<&T> for &GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
 
     fn mul(self, rhs: &T) -> Self::Output {
-        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             self.block_entries(row_offsets, col_offsets)
                 .into_iter()
@@ -767,11 +767,11 @@ impl<T: MatrixElem> Mul<&T> for &MmapMatrix<T> {
     }
 }
 
-impl<T: MatrixElem> Neg for MmapMatrix<T> {
+impl<T: MatrixElem> Neg for GenericMatrix<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        let mut new_matrix = MmapMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             self.block_entries(row_offsets, col_offsets)
                 .into_iter()
