@@ -3,8 +3,8 @@ use crate::{
     poly::{MatrixElem, MatrixParams},
     utils::{block_size, debug_mem},
 };
-use dashmap::mapref::entry;
 use itertools::Itertools;
+#[cfg(feature = "disk")]
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
 use rayon::prelude::*;
@@ -25,7 +25,7 @@ pub struct MmapMatrix<T: MatrixElem> {
     #[cfg(feature = "disk")]
     file: File,
     #[cfg(not(feature = "disk"))]
-    mmap: MmapMut,
+    inner: Vec<Vec<T>>,
     pub nrow: usize,
     pub ncol: usize,
 }
@@ -42,10 +42,8 @@ impl<T: MatrixElem> MmapMatrix<T> {
         }
         #[cfg(not(feature = "disk"))]
         {
-            let mmap = unsafe {
-                MmapOptions::new().len(len).populate().map_anon().expect("failed to create mmap")
-            };
-            return Self { params: params.clone(), mmap, nrow, ncol }
+            let inner = vec![vec![T::zero(params); ncol]; nrow];
+            return Self { params: params.clone(), inner, nrow, ncol }
         }
     }
 
@@ -81,12 +79,7 @@ impl<T: MatrixElem> MmapMatrix<T> {
                 }
                 #[cfg(not(feature = "disk"))]
                 {
-                    let row_data = &self.mmap[entry_size * (i * self.ncol + cols.start)..
-                        entry_size * (i * self.ncol + cols.end)];
-                    row_data
-                        .chunks(entry_size)
-                        .map(|entry| T::from_bytes_to_elem(&self.params, entry))
-                        .collect_vec()
+                    self.inner[i][cols.start..cols.end].to_vec()
                 }
             })
             .collect::<Vec<Vec<_>>>()
@@ -131,26 +124,34 @@ impl<T: MatrixElem> MmapMatrix<T> {
 
         #[cfg(not(feature = "disk"))]
         {
-            let entry_size = self.entry_size();
-            let mut_mmap = &mut self.mmap
-                [entry_size * (rows.start * self.ncol)..entry_size * (rows.end * self.ncol)];
-            mut_mmap.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
+            let polys = f(rows.clone(), cols.clone());
+            debug_assert_eq!(polys.len(), rows.len());
+            debug_assert_eq!(polys[0].len(), cols.len());
+            self.inner[rows.start..rows.end].par_iter_mut().enumerate().for_each(
                 |(i, row_data)| {
-                    let row_mut_mmap =
-                        &mut row_data[entry_size * (cols.start)..entry_size * (cols.end)];
-                    row_mut_mmap.par_chunks_mut(entry_size).enumerate().for_each(
-                        |(j, entry_data)| {
-                            let poly = f(
-                                rows.start + i..rows.start + i + 1,
-                                cols.start + j..cols.start + j + 1,
-                            )[0][0]
-                                .clone();
-                            let bytes = poly.as_elem_to_bytes();
-                            entry_data.copy_from_slice(&bytes);
-                        },
-                    );
+                    row_data[cols.start..cols.end].clone_from_slice(&polys[i]);
                 },
             );
+            //     let entry_size = self.entry_size();
+            //     let mut_mmap = &mut self.mmap
+            //         [entry_size * (rows.start * self.ncol)..entry_size * (rows.end * self.ncol)];
+            //     mut_mmap.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
+            //         |(i, row_data)| {
+            //             let row_mut_mmap =
+            //                 &mut row_data[entry_size * (cols.start)..entry_size * (cols.end)];
+            //             row_mut_mmap.par_chunks_mut(entry_size).enumerate().for_each(
+            //                 |(j, entry_data)| {
+            //                     let poly = f(
+            //                         rows.start + i..rows.start + i + 1,
+            //                         cols.start + j..cols.start + j + 1,
+            //                     )[0][0]
+            //                         .clone();
+            //                     let bytes = poly.as_elem_to_bytes();
+            //                     entry_data.copy_from_slice(&bytes);
+            //                 },
+            //             );
+            //         },
+            //     );
         }
     }
 
@@ -179,20 +180,12 @@ impl<T: MatrixElem> MmapMatrix<T> {
 
         #[cfg(not(feature = "disk"))]
         {
-            let entry_size = self.entry_size();
-            let mut_mmap = &mut self.mmap
-                [entry_size * diags.start * self.ncol..entry_size * diags.end * self.ncol];
             let polys = f(diags.clone());
-            mut_mmap.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
+            debug_assert_eq!(polys.len(), diags.len());
+            debug_assert_eq!(polys[0].len(), diags.len());
+            self.inner[diags.start..diags.end].par_iter_mut().enumerate().for_each(
                 |(i, row_data)| {
-                    row_data[entry_size * diags.start..entry_size * diags.end]
-                        .par_chunks_mut(entry_size)
-                        .enumerate()
-                        .for_each(|(j, entry_data)| {
-                            let poly = polys[i][j].clone();
-                            let bytes = poly.as_elem_to_bytes();
-                            entry_data.copy_from_slice(&bytes);
-                        });
+                    row_data[diags.start..diags.end].clone_from_slice(&polys[i]);
                 },
             );
         }
@@ -241,39 +234,16 @@ impl<T: MatrixElem> MmapMatrix<T> {
 
         #[cfg(not(feature = "disk"))]
         {
-            let entry_size = self.entry_size();
-            let mut_mmap = &mut self.mmap[entry_size * (rows.start * row_scale * self.ncol)..
-                entry_size * (rows.end * row_scale * self.ncol)];
-            mut_mmap.par_chunks_mut(entry_size * self.ncol * row_scale).enumerate().for_each(
-                |(i, row_scale_data)| {
-                    let polys = parallel_iter!(0..cols.len())
-                        .map(|j| {
-                            f(
-                                rows.start + i..rows.start + (i + 1),
-                                cols.start + j..cols.start + (j + 1),
-                            )
-                        })
-                        .collect::<Vec<Vec<Vec<T>>>>();
-                    debug_assert_eq!(polys[0].len(), row_scale);
-                    debug_assert_eq!(polys[0][0].len(), col_scale);
-                    row_scale_data.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
-                        |(k, row_data)| {
-                            let bytes = polys
-                                .iter()
-                                .flat_map(|polys| {
-                                    polys[k]
-                                        .iter()
-                                        .flat_map(|poly| poly.as_elem_to_bytes())
-                                        .collect::<Vec<_>>()
-                                })
-                                .collect::<Vec<_>>();
-                            row_data[entry_size * cols.start * col_scale..
-                                entry_size * cols.end * col_scale]
-                                .copy_from_slice(&bytes);
-                        },
-                    );
-                },
-            );
+            let polys = f(rows.clone(), cols.clone());
+            debug_assert_eq!(polys.len(), rows.len() * row_scale);
+            debug_assert_eq!(polys[0].len(), cols.len() * col_scale);
+            self.inner[rows.start * row_scale..rows.end * row_scale]
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, row_data)| {
+                    row_data[cols.start * col_scale..cols.end * col_scale]
+                        .clone_from_slice(&polys[i]);
+                });
         }
     }
 
@@ -579,7 +549,7 @@ impl<T: MatrixElem> Debug for MmapMatrix<T> {
             .field("params", &self.params)
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
-            .field("mmap", &self.mmap)
+            .field("inner", &self.inner)
             .finish();
         fmt
     }
