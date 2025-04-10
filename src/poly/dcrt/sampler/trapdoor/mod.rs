@@ -177,7 +177,7 @@ fn sample_p1_for_pert_mat(
                         dgg_stddev,
                     );
                     debug_mem("SampleP1ForPertSquareMat called");
-                    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(cpp_matrix))
+                    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(params, cpp_matrix))
                 })
                 .collect::<Vec<_>>();
             p1_blocks[0].concat_columns(&p1_blocks[1..].iter().collect::<Vec<_>>())

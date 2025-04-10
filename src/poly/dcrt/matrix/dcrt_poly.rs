@@ -126,9 +126,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             let entries = self.block_entries(row_offsets, col_offsets);
             let decomposed_entries: Vec<Vec<Vec<DCRTPoly>>> = parallel_iter!(0..nrow)
                 .map(|i| {
-                    (0..ncol)
-                        .map(|j| Self::dcrt_decompose_poly(&entries[i][j], base_bits))
-                        .collect()
+                    (0..ncol).map(|j| self.dcrt_decompose_poly(&entries[i][j], base_bits)).collect()
                 })
                 .collect();
             parallel_iter!(0..new_nrow)
@@ -283,7 +281,7 @@ impl DCRTPolyMatrix {
             }
         }
         debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
-        CppMatrix::new(matrix_ptr)
+        CppMatrix::new(&self.params, matrix_ptr)
     }
 
     pub(crate) fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
@@ -305,12 +303,12 @@ impl DCRTPolyMatrix {
             params.modulus_digits(),
             base,
         );
-        DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
+        DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(params, g_vec_cpp))
     }
 
-    fn dcrt_decompose_poly(poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
+    fn dcrt_decompose_poly(&self, poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
         let decomposed = poly.get_poly().Decompose(base_bits);
-        let cpp_decomposed = CppMatrix::new(decomposed);
+        let cpp_decomposed = CppMatrix::new(&self.params, decomposed);
         parallel_iter!(0..cpp_decomposed.ncol()).map(|idx| cpp_decomposed.entry(0, idx)).collect()
     }
 }
