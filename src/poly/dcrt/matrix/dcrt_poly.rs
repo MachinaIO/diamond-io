@@ -1,7 +1,4 @@
-#[cfg(feature = "disk")]
-use super::disk::MmapMatrix;
-#[cfg(feature = "memory")]
-use super::memory::MemoryMatrix;
+use super::mmap_matrix::MmapMatrix;
 
 use crate::{
     parallel_iter,
@@ -42,10 +39,7 @@ impl MatrixElem for DCRTPoly {
     }
 }
 
-#[cfg(feature = "disk")]
 pub type DCRTPolyMatrix = MmapMatrix<DCRTPoly>;
-#[cfg(feature = "memory")]
-pub type DCRTPolyMatrix = MemoryMatrix<DCRTPoly>;
 
 impl PolyMatrix for DCRTPolyMatrix {
     type P = DCRTPoly;
@@ -624,7 +618,9 @@ mod tests {
         assert_eq!(result.size().1, 28);
 
         let identity = DCRTPolyMatrix::identity(&params, 4, None);
+        println!("identity {:?}", identity.block_entries(0..4, 0..4));
         // Check result
+        println!("tensored {:?}", (identity.tensor(&other)).block_entries(0..20, 0..28));
         let expected_result = s * (identity.tensor(&other));
 
         assert_eq!(expected_result.size().0, 2);

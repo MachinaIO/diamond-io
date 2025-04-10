@@ -3,6 +3,7 @@ use crate::{
     poly::{MatrixElem, MatrixParams},
     utils::{block_size, debug_mem},
 };
+use dashmap::mapref::entry;
 use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
@@ -13,13 +14,18 @@ use std::{
     ops::{Add, Mul, Neg, Range, Sub},
 };
 // use sysinfo::System;
+use libc;
+#[cfg(feature = "disk")]
 use tempfile::tempfile;
 
 // static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
 
 pub struct MmapMatrix<T: MatrixElem> {
     pub params: T::Params,
-    pub file: File,
+    #[cfg(feature = "disk")]
+    file: File,
+    #[cfg(not(feature = "disk"))]
+    mmap: MmapMut,
     pub nrow: usize,
     pub ncol: usize,
 }
@@ -28,9 +34,19 @@ impl<T: MatrixElem> MmapMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
         let entry_size = params.entry_size();
         let len = entry_size * nrow * ncol;
-        let file = tempfile().expect("failed to open file");
-        file.set_len(len as u64).expect("failed to set file length");
-        Self { params: params.clone(), file, nrow, ncol }
+        #[cfg(feature = "disk")]
+        {
+            let file = tempfile().expect("failed to open file");
+            file.set_len(len as u64).expect("failed to set file length");
+            return Self { params: params.clone(), file, nrow, ncol }
+        }
+        #[cfg(not(feature = "disk"))]
+        {
+            let mmap = unsafe {
+                MmapOptions::new().len(len).populate().map_anon().expect("failed to create mmap")
+            };
+            return Self { params: params.clone(), mmap, nrow, ncol }
+        }
     }
 
     pub fn entry_size(&self) -> usize {
@@ -42,24 +58,36 @@ impl<T: MatrixElem> MmapMatrix<T> {
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
         parallel_iter!(rows)
             .map(|i| {
-                let raw_offset = entry_size * (i * self.ncol + cols.start);
-                let aligned_offset = raw_offset - (raw_offset % page_size);
-                let offset_adjustment = raw_offset - aligned_offset;
-                let required_size = offset_adjustment + entry_size * cols.len();
-                let mapping_size = if required_size % page_size == 0 {
-                    required_size
-                } else {
-                    ((required_size / page_size) + 1) * page_size
-                };
-                let mmap = map_file(&self.file, aligned_offset, mapping_size);
-                let row_data =
-                    &mmap[offset_adjustment..offset_adjustment + entry_size * cols.len()];
-                let row_col_vec = row_data
-                    .chunks(entry_size)
-                    .map(|entry| T::from_bytes_to_elem(&self.params, entry))
-                    .collect_vec();
-                drop(mmap);
-                row_col_vec
+                #[cfg(feature = "disk")]
+                {
+                    let raw_offset = entry_size * (i * self.ncol + cols.start);
+                    let aligned_offset = raw_offset - (raw_offset % page_size);
+                    let offset_adjustment = raw_offset - aligned_offset;
+                    let required_size = offset_adjustment + entry_size * cols.len();
+                    let mapping_size = if required_size % page_size == 0 {
+                        required_size
+                    } else {
+                        ((required_size / page_size) + 1) * page_size
+                    };
+                    let mmap = map_file(&self.file, aligned_offset, mapping_size);
+                    let row_data =
+                        &mmap[offset_adjustment..offset_adjustment + entry_size * cols.len()];
+                    let row_col_vec = row_data
+                        .chunks(entry_size)
+                        .map(|entry| T::from_bytes_to_elem(&self.params, entry))
+                        .collect_vec();
+                    drop(mmap);
+                    row_col_vec
+                }
+                #[cfg(not(feature = "disk"))]
+                {
+                    let row_data = &self.mmap[entry_size * (i * self.ncol + cols.start)..
+                        entry_size * (i * self.ncol + cols.end)];
+                    row_data
+                        .chunks(entry_size)
+                        .map(|entry| T::from_bytes_to_elem(&self.params, entry))
+                        .collect_vec()
+                }
             })
             .collect::<Vec<Vec<_>>>()
     }
@@ -68,53 +96,106 @@ impl<T: MatrixElem> MmapMatrix<T> {
     where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (row_offsets, col_offsets) = block_offsets(rows, cols);
         // debug_mem(format!(
         //     "replace_entries: row_offsets: {:?}, col_offsets: {:?}",
         //     row_offsets, col_offsets
         // ));
-        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
-            |(cur_block_row_idx, next_block_row_idx)| {
-                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
-                    |(cur_block_col_idx, next_block_col_idx)| {
-                        let new_entries = f(
-                            *cur_block_row_idx..*next_block_row_idx,
-                            *cur_block_col_idx..*next_block_col_idx,
-                        );
-                        // This is secure because the modified entries are not overlapped among
-                        // threads
-                        unsafe {
-                            self.replace_block_entries(
+        if self.nrow == 0 || self.ncol == 0 {
+            return;
+        }
+        #[cfg(feature = "disk")]
+        {
+            let (row_offsets, col_offsets) = block_offsets(rows, cols);
+            parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+                |(cur_block_row_idx, next_block_row_idx)| {
+                    parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                        |(cur_block_col_idx, next_block_col_idx)| {
+                            let new_entries = f(
                                 *cur_block_row_idx..*next_block_row_idx,
                                 *cur_block_col_idx..*next_block_col_idx,
-                                new_entries,
                             );
-                        }
-                    },
-                );
-            },
-        );
+                            // This is secure because the modified entries are not overlapped among
+                            // threads
+                            unsafe {
+                                self.replace_block_entries(
+                                    *cur_block_row_idx..*next_block_row_idx,
+                                    *cur_block_col_idx..*next_block_col_idx,
+                                    new_entries,
+                                );
+                            }
+                        },
+                    );
+                },
+            );
+        }
+
+        #[cfg(not(feature = "disk"))]
+        {
+            let entry_size = self.entry_size();
+            let mut_mmap = &mut self.mmap
+                [entry_size * (rows.start * self.ncol)..entry_size * (rows.end * self.ncol)];
+            mut_mmap.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
+                |(i, row_data)| {
+                    let row_mut_mmap =
+                        &mut row_data[entry_size * (cols.start)..entry_size * (cols.end)];
+                    row_mut_mmap.par_chunks_mut(entry_size).enumerate().for_each(
+                        |(j, entry_data)| {
+                            let poly = f(
+                                rows.start + i..rows.start + i + 1,
+                                cols.start + j..cols.start + j + 1,
+                            )[0][0]
+                                .clone();
+                            let bytes = poly.as_elem_to_bytes();
+                            entry_data.copy_from_slice(&bytes);
+                        },
+                    );
+                },
+            );
+        }
     }
 
     pub fn replace_entries_diag<F>(&mut self, diags: Range<usize>, f: F)
     where
         F: Fn(Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let (offsets, _) = block_offsets(diags, 0..0);
-        parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
-            |(cur_block_diag_idx, next_block_diag_idx)| {
-                let new_entries = f(*cur_block_diag_idx..*next_block_diag_idx);
-                // This is secure because the modified entries are not overlapped among
-                // threads
-                unsafe {
-                    self.replace_block_entries(
-                        *cur_block_diag_idx..*next_block_diag_idx,
-                        *cur_block_diag_idx..*next_block_diag_idx,
-                        new_entries,
-                    );
-                }
-            },
-        );
+        #[cfg(feature = "disk")]
+        {
+            let (offsets, _) = block_offsets(diags, 0..0);
+            parallel_iter!(offsets.iter().tuple_windows().collect_vec()).for_each(
+                |(cur_block_diag_idx, next_block_diag_idx)| {
+                    let new_entries = f(*cur_block_diag_idx..*next_block_diag_idx);
+                    // This is secure because the modified entries are not overlapped among
+                    // threads
+                    unsafe {
+                        self.replace_block_entries(
+                            *cur_block_diag_idx..*next_block_diag_idx,
+                            *cur_block_diag_idx..*next_block_diag_idx,
+                            new_entries,
+                        );
+                    }
+                },
+            );
+        }
+
+        #[cfg(not(feature = "disk"))]
+        {
+            let entry_size = self.entry_size();
+            let mut_mmap = &mut self.mmap
+                [entry_size * diags.start * self.ncol..entry_size * diags.end * self.ncol];
+            let polys = f(diags.clone());
+            mut_mmap.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
+                |(i, row_data)| {
+                    row_data[entry_size * diags.start..entry_size * diags.end]
+                        .par_chunks_mut(entry_size)
+                        .enumerate()
+                        .for_each(|(j, entry_data)| {
+                            let poly = polys[i][j].clone();
+                            let bytes = poly.as_elem_to_bytes();
+                            entry_data.copy_from_slice(&bytes);
+                        });
+                },
+            );
+        }
     }
 
     pub fn replace_entries_with_expand<F>(
@@ -127,39 +208,76 @@ impl<T: MatrixElem> MmapMatrix<T> {
     ) where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        let block_size = block_size();
-        let row_block_size = block_size.div_ceil(row_scale);
-        let col_block_size = block_size.div_ceil(col_scale);
-        let (row_offsets, col_offsets) =
-            block_offsets_distinct_block_sizes(rows, cols, row_block_size, col_block_size);
-        // debug_mem(format!(
-        //     "replace_entries: row_offsets: {:?}, col_offsets: {:?}",
-        //     row_offsets, col_offsets
-        // ));
-        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
-            |(cur_block_row_idx, next_block_row_idx)| {
-                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
-                    |(cur_block_col_idx, next_block_col_idx)| {
-                        let new_entries = f(
-                            *cur_block_row_idx..*next_block_row_idx,
-                            *cur_block_col_idx..*next_block_col_idx,
-                        );
-                        // This is secure because the modified entries are not overlapped among
-                        // threads
-
-                        unsafe {
-                            self.replace_block_entries(
-                                *cur_block_row_idx * row_scale..*next_block_row_idx * row_scale,
-                                *cur_block_col_idx * col_scale..*next_block_col_idx * col_scale,
-                                new_entries,
+        #[cfg(feature = "disk")]
+        {
+            let block_size = block_size();
+            let row_block_size = block_size.div_ceil(row_scale);
+            let col_block_size = block_size.div_ceil(col_scale);
+            let (row_offsets, col_offsets) =
+                block_offsets_distinct_block_sizes(rows, cols, row_block_size, col_block_size);
+            parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+                |(cur_block_row_idx, next_block_row_idx)| {
+                    parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
+                        |(cur_block_col_idx, next_block_col_idx)| {
+                            let new_entries = f(
+                                *cur_block_row_idx..*next_block_row_idx,
+                                *cur_block_col_idx..*next_block_col_idx,
                             );
-                        }
-                    },
-                );
-            },
-        );
+                            // This is secure because the modified entries are not overlapped among
+                            // threads
+
+                            unsafe {
+                                self.replace_block_entries(
+                                    *cur_block_row_idx * row_scale..*next_block_row_idx * row_scale,
+                                    *cur_block_col_idx * col_scale..*next_block_col_idx * col_scale,
+                                    new_entries,
+                                );
+                            }
+                        },
+                    );
+                },
+            );
+        }
+
+        #[cfg(not(feature = "disk"))]
+        {
+            let entry_size = self.entry_size();
+            let mut_mmap = &mut self.mmap[entry_size * (rows.start * row_scale * self.ncol)..
+                entry_size * (rows.end * row_scale * self.ncol)];
+            mut_mmap.par_chunks_mut(entry_size * self.ncol * row_scale).enumerate().for_each(
+                |(i, row_scale_data)| {
+                    let polys = parallel_iter!(0..cols.len())
+                        .map(|j| {
+                            f(
+                                rows.start + i..rows.start + (i + 1),
+                                cols.start + j..cols.start + (j + 1),
+                            )
+                        })
+                        .collect::<Vec<Vec<Vec<T>>>>();
+                    debug_assert_eq!(polys[0].len(), row_scale);
+                    debug_assert_eq!(polys[0][0].len(), col_scale);
+                    row_scale_data.par_chunks_mut(entry_size * self.ncol).enumerate().for_each(
+                        |(k, row_data)| {
+                            let bytes = polys
+                                .iter()
+                                .flat_map(|polys| {
+                                    polys[k]
+                                        .iter()
+                                        .flat_map(|poly| poly.as_elem_to_bytes())
+                                        .collect::<Vec<_>>()
+                                })
+                                .collect::<Vec<_>>();
+                            row_data[entry_size * cols.start * col_scale..
+                                entry_size * cols.end * col_scale]
+                                .copy_from_slice(&bytes);
+                        },
+                    );
+                },
+            );
+        }
     }
 
+    #[cfg(feature = "disk")]
     pub(crate) unsafe fn replace_block_entries(
         &self,
         rows: Range<usize>,
@@ -178,11 +296,11 @@ impl<T: MatrixElem> MmapMatrix<T> {
             let offset_in_page = desired_offset - aligned_offset;
             let required_len = offset_in_page + entry_size * num_cols;
             let mapping_len = required_len.div_ceil(page_size) * page_size;
-            let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
             let bytes = new_entries[i - row_start]
                 .iter()
                 .flat_map(|poly| poly.as_elem_to_bytes())
                 .collect::<Vec<_>>();
+            let mut mmap = unsafe { map_file_mut(&self.file, aligned_offset, mapping_len) };
             mmap[offset_in_page..offset_in_page + entry_size * num_cols].copy_from_slice(&bytes);
             drop(mmap);
         });
@@ -367,9 +485,14 @@ impl<T: MatrixElem> MmapMatrix<T> {
     }
 
     pub fn tensor(&self, other: &Self) -> Self {
+        #[cfg(feature = "disk")]
         let new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
+        #[cfg(not(feature = "disk"))]
+        let mut new_matrix =
+            Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
         let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
+        #[cfg(feature = "disk")]
         parallel_iter!(0..self.nrow).for_each(|i| {
             parallel_iter!(0..self.ncol).for_each(|j| {
                 let scalar = self.entry(i, j);
@@ -399,18 +522,66 @@ impl<T: MatrixElem> MmapMatrix<T> {
                 );
             });
         });
+        #[cfg(not(feature = "disk"))]
+        {
+            let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                let row_offsets_len = row_offsets.len();
+                let col_offsets_len = col_offsets.len();
+                // First calculate all scalar * sub_matrix products in parallel
+                let scalared_polys = parallel_iter!(0..row_offsets_len)
+                    .map(|i| {
+                        parallel_iter!(0..col_offsets_len)
+                            .map(|j| {
+                                let scalar =
+                                    self.entry(row_offsets.start + i, col_offsets.start + j);
+                                let sub_matrix = other.clone() * scalar;
+                                sub_matrix.block_entries(0..sub_matrix.nrow, 0..sub_matrix.ncol)
+                            })
+                            .collect::<Vec<Vec<Vec<T>>>>()
+                    })
+                    .collect::<Vec<Vec<Vec<Vec<T>>>>>();
+
+                parallel_iter!(0..row_offsets_len * other.nrow)
+                    .map(|idx| {
+                        let i = idx / other.nrow;
+                        let k = idx % other.nrow;
+                        parallel_iter!(0..col_offsets_len)
+                            .flat_map(|j| scalared_polys[i][j][k].clone())
+                            .collect::<Vec<T>>()
+                    })
+                    .collect::<Vec<Vec<T>>>()
+            };
+            new_matrix.replace_entries_with_expand(
+                0..self.nrow,
+                0..self.ncol,
+                other.nrow,
+                other.ncol,
+                f,
+            );
+        }
         new_matrix
     }
 }
 
 impl<T: MatrixElem> Debug for MmapMatrix<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MmapMatrix")
+        #[cfg(feature = "disk")]
+        let fmt = f
+            .debug_struct("MmapMatrix")
             .field("params", &self.params)
             .field("nrow", &self.nrow)
             .field("ncol", &self.ncol)
             .field("file", &self.file)
-            .finish()
+            .finish();
+        #[cfg(not(feature = "disk"))]
+        let fmt = f
+            .debug_struct("MmapMatrix")
+            .field("params", &self.params)
+            .field("nrow", &self.nrow)
+            .field("ncol", &self.ncol)
+            .field("mmap", &self.mmap)
+            .finish();
+        fmt
     }
 }
 
@@ -459,6 +630,7 @@ impl<T: MatrixElem> Eq for MmapMatrix<T> {}
 impl<T: MatrixElem> Drop for MmapMatrix<T> {
     fn drop(&mut self) {
         // debug_mem("Drop MmapMatrix");
+        #[cfg(feature = "disk")]
         self.file.set_len(0).expect("failed to truncate file");
         // debug_mem("Truncate file");
     }
@@ -636,6 +808,7 @@ impl<T: MatrixElem> Neg for MmapMatrix<T> {
     }
 }
 
+#[cfg(feature = "disk")]
 fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     unsafe {
         MmapOptions::new()
@@ -647,6 +820,7 @@ fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     }
 }
 
+#[cfg(feature = "disk")]
 unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
     unsafe {
         MmapOptions::new()
