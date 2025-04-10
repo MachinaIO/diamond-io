@@ -147,6 +147,7 @@ mod test {
             dcrt::{
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
             },
+            enc::rlwe_encrypt,
             sampler::DistType,
         },
     };
@@ -176,13 +177,14 @@ mod test {
 
         // 5. Generate RLWE ciphertext for the hardcoded key
         let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-        let e = sampler_uniform.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0 });
-        // Create a scale value (half of q)
+        // let e = sampler_uniform.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0
+        // }); Create a scale value (half of q)
         let modulus = params.modulus();
         let half_q = FinRingElem::half_q(&modulus.clone());
         let scale = DCRTPoly::from_const(&params, &half_q);
         let enc_hardcoded_key =
-            t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
+            rlwe_encrypt(&params, &sampler_uniform, &t_bar, &a_rlwe_bar, &hardcoded_key, 0.0);
+        // t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
         assert_eq!(
             (hardcoded_key.clone() * &scale).entry(0, 0),
             (t_bar.clone() * &a_rlwe_bar - &enc_hardcoded_key).entry(0, 0)
@@ -222,8 +224,10 @@ mod test {
             .collect_vec();
         assert_eq!(output_ints.len(), 1);
         assert_eq!(output_ints[0], (hardcoded_key.clone() * &scale).entry(0, 0));
-        let output_bits =
-            output_ints.iter().flat_map(|output| output.extract_highest_bits()).collect::<Vec<_>>();
+        let output_bits = output_ints
+            .iter()
+            .flat_map(|output| output.extract_bits_with_threshold(&params))
+            .collect::<Vec<_>>();
         // 11. Verify that the output matches the hardcoded key bits
         assert_eq!(output_bits.len(), hardcoded_key_bits.len());
         for (i, (output_bit, key_bit)) in
