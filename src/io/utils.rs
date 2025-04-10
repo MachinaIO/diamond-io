@@ -152,24 +152,25 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod test {
+    use std::sync::Arc;
+
     use super::*;
     use crate::{
         bgg::BitToInt,
         poly::{
-            dcrt::{
-                DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem,
-            },
-            element::PolyElem,
+            dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
+            enc::rlwe_encrypt,
             sampler::DistType,
         },
     };
-    use keccak_asm::Keccak256;
 
     #[test]
     fn test_build_final_step_circuit() {
         // 1. Set up parameters
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
+        let sampler_uniform = DCRTPolyUniformSampler::new();
+        let sigma = 3.0;
 
         // 2. Create a simple public circuit that takes 2*log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
@@ -179,49 +180,43 @@ mod test {
         }
 
         // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
-        let sampler_uniform = DCRTPolyUniformSampler::new();
         let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
-        // 4. Get the public polynomial a from PublicSampledData's sample function
-        let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        let a_rlwe_bar =
-            hash_sampler.sample_hash(&params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
 
-        // 5. Generate RLWE ciphertext for the hardcoded key
-        let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-        let e = sampler_uniform.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0 });
-        // Create a scale value (half of q)
-        let modulus = params.modulus();
-        let half_q = FinRingElem::half_q(&modulus.clone());
-        let scale = DCRTPoly::from_const(&params, &half_q);
-        let enc_hardcoded_key =
-            t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
-        assert_eq!(
-            (hardcoded_key.clone() * &scale).entry(0, 0),
-            (t_bar.clone() * &a_rlwe_bar - &enc_hardcoded_key).entry(0, 0)
+        // 4. Generate RLWE ciphertext for the hardcoded key
+        let a_rlwe_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+        let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+
+        let b = rlwe_encrypt(
+            &Arc::new(params.clone()),
+            &Arc::new(sampler_uniform),
+            &t_bar_matrix,
+            &a_rlwe_bar,
+            &hardcoded_key,
+            sigma,
         );
 
-        // 6. Decompose the ciphertext
-        let enc_hardcoded_key_polys: Vec<DCRTPoly> =
-            enc_hardcoded_key.entry(0, 0).decompose_bits(&params);
+        // 5. Decompose the ciphertext
+        let a_decomposed = a_rlwe_bar.entry(0, 0).decompose_bits(&params);
+        let b_decomposed = b.entry(0, 0).decompose_bits(&params);
 
-        // 7. Build the final step circuit with DCRTPoly as the Evaluable type
-        let a_decomposed_polys = a_rlwe_bar.entry(0, 0).decompose_bits(&params);
+        // 6. Build the final circuit with DCRTPoly as the Evaluable type
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &a_decomposed_polys,
-            &enc_hardcoded_key_polys,
-            public_circuit.clone(),
+            &a_decomposed,
+            &b_decomposed,
+            public_circuit,
         );
 
-        // 8. Evaluate the circuit with the decomposed ciphertext
+        // 7. Evaluate the circuit
         let one = DCRTPoly::const_one(&params);
 
         let mut inputs = vec![one.clone()];
-        inputs.push(t_bar.entry(0, 0).clone());
+        inputs.push(t_bar_matrix.entry(0, 0).clone());
 
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
+        assert_eq!(circuit_outputs.len(), log_q);
 
         // 9. Extract the output bits
-        let output_ints: Vec<DCRTPoly> = circuit_outputs
+        let output_ints = circuit_outputs
             .chunks(log_q)
             .map(|bits| DCRTPoly::bits_to_int(bits, &params))
             .collect_vec();
