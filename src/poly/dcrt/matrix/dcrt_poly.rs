@@ -618,9 +618,7 @@ mod tests {
         assert_eq!(result.size().1, 28);
 
         let identity = DCRTPolyMatrix::identity(&params, 4, None);
-        println!("identity {:?}", identity.block_entries(0..4, 0..4));
         // Check result
-        println!("tensored {:?}", (identity.tensor(&other)).block_entries(0..20, 0..28));
         let expected_result = s * (identity.tensor(&other));
 
         assert_eq!(expected_result.size().0, 2);

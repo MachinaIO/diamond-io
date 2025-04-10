@@ -204,10 +204,6 @@ where
                 let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
                 last_s = last_s * r;
             }
-            println!(
-                "plaintext coeffs {:?}",
-                output_encoding_ints[0].plaintext.as_ref().unwrap().coeffs()
-            );
             let output_plaintext = output_encoding_ints[0]
                 .plaintext
                 .as_ref()

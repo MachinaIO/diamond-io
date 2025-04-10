@@ -267,7 +267,6 @@ mod test {
             1 + params.ring_dimension() as usize,
         );
         let norm_json = serde_json::to_string(&norms).unwrap();
-        // println!("norms: {}", norm_json);
         use std::{fs::File, io::Write};
         let mut file = File::create("final_bits_norm.json").unwrap();
         file.write_all(norm_json.as_bytes()).unwrap();

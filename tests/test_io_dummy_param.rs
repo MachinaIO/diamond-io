@@ -5,11 +5,11 @@ mod test {
         io::{obf::obfuscate, params::ObfuscationParams},
         poly::{
             dcrt::{
-                DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-                DCRTPolyUniformSampler,
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
+                DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
             },
             sampler::DistType,
-            Poly, PolyParams,
+            MatrixElem, Poly, PolyParams,
         },
         utils::init_tracing,
     };
@@ -46,7 +46,7 @@ mod test {
             public_circuit: public_circuit.clone(),
             d: 3,
             encoding_sigma: 0.0,
-            hardcoded_key_sigma: 3.0,
+            hardcoded_key_sigma: 0.0,
             p_sigma: 0.0,
         };
 
@@ -66,7 +66,7 @@ mod test {
         let obfuscation_time = start_time.elapsed();
         info!("Time to obfuscate: {:?}", obfuscation_time);
 
-        let input = [false];
+        let input = [true];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         #[cfg(feature = "test")]
         let hardcoded_key = obfuscation
