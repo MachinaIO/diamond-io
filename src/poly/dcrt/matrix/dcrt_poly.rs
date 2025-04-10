@@ -271,9 +271,13 @@ impl DCRTPolyMatrix {
     pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
         let nrow = self.nrow;
         let ncol = self.ncol;
-        let params = &self.params;
-        let mut matrix_ptr =
-            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), nrow, ncol);
+        let mut matrix_ptr = MatrixGen(
+            self.params.ring_dimension(),
+            self.params.crt_depth(),
+            self.params.crt_bits(),
+            nrow,
+            ncol,
+        );
         debug_mem(format!("matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
         for i in 0..nrow {
             for j in 0..ncol {
