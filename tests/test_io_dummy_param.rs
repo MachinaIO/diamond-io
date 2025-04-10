@@ -73,7 +73,6 @@ mod test {
         let bool_in = rng.random::<bool>();
         let input = [bool_in];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        #[cfg(feature = "test")]
         let output =
             obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
@@ -146,7 +145,6 @@ mod test {
         let bool_in = rng.random::<bool>();
         let input = [bool_in];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        #[cfg(feature = "test")]
         let output =
             obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
@@ -165,6 +163,7 @@ mod test {
         );
         #[cfg(feature = "test")]
         assert_eq!(output_1st_gate, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());
+        #[cfg(feature = "test")]
         assert_eq!(output_2nd_gate, (hardcoded_key * input_poly).to_bool_vec());
     }
 }

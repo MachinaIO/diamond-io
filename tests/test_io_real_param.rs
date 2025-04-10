@@ -75,7 +75,6 @@ mod test {
         let bool_in = rng.random::<bool>();
         let input = [bool_in];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-        #[cfg(feature = "test")]
         let output =
             obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
