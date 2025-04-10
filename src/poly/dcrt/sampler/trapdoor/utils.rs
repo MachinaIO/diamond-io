@@ -100,7 +100,7 @@ pub(crate) fn split_int64_mat_to_elems(
 }
 
 pub(crate) fn split_int64_mat_alt_to_elems(
-    matrix: &Vec<Vec<i64>>,
+    matrix: &[Vec<i64>],
     params: &DCRTPolyParams,
 ) -> Vec<Vec<DCRTPoly>> {
     let nrow = matrix.len();

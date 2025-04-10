@@ -40,12 +40,12 @@ impl<T: MatrixElem> GenericMatrix<T> {
             let len = entry_size * nrow * ncol;
             let file = tempfile().expect("failed to open file");
             file.set_len(len as u64).expect("failed to set file length");
-            return Self { params: params.clone(), file, nrow, ncol }
+            Self { params: params.clone(), file, nrow, ncol }
         }
         #[cfg(not(feature = "disk"))]
         {
             let inner = vec![vec![T::zero(params); ncol]; nrow];
-            return Self { params: params.clone(), inner, nrow, ncol }
+            Self { params: params.clone(), inner, nrow, ncol }
         }
     }
 

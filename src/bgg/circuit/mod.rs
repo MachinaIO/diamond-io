@@ -319,8 +319,6 @@ impl PolyCircuit {
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
     use crate::{
         poly::{

@@ -5,11 +5,11 @@ mod test {
         io::{obf::obfuscate, params::ObfuscationParams},
         poly::{
             dcrt::{
-                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
-                DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
+                DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
+                DCRTPolyUniformSampler,
             },
             sampler::DistType,
-            MatrixElem, Poly, PolyParams,
+            Poly, PolyParams,
         },
         utils::init_tracing,
     };
