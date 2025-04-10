@@ -83,12 +83,10 @@ mod test {
         info!("output {:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);
         info!("Total time: {:?}", total_time);
-        #[cfg(feature = "test")]
         let input_poly = DCRTPoly::from_const(
             &params,
             &FinRingElem::constant(&params.modulus(), bool_in as u64),
         );
-        #[cfg(feature = "test")]
         assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
     }
 }
