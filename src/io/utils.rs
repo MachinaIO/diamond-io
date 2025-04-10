@@ -101,7 +101,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
     debug_assert_eq!(b_decomposed_polys.len(), log_q);
     let packed_eval_input_size = public_circuit.num_input() - (2 * log_q);
 
-    // circuit outputs the cipertext
+    // circuit outputs the cipertext ct=(a,b) as a_bit_0, b_bit_0, a_bit_1, b_bit_1, ...
     let mut ct_output_circuit = PolyCircuit::new();
     {
         let inputs = ct_output_circuit.input(packed_eval_input_size);
@@ -115,8 +115,8 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
             let bits = poly.coeffs().iter().map(|elem| elem.to_bit()).collect_vec();
             public_circuit_inputs.push(ct_output_circuit.const_bit_poly(&bits));
         }
-        assert_eq!(public_circuit_inputs.len(), 2 * log_q);
         public_circuit_inputs.extend(inputs);
+        assert_eq!(public_circuit_inputs.len(), 2 * log_q + packed_eval_input_size);
         let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &public_circuit_inputs);
         let mut outputs = Vec::with_capacity(pc_outputs.len());
         // n is the number of ciphertexts
@@ -179,7 +179,7 @@ mod test {
             public_circuit.output(inputs[0..2 * log_q].to_vec());
         }
 
-        // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
+        // 3. Generate a random hardcoded key
         let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
 
         // 4. Generate RLWE ciphertext for the hardcoded key
@@ -215,7 +215,7 @@ mod test {
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
         assert_eq!(circuit_outputs.len(), log_q);
 
-        // 9. Extract the output bits
+        // 8. Extract the output bits
         let output_ints = circuit_outputs
             .chunks(log_q)
             .map(|bits| DCRTPoly::bits_to_int(bits, &params))
@@ -226,7 +226,7 @@ mod test {
             .flat_map(|output| output.extract_bits_with_threshold(&params))
             .collect::<Vec<_>>();
 
-        // 10. Verify that the output matches the hardcoded key bits
+        // 9. Verify that the output matches the hardcoded key bits
         assert_eq!(output_bits.len(), params.ring_dimension() as usize);
         assert_eq!(output_bits, hardcoded_key.entry(0, 0).to_bool_vec());
     }

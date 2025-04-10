@@ -86,10 +86,10 @@ where
 
     log_mem("Generated RLWE ciphertext {a, b}");
 
-    let b_decomposed = b.entry(0, 0).decompose_bits(params.as_ref());
     let a_decomposed = a.entry(0, 0).decompose_bits(params.as_ref());
+    let b_decomposed = b.entry(0, 0).decompose_bits(params.as_ref());
 
-    log_mem("Decomposed ciphertext");
+    log_mem("Decomposed RLWE ciphertext into {bits(a), bits(b)}");
 
     let t_bar = t_bar_matrix.entry(0, 0);
 
