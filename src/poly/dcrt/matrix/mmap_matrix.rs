@@ -8,12 +8,14 @@ use itertools::Itertools;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 // use once_cell::sync::OnceCell;
 use rayon::prelude::*;
+#[cfg(feature = "disk")]
+use std::fs::File;
 use std::{
     fmt::Debug,
-    fs::File,
     ops::{Add, Mul, Neg, Range, Sub},
 };
 // use sysinfo::System;
+#[cfg(feature = "disk")]
 use libc;
 #[cfg(feature = "disk")]
 use tempfile::tempfile;
@@ -32,10 +34,10 @@ pub struct MmapMatrix<T: MatrixElem> {
 
 impl<T: MatrixElem> MmapMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
-        let entry_size = params.entry_size();
-        let len = entry_size * nrow * ncol;
         #[cfg(feature = "disk")]
         {
+            let entry_size = params.entry_size();
+            let len = entry_size * nrow * ncol;
             let file = tempfile().expect("failed to open file");
             file.set_len(len as u64).expect("failed to set file length");
             return Self { params: params.clone(), file, nrow, ncol }
@@ -52,7 +54,9 @@ impl<T: MatrixElem> MmapMatrix<T> {
     }
 
     pub fn block_entries(&self, rows: Range<usize>, cols: Range<usize>) -> Vec<Vec<T>> {
+        #[cfg(feature = "disk")]
         let entry_size = self.entry_size();
+        #[cfg(feature = "disk")]
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
         parallel_iter!(rows)
             .map(|i| {
@@ -461,6 +465,7 @@ impl<T: MatrixElem> MmapMatrix<T> {
         #[cfg(not(feature = "disk"))]
         let mut new_matrix =
             Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
+        #[cfg(feature = "disk")]
         let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
         #[cfg(feature = "disk")]
         parallel_iter!(0..self.nrow).for_each(|i| {
