@@ -60,7 +60,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn mul(self, other: &Self) -> Self {
         let decomposed = other.matrix.decompose();
-        let matrix = self.matrix.clone() * decomposed;
+        let matrix = self.matrix * decomposed;
         let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
         Self { matrix, reveal_plaintext }
     }
@@ -68,15 +68,15 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 
 impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
-        let matrix = self.matrix.clone() * rotate_poly;
+        let matrix = self.matrix * rotate_poly;
         Self { matrix, reveal_plaintext: self.reveal_plaintext }
     }
 
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
-        let matrix = one.matrix.clone() * const_poly;
+    fn from_bits(params: &Self::Params, one: Self, bits: &[bool]) -> Self {
+        let const_poly = <M::P as Evaluable>::from_bits(params, <M::P>::const_one(params), bits);
+        let matrix = one.matrix * const_poly;
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 }

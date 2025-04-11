@@ -96,7 +96,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
 
 impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
         let vector = self.vector.clone() * &rotate_poly;
         let pubkey = self.pubkey.rotate(params, shift);
@@ -104,10 +104,10 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         Self { vector, pubkey, plaintext }
     }
 
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
+    fn from_bits(params: &Self::Params, one: Self, bits: &[bool]) -> Self {
+        let const_poly = <M::P as Evaluable>::from_bits(params, <M::P>::const_one(params), bits);
         let vector = one.vector.clone() * &const_poly;
-        let pubkey = BggPublicKey::from_bits(params, &one.pubkey, bits);
+        let pubkey = BggPublicKey::from_bits(params, one.pubkey, bits);
         let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
         Self { vector, pubkey, plaintext }
     }

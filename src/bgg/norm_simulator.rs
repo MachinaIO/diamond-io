@@ -101,10 +101,10 @@ impl_binop_with_refs!(NormSimulator => Mul::mul(self, rhs: &NormSimulator) -> No
 
 impl Evaluable for NormSimulator {
     type Params = ();
-    fn rotate(&self, _: &Self::Params, _: usize) -> Self {
-        self.clone()
+    fn rotate(self, _: &Self::Params, _: usize) -> Self {
+        self
     }
-    fn from_bits(_: &Self::Params, one: &Self, _: &[bool]) -> Self {
+    fn from_bits(_: &Self::Params, one: Self, _: &[bool]) -> Self {
         let n = BigUint::from(one.dim);
         let h_norm = one.h_norm.clone() * &n;
         let plaintext_norm = n;
