@@ -10,6 +10,7 @@ use crate::poly::{
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
+#[cfg(feature = "cpu")]
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
 
@@ -103,14 +104,10 @@ pub fn log_mem<T: Into<String>>(tag: T) {
 }
 
 pub fn debug_mem<T: Into<String>>(tag: T) {
-    let s =
-        System::new_with_specifics(RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()));
-    let cpu_usage_sum = s.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>();
     if let Some(usage) = memory_stats() {
         debug!(
-            "{} || Cpu usage {} || Current physical/virtural memory usage: {} | {}",
+            "{} || Current physical/virtural memory usage: {} | {}",
             tag.into(),
-            cpu_usage_sum,
             usage.physical_mem,
             usage.virtual_mem
         );
