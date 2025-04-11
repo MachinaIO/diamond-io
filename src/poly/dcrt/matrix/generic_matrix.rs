@@ -324,16 +324,12 @@ impl<T: MatrixElem> GenericMatrix<T> {
             let nrow = row_end - row_start;
             let ncol = col_end - col_start;
 
-            let mut c = Vec::with_capacity(nrow);
-            for i in row_start..row_end {
-                let mut row = Vec::with_capacity(ncol);
-                for j in col_start..col_end {
-                    row.push(self.inner[i][j].clone());
-                }
-                c.push(row);
-            }
+            let inner: Vec<_> = (row_start..row_end)
+                .into_par_iter()
+                .map(|i| (col_start..col_end).map(|j| self.inner[i][j].clone()).collect::<Vec<_>>())
+                .collect();
 
-            Self { inner: c, params: self.params.clone(), nrow, ncol }
+            Self { inner, params: self.params.clone(), nrow, ncol }
         }
     }
 
@@ -365,21 +361,16 @@ impl<T: MatrixElem> GenericMatrix<T> {
             let ncol = size;
             let scalar = scalar.unwrap_or_else(|| T::one(params));
             let zero_elem = T::zero(params);
-            let mut result = Vec::with_capacity(nrow);
+            let inner: Vec<Vec<T>> = (0..size)
+                .into_par_iter() //
+                .map(|i| {
+                    (0..size)
+                        .map(|j| if i == j { scalar.clone() } else { zero_elem.clone() })
+                        .collect()
+                })
+                .collect();
 
-            for i in 0..nrow {
-                let mut row = Vec::with_capacity(ncol);
-                for j in 0..ncol {
-                    if i == j {
-                        row.push(scalar.clone());
-                    } else {
-                        row.push(zero_elem.clone());
-                    }
-                }
-                result.push(row);
-            }
-
-            Self { inner: result, params: params.clone(), nrow, ncol }
+            Self { inner, params: params.clone(), nrow, ncol }
         }
     }
 
@@ -408,16 +399,12 @@ impl<T: MatrixElem> GenericMatrix<T> {
         {
             let nrow = self.ncol;
             let ncol = self.nrow;
-            let mut result = Vec::with_capacity(nrow);
-            for i in 0..nrow {
-                let mut row = Vec::with_capacity(ncol);
-                for j in 0..ncol {
-                    row.push(self.inner[j][i].clone());
-                }
-                result.push(row);
-            }
+            let inner: Vec<Vec<T>> = (0..self.ncol)
+                .into_par_iter()
+                .map(|i| (0..self.nrow).map(|j| self.inner[j][i].clone()).collect::<Vec<T>>())
+                .collect();
 
-            Self { inner: result, params: self.params.clone(), nrow, ncol }
+            Self { inner, params: self.params.clone(), nrow, ncol }
         }
     }
 
