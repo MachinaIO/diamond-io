@@ -1,7 +1,7 @@
 use crate::{
     parallel_iter,
     poly::{MatrixElem, MatrixParams},
-    utils::{block_size, debug_mem},
+    utils::block_size,
 };
 use itertools::Itertools;
 #[cfg(feature = "disk")]
@@ -22,6 +22,7 @@ use tempfile::tempfile;
 
 // static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
 
+#[cfg_attr(not(feature = "disk"), derive(Clone))]
 pub struct GenericMatrix<T: MatrixElem> {
     pub params: T::Params,
     #[cfg(feature = "disk")]
@@ -303,17 +304,36 @@ impl<T: MatrixElem> GenericMatrix<T> {
         col_start: usize,
         col_end: usize,
     ) -> Self {
-        let nrow = row_end - row_start;
-        let ncol = col_end - col_start;
-        let mut new_matrix = Self::new_empty(&self.params, nrow, ncol);
-        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            let row_offsets = row_start + row_offsets.start..row_start + row_offsets.end;
-            let col_offsets = col_start + col_offsets.start..col_start + col_offsets.end;
+        #[cfg(feature = "disk")]
+        {
+            let nrow = row_end - row_start;
+            let ncol = col_end - col_start;
+            let mut new_matrix = Self::new_empty(&self.params, nrow, ncol);
+            let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                let row_offsets = row_start + row_offsets.start..row_start + row_offsets.end;
+                let col_offsets = col_start + col_offsets.start..col_start + col_offsets.end;
 
-            self.block_entries(row_offsets, col_offsets)
-        };
-        new_matrix.replace_entries(0..nrow, 0..ncol, f);
-        new_matrix
+                self.block_entries(row_offsets, col_offsets)
+            };
+            new_matrix.replace_entries(0..nrow, 0..ncol, f);
+            new_matrix
+        }
+        #[cfg(not(feature = "disk"))]
+        {
+            let nrow = row_end - row_start;
+            let ncol = col_end - col_start;
+
+            let mut c = Vec::with_capacity(nrow);
+            for i in row_start..row_end {
+                let mut row = Vec::with_capacity(ncol);
+                for j in col_start..col_end {
+                    row.push(self.inner[i][j].clone());
+                }
+                c.push(row);
+            }
+
+            Self { inner: c, params: self.params.clone(), nrow, ncol }
+        }
     }
 
     pub fn zero(params: &T::Params, nrow: usize, ncol: usize) -> Self {
@@ -321,40 +341,83 @@ impl<T: MatrixElem> GenericMatrix<T> {
     }
 
     pub fn identity(params: &T::Params, size: usize, scalar: Option<T>) -> Self {
-        let mut new_matrix = Self::new_empty(params, size, size);
-        let scalar = scalar.unwrap_or_else(|| T::one(params));
-        let f = |offsets: Range<usize>| -> Vec<Vec<T>> {
-            let len = offsets.len();
-            (0..len)
-                .map(|i| {
-                    (0..len)
-                        .map(|j| if i == j { scalar.clone() } else { T::zero(params) })
-                        .collect()
-                })
-                .collect()
-        };
-        new_matrix.replace_entries_diag(0..size, f);
-        new_matrix
+        #[cfg(feature = "disk")]
+        {
+            let mut new_matrix = Self::new_empty(params, size, size);
+            let scalar = scalar.unwrap_or_else(|| T::one(params));
+            let f = |offsets: Range<usize>| -> Vec<Vec<T>> {
+                let len = offsets.len();
+                (0..len)
+                    .map(|i| {
+                        (0..len)
+                            .map(|j| if i == j { scalar.clone() } else { T::zero(params) })
+                            .collect()
+                    })
+                    .collect()
+            };
+            new_matrix.replace_entries_diag(0..size, f);
+            new_matrix
+        }
+        #[cfg(not(feature = "disk"))]
+        {
+            let nrow = size;
+            let ncol = size;
+            let scalar = scalar.unwrap_or_else(|| T::one(params));
+            let zero_elem = T::zero(params);
+            let mut result = Vec::with_capacity(nrow);
+
+            for i in 0..nrow {
+                let mut row = Vec::with_capacity(ncol);
+                for j in 0..ncol {
+                    if i == j {
+                        row.push(scalar.clone());
+                    } else {
+                        row.push(zero_elem.clone());
+                    }
+                }
+                result.push(row);
+            }
+
+            Self { inner: result, params: params.clone(), nrow, ncol }
+        }
     }
 
     pub fn transpose(&self) -> Self {
-        let mut new_matrix = Self::new_empty(&self.params, self.ncol, self.nrow);
-        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            let cur_entries = self.block_entries(col_offsets.clone(), row_offsets.clone());
-            let row_offsets_len = row_offsets.len();
-            let col_offsets_len = col_offsets.len();
-            (0..row_offsets_len)
-                .into_par_iter()
-                .map(|i| {
-                    (0..col_offsets_len)
-                        .into_par_iter()
-                        .map(|j| cur_entries[j][i].clone())
-                        .collect::<Vec<T>>()
-                })
-                .collect::<Vec<Vec<T>>>()
-        };
-        new_matrix.replace_entries(0..self.ncol, 0..self.nrow, f);
-        new_matrix
+        #[cfg(feature = "disk")]
+        {
+            let mut new_matrix = Self::new_empty(&self.params, self.ncol, self.nrow);
+            let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                let cur_entries = self.block_entries(col_offsets.clone(), row_offsets.clone());
+                let row_offsets_len = row_offsets.len();
+                let col_offsets_len = col_offsets.len();
+                (0..row_offsets_len)
+                    .into_par_iter()
+                    .map(|i| {
+                        (0..col_offsets_len)
+                            .into_par_iter()
+                            .map(|j| cur_entries[j][i].clone())
+                            .collect::<Vec<T>>()
+                    })
+                    .collect::<Vec<Vec<T>>>()
+            };
+            new_matrix.replace_entries(0..self.ncol, 0..self.nrow, f);
+            new_matrix
+        }
+        #[cfg(not(feature = "disk"))]
+        {
+            let nrow = self.ncol;
+            let ncol = self.nrow;
+            let mut result = Vec::with_capacity(nrow);
+            for i in 0..nrow {
+                let mut row = Vec::with_capacity(ncol);
+                for j in 0..ncol {
+                    row.push(self.inner[j][i].clone());
+                }
+                result.push(row);
+            }
+
+            Self { inner: result, params: self.params.clone(), nrow, ncol }
+        }
     }
 
     // (m * n1), (m * n2) -> (m * (n1 + n2))
@@ -368,26 +431,46 @@ impl<T: MatrixElem> GenericMatrix<T> {
                 );
             }
         }
-        let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
-        let mut new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
-        let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            self.block_entries(row_offsets, col_offsets)
-        };
-        new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
-        debug_mem("self replaced in concat_columns");
-
-        let mut col_acc = self.ncol;
-        for (idx, other) in others.iter().enumerate() {
-            let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-                let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
-                other.block_entries(row_offsets, col_offsets)
+        #[cfg(feature = "disk")]
+        {
+            let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
+            let mut new_matrix = Self::new_empty(&self.params, self.nrow, updated_ncol);
+            let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                self.block_entries(row_offsets, col_offsets)
             };
-            new_matrix.replace_entries(0..self.nrow, col_acc..col_acc + other.ncol, other_f);
-            debug_mem(format!("the {}-th other replaced in concat_columns", idx));
-            col_acc += other.ncol;
+            new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+            debug_mem("self replaced in concat_columns");
+
+            let mut col_acc = self.ncol;
+            for (idx, other) in others.iter().enumerate() {
+                let other_f =
+                    |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                        let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
+                        other.block_entries(row_offsets, col_offsets)
+                    };
+                new_matrix.replace_entries(0..self.nrow, col_acc..col_acc + other.ncol, other_f);
+                debug_mem(format!("the {}-th other replaced in concat_columns", idx));
+                col_acc += other.ncol;
+            }
+            debug_assert_eq!(col_acc, updated_ncol);
+            new_matrix
         }
-        debug_assert_eq!(col_acc, updated_ncol);
-        new_matrix
+        #[cfg(not(feature = "disk"))]
+        {
+            let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
+            let result: Vec<Vec<T>> = parallel_iter!(0..self.nrow)
+                .map(|i| {
+                    let mut row: Vec<&T> = Vec::with_capacity(ncol);
+                    row.extend(self.inner[i].iter());
+                    for other in others {
+                        row.extend(other.inner[i].iter());
+                    }
+                    row.into_iter().cloned().collect()
+                })
+                .collect();
+
+            Self { inner: result, params: self.params.clone(), nrow: self.nrow, ncol }
+        }
     }
 
     // (m1 * n), (m2 * n) -> ((m1 + m2) * n)
@@ -401,140 +484,192 @@ impl<T: MatrixElem> GenericMatrix<T> {
                 );
             }
         }
-        let updated_nrow = others.iter().fold(self.nrow, |acc, other| acc + other.nrow);
+        #[cfg(feature = "disk")]
+        {
+            let updated_nrow = others.iter().fold(self.nrow, |acc, other| acc + other.nrow);
 
-        let mut new_matrix = Self::new_empty(&self.params, updated_nrow, self.ncol);
-        let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            self.block_entries(row_offsets, col_offsets)
-        };
-        new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
-        debug_mem("self replaced in concat_rows");
-
-        let mut row_acc = self.nrow;
-        for (idx, other) in others.iter().enumerate() {
-            let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-                let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
-                other.block_entries(row_offsets, col_offsets)
+            let mut new_matrix = Self::new_empty(&self.params, updated_nrow, self.ncol);
+            let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                self.block_entries(row_offsets, col_offsets)
             };
-            new_matrix.replace_entries(row_acc..row_acc + other.nrow, 0..self.ncol, other_f);
-            debug_mem(format!("the {}-th other replaced in concat_rows", idx));
-            row_acc += other.nrow;
+            new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+            debug_mem("self replaced in concat_rows");
+
+            let mut row_acc = self.nrow;
+            for (idx, other) in others.iter().enumerate() {
+                let other_f =
+                    |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                        let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
+                        other.block_entries(row_offsets, col_offsets)
+                    };
+                new_matrix.replace_entries(row_acc..row_acc + other.nrow, 0..self.ncol, other_f);
+                debug_mem(format!("the {}-th other replaced in concat_rows", idx));
+                row_acc += other.nrow;
+            }
+            debug_assert_eq!(row_acc, updated_nrow);
+            new_matrix
         }
-        debug_assert_eq!(row_acc, updated_nrow);
-        new_matrix
+        #[cfg(not(feature = "disk"))]
+        {
+            let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
+            let mut result = Vec::with_capacity(nrow);
+            for i in 0..self.nrow {
+                let mut row = Vec::with_capacity(self.ncol);
+                for j in 0..self.ncol {
+                    row.push(self.inner[i][j].clone());
+                }
+                result.push(row);
+            }
+            for other in others {
+                for i in 0..other.nrow {
+                    let mut row = Vec::with_capacity(self.ncol);
+                    for j in 0..other.ncol {
+                        row.push(other.inner[i][j].clone());
+                    }
+                    result.push(row);
+                }
+            }
+
+            Self { inner: result, params: self.params.clone(), nrow, ncol: self.ncol }
+        }
     }
 
     // (m1 * n1), (m2 * n2) -> ((m1 + m2) * (n1 + n2))
     pub fn concat_diag(&self, others: &[&Self]) -> Self {
-        let updated_nrow = others.iter().fold(self.nrow, |acc, other| acc + other.nrow);
-        let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
+        #[cfg(feature = "disk")]
+        {
+            let updated_nrow = others.iter().fold(self.nrow, |acc, other| acc + other.nrow);
+            let updated_ncol = others.iter().fold(self.ncol, |acc, other| acc + other.ncol);
 
-        let mut new_matrix = Self::new_empty(&self.params, updated_nrow, updated_ncol);
-        let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-            self.block_entries(row_offsets, col_offsets)
-        };
-        new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
-        debug_mem("self replaced in concat_diag");
-
-        let mut row_acc = self.nrow;
-        let mut col_acc = self.ncol;
-        for (idx, other) in others.iter().enumerate() {
-            let other_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-                let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
-                let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
-                other.block_entries(row_offsets, col_offsets)
+            let mut new_matrix = Self::new_empty(&self.params, updated_nrow, updated_ncol);
+            let self_f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                self.block_entries(row_offsets, col_offsets)
             };
-            new_matrix.replace_entries(
-                row_acc..row_acc + other.nrow,
-                col_acc..col_acc + other.ncol,
-                other_f,
-            );
-            debug_mem(format!("the {}-th other replaced in concat_diag", idx));
-            row_acc += other.nrow;
-            col_acc += other.ncol;
+            new_matrix.replace_entries(0..self.nrow, 0..self.ncol, self_f);
+            debug_mem("self replaced in concat_diag");
+
+            let mut row_acc = self.nrow;
+            let mut col_acc = self.ncol;
+            for (idx, other) in others.iter().enumerate() {
+                let other_f =
+                    |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+                        let row_offsets = row_offsets.start - row_acc..row_offsets.end - row_acc;
+                        let col_offsets = col_offsets.start - col_acc..col_offsets.end - col_acc;
+                        other.block_entries(row_offsets, col_offsets)
+                    };
+                new_matrix.replace_entries(
+                    row_acc..row_acc + other.nrow,
+                    col_acc..col_acc + other.ncol,
+                    other_f,
+                );
+                debug_mem(format!("the {}-th other replaced in concat_diag", idx));
+                row_acc += other.nrow;
+                col_acc += other.ncol;
+            }
+            debug_assert_eq!(row_acc, updated_nrow);
+            debug_assert_eq!(col_acc, updated_ncol);
+            new_matrix
         }
-        debug_assert_eq!(row_acc, updated_nrow);
-        debug_assert_eq!(col_acc, updated_ncol);
-        new_matrix
+        #[cfg(not(feature = "disk"))]
+        {
+            let nrow = self.nrow + others.iter().map(|x| x.nrow).sum::<usize>();
+            let ncol = self.ncol + others.iter().map(|x| x.ncol).sum::<usize>();
+
+            let zero_elem = T::zero(&self.params);
+
+            let mut result: Vec<Vec<T>> = Vec::with_capacity(nrow);
+
+            // First part of the matrix (self)
+            for i in 0..self.nrow {
+                let mut row = Vec::with_capacity(ncol);
+                row.extend(self.inner[i].iter().cloned());
+                row.extend(std::iter::repeat_n(zero_elem.clone(), ncol - self.ncol));
+                result.push(row);
+            }
+
+            let mut col_offset = self.ncol;
+            for other in others.iter() {
+                result.extend(
+                    parallel_iter!(0..other.nrow)
+                        .map(|i| {
+                            let mut row = Vec::with_capacity(ncol);
+                            row.extend(std::iter::repeat_n(zero_elem.clone(), col_offset));
+                            row.extend(other.inner[i].iter().cloned());
+                            row.extend(std::iter::repeat_n(
+                                zero_elem.clone(),
+                                ncol - col_offset - other.ncol,
+                            ));
+                            row
+                        })
+                        .collect::<Vec<Vec<T>>>()
+                        .into_iter(),
+                );
+                col_offset += other.ncol;
+            }
+
+            Self { inner: result, params: self.params.clone(), nrow, ncol }
+        }
     }
 
     pub fn tensor(&self, other: &Self) -> Self {
         #[cfg(feature = "disk")]
-        let new_matrix =
-            Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
-        #[cfg(not(feature = "disk"))]
-        let mut new_matrix =
-            Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
-        #[cfg(feature = "disk")]
-        let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
-        #[cfg(feature = "disk")]
-        parallel_iter!(0..self.nrow).for_each(|i| {
-            parallel_iter!(0..self.ncol).for_each(|j| {
-                let scalar = self.entry(i, j);
-                let sub_matrix = other * scalar;
-                parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
-                    |(cur_block_row_idx, next_block_row_idx)| {
-                        parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
-                            |(cur_block_col_idx, next_block_col_idx)| {
-                                let sub_block_polys = sub_matrix.block_entries(
-                                    *cur_block_row_idx..*next_block_row_idx,
-                                    *cur_block_col_idx..*next_block_col_idx,
-                                );
-                                // This is secure because the modified entries are not overlapped
-                                // among threads
-                                unsafe {
-                                    new_matrix.replace_block_entries(
-                                        i * sub_matrix.nrow + *cur_block_row_idx..
-                                            i * sub_matrix.nrow + *next_block_row_idx,
-                                        j * sub_matrix.ncol + *cur_block_col_idx..
-                                            j * sub_matrix.ncol + *next_block_col_idx,
-                                        sub_block_polys,
+        {
+            let new_matrix =
+                Self::new_empty(&self.params, self.nrow * other.nrow, self.ncol * other.ncol);
+            let (row_offsets, col_offsets) = block_offsets(0..other.nrow, 0..other.ncol);
+            parallel_iter!(0..self.nrow).for_each(|i| {
+                parallel_iter!(0..self.ncol).for_each(|j| {
+                    let scalar = self.entry(i, j);
+                    let sub_matrix = other * scalar;
+                    parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
+                        |(cur_block_row_idx, next_block_row_idx)| {
+                            parallel_iter!(col_offsets.iter().tuple_windows().collect_vec())
+                                .for_each(|(cur_block_col_idx, next_block_col_idx)| {
+                                    let sub_block_polys = sub_matrix.block_entries(
+                                        *cur_block_row_idx..*next_block_row_idx,
+                                        *cur_block_col_idx..*next_block_col_idx,
                                     );
-                                }
-                            },
-                        );
-                    },
-                );
+                                    // This is secure because the modified entries are not
+                                    // overlapped among threads
+                                    unsafe {
+                                        new_matrix.replace_block_entries(
+                                            i * sub_matrix.nrow + *cur_block_row_idx..
+                                                i * sub_matrix.nrow + *next_block_row_idx,
+                                            j * sub_matrix.ncol + *cur_block_col_idx..
+                                                j * sub_matrix.ncol + *next_block_col_idx,
+                                            sub_block_polys,
+                                        );
+                                    }
+                                });
+                        },
+                    );
+                });
             });
-        });
+        }
+
         #[cfg(not(feature = "disk"))]
         {
-            let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
-                let row_offsets_len = row_offsets.len();
-                let col_offsets_len = col_offsets.len();
-                // First calculate all scalar * sub_matrix products in parallel
-                let scalared_polys = parallel_iter!(0..row_offsets_len)
-                    .map(|i| {
-                        parallel_iter!(0..col_offsets_len)
-                            .map(|j| {
-                                let scalar =
-                                    self.entry(row_offsets.start + i, col_offsets.start + j);
-                                let sub_matrix = other.clone() * scalar;
-                                sub_matrix.block_entries(0..sub_matrix.nrow, 0..sub_matrix.ncol)
-                            })
-                            .collect::<Vec<Vec<Vec<T>>>>()
-                    })
-                    .collect::<Vec<Vec<Vec<Vec<T>>>>>();
+            let nrow_total = self.nrow * other.nrow;
+            let ncol_total = self.ncol * other.ncol;
 
-                parallel_iter!(0..row_offsets_len * other.nrow)
-                    .map(|idx| {
-                        let i = idx / other.nrow;
-                        let k = idx % other.nrow;
-                        parallel_iter!(0..col_offsets_len)
-                            .flat_map(|j| scalared_polys[i][j][k].clone())
-                            .collect::<Vec<T>>()
-                    })
-                    .collect::<Vec<Vec<T>>>()
-            };
-            new_matrix.replace_entries_with_expand(
-                0..self.nrow,
-                0..self.ncol,
-                other.nrow,
-                other.ncol,
-                f,
-            );
+            let index_pairs: Vec<(usize, usize)> =
+                (0..self.nrow).flat_map(|i1| (0..other.nrow).map(move |i2| (i1, i2))).collect();
+
+            let result: Vec<Vec<T>> = index_pairs
+                .into_par_iter()
+                .map(|(i1, i2)| {
+                    let mut row = Vec::with_capacity(ncol_total);
+                    for j1 in 0..self.ncol {
+                        for j2 in 0..other.ncol {
+                            row.push(self.inner[i1][j1].clone() * &other.inner[i2][j2]);
+                        }
+                    }
+                    row
+                })
+                .collect();
+
+            Self { params: self.params.clone(), inner: result, nrow: nrow_total, ncol: ncol_total }
         }
-        new_matrix
     }
 }
 
@@ -560,6 +695,7 @@ impl<T: MatrixElem> Debug for GenericMatrix<T> {
     }
 }
 
+#[cfg(feature = "disk")]
 impl<T: MatrixElem> Clone for GenericMatrix<T> {
     fn clone(&self) -> Self {
         let mut new_matrix = Self::new_empty(&self.params, self.nrow, self.ncol);
@@ -571,6 +707,7 @@ impl<T: MatrixElem> Clone for GenericMatrix<T> {
     }
 }
 
+#[cfg(feature = "disk")]
 impl<T: MatrixElem> PartialEq for GenericMatrix<T> {
     fn eq(&self, other: &Self) -> bool {
         if self.params != other.params || self.nrow != other.nrow || self.ncol != other.ncol {
@@ -600,14 +737,22 @@ impl<T: MatrixElem> PartialEq for GenericMatrix<T> {
     }
 }
 
+#[cfg(not(feature = "disk"))]
+impl<T: MatrixElem> PartialEq for GenericMatrix<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner &&
+            self.params == other.params &&
+            self.nrow == other.nrow &&
+            self.ncol == other.ncol
+    }
+}
+
 impl<T: MatrixElem> Eq for GenericMatrix<T> {}
 
 impl<T: MatrixElem> Drop for GenericMatrix<T> {
     fn drop(&mut self) {
-        // debug_mem("Drop GenericMatrix");
         #[cfg(feature = "disk")]
         self.file.set_len(0).expect("failed to truncate file");
-        // debug_mem("Truncate file");
     }
 }
 
@@ -622,6 +767,14 @@ impl<T: MatrixElem> Add for GenericMatrix<T> {
 impl<T: MatrixElem> Add<&GenericMatrix<T>> for GenericMatrix<T> {
     type Output = GenericMatrix<T>;
 
+    fn add(self, rhs: &Self) -> Self::Output {
+        &self + rhs
+    }
+}
+
+impl<T: MatrixElem> Add<&GenericMatrix<T>> for &GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
+
     fn add(self, rhs: &GenericMatrix<T>) -> Self::Output {
         debug_assert!(
             self.nrow == rhs.nrow && self.ncol == rhs.ncol,
@@ -631,6 +784,7 @@ impl<T: MatrixElem> Add<&GenericMatrix<T>> for GenericMatrix<T> {
             rhs.nrow,
             rhs.ncol
         );
+
         let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
@@ -670,6 +824,7 @@ impl<T: MatrixElem> Sub<&GenericMatrix<T>> for &GenericMatrix<T> {
             rhs.nrow,
             rhs.ncol
         );
+
         let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
             let self_block_polys = self.block_entries(row_offsets.clone(), col_offsets.clone());
@@ -697,6 +852,14 @@ impl<T: MatrixElem> Mul<&GenericMatrix<T>> for GenericMatrix<T> {
     }
 }
 
+impl<T: MatrixElem> Mul<GenericMatrix<T>> for &GenericMatrix<T> {
+    type Output = GenericMatrix<T>;
+
+    fn mul(self, rhs: GenericMatrix<T>) -> Self::Output {
+        self * &rhs
+    }
+}
+
 impl<T: MatrixElem> Mul<&GenericMatrix<T>> for &GenericMatrix<T> {
     type Output = GenericMatrix<T>;
 
@@ -707,6 +870,7 @@ impl<T: MatrixElem> Mul<&GenericMatrix<T>> for &GenericMatrix<T> {
             self.ncol,
             rhs.nrow
         );
+
         let mut new_matrix = GenericMatrix::new_empty(&self.params, self.nrow, rhs.ncol);
         let (_, ip_offsets) = block_offsets(0..0, 0..self.ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
@@ -818,7 +982,6 @@ pub fn block_offsets_distinct_block_sizes(
     row_block_size: usize,
     col_block_size: usize,
 ) -> (Vec<usize>, Vec<usize>) {
-    // *BLOCK_SIZE.get().unwrap();
     let nrow = rows.end - rows.start;
     let ncol = cols.end - cols.start;
     let num_blocks_row = nrow.div_ceil(row_block_size);
