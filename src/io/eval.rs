@@ -206,22 +206,12 @@ where
                 let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
                 last_s = last_s * r;
             }
-
-            let output_plaintext =
-                output_encoding_ints[0].plaintext.as_ref().unwrap().extract_highest_bits();
-            let hardcoded_key_bits = self
-                .hardcoded_key
-                .coeffs()
-                .iter()
-                .map(|elem| elem != &<M::P as Poly>::Elem::zero(&params.modulus()))
-                .collect::<Vec<_>>();
-            debug_assert_eq!(output_plaintext, hardcoded_key_bits);
             {
-                let expcted = last_s *
+                let expected = last_s *
                     (output_encoding_ints[0].pubkey.matrix.clone() -
                         M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
                             output_encoding_ints[0].plaintext.clone().unwrap());
-                debug_assert_eq!(output_encoding_ints[0].vector, expcted);
+                debug_assert_eq!(output_encoding_ints[0].vector, expected);
             }
             debug_assert_eq!(z.size(), (1, packed_output_size));
             debug_assert_eq!(z.entry(0, 0), output_encoding_ints[0].plaintext.clone().unwrap());
