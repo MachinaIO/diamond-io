@@ -66,7 +66,7 @@ def analyze_memory_usage_from_string(log_output):
     
     # Pattern for lines with message
     pattern_with_message = re.compile(
-        r".*?diamond_io::utils\s*:\s*(.*?)\s*\|\|\s*Current physical/virtural memory usage:\s*(\d+)\s*\|\s*(\d+)"
+        r".*?diamond_io::utils\s*:\s*(.*?)\s*\|\|\s*Current physical/virtual memory usage:\s*(\d+)\s*\|\s*(\d+)"
     )
     
     # Pattern for lines with just numbers

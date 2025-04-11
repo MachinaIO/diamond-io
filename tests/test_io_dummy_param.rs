@@ -80,9 +80,6 @@ mod test {
         let output =
             obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);
         let total_time = start_time.elapsed();
-        info!("hardcoded key {:?}", hardcoded_key.coeffs());
-        info!("input {:?}", input);
-        info!("output {:?}", output);
         info!("Time for evaluation: {:?}", total_time - obfuscation_time);
         info!("Total time: {:?}", total_time);
         let n = output.len() / 2;

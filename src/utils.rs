@@ -106,7 +106,7 @@ pub fn log_mem<T: Into<String>>(tag: T) {
 pub fn debug_mem<T: Into<String>>(tag: T) {
     if let Some(usage) = memory_stats() {
         debug!(
-            "{} || Current physical/virtural memory usage: {} | {}",
+            "{} || Current physical/virtual memory usage: {} | {}",
             tag.into(),
             usage.physical_mem,
             usage.virtual_mem
