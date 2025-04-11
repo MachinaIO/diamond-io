@@ -1,3 +1,5 @@
+#[cfg(feature = "disk")]
+use crate::utils::debug_mem;
 use crate::{
     parallel_iter,
     poly::{MatrixElem, MatrixParams},
@@ -6,7 +8,6 @@ use crate::{
 use itertools::Itertools;
 #[cfg(feature = "disk")]
 use memmap2::{Mmap, MmapMut, MmapOptions};
-// use once_cell::sync::OnceCell;
 use rayon::prelude::*;
 #[cfg(feature = "disk")]
 use std::fs::File;
@@ -645,6 +646,8 @@ impl<T: MatrixElem> GenericMatrix<T> {
                     );
                 });
             });
+
+            new_matrix
         }
 
         #[cfg(not(feature = "disk"))]
