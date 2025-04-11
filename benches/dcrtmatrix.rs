@@ -1,8 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use diamond_io::poly::{
-    dcrt::{DCRTPolyMatrix, DCRTPolyParams},
-    PolyMatrix,
-};
+use diamond_io::poly::dcrt::{DCRTPolyMatrix, DCRTPolyParams};
 
 fn bench_matrix_operation(c: &mut Criterion) {
     let params = DCRTPolyParams::new(4, 2, 17, 1);

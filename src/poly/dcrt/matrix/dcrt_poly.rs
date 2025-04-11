@@ -1,24 +1,19 @@
-use super::{MmapMatrix, MmapMatrixElem, MmapMatrixParams};
+use super::generic_matrix::GenericMatrix;
+
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyParams},
-        Poly, PolyMatrix, PolyParams,
+        dcrt::{cpp_matrix::CppMatrix, DCRTPoly, DCRTPolyParams},
+        MatrixElem, MatrixParams, Poly, PolyMatrix, PolyParams,
     },
     utils::debug_mem,
 };
 use itertools::Itertools;
-use openfhe::{
-    cxx::UniquePtr,
-    ffi::{
-        DCRTPolyGadgetVector, GetMatrixCols, GetMatrixElement, GetMatrixRows, Matrix, MatrixGen,
-        SetMatrixElement,
-    },
-};
+use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::ops::Range;
 
-impl MmapMatrixParams for DCRTPolyParams {
+impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
         let log_q_bytes = self.modulus_bits().div_ceil(8);
         let dim = self.ring_dimension() as usize;
@@ -26,7 +21,7 @@ impl MmapMatrixParams for DCRTPolyParams {
     }
 }
 
-impl MmapMatrixElem for DCRTPoly {
+impl MatrixElem for DCRTPoly {
     type Params = DCRTPolyParams;
 
     fn zero(params: &Self::Params) -> Self {
@@ -44,7 +39,7 @@ impl MmapMatrixElem for DCRTPoly {
     }
 }
 
-pub type DCRTPolyMatrix = MmapMatrix<DCRTPoly>;
+pub type DCRTPolyMatrix = GenericMatrix<DCRTPoly>;
 
 impl PolyMatrix for DCRTPolyMatrix {
     type P = DCRTPoly;
@@ -131,9 +126,7 @@ impl PolyMatrix for DCRTPolyMatrix {
             let entries = self.block_entries(row_offsets, col_offsets);
             let decomposed_entries: Vec<Vec<Vec<DCRTPoly>>> = parallel_iter!(0..nrow)
                 .map(|i| {
-                    (0..ncol)
-                        .map(|j| Self::dcrt_decompose_poly(&entries[i][j], base_bits))
-                        .collect()
+                    (0..ncol).map(|j| self.dcrt_decompose_poly(&entries[i][j], base_bits)).collect()
                 })
                 .collect();
             parallel_iter!(0..new_nrow)
@@ -274,38 +267,17 @@ impl PolyMatrix for DCRTPolyMatrix {
     // }
 }
 
-pub(crate) struct CppMatrix {
-    pub(crate) inner: UniquePtr<Matrix>,
-}
-
-unsafe impl Send for CppMatrix {}
-unsafe impl Sync for CppMatrix {}
-
-impl CppMatrix {
-    pub fn new(inner: UniquePtr<Matrix>) -> Self {
-        CppMatrix { inner }
-    }
-
-    pub fn nrow(&self) -> usize {
-        GetMatrixRows(&self.inner)
-    }
-
-    pub fn ncol(&self) -> usize {
-        GetMatrixCols(&self.inner)
-    }
-
-    pub fn entry(&self, i: usize, j: usize) -> DCRTPoly {
-        DCRTPoly::new(GetMatrixElement(&self.inner, i, j))
-    }
-}
-
 impl DCRTPolyMatrix {
     pub(crate) fn to_cpp_matrix_ptr(&self) -> CppMatrix {
         let nrow = self.nrow;
         let ncol = self.ncol;
-        let params = &self.params;
-        let mut matrix_ptr =
-            MatrixGen(params.ring_dimension(), params.crt_depth(), params.crt_bits(), nrow, ncol);
+        let mut matrix_ptr = MatrixGen(
+            self.params.ring_dimension(),
+            self.params.crt_depth(),
+            self.params.crt_bits(),
+            nrow,
+            ncol,
+        );
         debug_mem(format!("matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
         for i in 0..nrow {
             for j in 0..ncol {
@@ -313,7 +285,7 @@ impl DCRTPolyMatrix {
             }
         }
         debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
-        CppMatrix::new(matrix_ptr)
+        CppMatrix::new(&self.params, matrix_ptr)
     }
 
     pub(crate) fn from_cpp_matrix_ptr(params: &DCRTPolyParams, cpp_matrix: &CppMatrix) -> Self {
@@ -335,12 +307,12 @@ impl DCRTPolyMatrix {
             params.modulus_digits(),
             base,
         );
-        DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(g_vec_cpp))
+        DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(params, g_vec_cpp))
     }
 
-    fn dcrt_decompose_poly(poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
+    fn dcrt_decompose_poly(&self, poly: &DCRTPoly, base_bits: u32) -> Vec<DCRTPoly> {
         let decomposed = poly.get_poly().Decompose(base_bits);
-        let cpp_decomposed = CppMatrix::new(decomposed);
+        let cpp_decomposed = CppMatrix::new(&self.params, decomposed);
         parallel_iter!(0..cpp_decomposed.ncol()).map(|idx| cpp_decomposed.entry(0, idx)).collect()
     }
 }

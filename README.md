@@ -2,6 +2,12 @@
 
 Implementation of [Diamond iO](https://eprint.iacr.org/2025/236)
 
+### note
+
+We currently have 2 different matrix implementation:
+1. (default) by using memory fully
+2. 1. (enable `disk` feature) by calling `mmap()` syscall, use disk space as default storage
+
 #### Full Test (with test feature)
 
 ```

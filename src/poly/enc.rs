@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use super::{sampler::PolyUniformSampler, Poly, PolyMatrix};
 use crate::poly::{element::PolyElem, sampler::DistType, PolyParams};
 
 pub fn rlwe_encrypt<M, SU>(
-    params: &Arc<<<M as PolyMatrix>::P as Poly>::Params>,
-    sampler_uniform: &Arc<SU>,
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    sampler_uniform: &SU,
     t: &M,
     a: &M,
     m: &M,
@@ -23,7 +21,7 @@ where
     assert!(a.col_size() == 1);
 
     // Sample error from Gaussian distribution
-    let e = sampler_uniform.sample_uniform(params.as_ref(), 1, 1, DistType::GaussDist { sigma });
+    let e = sampler_uniform.sample_uniform(params, 1, 1, DistType::GaussDist { sigma });
 
     // Use provided scale or calculate half of q
     let scale = M::P::from_const(params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
@@ -35,8 +33,6 @@ where
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
-    use std::sync::Arc;
-
     use crate::poly::{
         dcrt::{DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler},
         enc::rlwe_encrypt,
@@ -46,8 +42,8 @@ mod tests {
 
     #[test]
     fn test_rlwe_encrypt_decrypt() {
-        let params = Arc::new(DCRTPolyParams::default());
-        let sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
         let sigma = 3.0;
 
         // Generate random message bits

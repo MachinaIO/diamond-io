@@ -1,8 +1,9 @@
-use crate::poly::params::PolyParams;
 use num_bigint::BigUint;
 use num_traits::Num;
 use openfhe::ffi;
 use std::{fmt::Debug, sync::Arc};
+
+use crate::poly::PolyParams;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct DCRTPolyParams {

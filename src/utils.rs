@@ -1,3 +1,5 @@
+use std::env;
+
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
     sampler::DistType,
@@ -109,6 +111,10 @@ pub fn debug_mem<T: Into<String>>(tag: T) {
 
 pub fn init_tracing() {
     tracing_subscriber::fmt::init();
+}
+
+pub fn block_size() -> usize {
+    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(100)
 }
 
 #[macro_export]
