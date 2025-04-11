@@ -1,10 +1,28 @@
-use super::PolyElem;
-use crate::poly::params::PolyParams;
-use itertools::Itertools;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
+use itertools::Itertools;
+
+use super::element::PolyElem;
+
+pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
+    type Modulus: Debug + Clone;
+    /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n -
+    /// 1)`.
+    fn modulus(&self) -> Self::Modulus;
+    /// A size of the base value used for a gadget vector and decomposition, i.e., `base =
+    /// 2^base_bits`.
+    fn base_bits(&self) -> u32;
+    /// Fewest bits necessary to represent the modulus value `q`.
+    fn modulus_bits(&self) -> usize;
+    /// Fewest digits necessary to represent the modulus value `q` in the given base.
+    fn modulus_digits(&self) -> usize;
+    /// Returns the integer `n` that specifies the size of the polynomial ring used in this
+    /// polynomial. Specifically, this is the degree parameter for the ring `Z_q[x]/(x^n - 1)`.
+    fn ring_dimension(&self) -> u32;
+}
 
 pub trait Poly:
     Sized
@@ -53,13 +71,6 @@ pub trait Poly:
         Self::from_coeffs(params, &coeffs)
     }
     fn const_max(params: &Self::Params) -> Self;
-    fn extract_highest_bits(&self) -> Vec<bool> {
-        let mut bits = Vec::with_capacity(self.coeffs().len());
-        for elem in self.coeffs() {
-            bits.push(elem.extract_highest_bits());
-        }
-        bits
-    }
     fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool>;
     fn decompose_bits(&self, params: &Self::Params) -> Vec<Self>;
     fn to_bytes(&self) -> Vec<u8> {

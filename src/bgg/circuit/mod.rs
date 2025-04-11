@@ -319,8 +319,6 @@ impl PolyCircuit {
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
     use crate::{
         poly::{
@@ -725,8 +723,8 @@ mod tests {
     #[test]
     fn test_mul_fhe_poly_bits_mul_by_poly_circuit() {
         let mut circuit = PolyCircuit::new();
-        let params = Arc::new(DCRTPolyParams::default());
-        let sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
         let sigma = 3.0;
         let log_q = params.modulus_bits();
 
@@ -766,7 +764,7 @@ mod tests {
 
         // concatenate decomposed_c0 and decomposed_c1 and x
         let input = [a_bits, b_bits, vec![x.clone()]].concat();
-        let result = circuit.eval(params.as_ref(), &DCRTPoly::const_one(&params), &input);
+        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &input);
 
         assert_eq!(result.len(), log_q * 2);
 

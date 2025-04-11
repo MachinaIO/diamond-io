@@ -2,16 +2,15 @@ use crate::{
     parallel_iter,
     poly::{
         dcrt::{
-            matrix::{
-                block_size, dcrt_poly_matrix::CppMatrix, i64_matrix::I64MatrixParams, I64Matrix,
-            },
+            cpp_matrix::CppMatrix,
+            matrix::{I64Matrix, I64MatrixParams},
             sampler::DCRTPolyUniformSampler,
             DCRTPolyMatrix, DCRTPolyParams,
         },
         sampler::{DistType, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
-    utils::debug_mem,
+    utils::{block_size, debug_mem},
 };
 use openfhe::ffi::{ExtractMatrixCols, FormatMatrixCoefficient, SampleP1ForPertMat};
 use rayon::iter::ParallelIterator;
@@ -178,7 +177,7 @@ fn sample_p1_for_pert_mat(
                         dgg_stddev,
                     );
                     debug_mem("SampleP1ForPertSquareMat called");
-                    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(cpp_matrix))
+                    DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(params, cpp_matrix))
                 })
                 .collect::<Vec<_>>();
             p1_blocks[0].concat_columns(&p1_blocks[1..].iter().collect::<Vec<_>>())

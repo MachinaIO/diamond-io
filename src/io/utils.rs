@@ -64,7 +64,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let dim = params.ring_dimension() as usize;
         // input bits, poly of the RLWE key
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
-        let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_q);
+        let packed_output_size = obf_params.public_circuit.num_output() / log_q;
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
         let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
@@ -99,38 +99,26 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 ) -> PolyCircuit {
     let log_q = a_decomposed_polys.len();
     debug_assert_eq!(b_decomposed_polys.len(), log_q);
-    let packed_eval_input_size = public_circuit.num_input() - (2 * log_q);
+    let packed_eval_input_size = public_circuit.num_input() - log_q;
 
-    // circuit outputs the cipertext ct=(a,b) as a_bit_0, b_bit_0, a_bit_1, b_bit_1, ...
+    // circuit outputs the cipertext
     let mut ct_output_circuit = PolyCircuit::new();
     {
         let inputs = ct_output_circuit.input(packed_eval_input_size);
         let circuit_id = ct_output_circuit.register_sub_circuit(public_circuit);
         let mut public_circuit_inputs = vec![];
-        for poly in a_decomposed_polys.iter() {
-            let bits = poly.coeffs().iter().map(|elem| elem.to_bit()).collect_vec();
-            public_circuit_inputs.push(ct_output_circuit.const_bit_poly(&bits));
-        }
         for poly in b_decomposed_polys.iter() {
             let bits = poly.coeffs().iter().map(|elem| elem.to_bit()).collect_vec();
             public_circuit_inputs.push(ct_output_circuit.const_bit_poly(&bits));
         }
         public_circuit_inputs.extend(inputs);
-        assert_eq!(public_circuit_inputs.len(), 2 * log_q + packed_eval_input_size);
         let pc_outputs = ct_output_circuit.call_sub_circuit(circuit_id, &public_circuit_inputs);
-        let mut outputs = Vec::with_capacity(pc_outputs.len());
-        // n is the number of ciphertexts
-        let n = pc_outputs.len() / (2 * log_q);
-        for ct_idx in 0..n {
-            let ct_offset = ct_idx * 2 * log_q;
-            for bit_idx in 0..log_q {
-                let a_index = ct_offset + bit_idx;
-                let b_index = ct_offset + log_q + bit_idx;
-                let a_bit = pc_outputs[a_index];
-                let b_bit = pc_outputs[b_index];
-                outputs.push(a_bit);
-                outputs.push(b_bit);
-            }
+        let mut outputs = Vec::with_capacity(pc_outputs.len() * 2);
+        for (idx, b_bit) in pc_outputs.into_iter().enumerate() {
+            let bits =
+                a_decomposed_polys[idx].coeffs().iter().map(|elem| elem.to_bit()).collect_vec();
+            outputs.push(ct_output_circuit.const_bit_poly(&bits));
+            outputs.push(b_bit);
         }
         ct_output_circuit.output(outputs);
     }
@@ -138,7 +126,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
     // actual
     let mut circuit = PolyCircuit::new();
     {
-        let mut inputs = circuit.input(packed_eval_input_size + 1); // + 1 is for t_bar
+        let mut inputs = circuit.input(packed_eval_input_size + 1);
         let minus_one = circuit.const_minus_one_gate();
         inputs.push(minus_one);
         let sub_circuit = build_circuit_ip_priv_and_pub_outputs::<E>(ct_output_circuit, 2);
@@ -152,83 +140,100 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod test {
-    use std::sync::Arc;
-
     use super::*;
     use crate::{
         bgg::BitToInt,
         poly::{
-            dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
-            enc::rlwe_encrypt,
+            dcrt::{
+                DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
+                DCRTPolyUniformSampler, FinRingElem,
+            },
+            element::PolyElem,
             sampler::DistType,
         },
     };
+    use keccak_asm::Keccak256;
+    use num_bigint::BigUint;
+    use tracing_subscriber::field::debug;
 
     #[test]
     fn test_build_final_step_circuit() {
         // 1. Set up parameters
         let params = DCRTPolyParams::default();
         let log_q = params.modulus_bits();
-        let sampler_uniform = DCRTPolyUniformSampler::new();
-        let sigma = 3.0;
 
-        // 2. Create a simple public circuit that takes 2*log_q inputs and outputs them directly
+        // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
         {
-            let inputs = public_circuit.input(2 * log_q + 1);
-            public_circuit.output(inputs[0..2 * log_q].to_vec());
+            let inputs = public_circuit.input(log_q + 1);
+            public_circuit.output(inputs[0..log_q].to_vec());
         }
 
-        // 3. Generate a random hardcoded key
+        // 3. Generate a random hardcoded key (similar to obf.rs lines 53-65)
+        let sampler_uniform = DCRTPolyUniformSampler::new();
         let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+        // 4. Get the public polynomial a from PublicSampledData's sample function
+        let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
+        let a_rlwe_bar =
+            hash_sampler.sample_hash(&params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
 
-        // 4. Generate RLWE ciphertext for the hardcoded key
-        let a_rlwe_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
-        let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
-
-        let b = rlwe_encrypt(
-            &Arc::new(params.clone()),
-            &Arc::new(sampler_uniform),
-            &t_bar_matrix,
-            &a_rlwe_bar,
-            &hardcoded_key,
-            sigma,
+        // 5. Generate RLWE ciphertext for the hardcoded key
+        let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+        let e = sampler_uniform.sample_uniform(&params, 1, 1, DistType::GaussDist { sigma: 0.0 });
+        // Create a scale value (half of q)
+        let modulus = params.modulus();
+        let half_q = FinRingElem::half_q(&modulus.clone());
+        let scale = DCRTPoly::from_const(&params, &half_q);
+        let enc_hardcoded_key =
+            t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
+        assert_eq!(
+            (hardcoded_key.clone() * &scale).entry(0, 0),
+            (t_bar.clone() * &a_rlwe_bar - &enc_hardcoded_key).entry(0, 0)
         );
 
-        // 5. Decompose the ciphertext
-        let a_decomposed = a_rlwe_bar.entry(0, 0).decompose_bits(&params);
-        let b_decomposed = b.entry(0, 0).decompose_bits(&params);
+        // 6. Decompose the ciphertext
+        let enc_hardcoded_key_polys: Vec<DCRTPoly> =
+            enc_hardcoded_key.entry(0, 0).decompose_bits(&params);
 
-        // 6. Build the final circuit with DCRTPoly as the Evaluable type
+        // 7. Build the final step circuit with DCRTPoly as the Evaluable type
+        let a_decomposed_polys = a_rlwe_bar.entry(0, 0).decompose_bits(&params);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &a_decomposed,
-            &b_decomposed,
-            public_circuit,
+            &a_decomposed_polys,
+            &enc_hardcoded_key_polys,
+            public_circuit.clone(),
         );
 
-        // 7. Evaluate the circuit
+        // 8. Evaluate the circuit with the decomposed ciphertext
         let one = DCRTPoly::const_one(&params);
 
         let mut inputs = vec![one.clone()];
-        inputs.push(t_bar_matrix.entry(0, 0).clone());
+        inputs.push(t_bar.entry(0, 0).clone());
 
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
-        assert_eq!(circuit_outputs.len(), log_q);
+        // 9. Extract the hardcoded key bits
+        let hardcoded_key_bits = hardcoded_key
+            .entry(0, 0)
+            .coeffs()
+            .iter()
+            .map(|elem| elem.value() != &BigUint::from(0u8))
+            .collect::<Vec<_>>();
 
-        // 8. Extract the output bits
-        let output_ints = circuit_outputs
+        // 10. Extract the output bits
+        let output_ints: Vec<DCRTPoly> = circuit_outputs
             .chunks(log_q)
             .map(|bits| DCRTPoly::bits_to_int(bits, &params))
             .collect_vec();
         assert_eq!(output_ints.len(), 1);
-        let output_bits = output_ints
-            .iter()
-            .flat_map(|output| output.extract_bits_with_threshold(&params))
-            .collect::<Vec<_>>();
-
-        // 9. Verify that the output matches the hardcoded key bits
-        assert_eq!(output_bits.len(), params.ring_dimension() as usize);
-        assert_eq!(output_bits, hardcoded_key.entry(0, 0).to_bool_vec());
+        assert_eq!(output_ints[0], (hardcoded_key.clone() * &scale).entry(0, 0));
+        let output_bits =
+            output_ints.iter().flat_map(|output| output.extract_highest_bits()).collect::<Vec<_>>();
+        // 11. Verify that the output matches the hardcoded key bits
+        assert_eq!(output_bits.len(), hardcoded_key_bits.len());
+        for (i, (output_bit, key_bit)) in
+            output_bits.iter().zip(hardcoded_key_bits.iter()).enumerate()
+        {
+            assert_eq!(output_bit, key_bit, "Bit mismatch at position {}", i);
+        }
     }
 
     #[test]
@@ -240,8 +245,8 @@ mod test {
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
         {
-            let inputs = public_circuit.input((2 * log_q) + 1);
-            public_circuit.output(inputs[0..(2 * log_q)].to_vec());
+            let inputs = public_circuit.input(log_q + 1);
+            public_circuit.output(inputs[0..log_q].to_vec());
         }
 
         let a_rlwe_bar = DCRTPoly::const_max(&params);

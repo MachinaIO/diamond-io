@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
     impl_binop_with_refs, parallel_iter,
-    poly::{Poly, PolyElem, PolyParams},
+    poly::{element::PolyElem, Poly, PolyParams},
 };
 use num_bigint::BigUint;
 use openfhe::{
@@ -265,7 +265,8 @@ impl Poly for DCRTPoly {
     /// Recover bits from a polynomial using decision thresholds q/4 and 3q/4
     fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool> {
         let modulus = params.modulus();
-        let quarter_q = modulus.as_ref() >> 2; // q/4
+        let half_q = FinRingElem::half_q(&modulus); // q/2
+        let quarter_q = half_q.value() >> 1; // q/4
         let three_quarter_q = &quarter_q * 3u32; // 3q/4
 
         self.coeffs()

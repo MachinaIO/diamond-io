@@ -86,7 +86,7 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
 mod tests {
     use crate::{
         bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},
-        poly::dcrt::{params::DCRTPolyParams, sampler::hash::DCRTPolyHashSampler},
+        poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
     };
     use keccak_asm::Keccak256;
     use std::sync::Arc;

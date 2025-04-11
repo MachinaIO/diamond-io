@@ -1,7 +1,7 @@
 use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, BitToInt},
-    poly::{matrix::*, sampler::*, Poly, PolyElem, PolyParams},
+    poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
 };
 use itertools::Itertools;
 use std::sync::Arc;
@@ -59,7 +59,7 @@ where
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
                 s_connect * &self.bs[0][2]
             };
-            debug_assert_eq!(self.p_init, expected_p_init);
+            assert_eq!(self.p_init, expected_p_init);
 
             let zero = <M::P as Poly>::const_zero(&params);
             let one = <M::P as Poly>::const_one(&params);
@@ -75,10 +75,7 @@ where
             };
             let expected_encoding_init = self.s_init.clone() *
                 &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
-            debug_assert_eq!(
-                encodings[0][0].concat_vector(&encodings[0][1..]),
-                expected_encoding_init
-            );
+            assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
         let log_base_q = params.as_ref().modulus_digits();
         let dim = params.as_ref().ring_dimension() as usize;
@@ -137,9 +134,9 @@ where
                 let b_next_bit =
                     if *input { self.bs[idx + 1][1].clone() } else { self.bs[idx + 1][0].clone() };
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
-                debug_assert_eq!(q, expected_q);
+                assert_eq!(q, expected_q);
                 let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1][2];
-                debug_assert_eq!(p, expected_p);
+                assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
                     let one = <M::P as Poly>::const_one(&params);
@@ -169,7 +166,7 @@ where
                     let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)
                 };
-                debug_assert_eq!(new_encode_vec, expcted_new_encode);
+                assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_bits(params.as_ref());
@@ -211,10 +208,10 @@ where
                     (output_encoding_ints[0].pubkey.matrix.clone() -
                         M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
                             output_encoding_ints[0].plaintext.clone().unwrap());
-                debug_assert_eq!(output_encoding_ints[0].vector, expected);
+                assert_eq!(output_encoding_ints[0].vector, expected);
             }
-            debug_assert_eq!(z.size(), (1, packed_output_size));
-            debug_assert_eq!(z.entry(0, 0), output_encoding_ints[0].plaintext.clone().unwrap());
+            assert_eq!(z.size(), (1, packed_output_size));
+            assert_eq!(z.entry(0, 0), output_encoding_ints[0].plaintext.clone().unwrap());
         }
         z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
     }

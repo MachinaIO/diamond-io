@@ -76,8 +76,8 @@ where
     let a = public_data.a_rlwe_bar;
 
     let b = rlwe_encrypt(
-        &params,
-        &sampler_uniform,
+        params.as_ref(),
+        sampler_uniform.as_ref(),
         &t_bar_matrix,
         &a,
         &hardcoded_key_matrix,
