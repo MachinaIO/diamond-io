@@ -1,4 +1,6 @@
 use std::env;
+#[cfg(feature = "cpu")]
+use std::{thread, time};
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
@@ -76,19 +78,27 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
 }
 
 pub fn log_mem<T: Into<String>>(tag: T) {
-    let s =
-        System::new_with_specifics(RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()));
-    let cpu_usage_sum = s.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>();
     if let Some(usage) = memory_stats() {
         info!(
-            "{} || Cpu usage {} || Current physical/virtural memory usage: {} | {}",
+            "{} || Current physical/virtual memory usage: {} | {}",
             tag.into(),
-            cpu_usage_sum,
             usage.physical_mem,
-            usage.virtual_mem
+            usage.virtual_mem,
         );
     } else {
         info!("Couldn't get the current memory usage :(");
+    }
+
+    #[cfg(feature = "cpu")]
+    {
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()),
+        );
+        sys.refresh_cpu_all();
+        thread::sleep(time::Duration::from_millis(200));
+        sys.refresh_cpu_all();
+        let cpu_usages: Vec<f32> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
+        info!("CPU usages: {:?} ", cpu_usages);
     }
 }
 
@@ -106,6 +116,18 @@ pub fn debug_mem<T: Into<String>>(tag: T) {
         );
     } else {
         debug!("Couldn't get the current memory usage :(");
+    }
+
+    #[cfg(feature = "cpu")]
+    {
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()),
+        );
+        sys.refresh_cpu_all();
+        thread::sleep(time::Duration::from_millis(200));
+        sys.refresh_cpu_all();
+        let cpu_usages: Vec<f32> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
+        debug!("CPU usages: {:?} ", cpu_usages,);
     }
 }
 

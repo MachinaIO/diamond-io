@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 default = ["test"]
 test = []
 disk = ["tempfile", "libc", "memmap2"]
+cpu = []
 
 [dependencies]
 libc = { version = "0.2", optional = true }
