@@ -26,8 +26,8 @@ where
     // Use provided scale or calculate half of q
     let scale = M::P::from_const(params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
 
-    // Compute RLWE encryption: t * a + (e - (m * scale))
-    t.clone() * a + e - &(m.clone() * &scale)
+    // Compute RLWE encryption: t * a + e + m * scale)
+    t.clone() * a + e + &(m.clone() * &scale)
 }
 
 #[cfg(test)]
@@ -59,7 +59,7 @@ mod tests {
         let b = rlwe_encrypt(&params, &sampler, &t_mat, &a_mat, &m_mat, sigma);
 
         // Decrypt the ciphertext and recover the message bits
-        let recovered = ((a_mat * t_mat) - b).entry(0, 0);
+        let recovered = (b - (a_mat * t_mat)).entry(0, 0);
         let recovered_bits = recovered.extract_bits_with_threshold(&params);
 
         // Verify correctness
