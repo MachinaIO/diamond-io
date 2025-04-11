@@ -1,5 +1,6 @@
-use super::generic_matrix::GenericMatrix;
 use crate::poly::{MatrixElem, MatrixParams};
+
+use super::base::BaseMatrix;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I64MatrixParams;
@@ -31,4 +32,4 @@ impl MatrixElem for i64 {
     }
 }
 
-pub type I64Matrix = GenericMatrix<i64>;
+pub type I64Matrix = BaseMatrix<i64>;
