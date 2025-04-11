@@ -4,7 +4,6 @@ pub mod encoding;
 pub mod norm_simulator;
 pub mod public_key;
 pub mod sampler;
-// pub mod serde;
 
 pub use bit_to_int::BitToInt;
 pub use encoding::BggEncoding;

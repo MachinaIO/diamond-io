@@ -72,22 +72,20 @@ where
 
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
     log_mem("Sampled hardcoded_key_matrix");
-
+    let t_bar = t_bar_matrix.entry(0, 0);
+    #[cfg(feature = "test")]
+    let hardcoded_key = hardcoded_key_matrix.entry(0, 0);
     let enc_hardcoded_key = rlwe_encrypt(
         params.as_ref(),
         sampler_uniform.as_ref(),
-        &t_bar_matrix,
+        t_bar_matrix,
         &public_data.a_rlwe_bar,
-        &hardcoded_key_matrix,
+        hardcoded_key_matrix,
         obf_params.hardcoded_key_sigma,
     );
 
     let enc_hardcoded_key_polys = enc_hardcoded_key.entry(0, 0).decompose_bits(params.as_ref());
     log_mem("Sampled enc_hardcoded_key_polys");
-
-    let t_bar = t_bar_matrix.entry(0, 0);
-    #[cfg(feature = "test")]
-    let hardcoded_key = hardcoded_key_matrix.entry(0, 0);
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
@@ -231,8 +229,8 @@ where
     let final_preimage_target = {
         let a_decomposed_polys = public_data.a_rlwe_bar.entry(0, 0).decompose_bits(params.as_ref());
         let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
-            &a_decomposed_polys,
-            &enc_hardcoded_key_polys,
+            a_decomposed_polys,
+            enc_hardcoded_key_polys,
             public_circuit.clone(),
         );
         log_mem("Computed final_circuit");

@@ -97,9 +97,9 @@ impl DCRTTrapdoor {
         // debug_mem("p2_vecs generated");
         // let p2 = p2_vecs[0].concat_columns(&p2_vecs[1..].iter().collect::<Vec<_>>());
         debug_mem("p2 generated");
-        let a_mat = r.clone() * r.transpose(); // d x d
-        let b_mat = r.clone() * e.transpose(); // d x d
-        let d_mat = e.clone() * e.transpose(); // d x d
+        let a_mat = r * r.transpose(); // d x d
+        let b_mat = r * e.transpose(); // d x d
+        let d_mat = e * e.transpose(); // d x d
         debug_mem("a_mat, b_mat, d_mat generated");
         let re = r.concat_rows(&[e]);
         debug_mem("re generated");

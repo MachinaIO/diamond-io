@@ -170,10 +170,10 @@ where
             }
         }
         let enc_hardcoded_key_decomposed =
-            &self.enc_hardcoded_key.entry(0, 0).decompose_bits(params.as_ref());
+            self.enc_hardcoded_key.entry(0, 0).decompose_bits(params.as_ref());
         let a_decomposed_polys = public_data.a_rlwe_bar.entry(0, 0).decompose_bits(params.as_ref());
         let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
-            &a_decomposed_polys,
+            a_decomposed_polys,
             enc_hardcoded_key_decomposed,
             obf_params.public_circuit.clone(),
         );

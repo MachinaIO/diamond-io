@@ -119,7 +119,7 @@ mod tests {
         assert_eq!(matrix3.col_size(), 12);
 
         // Test matrix arithmetic
-        let added_matrix = matrix1.clone() + matrix2;
+        let added_matrix = &matrix1 + &matrix2;
         assert_eq!(added_matrix.row_size(), 20);
         assert_eq!(added_matrix.col_size(), 5);
         let mult_matrix = matrix1 * matrix3;

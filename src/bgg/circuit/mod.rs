@@ -741,7 +741,7 @@ mod tests {
         let m_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![m.clone()]);
         let a_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![a.clone()]);
         let t_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![t.clone()]);
-        let b_mat = rlwe_encrypt(&params, &sampler, &t_mat, &a_mat, &m_mat, sigma);
+        let b_mat = rlwe_encrypt(&params, &sampler, t_mat, &a_mat, m_mat, sigma);
         let b = b_mat.entry(0, 0);
 
         // ct = (a, b)

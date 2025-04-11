@@ -93,8 +93,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 }
 
 pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
-    a_decomposed_polys: &[P],
-    b_decomposed_polys: &[P],
+    a_decomposed_polys: Vec<P>,
+    b_decomposed_polys: Vec<P>,
     public_circuit: PolyCircuit,
 ) -> PolyCircuit {
     let log_q = a_decomposed_polys.len();
@@ -182,8 +182,14 @@ mod test {
         let modulus = params.modulus();
         let half_q = FinRingElem::half_q(&modulus.clone());
         let scale = DCRTPoly::from_const(&params, &half_q);
-        let enc_hardcoded_key =
-            rlwe_encrypt(&params, &sampler_uniform, &t_bar, &a_rlwe_bar, &hardcoded_key, 0.0);
+        let enc_hardcoded_key = rlwe_encrypt(
+            &params,
+            &sampler_uniform,
+            t_bar.clone(),
+            &a_rlwe_bar,
+            hardcoded_key.clone(),
+            0.0,
+        );
         // t_bar.clone() * &a_rlwe_bar + &e - &(hardcoded_key.clone() * &scale);
         assert_eq!(
             (hardcoded_key.clone() * &scale).entry(0, 0),
@@ -197,8 +203,8 @@ mod test {
         // 7. Build the final step circuit with DCRTPoly as the Evaluable type
         let a_decomposed_polys = a_rlwe_bar.entry(0, 0).decompose_bits(&params);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &a_decomposed_polys,
-            &enc_hardcoded_key_polys,
+            a_decomposed_polys,
+            enc_hardcoded_key_polys,
             public_circuit.clone(),
         );
 
@@ -256,8 +262,8 @@ mod test {
         let a_decomposed_polys = a_rlwe_bar.decompose_bits(&params);
         let b_decomposed_polys = enc_hardcoded_key.decompose_bits(&params);
         let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
-            &a_decomposed_polys,
-            &b_decomposed_polys,
+            a_decomposed_polys,
+            b_decomposed_polys,
             public_circuit,
         );
 

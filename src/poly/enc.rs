@@ -4,9 +4,9 @@ use crate::poly::{element::PolyElem, sampler::DistType, PolyParams};
 pub fn rlwe_encrypt<M, SU>(
     params: &<<M as PolyMatrix>::P as Poly>::Params,
     sampler_uniform: &SU,
-    t: &M,
+    t: M,
     a: &M,
-    m: &M,
+    m: M,
     sigma: f64,
 ) -> M
 where
@@ -27,7 +27,7 @@ where
     let scale = M::P::from_const(params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
 
     // Compute RLWE encryption: t * a + e - (m * scale)
-    t.clone() * a + &e - &(m.clone() * &scale)
+    t * a + &e - &(m * &scale)
 }
 
 #[cfg(test)]
@@ -56,7 +56,7 @@ mod tests {
         let m_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![m.clone()]);
         let a_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![a.clone()]);
         let t_mat = DCRTPolyMatrix::from_poly_vec_row(&params, vec![t.clone()]);
-        let b = rlwe_encrypt(&params, &sampler, &t_mat, &a_mat, &m_mat, sigma);
+        let b = rlwe_encrypt(&params, &sampler, t_mat.clone(), &a_mat, m_mat, sigma);
 
         // Decrypt the ciphertext and recover the message bits
         let recovered = (b - (a_mat * t_mat)).entry(0, 0);

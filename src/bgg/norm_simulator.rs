@@ -106,7 +106,7 @@ impl Evaluable for NormSimulator {
     }
     fn from_bits(_: &Self::Params, one: Self, _: &[bool]) -> Self {
         let n = BigUint::from(one.dim);
-        let h_norm = one.h_norm.clone() * &n;
+        let h_norm = one.h_norm * &n;
         let plaintext_norm = n;
         let dim = one.dim;
         let base = one.base;

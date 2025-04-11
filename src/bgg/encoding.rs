@@ -78,7 +78,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
             panic!("Unknown plaintext for the left-hand input of multiplication");
         }
         let decomposed_b = other.pubkey.matrix.decompose();
-        let first_term = self.vector.clone() * decomposed_b.clone();
+        let first_term = self.vector * &decomposed_b;
         let second_term = other.vector.clone() * self.plaintext.as_ref().unwrap();
         let new_vector = first_term + second_term;
         let new_plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
@@ -87,7 +87,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
         };
 
         let new_pubkey = BggPublicKey {
-            matrix: self.pubkey.matrix.clone() * decomposed_b,
+            matrix: self.pubkey.matrix * decomposed_b,
             reveal_plaintext: self.pubkey.reveal_plaintext & other.pubkey.reveal_plaintext,
         };
         Self { vector: new_vector, pubkey: new_pubkey, plaintext: new_plaintext }
@@ -98,17 +98,17 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
     fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
-        let vector = self.vector.clone() * &rotate_poly;
+        let vector = self.vector * &rotate_poly;
         let pubkey = self.pubkey.rotate(params, shift);
-        let plaintext = self.plaintext.clone().map(|plaintext| plaintext * rotate_poly);
+        let plaintext = self.plaintext.map(|plaintext| plaintext * rotate_poly);
         Self { vector, pubkey, plaintext }
     }
 
     fn from_bits(params: &Self::Params, one: Self, bits: &[bool]) -> Self {
         let const_poly = <M::P as Evaluable>::from_bits(params, <M::P>::const_one(params), bits);
-        let vector = one.vector.clone() * &const_poly;
+        let vector = one.vector * &const_poly;
         let pubkey = BggPublicKey::from_bits(params, one.pubkey, bits);
-        let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
+        let plaintext = one.plaintext.map(|plaintext| plaintext * const_poly);
         Self { vector, pubkey, plaintext }
     }
 }

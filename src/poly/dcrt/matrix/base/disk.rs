@@ -508,6 +508,45 @@ impl<T: MatrixElem> Add<&BaseMatrix<T>> for &BaseMatrix<T> {
     }
 }
 
+impl<T: MatrixElem> Add<T> for BaseMatrix<T> {
+    type Output = BaseMatrix<T>;
+    fn add(self, rhs: T) -> Self::Output {
+        self + &rhs
+    }
+}
+
+impl<T: MatrixElem> Add<&T> for BaseMatrix<T> {
+    type Output = BaseMatrix<T>;
+
+    fn add(self, rhs: &T) -> Self::Output {
+        &self + rhs
+    }
+}
+
+impl<T: MatrixElem> Add<T> for &BaseMatrix<T> {
+    type Output = BaseMatrix<T>;
+
+    fn add(self, rhs: T) -> Self::Output {
+        self + &rhs
+    }
+}
+
+impl<T: MatrixElem> Add<&T> for &BaseMatrix<T> {
+    type Output = BaseMatrix<T>;
+
+    fn add(self, rhs: &T) -> Self::Output {
+        let mut new_matrix = BaseMatrix::new_empty(&self.params, self.nrow, self.ncol);
+        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<T>> {
+            self.block_entries(row_offsets, col_offsets)
+                .into_iter()
+                .map(|row| row.into_iter().map(|elem| elem + rhs).collect::<Vec<T>>())
+                .collect::<Vec<Vec<T>>>()
+        };
+        new_matrix.replace_entries(0..self.nrow, 0..self.ncol, f);
+        new_matrix
+    }
+}
+
 impl<T: MatrixElem> Sub<BaseMatrix<T>> for BaseMatrix<T> {
     type Output = BaseMatrix<T>;
 
