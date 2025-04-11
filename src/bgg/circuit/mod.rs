@@ -218,7 +218,7 @@ impl PolyCircuit {
                 PolyGateType::Input => {
                     panic!("Input gate {:?} should already be preloaded", gate);
                 }
-                PolyGateType::Const { bits } => E::from_bits(params, one, bits),
+                PolyGateType::Const { bits } => E::from_bits(params, one.clone(), bits),
                 PolyGateType::Add => {
                     let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Add");
                     let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Add");
@@ -235,8 +235,10 @@ impl PolyCircuit {
                     left.clone() * right
                 }
                 PolyGateType::Rotate { shift } => {
-                    let input =
-                        wires[gate.input_gates[0]].as_ref().expect("wire missing for Rotate");
+                    let input = wires[gate.input_gates[0]]
+                        .as_ref()
+                        .expect("wire missing for Rotate")
+                        .clone();
                     input.rotate(params, *shift)
                 }
                 PolyGateType::Call { .. } => {

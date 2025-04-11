@@ -16,20 +16,20 @@ pub trait Evaluable:
     + for<'a> Mul<&'a Self, Output = Self>
 {
     type Params: Debug + Clone;
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self;
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self;
+    fn from_bits(params: &Self::Params, one: Self, bits: &[bool]) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
     type Params = P::Params;
 
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let mut coeffs = self.coeffs();
         coeffs.rotate_right(shift);
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn from_bits(params: &Self::Params, _: &Self, bits: &[bool]) -> Self {
+    fn from_bits(params: &Self::Params, _: Self, bits: &[bool]) -> Self {
         let modulus = params.modulus();
         let one_elem = <P::Elem as PolyElem>::one(&modulus);
         let zero_elem = <P::Elem as PolyElem>::zero(&modulus);
