@@ -1,5 +1,5 @@
 #!/bin/bash
-LOGFILE="cpu_logs/cpu_usage.log"
+LOGFILE="./cpu_usage.log"
 
 while true; do
     echo "==== $(date) ====" >> "${LOGFILE}"
