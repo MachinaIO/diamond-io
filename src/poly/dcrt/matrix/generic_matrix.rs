@@ -326,7 +326,12 @@ impl<T: MatrixElem> GenericMatrix<T> {
 
             let inner: Vec<_> = (row_start..row_end)
                 .into_par_iter()
-                .map(|i| (col_start..col_end).map(|j| self.inner[i][j].clone()).collect::<Vec<_>>())
+                .map(|i| {
+                    (col_start..col_end)
+                        .into_par_iter()
+                        .map(|j| self.inner[i][j].clone())
+                        .collect::<Vec<_>>()
+                })
                 .collect();
 
             Self { inner, params: self.params.clone(), nrow, ncol }
@@ -365,6 +370,7 @@ impl<T: MatrixElem> GenericMatrix<T> {
                 .into_par_iter() //
                 .map(|i| {
                     (0..size)
+                        .into_par_iter()
                         .map(|j| if i == j { scalar.clone() } else { zero_elem.clone() })
                         .collect()
                 })
@@ -401,7 +407,12 @@ impl<T: MatrixElem> GenericMatrix<T> {
             let ncol = self.nrow;
             let inner: Vec<Vec<T>> = (0..self.ncol)
                 .into_par_iter()
-                .map(|i| (0..self.nrow).map(|j| self.inner[j][i].clone()).collect::<Vec<T>>())
+                .map(|i| {
+                    (0..self.nrow)
+                        .into_par_iter()
+                        .map(|j| self.inner[j][i].clone())
+                        .collect::<Vec<T>>()
+                })
                 .collect();
 
             Self { inner, params: self.params.clone(), nrow, ncol }
