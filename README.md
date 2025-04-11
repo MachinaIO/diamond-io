@@ -21,7 +21,7 @@ this will remove helper logic + helper fields for test which is not require for 
 
 - dummy params
 ```
-cargo test -r --test test_io_dummy_param test_io_just_mul_enc_and_bit --no-default-features -- --nocapture
+cargo test -r --test test_io_dummy_param --no-default-features -- --nocapture
 ```
 
 - real params (by default ignored)
