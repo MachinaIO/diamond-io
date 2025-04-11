@@ -69,7 +69,7 @@ where
                 for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
                     polys.push(zero.clone());
                 }
-                polys.push(self.t_bar.clone());
+                polys.push(self.minus_t_bar.clone());
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
@@ -160,7 +160,7 @@ where
                             .map(|coeffs| M::P::from_coeffs(&params, coeffs))
                             .collect_vec();
                         polys.extend(input_polys);
-                        polys.push(self.t_bar.clone());
+                        polys.push(self.minus_t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
                     let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);

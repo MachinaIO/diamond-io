@@ -91,12 +91,12 @@ where
 
     log_mem("Decomposed RLWE ciphertext into {bits(a), bits(b)}");
 
-    let t_bar = t_bar_matrix.entry(0, 0);
+    let minus_t_bar = -t_bar_matrix.entry(0, 0);
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
-    plaintexts.push(t_bar.clone());
+    plaintexts.push(minus_t_bar.clone());
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
@@ -273,7 +273,7 @@ where
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
-        t_bar,
+        minus_t_bar,
         #[cfg(feature = "test")]
         bs,
         #[cfg(feature = "test")]

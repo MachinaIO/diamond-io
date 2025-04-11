@@ -1,6 +1,6 @@
 use crate::{
     bgg::{
-        circuit::{build_circuit_ip_priv_and_pub_outputs, Evaluable, PolyCircuit},
+        circuit::{build_composite_circuit_from_public_and_fhe_dec, Evaluable, PolyCircuit},
         sampler::*,
         BggPublicKey,
     },
@@ -138,10 +138,9 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
     // actual
     let mut circuit = PolyCircuit::new();
     {
-        let mut inputs = circuit.input(packed_eval_input_size + 1); // + 1 is for t_bar
-        let minus_one = circuit.const_minus_one_gate();
-        inputs.push(minus_one);
-        let sub_circuit = build_circuit_ip_priv_and_pub_outputs::<E>(ct_output_circuit, 2);
+        let inputs = circuit.input(packed_eval_input_size + 1); // + 1 is for -t_bar
+        let sub_circuit =
+            build_composite_circuit_from_public_and_fhe_dec::<E>(ct_output_circuit, log_q);
         let circuit_id = circuit.register_sub_circuit(sub_circuit);
         let outputs = circuit.call_sub_circuit(circuit_id, &inputs);
         circuit.output(outputs);
@@ -208,7 +207,7 @@ mod test {
         let one = DCRTPoly::const_one(&params);
 
         let mut inputs = vec![one.clone()];
-        inputs.push(t_bar_matrix.entry(0, 0).clone());
+        inputs.push(-(t_bar_matrix.entry(0, 0)).clone());
 
         let circuit_outputs = final_circuit.eval(&params, &one, &inputs);
         assert_eq!(circuit_outputs.len(), log_q);
