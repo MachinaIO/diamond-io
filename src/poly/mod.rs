@@ -3,6 +3,7 @@
 
 pub mod dcrt;
 pub mod element;
+pub mod enc;
 pub mod matrix;
 pub mod params;
 pub mod polynomial;

@@ -6,6 +6,7 @@ use crate::{
     },
     io::utils::{build_final_bits_circuit, PublicSampledData},
     poly::{
+        enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
     },
@@ -20,6 +21,7 @@ pub fn obfuscate<M, SU, SH, ST, R>(
     sampler_uniform: SU,
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
+    hardcoded_key: M::P,
     rng: &mut R,
 ) -> Obfuscation<M>
 where
@@ -63,24 +65,23 @@ where
         sampler_uniform.clone(),
         obf_params.encoding_sigma,
     );
+
     let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
 
-    let hardcoded_key_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
     log_mem("Sampled hardcoded_key_matrix");
 
-    let enc_hardcoded_key = {
-        let e = sampler_uniform.sample_uniform(
-            &params,
-            1,
-            1,
-            DistType::GaussDist { sigma: obf_params.hardcoded_key_sigma },
-        );
-        let scale = M::P::from_const(&params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
-        t_bar_matrix.clone() * &public_data.a_rlwe_bar + &e -
-            &(hardcoded_key_matrix.clone() * &scale)
-    };
+    let enc_hardcoded_key = rlwe_encrypt(
+        &params,
+        &sampler_uniform,
+        &t_bar_matrix,
+        &public_data.a_rlwe_bar,
+        &hardcoded_key_matrix,
+        obf_params.hardcoded_key_sigma,
+    );
+
     let enc_hardcoded_key_polys = enc_hardcoded_key.entry(0, 0).decompose_bits(params.as_ref());
     log_mem("Sampled enc_hardcoded_key_polys");
 

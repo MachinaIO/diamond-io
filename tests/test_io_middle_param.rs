@@ -8,6 +8,7 @@ mod test {
                 DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
                 DCRTPolyUniformSampler,
             },
+            sampler::DistType,
             Poly, PolyParams,
         },
         utils::init_tracing,
@@ -55,11 +56,13 @@ mod test {
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let mut rng = rand::rng();
+        let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
         let obfuscation = obfuscate::<DCRTPolyMatrix, _, _, _, _>(
             obf_params.clone(),
             sampler_uniform,
             sampler_hash,
             sampler_trapdoor,
+            hardcoded_key,
             &mut rng,
         );
         let obfuscation_time = start_time.elapsed();
