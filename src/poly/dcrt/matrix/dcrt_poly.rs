@@ -1,5 +1,3 @@
-use super::generic_matrix::GenericMatrix;
-
 use crate::{
     parallel_iter,
     poly::{
@@ -12,6 +10,8 @@ use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::ops::Range;
+
+use super::base::BaseMatrix;
 
 impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -39,7 +39,7 @@ impl MatrixElem for DCRTPoly {
     }
 }
 
-pub type DCRTPolyMatrix = GenericMatrix<DCRTPoly>;
+pub type DCRTPolyMatrix = BaseMatrix<DCRTPoly>;
 
 impl PolyMatrix for DCRTPolyMatrix {
     type P = DCRTPoly;
