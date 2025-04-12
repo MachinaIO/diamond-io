@@ -60,10 +60,24 @@ pub trait Poly:
     }
     fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self;
     fn coeffs(&self) -> Vec<Self::Elem>;
+    fn coeffs_digits(&self) -> Vec<u32> {
+        self.coeffs()
+            .iter()
+            .map(|elem| {
+                let u32s = elem.to_biguint().to_u32_digits();
+                debug_assert!(u32s.len() < 2);
+                if u32s.len() == 1 {
+                    u32s[0]
+                } else {
+                    0
+                }
+            })
+            .collect()
+    }
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
-    fn const_power_of_two(params: &Self::Params, k: usize) -> Self;
+    fn const_power_of_base(params: &Self::Params, k: usize) -> Self;
     fn const_rotate_poly(params: &Self::Params, shift: usize) -> Self {
         let zero = Self::const_zero(params);
         let mut coeffs = zero.coeffs();
@@ -72,7 +86,7 @@ pub trait Poly:
     }
     fn const_max(params: &Self::Params) -> Self;
     fn extract_bits_with_threshold(&self, params: &Self::Params) -> Vec<bool>;
-    fn decompose_bits(&self, params: &Self::Params) -> Vec<Self>;
+    fn decompose_base(&self, params: &Self::Params) -> Vec<Self>;
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for elem in self.coeffs() {

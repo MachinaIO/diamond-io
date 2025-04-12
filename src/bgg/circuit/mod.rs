@@ -144,8 +144,8 @@ impl PolyCircuit {
         self.new_gate_generic(vec![input], PolyGateType::Rotate { shift })
     }
 
-    pub fn const_bit_poly(&mut self, bits: &[bool]) -> usize {
-        self.new_gate_generic(vec![], PolyGateType::Const { bits: bits.to_vec() })
+    pub fn const_digits_poly(&mut self, digits: &[u32]) -> usize {
+        self.new_gate_generic(vec![], PolyGateType::Const { digits: digits.to_vec() })
     }
 
     fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType) -> usize {
@@ -218,7 +218,7 @@ impl PolyCircuit {
                 PolyGateType::Input => {
                     panic!("Input gate {:?} should already be preloaded", gate);
                 }
-                PolyGateType::Const { bits } => E::from_bits(params, one, bits),
+                PolyGateType::Const { digits } => E::from_digits(params, one, &digits),
                 PolyGateType::Add => {
                     let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Add");
                     let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Add");
@@ -416,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn test_const_bit_poly() {
+    fn test_const_digits_poly() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
 
@@ -429,9 +429,9 @@ mod tests {
         // This will create a polynomial with coefficients:
         // [1, 0, 1, 1]
         // (where 1 is at positions 0, 2, 3, and 4)
-        let bits = vec![true, false, true, true];
-        let bit_poly_gate = circuit.const_bit_poly(&bits);
-        circuit.output(vec![bit_poly_gate]);
+        let digits = vec![1u32, 0u32, 1u32, 1u32];
+        let digits_poly_gate = circuit.const_digits_poly(&digits);
+        circuit.output(vec![digits_poly_gate]);
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
@@ -442,8 +442,8 @@ mod tests {
 
         // Check that the coefficients match the bit pattern
         let coeffs = result[0].coeffs();
-        for (i, bit) in bits.iter().enumerate() {
-            if *bit {
+        for (i, digit) in digits.iter().enumerate() {
+            if digit != &0 {
                 assert_eq!(
                     coeffs[i].value(),
                     &BigUint::from(1u8),
@@ -461,7 +461,7 @@ mod tests {
         }
 
         // Check that remaining coefficients are 0
-        for (i, _) in coeffs.iter().enumerate().skip(bits.len()) {
+        for (i, _) in coeffs.iter().enumerate().skip(digits.len()) {
             assert_eq!(
                 coeffs[i].value(),
                 &BigUint::from(0u8),
@@ -743,8 +743,8 @@ mod tests {
         let b = b_mat.entry(0, 0);
 
         // ct = (a, b)
-        let a_bits = a.decompose_bits(&params);
-        let b_bits = b.decompose_bits(&params);
+        let a_bits = a.decompose_base(&params);
+        let b_bits = b.decompose_base(&params);
 
         let x = DCRTPoly::const_one(&params);
 

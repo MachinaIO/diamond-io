@@ -164,8 +164,9 @@ impl Poly for DCRTPoly {
         )
     }
 
-    fn const_power_of_two(params: &Self::Params, k: usize) -> Self {
-        Self::poly_gen_from_const(params, BigUint::from(2u32).pow(k as u32).to_string())
+    fn const_power_of_base(params: &Self::Params, k: usize) -> Self {
+        let base = 1u32 << params.base_bits();
+        Self::poly_gen_from_const(params, BigUint::from(base).pow(k as u32).to_string())
     }
 
     fn const_max(params: &Self::Params) -> Self {
@@ -174,26 +175,48 @@ impl Poly for DCRTPoly {
     }
 
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}
-    /// where b_{j, h} is the h-th bit of the j-th coefficient of the polynomial.
+    /// where b_{j, h} is the h-th digit of the j-th coefficient of the polynomial.
     /// Return a vector of polynomials, where the h-th polynomial is defined as
     /// b_{0, h} + b_{1, h} * x + b_{2, h} * x^2 + ... + b_{n-1, h} * x^{n-1}.
-    fn decompose_bits(&self, params: &Self::Params) -> Vec<Self> {
+    fn decompose_base(&self, params: &Self::Params) -> Vec<Self> {
         let coeffs = self.coeffs();
-        let bit_length = params.modulus_bits();
-        parallel_iter!(0..bit_length)
-            .map(|h| {
-                DCRTPoly::from_coeffs(
+        let log_q = params.modulus_bits();
+        let base_bits = params.base_bits() as usize;
+
+        // Calculate the number of digits needed in the decomposition
+        let num_digits = params.modulus_digits() as usize;
+
+        // Create a mask for extracting the base_bits bits
+        let base_mask = (BigUint::from(1u32) << base_bits) - BigUint::from(1u32);
+
+        // Directly decompose into base_bits digits
+        parallel_iter!(0..num_digits)
+            .map(|digit_idx| {
+                // Compute the shift amount for this digit
+                let shift_amount = digit_idx * base_bits;
+
+                // Extract the digit values for all coefficients
+                let digit_values = coeffs
+                    .par_iter()
+                    .map(|coeff| {
+                        if shift_amount >= log_q as usize {
+                            BigUint::from(0u32) // Handle the case where shift exceeds modulus bits
+                        } else {
+                            (coeff.value() >> shift_amount) & &base_mask
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                // Create a polynomial from these digit values
+                let poly_from_digits = DCRTPoly::from_coeffs(
                     params,
-                    &coeffs
-                        .iter()
-                        .map(|j| {
-                            FinRingElem::new(
-                                (j.value() >> h) & BigUint::from(1u32),
-                                params.modulus(),
-                            )
-                        })
-                        .collect_vec(),
-                )
+                    &digit_values
+                        .par_iter()
+                        .map(|value| FinRingElem::new(value.clone(), params.modulus()))
+                        .collect::<Vec<_>>(),
+                );
+
+                poly_from_digits
             })
             .collect()
     }
@@ -473,8 +496,8 @@ mod tests {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
-        let decomposed = poly.decompose_bits(&params);
-        assert_eq!(decomposed.len(), params.modulus_bits());
+        let decomposed = poly.decompose_base(&params);
+        assert_eq!(decomposed.len(), params.modulus_digits() as usize);
     }
 
     #[test]

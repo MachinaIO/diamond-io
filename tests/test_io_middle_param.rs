@@ -28,17 +28,17 @@ mod test {
         init_tracing();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::new(1024, 4, 37, 20);
-        let log_q = params.modulus_bits();
+        let log_base_q = params.modulus_digits();
         let switched_modulus = Arc::new(BigUint::from_str_radix("672178712", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();
 
         // inputs: BITS(ct), eval_input
         // outputs: BITS(ct) AND eval_input
         {
-            let inputs = public_circuit.input((2 * log_q) + 1);
+            let inputs = public_circuit.input((2 * log_base_q) + 1);
             let mut outputs = vec![];
-            let eval_input = inputs[2 * log_q];
-            for ct_input in inputs[0..2 * log_q].iter() {
+            let eval_input = inputs[2 * log_base_q];
+            for ct_input in inputs[0..2 * log_base_q].iter() {
                 let muled = public_circuit.and_gate(*ct_input, eval_input);
                 outputs.push(muled);
             }

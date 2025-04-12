@@ -104,10 +104,11 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         Self { vector, pubkey, plaintext }
     }
 
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
+    fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self {
+        let const_poly =
+            <M::P as Evaluable>::from_digits(params, &<M::P>::const_one(params), digits);
         let vector = one.vector.clone() * &const_poly;
-        let pubkey = BggPublicKey::from_bits(params, &one.pubkey, bits);
+        let pubkey = BggPublicKey::from_digits(params, &one.pubkey, digits);
         let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
         Self { vector, pubkey, plaintext }
     }

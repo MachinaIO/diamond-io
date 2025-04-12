@@ -17,7 +17,7 @@ pub trait Evaluable:
 {
     type Params: Debug + Clone;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self;
+    fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
@@ -29,13 +29,10 @@ impl<P: Poly> Evaluable for P {
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn from_bits(params: &Self::Params, _: &Self, bits: &[bool]) -> Self {
-        let modulus = params.modulus();
-        let one_elem = <P::Elem as PolyElem>::one(&modulus);
-        let zero_elem = <P::Elem as PolyElem>::zero(&modulus);
-        let coeffs: Vec<P::Elem> = bits
+    fn from_digits(params: &Self::Params, _: &Self, digits: &[u32]) -> Self {
+        let coeffs: Vec<P::Elem> = digits
             .par_iter()
-            .map(|&bit| if bit { one_elem.clone() } else { zero_elem.clone() })
+            .map(|&digit| <P::Elem as PolyElem>::constant(&params.modulus(), digit as u64))
             .collect();
         Self::from_coeffs(params, &coeffs)
     }

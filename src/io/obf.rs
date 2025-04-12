@@ -2,7 +2,7 @@ use super::{params::ObfuscationParams, utils::sample_public_key_by_idx, Obfuscat
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggPublicKey, BitToInt,
+        BggPublicKey, DigitsToInt,
     },
     io::utils::{build_final_bits_circuit, PublicSampledData},
     poly::{
@@ -33,9 +33,9 @@ where
 {
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
-    let log_q = obf_params.params.modulus_bits();
+    // let log_q = obf_params.params.modulus_bits();
     let log_base_q = obf_params.params.modulus_digits();
-    debug_assert_eq!(public_circuit.num_input(), (2 * log_q) + obf_params.input_size);
+    debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
@@ -86,8 +86,8 @@ where
 
     log_mem("Generated RLWE ciphertext {a, b}");
 
-    let a_decomposed = a.entry(0, 0).decompose_bits(params.as_ref());
-    let b_decomposed = b.entry(0, 0).decompose_bits(params.as_ref());
+    let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
+    let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
 
     log_mem("Decomposed RLWE ciphertext into {bits(a), bits(b)}");
 
@@ -238,10 +238,10 @@ where
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         log_mem("Evaluated outputs");
-        assert_eq!(eval_outputs.len(), log_q * packed_output_size);
+        assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
-            .chunks(log_q)
-            .map(|bits| BggPublicKey::bits_to_int(bits, &params))
+            .chunks(log_base_q)
+            .map(|bits| BggPublicKey::digits_to_int(bits, &params))
             .collect_vec();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);

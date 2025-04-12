@@ -105,10 +105,10 @@ impl Evaluable for NormSimulator {
     fn rotate(&self, _: &Self::Params, _: usize) -> Self {
         self.clone()
     }
-    // We directly multiply the bits polynomial with the encoding for one.
+    // We directly multiply the const polynomial with the encoding for one.
     // Since the h_norm for the one encoding contains only an one polynomial f(x) = 1, this
     // multiplication does not change the norm.
-    fn from_bits(_: &Self::Params, one: &Self, _: &[bool]) -> Self {
+    fn from_digits(_: &Self::Params, one: &Self, _: &[u32]) -> Self {
         one.clone()
     }
 }

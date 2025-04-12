@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SerializablePolyGateType {
     Input,
-    Const { bits: Vec<bool> },
+    Const { digits: Vec<u32> },
     Add,
     Sub,
     Mul,
@@ -67,8 +67,8 @@ impl SerializablePolyCircuit {
         for (gate_id, gate) in circuit.gates.iter() {
             let gate_type = match &gate.gate_type {
                 PolyGateType::Input => SerializablePolyGateType::Input,
-                PolyGateType::Const { bits } => {
-                    SerializablePolyGateType::Const { bits: bits.clone() }
+                PolyGateType::Const { digits } => {
+                    SerializablePolyGateType::Const { digits: digits.clone() }
                 }
                 PolyGateType::Add => SerializablePolyGateType::Add,
                 PolyGateType::Sub => SerializablePolyGateType::Sub,
@@ -113,8 +113,8 @@ impl SerializablePolyCircuit {
                 SerializablePolyGateType::Input => {
                     gate_idx += 1;
                 }
-                SerializablePolyGateType::Const { bits } => {
-                    circuit.const_bit_poly(bits);
+                SerializablePolyGateType::Const { digits } => {
+                    circuit.const_digits_poly(digits);
                     gate_idx += 1;
                 }
                 SerializablePolyGateType::Add => {
