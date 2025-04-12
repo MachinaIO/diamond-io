@@ -1090,7 +1090,8 @@ mod tests {
         // Create the innermost sub-circuit that performs scalar multiplication
         let mut inner_circuit = PolyCircuit::new();
         let (inner_inputs, inner_scalar_inputs) = inner_circuit.input(1, 1);
-        let scalar_mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_scalar_inputs[0]);
+        let scalar_mul_gate =
+            inner_circuit.scalar_mul_gate(inner_inputs[0], inner_scalar_inputs[0]);
         inner_circuit.output(vec![scalar_mul_gate]);
 
         // Create a middle sub-circuit that uses the inner sub-circuit
