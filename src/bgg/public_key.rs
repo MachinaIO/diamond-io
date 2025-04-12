@@ -66,7 +66,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     }
 }
 
-impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
+impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
@@ -75,14 +75,13 @@ impl<M: PolyMatrix> Evaluable<M::P> for BggPublicKey<M> {
     }
 
     fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly =
-            <M::P as Evaluable<M::P>>::from_bits(params, &<M::P>::const_one(params), bits);
+        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
         let matrix = one.matrix.clone() * const_poly;
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 
-    fn scalar_mul(&self, scalar: &M::P) -> Self {
-        let matrix = self.matrix.clone() * scalar;
+    fn scalar_mul(&self, scalar: &Self) -> Self {
+        let matrix = self.matrix.clone() * scalar.matrix.entry(0, 0);
         let reveal_plaintext = self.reveal_plaintext;
         Self { matrix, reveal_plaintext }
     }
@@ -95,10 +94,15 @@ mod tests {
         bgg::{
             circuit::{Evaluable, PolyCircuit},
             sampler::BGGPublicKeySampler,
+            BggPublicKey,
         },
-        poly::dcrt::{params::DCRTPolyParams, DCRTPoly, DCRTPolyHashSampler},
+        poly::{
+            dcrt::{params::DCRTPolyParams, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix},
+            PolyMatrix,
+        },
         utils::create_random_poly,
     };
+    use bitvec::vec;
     use keccak_asm::Keccak256;
     use std::sync::Arc;
 
@@ -243,25 +247,28 @@ mod tests {
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
 
-        // Create scalar
+        // Create "scalar" BGG+ Public key
         let scalar = create_random_poly(&params);
+        let reveal_plaintext = true;
+        let scalar_matrix = DCRTPolyMatrix::from_poly_vec(&params, vec![vec![scalar.clone()]]);
+        let scalar_pk = BggPublicKey::new(scalar_matrix.clone(), reveal_plaintext);
 
         // Create a simple circuit with a ScalarMul operation
-        let mut circuit = PolyCircuit::<DCRTPoly>::new();
-        let inputs = circuit.input(1);
-        let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], scalar.clone());
+        let mut circuit = PolyCircuit::new();
+        let inputs = circuit.input(2);
+        let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], inputs[1]);
         circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), scalar_pk.clone()]);
 
         // Expected result
-        let expected = pk1.scalar_mul(&scalar);
+        let expected_matrix = pk1.matrix * (&scalar);
 
         // Verify the result
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].matrix, expected.matrix);
-        assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
+        assert_eq!(result[0].matrix, expected_matrix);
+        assert_eq!(result[0].reveal_plaintext, scalar_pk.reveal_plaintext);
     }
 
     #[test]
