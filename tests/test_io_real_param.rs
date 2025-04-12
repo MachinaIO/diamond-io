@@ -31,6 +31,8 @@ mod test {
         let log_q = params.modulus_bits();
         let switched_modulus = Arc::new(BigUint::from_str_radix("15829145694278690179872161345257420162248406342477557754500035589945422364945084658438108187108114830000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();
+        let num_and_gate = 2;
+        assert!(num_and_gate <= 2 * log_q);
 
         // inputs: BITS(ct), eval_input
         // outputs: BITS(ct) AND eval_input
@@ -38,9 +40,14 @@ mod test {
             let inputs = public_circuit.input((2 * log_q) + 1);
             let mut outputs = vec![];
             let eval_input = inputs[2 * log_q];
-            for ct_input in inputs[0..2 * log_q].iter() {
-                let muled = public_circuit.and_gate(*ct_input, eval_input);
-                outputs.push(muled);
+            for idx in 0..2 * log_q {
+                let ct_input = inputs[idx];
+                if idx >= num_and_gate {
+                    outputs.push(ct_input);
+                } else {
+                    let muled = public_circuit.and_gate(ct_input, eval_input);
+                    outputs.push(muled);
+                }
             }
             public_circuit.output(outputs);
         }
@@ -72,7 +79,7 @@ mod test {
         let obfuscation_time = start_time.elapsed();
         info!("Time to obfuscate: {:?}", obfuscation_time);
 
-        let bool_in = rng.random::<bool>();
+        let bool_in = true;
         let input = [bool_in];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let output =
