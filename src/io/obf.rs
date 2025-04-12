@@ -35,7 +35,7 @@ where
     let dim = obf_params.params.ring_dimension() as usize;
     let log_q = obf_params.params.modulus_bits();
     let log_base_q = obf_params.params.modulus_digits();
-    debug_assert_eq!(public_circuit.num_input(), log_q + obf_params.input_size);
+    debug_assert_eq!(public_circuit.num_input(), (2 * log_q) + obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
@@ -70,27 +70,30 @@ where
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
 
-    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
+    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     log_mem("Sampled hardcoded_key_matrix");
-    let t_bar = t_bar_matrix.entry(0, 0);
-    #[cfg(feature = "test")]
-    let hardcoded_key = hardcoded_key_matrix.entry(0, 0);
-    let enc_hardcoded_key = rlwe_encrypt(
+    let minus_t_bar = -t_bar_matrix.entry(0, 0);
+    let a = public_data.a_rlwe_bar;
+    let b = rlwe_encrypt(
         params.as_ref(),
         sampler_uniform.as_ref(),
         t_bar_matrix,
-        &public_data.a_rlwe_bar,
+        &a,
         hardcoded_key_matrix,
         obf_params.hardcoded_key_sigma,
     );
 
-    let enc_hardcoded_key_polys = enc_hardcoded_key.entry(0, 0).decompose_bits(params.as_ref());
-    log_mem("Sampled enc_hardcoded_key_polys");
+    log_mem("Generated RLWE ciphertext {a, b}");
+
+    let a_decomposed = a.entry(0, 0).decompose_bits(params.as_ref());
+    let b_decomposed = b.entry(0, 0).decompose_bits(params.as_ref());
+
+    log_mem("Decomposed RLWE ciphertext into {bits(a), bits(b)}");
 
     let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
         .map(|_| M::P::const_zero(params.as_ref()))
         .collect_vec();
-    plaintexts.push(t_bar.clone());
+    plaintexts.push(minus_t_bar.clone());
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
@@ -168,9 +171,6 @@ where
             {
                 bs[idx + 1][bit] = b_bit_idx.clone();
             }
-            // let m_preimage_bit_id = format!("m_preimage_{}_{}", idx, bit);
-            // let n_preimage_bit_id = format!("n_preimage_{}_{}", idx, bit);
-            // let k_preimage_bit_id = format!("k_preimage_{}_{}", idx, bit);
 
             let m_preimage_bit = sampler_trapdoor.preimage(
                 &params,
@@ -227,10 +227,9 @@ where
     }
 
     let final_preimage_target = {
-        let a_decomposed_polys = public_data.a_rlwe_bar.entry(0, 0).decompose_bits(params.as_ref());
         let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
-            a_decomposed_polys,
-            enc_hardcoded_key_polys,
+            a_decomposed,
+            b_decomposed,
             public_circuit.clone(),
         );
         log_mem("Computed final_circuit");
@@ -261,7 +260,7 @@ where
 
     Obfuscation {
         hash_key,
-        enc_hardcoded_key,
+        ct_b: b,
         encodings_init,
         p_init,
         m_preimages,
@@ -271,11 +270,11 @@ where
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]
-        t_bar: t_bar.clone(),
+        minus_t_bar,
         #[cfg(feature = "test")]
         bs,
         #[cfg(feature = "test")]
-        hardcoded_key: hardcoded_key.clone(),
+        hardcoded_key,
         #[cfg(feature = "test")]
         final_preimage_target,
     }

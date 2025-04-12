@@ -26,8 +26,8 @@ where
     // Use provided scale or calculate half of q
     let scale = M::P::from_const(params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
 
-    // Compute RLWE encryption: t * a + e - (m * scale)
-    t * a + &e - &(m * &scale)
+    // Compute RLWE encryption: t * a + e + m * scale
+    t * a + e + &(m * &scale)
 }
 
 #[cfg(test)]
