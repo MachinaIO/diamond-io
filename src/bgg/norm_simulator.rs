@@ -1,5 +1,5 @@
 use super::circuit::{Evaluable, PolyCircuit};
-use crate::impl_binop_with_refs;
+use crate::{impl_binop_with_refs, poly::dcrt::matrix::base};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
@@ -105,11 +105,13 @@ impl Evaluable for NormSimulator {
     fn rotate(&self, _: &Self::Params, _: usize) -> Self {
         self.clone()
     }
-    // We directly multiply the const polynomial with the encoding for one.
-    // Since the h_norm for the one encoding contains only an one polynomial f(x) = 1, this
-    // multiplication does not change the norm.
-    fn from_digits(_: &Self::Params, one: &Self, _: &[u32]) -> Self {
-        one.clone()
+
+    fn from_digits(_: &Self::Params, one: &Self, digits: &[u32]) -> Self {
+        let digit_max = digits.iter().max().unwrap();
+        let dim_sqrt = one.dim_sqrt;
+        let h_norm = one.h_norm.clone() * BigUint::from(digit_max * dim_sqrt);
+        let plaintext_norm = one.plaintext_norm.clone() * BigUint::from(*digit_max);
+        Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
 }
 
