@@ -1,6 +1,6 @@
 use super::{circuit::Evaluable, BggEncoding, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix, PolyParams};
-pub trait BitToInt<P: Poly>: Evaluable {
+pub trait BitToInt<P: Poly>: Evaluable<P> {
     fn power_of_two(&self, params: &P::Params, k: usize) -> Self;
     fn bits_to_int(bits: &[Self], params: &P::Params) -> Self {
         let log_q = params.modulus_bits();

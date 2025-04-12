@@ -1,4 +1,4 @@
-use crate::bgg::circuit::Evaluable;
+use crate::{bgg::circuit::Evaluable, poly::Poly};
 
 use super::PolyCircuit;
 
@@ -8,10 +8,10 @@ use super::PolyCircuit;
 ///    a_bit_1, b_bit_1, ...]
 /// 2. An FHE decryption circuit that takes each ciphertext and the RLWE secret key -t_bar as inputs
 ///    and returns the bit decomposed plaintext for each cipheretxt
-pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
-    public_circuit: PolyCircuit,
+pub fn build_composite_circuit_from_public_and_fhe_dec<P: Poly, E: Evaluable<P>>(
+    public_circuit: PolyCircuit<P>,
     log_q: usize,
-) -> PolyCircuit {
+) -> PolyCircuit<P> {
     let num_pub_circuit_input = public_circuit.num_input();
     let num_pub_circuit_output = public_circuit.num_output();
     debug_assert_eq!(num_pub_circuit_output % (2 * log_q), 0);
@@ -86,8 +86,10 @@ mod tests {
         );
 
         // 5. Build a composite circuit from public circuit and FHE decryption
-        let circuit =
-            build_composite_circuit_from_public_and_fhe_dec::<DCRTPoly>(public_circuit, log_q);
+        let circuit = build_composite_circuit_from_public_and_fhe_dec::<DCRTPoly, DCRTPoly>(
+            public_circuit,
+            log_q,
+        );
 
         // 6. Evaluate the circuit with inputs a_bit_0, b_bit_0, a_bit_1, b_bit_1, ..., -t_bar
         let a_decomposed = a_rlwe_bar.entry(0, 0).decompose_bits(&params);

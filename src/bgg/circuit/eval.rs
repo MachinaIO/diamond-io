@@ -5,7 +5,7 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
-pub trait Evaluable:
+pub trait Evaluable<P: Poly>:
     Debug
     + Clone
     + Add<Output = Self>
@@ -18,9 +18,10 @@ pub trait Evaluable:
     type Params: Debug + Clone;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
     fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self;
+    fn scalar_mul(&self, scalar: &P) -> Self;
 }
 
-impl<P: Poly> Evaluable for P {
+impl<P: Poly> Evaluable<P> for P {
     type Params = P::Params;
 
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
@@ -38,5 +39,9 @@ impl<P: Poly> Evaluable for P {
             .map(|&bit| if bit { one_elem.clone() } else { zero_elem.clone() })
             .collect();
         Self::from_coeffs(params, &coeffs)
+    }
+
+    fn scalar_mul(&self, scalar: &P) -> Self {
+        self.clone() * scalar
     }
 }

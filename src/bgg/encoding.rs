@@ -94,7 +94,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
     }
 }
 
-impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
+impl<M: PolyMatrix> Evaluable<M::P> for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
@@ -105,10 +105,18 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     }
 
     fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
+        let const_poly =
+            <M::P as Evaluable<M::P>>::from_bits(params, &<M::P>::const_one(params), bits);
         let vector = one.vector.clone() * &const_poly;
         let pubkey = BggPublicKey::from_bits(params, &one.pubkey, bits);
         let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
+        Self { vector, pubkey, plaintext }
+    }
+
+    fn scalar_mul(&self, scalar: &M::P) -> Self {
+        let vector = self.vector.clone() * scalar;
+        let pubkey = self.pubkey.scalar_mul(scalar);
+        let plaintext = self.plaintext.as_ref().map(|p| p.clone() * scalar);
         Self { vector, pubkey, plaintext }
     }
 }
@@ -118,12 +126,13 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 mod tests {
     use crate::{
         bgg::{
-            circuit::PolyCircuit,
+            circuit::{Evaluable, PolyCircuit},
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         },
         poly::dcrt::{
             params::DCRTPolyParams,
             sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+            DCRTPoly,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -272,6 +281,58 @@ mod tests {
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vector, expected.vector);
+        assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
+        assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
+
+    #[test]
+    fn test_encoding_scalar_mul() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create samplers
+        let key: [u8; 32] = rand::random();
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        let d = 3;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create random public keys
+        let reveal_plaintexts = [true; 1];
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+
+        // Create secret and plaintexts
+        let secrets = vec![create_bit_random_poly(&params); d];
+        let plaintexts = vec![create_random_poly(&params)];
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let enc_one = encodings[0].clone();
+        let enc = encodings[1].clone();
+
+        // Create scalar
+        let scalar = create_random_poly(&params);
+
+        // Create a simple circuit with a ScalarMul operation
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let inputs = circuit.input(1);
+        let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], scalar.clone());
+        circuit.output(vec![scalar_mul_gate]);
+
+        // Evaluate the circuit
+        let result = circuit.eval(&params, &enc_one.clone(), &[enc.clone()]);
+
+        // Expected result
+        let expected = enc.scalar_mul(&scalar);
 
         // Verify the result
         assert_eq!(result.len(), 1);

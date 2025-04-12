@@ -9,15 +9,17 @@ use std::{
     fmt::Debug,
 };
 pub use utils::*;
+
+use crate::poly::Poly;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PolyCircuit {
-    gates: BTreeMap<usize, PolyGate>,
+pub struct PolyCircuit<P: Poly> {
+    gates: BTreeMap<usize, PolyGate<P>>,
     sub_circuits: BTreeMap<usize, Self>,
     output_ids: Vec<usize>,
     num_input: usize,
 }
 
-impl PolyCircuit {
+impl<P: Poly> PolyCircuit<P> {
     pub fn new() -> Self {
         Self {
             gates: BTreeMap::new(),
@@ -140,6 +142,10 @@ impl PolyCircuit {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Mul)
     }
 
+    pub fn scalar_mul_gate(&mut self, input: usize, scalar: P) -> usize {
+        self.new_gate_generic(vec![input], PolyGateType::ScalarMul { scalar })
+    }
+
     pub fn rotate_gate(&mut self, input: usize, shift: usize) -> usize {
         self.new_gate_generic(vec![input], PolyGateType::Rotate { shift })
     }
@@ -148,7 +154,7 @@ impl PolyCircuit {
         self.new_gate_generic(vec![], PolyGateType::Const { bits: bits.to_vec() })
     }
 
-    fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType) -> usize {
+    fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType<P>) -> usize {
         #[cfg(debug_assertions)]
         {
             assert_ne!(self.num_input, 0);
@@ -193,7 +199,7 @@ impl PolyCircuit {
     }
 
     /// Evaluate the circuit using an iterative approach over a precomputed topological order.
-    pub fn eval<E: Evaluable>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E> {
+    pub fn eval<E: Evaluable<P>>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E> {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), inputs.len());
@@ -234,6 +240,12 @@ impl PolyCircuit {
                     let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Mul");
                     left.clone() * right
                 }
+                PolyGateType::ScalarMul { scalar } => {
+                    let input =
+                        wires[gate.input_gates[0]].as_ref().expect("wire missing for ScalarMul");
+                    input.scalar_mul(scalar)
+                }
+
                 PolyGateType::Rotate { shift } => {
                     let input =
                         wires[gate.input_gates[0]].as_ref().expect("wire missing for Rotate");
@@ -285,7 +297,7 @@ impl PolyCircuit {
     fn inline_gate(
         &mut self,
         start_gate_id: usize,
-        sub_circuit: &PolyCircuit,
+        sub_circuit: &PolyCircuit<P>,
         gate_map: &mut BTreeMap<usize, usize>,
     ) -> usize {
         let mut stack = Vec::new();
@@ -409,6 +421,34 @@ mod tests {
 
         // Expected result: poly1 * poly2
         let expected = poly1 * poly2;
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_eval_scalar_mul() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create input polynomial using UniformSampler
+        let poly = create_random_poly(&params);
+
+        // Create scalar as a random polynomial
+        let scalar = create_random_poly(&params);
+
+        // Create a circuit with a ScalarMul operation
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let inputs = circuit.input(1);
+        let scalar_mul_gate = circuit.scalar_mul_gate(inputs[0], scalar.clone());
+        circuit.output(vec![scalar_mul_gate]);
+
+        // Evaluate the circuit
+        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[poly.clone()]);
+
+        // Expected result: poly * scalar
+        let expected = poly * scalar;
 
         // Verify the result
         assert_eq!(result.len(), 1);
