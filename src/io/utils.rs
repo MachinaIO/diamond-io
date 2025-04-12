@@ -232,8 +232,14 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let params = DCRTPolyParams::new(8192, 12, 51, 16);
+        let log_n = 13u32;
+        let n = 2u32.pow(log_n);
+        let crt_depth = 12;
+        let crt_bits = 51;
+        let base_bits = 20;
+        let params = DCRTPolyParams::new(n, crt_depth, crt_bits, base_bits);
         let log_q = params.modulus_bits();
+        debug_assert_eq!(crt_bits * crt_depth, log_q);
 
         // 2. Create a simple public circuit that takes log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
@@ -260,7 +266,11 @@ mod test {
         );
         let norm_json = serde_json::to_string(&norms).unwrap();
         use std::{fs::File, io::Write};
-        let mut file = File::create("final_bits_norm.json").unwrap();
+        let mut file = File::create(format!(
+            "final_bits_norm_n_{}_q_{}_base_{}.json",
+            log_n, log_q, base_bits
+        ))
+        .unwrap();
         file.write_all(norm_json.as_bytes()).unwrap();
     }
 }
