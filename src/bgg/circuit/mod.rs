@@ -255,7 +255,8 @@ impl<P: Poly> PolyCircuit<P> {
         // Compute a topological order of gate IDs.
         let order = self.topological_order();
         for gate_id in order {
-            // Skip if the wire has already been set (i.e. it is an input or constant)
+            // Skip if the wire has already been set (i.e. it is an input, a scalar input or
+            // constant)
             if wires[gate_id].is_some() {
                 continue;
             }
@@ -265,7 +266,7 @@ impl<P: Poly> PolyCircuit<P> {
                     panic!("Input gate {:?} should already be preloaded", gate);
                 }
                 PolyGateType::InputScalar => {
-                    panic!("Input scalar gate {:?} should already be preloaded", gate);
+                    continue;
                 }
                 PolyGateType::Const { bits } => E::from_bits(params, one, bits),
                 PolyGateType::Add => {
@@ -343,9 +344,10 @@ impl<P: Poly> PolyCircuit<P> {
         }
 
         for j in 0..sub_circuit.num_scalar_input {
-            println!("j: {}", j);
             let scalar_gate_id = sub_circuit.num_input + j + 1;
+            println!("scalar_gate_id: {}", scalar_gate_id);
             if j <= scalar_circuit_inputs.len() {
+                // print scalar_gate_id
                 gate_map.insert(scalar_gate_id, scalar_circuit_inputs[j]);
             }
         }
@@ -1069,6 +1071,77 @@ mod tests {
         // Expected result: ((poly1 * poly2) + poly3)^2
         let expected =
             ((poly1.clone() * poly2.clone()) + poly3.clone()) * ((poly1 * poly2) + poly3);
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    fn test_nested_sub_circuits_with_scalar() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create input polynomials
+        let poly1 = create_random_poly(&params);
+        let poly2 = create_random_poly(&params);
+        let scalar = create_random_poly(&params);
+
+        // Create the innermost sub-circuit that performs scalar multiplication
+        let mut inner_circuit = PolyCircuit::new();
+        let (inner_inputs, inner_scalar_inputs) = inner_circuit.input(1, 1);
+        let scalar_mul_gate = inner_circuit.mul_gate(inner_inputs[0], inner_scalar_inputs[0]);
+        inner_circuit.output(vec![scalar_mul_gate]);
+
+        // Create a middle sub-circuit that uses the inner sub-circuit
+        let mut middle_circuit = PolyCircuit::new();
+        let (middle_inputs, middle_scalar_inputs) = middle_circuit.input(2, 1);
+
+        // Register the inner circuit
+        let inner_circuit_id = middle_circuit.register_sub_circuit(inner_circuit);
+
+        // Call the inner circuit with the poly1 and the scalar
+        let inner_outputs = middle_circuit.call_sub_circuit(
+            inner_circuit_id,
+            &[middle_inputs[0]],
+            &[middle_scalar_inputs[0]],
+        );
+
+        // Add the result of the inner circuit with poly2
+        let add_gate = middle_circuit.add_gate(inner_outputs[0], middle_inputs[1]);
+        middle_circuit.output(vec![add_gate]);
+
+        // Create the main circuit
+        let mut main_circuit = PolyCircuit::new();
+        let (main_inputs, main_scalar_inputs) = main_circuit.input(2, 1);
+
+        // Register the middle circuit
+        let middle_circuit_id = main_circuit.register_sub_circuit(middle_circuit);
+
+        // Call the middle circuit with all inputs
+        let middle_outputs = main_circuit.call_sub_circuit(
+            middle_circuit_id,
+            &[main_inputs[0], main_inputs[1]],
+            &[main_scalar_inputs[0]],
+        );
+
+        // Multiply the result of the middle circuit with itself
+        let final_mul_gate = main_circuit.mul_gate(middle_outputs[0], middle_outputs[0]);
+
+        // Set the output of the main circuit
+        main_circuit.output(vec![final_mul_gate]);
+
+        // Evaluate the main circuit
+        let result = main_circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[poly1.clone(), poly2.clone()],
+            &[scalar.clone()],
+        );
+
+        // Expected result: ((poly1 * scalar) + poly)^2
+        let expected =
+            ((poly1.clone() * scalar.clone()) + poly2.clone()) * ((poly1 * scalar) + poly2);
 
         // Verify the result
         assert_eq!(result.len(), 1);
