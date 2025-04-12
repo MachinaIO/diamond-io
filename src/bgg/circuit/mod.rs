@@ -162,8 +162,8 @@ impl<P: Poly> PolyCircuit<P> {
         self.new_gate_generic(vec![left_input, right_input], vec![], PolyGateType::Mul)
     }
 
-    pub fn scalar_mul_gate(&mut self, left_input: usize, right_input: usize) -> usize {
-        self.new_gate_generic(vec![left_input], vec![right_input], PolyGateType::ScalarMul)
+    pub fn scalar_mul_gate(&mut self, input: usize, scalar_input: usize) -> usize {
+        self.new_gate_generic(vec![input], vec![scalar_input], PolyGateType::ScalarMul)
     }
 
     pub fn rotate_gate(&mut self, input: usize, shift: usize) -> usize {
@@ -318,15 +318,23 @@ impl<P: Poly> PolyCircuit<P> {
 
     /// Inlines the subcircuit operations directly into the main circuit instead of using call
     /// gates.
-    pub fn call_sub_circuit(&mut self, circuit_id: usize, inputs: &[usize]) -> Vec<usize> {
+    pub fn call_sub_circuit(
+        &mut self,
+        circuit_id: usize,
+        inputs: &[usize],
+        scalar_circuit_inputs: &[usize],
+    ) -> Vec<usize> {
         #[cfg(debug_assertions)]
         {
             let sub_circuit = &self.sub_circuits[&circuit_id];
             assert_eq!(inputs.len(), sub_circuit.num_input());
+            assert_eq!(scalar_circuit_inputs.len(), sub_circuit.num_scalar_input());
         }
         let mut gate_map: BTreeMap<usize, usize> = BTreeMap::new();
         let sub_circuit = self.sub_circuits.get(&circuit_id).unwrap().clone();
         for i in 0..=sub_circuit.num_input {
+            // print i
+            println!("i: {}", i);
             if i == 0 {
                 gate_map.insert(i, 0);
             } else if i <= inputs.len() {
@@ -334,11 +342,11 @@ impl<P: Poly> PolyCircuit<P> {
             }
         }
 
-        for j in 0..=sub_circuit.num_scalar_input {
-            if j == 0 {
-                gate_map.insert(j, 0);
-            } else if j <= inputs.len() {
-                gate_map.insert(j, inputs[j - 1]);
+        for j in 0..sub_circuit.num_scalar_input {
+            println!("j: {}", j);
+            let scalar_gate_id = sub_circuit.num_input + j + 1;
+            if j <= scalar_circuit_inputs.len() {
+                gate_map.insert(scalar_gate_id, scalar_circuit_inputs[j]);
             }
         }
 
@@ -969,7 +977,7 @@ mod tests {
 
         // Call the sub-circuit with the main circuit's inputs
         let sub_outputs =
-            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]]);
+            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]], &[]);
 
         // Verify we got two outputs from the sub-circuit
         assert_eq!(sub_outputs.len(), 2);
@@ -1021,8 +1029,11 @@ mod tests {
         let inner_circuit_id = middle_circuit.register_sub_circuit(inner_circuit);
 
         // Call the inner circuit with the first two inputs
-        let inner_outputs = middle_circuit
-            .call_sub_circuit(inner_circuit_id, &[middle_inputs[0], middle_inputs[1]]);
+        let inner_outputs = middle_circuit.call_sub_circuit(
+            inner_circuit_id,
+            &[middle_inputs[0], middle_inputs[1]],
+            &[],
+        );
 
         // Add the result of the inner circuit with the third input
         let add_gate = middle_circuit.add_gate(inner_outputs[0], middle_inputs[2]);
@@ -1036,8 +1047,11 @@ mod tests {
         let middle_circuit_id = main_circuit.register_sub_circuit(middle_circuit);
 
         // Call the middle circuit with all inputs
-        let middle_outputs = main_circuit
-            .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
+        let middle_outputs = main_circuit.call_sub_circuit(
+            middle_circuit_id,
+            &[main_inputs[0], main_inputs[1], main_inputs[2]],
+            &[],
+        );
 
         let scalar_mul_gate = main_circuit.mul_gate(middle_outputs[0], middle_outputs[0]);
 

@@ -430,7 +430,7 @@ mod tests {
 
         // Call the sub-circuit with the main circuit's inputs
         let sub_outputs =
-            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]]);
+            main_circuit.call_sub_circuit(sub_circuit_id, &[main_inputs[0], main_inputs[1]], &[]);
 
         // Verify we got two outputs from the sub-circuit
         assert_eq!(sub_outputs.len(), 2);
@@ -491,8 +491,11 @@ mod tests {
         let inner_circuit_id = middle_circuit.register_sub_circuit(inner_circuit);
 
         // Call the inner circuit with the first two inputs
-        let inner_outputs = middle_circuit
-            .call_sub_circuit(inner_circuit_id, &[middle_inputs[0], middle_inputs[1]]);
+        let inner_outputs = middle_circuit.call_sub_circuit(
+            inner_circuit_id,
+            &[middle_inputs[0], middle_inputs[1]],
+            &[],
+        );
 
         // Add the result of the inner circuit with the third input
         let add_gate = middle_circuit.add_gate(inner_outputs[0], middle_inputs[2]);
@@ -506,8 +509,11 @@ mod tests {
         let middle_circuit_id = main_circuit.register_sub_circuit(middle_circuit);
 
         // Call the middle circuit with all inputs
-        let middle_outputs = main_circuit
-            .call_sub_circuit(middle_circuit_id, &[main_inputs[0], main_inputs[1], main_inputs[2]]);
+        let middle_outputs = main_circuit.call_sub_circuit(
+            middle_circuit_id,
+            &[main_inputs[0], main_inputs[1], main_inputs[2]],
+            &[],
+        );
 
         // Use the output for square
         let square_gate = main_circuit.mul_gate(middle_outputs[0], middle_outputs[0]);
