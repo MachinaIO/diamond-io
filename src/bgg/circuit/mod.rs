@@ -9,6 +9,8 @@ use std::{
     fmt::Debug,
 };
 pub use utils::*;
+
+use crate::utils::debug_mem;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PolyCircuit {
     gates: BTreeMap<usize, PolyGate>,
@@ -205,47 +207,69 @@ impl PolyCircuit {
         for (idx, input) in inputs.iter().enumerate() {
             wires[idx + 1] = Some(input.clone());
         }
+        debug_mem("Input wires are set");
 
         // Compute a topological order of gate IDs.
         let order = self.topological_order();
+        debug_mem("Order is computed");
+
         for gate_id in order {
+            debug_mem(format!("Gate id {} started", gate_id));
             // Skip if the wire has already been set (i.e. it is an input or constant)
             if wires[gate_id].is_some() {
                 continue;
             }
             let gate = self.gates.get(&gate_id).expect("gate not found");
+            debug_mem("Get gate");
             let result = match &gate.gate_type {
                 PolyGateType::Input => {
                     panic!("Input gate {:?} should already be preloaded", gate);
                 }
                 PolyGateType::Const { digits } => E::from_digits(params, one, &digits),
                 PolyGateType::Add => {
+                    debug_mem("Add gate start");
                     let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Add");
                     let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Add");
-                    left.clone() + right
+                    let result = left.clone() + right;
+                    debug_mem("Add gate end");
+                    result
                 }
                 PolyGateType::Sub => {
+                    debug_mem("Sub gate start");
                     let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Sub");
                     let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Sub");
-                    left.clone() - right
+                    let result = left.clone() - right;
+                    debug_mem("Sub gate end");
+                    result
                 }
                 PolyGateType::Mul => {
+                    debug_mem("Mul gate start");
                     let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Mul");
                     let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Mul");
-                    left.clone() * right
+                    let result = left.clone() * right;
+                    debug_mem("Mul gate end");
+                    result
                 }
                 PolyGateType::Rotate { shift } => {
+                    debug_mem("Rotate gate start");
                     let input =
                         wires[gate.input_gates[0]].as_ref().expect("wire missing for Rotate");
-                    input.rotate(params, *shift)
+                    let result = input.rotate(params, *shift);
+                    debug_mem("Rotate gate end");
+                    result
                 }
                 PolyGateType::Call { .. } => {
                     panic!("no more call gate type during evaluation");
                 }
             };
             wires[gate_id] = Some(result);
+            debug_mem(format!("Gate id {} finished", gate_id));
         }
-        self.output_ids.iter().map(|&id| wires[id].take().expect("output missing")).collect()
+        debug_mem("All gates are evaluated");
+        let outputs =
+            self.output_ids.iter().map(|&id| wires[id].take().expect("output missing")).collect();
+        debug_mem("Outputs are collected");
+        outputs
     }
 
     pub fn register_sub_circuit(&mut self, sub_circuit: Self) -> usize {

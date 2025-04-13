@@ -1,5 +1,8 @@
 use super::circuit::Evaluable;
-use crate::poly::{Poly, PolyMatrix};
+use crate::{
+    poly::{Poly, PolyMatrix},
+    utils::debug_mem,
+};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
@@ -59,9 +62,13 @@ impl<M: PolyMatrix> Mul for BggPublicKey<M> {
 impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn mul(self, other: &Self) -> Self {
+        debug_mem(format!("BGGPublicKey::mul {:?}, {:?}", self.matrix.size(), other.matrix.size()));
         let decomposed = other.matrix.decompose();
+        debug_mem("BGGPublicKey::mul decomposed");
         let matrix = self.matrix.clone() * decomposed;
+        debug_mem("BGGPublicKey::mul matrix multiplied");
         let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        debug_mem("BGGPublicKey::mul reveal_plaintext");
         Self { matrix, reveal_plaintext }
     }
 }
@@ -69,15 +76,21 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+        debug_mem(format!("BGGPublicKey::rotate {:?}, {:?}", self.matrix.size(), shift));
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
+        debug_mem("BGGPublicKey::rotate rotate_poly");
         let matrix = self.matrix.clone() * rotate_poly;
+        debug_mem("BGGPublicKey::rotate matrix multiplied");
         Self { matrix, reveal_plaintext: self.reveal_plaintext }
     }
 
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self {
+        debug_mem(format!("BGGPublicKey::from_digits {:?}, {:?}", one.matrix.size(), digits.len()));
         let const_poly =
             <M::P as Evaluable>::from_digits(params, &<M::P>::const_one(params), digits);
+        debug_mem("BGGPublicKey::from_digits const_poly");
         let matrix = one.matrix.clone() * const_poly;
+        debug_mem("BGGPublicKey::from_digits matrix multiplied");
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 }
