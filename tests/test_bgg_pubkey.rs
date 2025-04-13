@@ -15,6 +15,7 @@ use diamond_io::{
 };
 use keccak_asm::Keccak256;
 use rand::Rng;
+use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 
 #[test]
 fn test_build_final_step_circuit() {
@@ -86,7 +87,7 @@ fn test_build_final_step_circuit() {
     log_mem("Evaluated outputs");
 
     let output_ints = eval_outputs
-        .chunks(log_base_q)
+        .par_chunks(log_base_q)
         .map(|bits| BggPublicKey::digits_to_int(bits, &params))
         .collect::<Vec<_>>();
     log_mem("Converted outputs to integers");

@@ -375,7 +375,7 @@ impl PolyCircuit {
         // debug_mem("All gates are evaluated");
         let outputs = self
             .output_ids
-            .iter()
+            .par_iter()
             .map(|&id| wires.get(&id).expect("output missing").clone())
             .collect();
         debug_mem("Outputs are collected");

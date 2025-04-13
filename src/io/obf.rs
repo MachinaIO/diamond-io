@@ -14,6 +14,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
+use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::sync::Arc;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
@@ -240,9 +241,9 @@ where
         log_mem("Evaluated outputs");
         assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
-            .chunks(log_base_q)
+            .par_chunks(log_base_q)
             .map(|bits| BggPublicKey::digits_to_int(bits, &params))
-            .collect_vec();
+            .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
