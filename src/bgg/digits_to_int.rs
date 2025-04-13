@@ -1,15 +1,18 @@
 use super::{circuit::Evaluable, BggEncoding, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix, PolyParams};
+use rayon::prelude::*;
 pub trait DigitsToInt<P: Poly>: Evaluable {
     fn power_of_base(&self, params: &P::Params, k: usize) -> Self;
     fn digits_to_int(digits: &[Self], params: &P::Params) -> Self {
         let log_base_q = params.modulus_digits();
         debug_assert_eq!(digits.len(), log_base_q);
-        let mut result = digits[0].power_of_base(params, 0);
-        for (i, digit) in digits[1..].iter().enumerate() {
-            result = result + digit.power_of_base(params, i + 1);
-        }
-        result
+
+        digits
+            .par_iter()
+            .enumerate()
+            .map(|(i, digit)| digit.power_of_base(params, i))
+            .reduce_with(|a, b| a + b)
+            .unwrap()
     }
 }
 
