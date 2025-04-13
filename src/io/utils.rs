@@ -4,9 +4,8 @@ use crate::{
         sampler::*,
         BggPublicKey,
     },
-    poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
+    poly::{sampler::*, Poly, PolyMatrix, PolyParams},
 };
-use itertools::Itertools;
 use std::marker::PhantomData;
 
 use super::params::ObfuscationParams;
@@ -217,7 +216,7 @@ mod test {
         let output_ints = circuit_outputs
             .chunks(log_q)
             .map(|bits| DCRTPoly::digits_to_int(bits, &params))
-            .collect_vec();
+            .collect::<Vec<_>>();
         assert_eq!(output_ints.len(), 1);
         let output_bits = output_ints
             .iter()
@@ -232,9 +231,9 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let log_n = 12u32;
+        let log_n = 13u32;
         let n = 2u32.pow(log_n);
-        let crt_depth = 8;
+        let crt_depth = 23;
         let crt_bits = 51;
         let base_bits = 20;
         let params = DCRTPolyParams::new(n, crt_depth, crt_bits, base_bits);

@@ -1,5 +1,5 @@
 use super::circuit::{Evaluable, PolyCircuit};
-use crate::{impl_binop_with_refs, poly::dcrt::matrix::base};
+use crate::impl_binop_with_refs;
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};

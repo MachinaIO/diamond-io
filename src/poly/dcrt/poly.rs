@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use rayon::prelude::*;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
