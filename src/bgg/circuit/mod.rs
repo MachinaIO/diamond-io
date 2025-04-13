@@ -2,10 +2,12 @@ pub mod eval;
 pub mod gate;
 pub mod serde;
 pub mod utils;
+use dashmap::DashMap;
 pub use eval::*;
 pub use gate::{PolyGate, PolyGateType};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
 };
 pub use utils::*;
@@ -194,6 +196,39 @@ impl PolyCircuit {
         order
     }
 
+    /// Computes a levelized grouping of gate ids.
+    /// Input wires (keys 0..=num_input) are assigned level 0.
+    /// Each non‐input gate's level is defined as max(levels of its inputs) + 1.
+    fn compute_levels(&self) -> Vec<Vec<usize>> {
+        let mut gate_levels: HashMap<usize, usize> = HashMap::new();
+        let mut levels: Vec<Vec<usize>> = vec![vec![]];
+        for i in 0..=self.num_input {
+            gate_levels.insert(i, 0);
+        }
+        let orders = self.topological_order();
+        for gate_id in orders.into_iter() {
+            let gate = self.gates.get(&gate_id).expect("gate not found");
+            if gate.input_gates.len() == 0 {
+                gate_levels.insert(gate_id, 0);
+                levels[0].push(gate_id);
+                continue;
+            }
+            let level = gate
+                .input_gates
+                .iter()
+                .map(|id| *gate_levels.get(id).expect("input gate not found"))
+                .max()
+                .expect("max level not found") +
+                1;
+            gate_levels.insert(gate_id, level);
+            if levels.len() <= level {
+                levels.resize(level + 1, vec![]);
+            }
+            levels[level].push(gate_id);
+        }
+        levels
+    }
+
     /// Evaluate the circuit using an iterative approach over a precomputed topological order.
     pub fn eval<E: Evaluable>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E> {
         #[cfg(debug_assertions)]
@@ -201,73 +236,148 @@ impl PolyCircuit {
             assert_eq!(self.num_input(), inputs.len());
             assert_ne!(self.num_output(), 0);
         }
-        let num_gates = self.gates.len();
-        let mut wires: Vec<Option<E>> = vec![None; num_gates];
-        wires[0] = Some(one.clone());
+
+        let wires = DashMap::new();
+        let levels = self.compute_levels();
+        debug_mem(format!("Levels: {:?}", levels));
+        debug_mem("Levels are computed");
+
+        wires.insert(0, one.clone());
         for (idx, input) in inputs.iter().enumerate() {
-            wires[idx + 1] = Some(input.clone());
+            wires.insert(idx + 1, input.clone());
         }
         debug_mem("Input wires are set");
 
-        // Compute a topological order of gate IDs.
-        let order = self.topological_order();
-        debug_mem("Order is computed");
-
-        for gate_id in order {
-            debug_mem(format!("Gate id {} started", gate_id));
-            // Skip if the wire has already been set (i.e. it is an input or constant)
-            if wires[gate_id].is_some() {
-                continue;
-            }
-            let gate = self.gates.get(&gate_id).expect("gate not found");
-            debug_mem("Get gate");
-            let result = match &gate.gate_type {
-                PolyGateType::Input => {
-                    panic!("Input gate {:?} should already be preloaded", gate);
+        for level in levels.iter() {
+            debug_mem("New level started");
+            // All gates in the same level can be processed in parallel.
+            level.par_iter().for_each(|&gate_id| {
+                debug_mem(format!("Gate id {} started", gate_id));
+                if wires.contains_key(&gate_id) {
+                    debug_mem(format!("Gate id {} already evaluated", gate_id));
+                    return;
                 }
-                PolyGateType::Const { digits } => E::from_digits(params, one, &digits),
-                PolyGateType::Add => {
-                    debug_mem("Add gate start");
-                    let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Add");
-                    let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Add");
-                    let result = left.clone() + right;
-                    debug_mem("Add gate end");
-                    result
-                }
-                PolyGateType::Sub => {
-                    debug_mem("Sub gate start");
-                    let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Sub");
-                    let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Sub");
-                    let result = left.clone() - right;
-                    debug_mem("Sub gate end");
-                    result
-                }
-                PolyGateType::Mul => {
-                    debug_mem("Mul gate start");
-                    let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for Mul");
-                    let right = wires[gate.input_gates[1]].as_ref().expect("wire missing for Mul");
-                    let result = left.clone() * right;
-                    debug_mem("Mul gate end");
-                    result
-                }
-                PolyGateType::Rotate { shift } => {
-                    debug_mem("Rotate gate start");
-                    let input =
-                        wires[gate.input_gates[0]].as_ref().expect("wire missing for Rotate");
-                    let result = input.rotate(params, *shift);
-                    debug_mem("Rotate gate end");
-                    result
-                }
-                PolyGateType::Call { .. } => {
-                    panic!("no more call gate type during evaluation");
-                }
-            };
-            wires[gate_id] = Some(result);
-            debug_mem(format!("Gate id {} finished", gate_id));
+                let gate = self.gates.get(&gate_id).expect("gate not found").clone();
+                debug_mem("Get gate");
+                let result = match &gate.gate_type {
+                    PolyGateType::Input => {
+                        panic!("Input gate {:?} should already be preloaded", gate);
+                    }
+                    PolyGateType::Const { digits } => E::from_digits(params, one, &digits),
+                    PolyGateType::Add => {
+                        debug_mem("Add gate start");
+                        let left =
+                            wires.get(&gate.input_gates[0]).expect("wire missing for Add").clone();
+                        let right =
+                            wires.get(&gate.input_gates[1]).expect("wire missing for Add").clone();
+                        let result = left.clone() + right;
+                        debug_mem("Add gate end");
+                        result
+                    }
+                    PolyGateType::Sub => {
+                        debug_mem("Sub gate start");
+                        let left =
+                            wires.get(&gate.input_gates[0]).expect("wire missing for Sub").clone();
+                        let right =
+                            wires.get(&gate.input_gates[1]).expect("wire missing for Sub").clone();
+                        let result = left.clone() - right;
+                        debug_mem("Sub gate end");
+                        result
+                    }
+                    PolyGateType::Mul => {
+                        debug_mem("Mul gate start");
+                        let left =
+                            wires.get(&gate.input_gates[0]).expect("wire missing for Mul").clone();
+                        let right =
+                            wires.get(&gate.input_gates[1]).expect("wire missing for Mul").clone();
+                        let result = left.clone() * right;
+                        debug_mem("Mul gate end");
+                        result
+                    }
+                    PolyGateType::Rotate { shift } => {
+                        debug_mem("Rotate gate start");
+                        let input = wires
+                            .get(&gate.input_gates[0])
+                            .expect("wire missing for Rotate")
+                            .clone();
+                        let result = input.rotate(params, *shift);
+                        debug_mem("Rotate gate end");
+                        result
+                    }
+                    PolyGateType::Call { .. } => {
+                        panic!("no more call gate type during evaluation");
+                    }
+                };
+                wires.insert(gate_id, result);
+                debug_mem(format!("Gate id {} finished", gate_id));
+            });
+            debug_mem("Evaluated gate in parallel");
         }
-        debug_mem("All gates are evaluated");
-        let outputs =
-            self.output_ids.iter().map(|&id| wires[id].take().expect("output missing")).collect();
+
+        // let mut wires: Vec<Option<E>> = vec![None; num_gates];
+
+        // // Compute a topological order of gate IDs.
+        // let order = self.topological_order();
+        // debug_mem("Order is computed");
+
+        // for gate_id in order {
+        //     debug_mem(format!("Gate id {} started", gate_id));
+        //     // Skip if the wire has already been set (i.e. it is an input or constant)
+        //     if wires[gate_id].is_some() {
+        //         continue;
+        //     }
+        //     let gate = self.gates.get(&gate_id).expect("gate not found");
+        //     debug_mem("Get gate");
+        //     let result = match &gate.gate_type {
+        //         PolyGateType::Input => {
+        //             panic!("Input gate {:?} should already be preloaded", gate);
+        //         }
+        //         PolyGateType::Const { digits } => E::from_digits(params, one, &digits),
+        //         PolyGateType::Add => {
+        //             debug_mem("Add gate start");
+        //             let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for
+        // Add");             let right = wires[gate.input_gates[1]].as_ref().expect("wire
+        // missing for Add");             let result = left.clone() + right;
+        //             debug_mem("Add gate end");
+        //             result
+        //         }
+        //         PolyGateType::Sub => {
+        //             debug_mem("Sub gate start");
+        //             let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for
+        // Sub");             let right = wires[gate.input_gates[1]].as_ref().expect("wire
+        // missing for Sub");             let result = left.clone() - right;
+        //             debug_mem("Sub gate end");
+        //             result
+        //         }
+        //         PolyGateType::Mul => {
+        //             debug_mem("Mul gate start");
+        //             let left = wires[gate.input_gates[0]].as_ref().expect("wire missing for
+        // Mul");             let right = wires[gate.input_gates[1]].as_ref().expect("wire
+        // missing for Mul");             let result = left.clone() * right;
+        //             debug_mem("Mul gate end");
+        //             result
+        //         }
+        //         PolyGateType::Rotate { shift } => {
+        //             debug_mem("Rotate gate start");
+        //             let input =
+        //                 wires[gate.input_gates[0]].as_ref().expect("wire missing for Rotate");
+        //             let result = input.rotate(params, *shift);
+        //             debug_mem("Rotate gate end");
+        //             result
+        //         }
+        //         PolyGateType::Call { .. } => {
+        //             panic!("no more call gate type during evaluation");
+        //         }
+        //     };
+        //     wires[gate_id] = Some(result);
+        //     debug_mem(format!("Gate id {} finished", gate_id));
+        // }
+        // debug_mem("All gates are evaluated");
+        let outputs = self
+            .output_ids
+            .iter()
+            .map(|&id| wires.get(&id).expect("output missing").clone())
+            .collect();
         debug_mem("Outputs are collected");
         outputs
     }

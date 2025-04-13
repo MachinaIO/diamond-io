@@ -8,6 +8,8 @@ use std::{
 pub trait Evaluable:
     Debug
     + Clone
+    + Send
+    + Sync
     + Add<Output = Self>
     + Sub<Output = Self>
     + Mul<Output = Self>
@@ -15,7 +17,7 @@ pub trait Evaluable:
     + for<'a> Sub<&'a Self, Output = Self>
     + for<'a> Mul<&'a Self, Output = Self>
 {
-    type Params: Debug + Clone;
+    type Params: Debug + Clone + Send + Sync;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
 }
