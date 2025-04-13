@@ -2,8 +2,10 @@ use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
     poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
+    utils::log_mem,
 };
 use itertools::Itertools;
+use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::sync::Arc;
 
 impl<M> Obfuscation<M>
@@ -28,6 +30,7 @@ where
         debug_assert_eq!(inputs.len(), obf_params.input_size);
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
         let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+        log_mem("Sampled public data");
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
@@ -49,6 +52,7 @@ where
                 )
             })
             .collect_vec();
+        log_mem("Sampled public keys");
 
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
@@ -82,21 +86,26 @@ where
         for (idx, input) in inputs.iter().enumerate() {
             let m = if *input { &self.m_preimages[idx][1] } else { &self.m_preimages[idx][0] };
             let q = ps[idx].clone() * m;
+            log_mem(format!("q at {} computed", idx));
             let n = if *input { &self.n_preimages[idx][1] } else { &self.n_preimages[idx][0] };
             let p = q.clone() * n;
+            log_mem(format!("p at {} computed", idx));
             let k = if *input { &self.k_preimages[idx][1] } else { &self.k_preimages[idx][0] };
             let v = q.clone() * k;
+            log_mem(format!("v at {} computed", idx));
             let new_encode_vec = {
                 let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
                 let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
                 encode_vec.mul_tensor_identity_decompose(t, packed_input_size + 1) + v
             };
+            log_mem(format!("new_encode_vec at {} computed", idx));
             let mut new_encodings = vec![];
             let inserted_poly_index = 1 + idx / dim;
             for (j, encode) in encodings[idx].iter().enumerate() {
                 let m = d1 * log_base_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
+                log_mem(format!("new_vec at {}, {} computed", idx, j));
                 let plaintext = if j == inserted_poly_index {
                     let inserted_coeff_index = idx % dim;
                     let mut coeffs = encode.plaintext.as_ref().unwrap().coeffs().clone();
@@ -109,9 +118,11 @@ where
                 } else {
                     encode.plaintext.clone()
                 };
+                log_mem(format!("plaintext at {}, {} computed", idx, j));
                 let new_pubkey = pubkeys[idx + 1][j].clone();
                 let new_encode: BggEncoding<M> =
                     BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
+                log_mem(format!("new_encode at {}, {} computed", idx, j));
                 new_encodings.push(new_encode);
             }
             ps.push(p.clone());
@@ -171,26 +182,32 @@ where
         }
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
         let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
+        log_mem("a,b decomposed");
         let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
             b_decomposed,
             obf_params.public_circuit.clone(),
         );
+        log_mem("final_circuit built");
         let last_input_encodings = encodings.last().unwrap();
         let output_encodings = final_circuit.eval::<BggEncoding<M>>(
             params.as_ref(),
             &last_input_encodings[0],
             &last_input_encodings[1..],
         );
+        log_mem("final_circuit evaluated");
         let output_encoding_ints = output_encodings
-            .chunks(log_base_q)
+            .par_chunks(log_base_q)
             .map(|bits| BggEncoding::digits_to_int(bits, &params))
-            .collect_vec();
+            .collect::<Vec<_>>();
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
+        log_mem("final_circuit evaluated and recomposed");
         let final_preimage = &self.final_preimage;
         let final_v = ps.last().unwrap().clone() * final_preimage;
+        log_mem("final_v computed");
         let z = output_encodings_vec.clone() - final_v.clone();
+        log_mem("z computed");
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
