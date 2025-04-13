@@ -210,7 +210,16 @@ where
                 assert_eq!(output_encoding_ints[0].vector, expected);
             }
             assert_eq!(z.size(), (1, packed_output_size));
-            assert_eq!(z.entry(0, 0), output_encoding_ints[0].plaintext.clone().unwrap());
+            if inputs[0] {
+                assert_eq!(
+                    output_encoding_ints[0]
+                        .plaintext
+                        .clone()
+                        .unwrap()
+                        .extract_bits_with_threshold(&params),
+                    self.hardcoded_key.to_bool_vec()
+                );
+            }
         }
         z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
     }

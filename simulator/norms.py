@@ -12,7 +12,7 @@ class CircuitNorms:
     a list of lists of integers.
     """
 
-    def __init__(self, h_norms: List[List[int]], log_q: int):
+    def __init__(self, h_norms: List[List[int]], log_base_q: int):
         """
         Initialize a CircuitNorms object.
 
@@ -20,10 +20,10 @@ class CircuitNorms:
             h_norms: List of lists of integers representing the norms.
         """
         self.h_norms = h_norms
-        self.log_q = log_q
+        self.log_base_q = log_base_q
 
     @classmethod
-    def from_json(cls, json_data: dict, log_q: int) -> "CircuitNorms":
+    def from_json(cls, json_data: dict, log_base_q: int) -> "CircuitNorms":
         """
         Create a CircuitNorms object from JSON data.
 
@@ -42,10 +42,10 @@ class CircuitNorms:
         for norm_list in json_data["h_norms"]:
             h_norms.append([int(value) for value in norm_list])
 
-        return cls(h_norms, log_q)
+        return cls(h_norms, log_base_q)
 
     @classmethod
-    def load_from_file(cls, file_path: str, log_q: int) -> "CircuitNorms":
+    def load_from_file(cls, file_path: str, log_base_q: int) -> "CircuitNorms":
         """
         Load a CircuitNorms object from a JSON file.
 
@@ -61,7 +61,7 @@ class CircuitNorms:
         with open(file_path, "r") as f:
             json_data = json.load(f)
 
-        return cls.from_json(json_data, log_q)
+        return cls.from_json(json_data, log_base_q)
 
     def get_h_norms(self) -> List[List[int]]:
         """
@@ -72,21 +72,20 @@ class CircuitNorms:
         """
         return self.h_norms
 
-    def compute_norms(
-        self,
-        m: int,
-    ) -> List[int]:
+    def compute_norms(self, m_sqrt: int, n_sqrt: int, base: int) -> List[int]:
         bit_norms = [0 for _ in range(len(self.h_norms))]
         max_deg = max([len(norm) for norm in self.h_norms])
-        power_ms = [m**i for i in range(max_deg)]
+        power_ms = [m_sqrt**i for i in range(max_deg)]
         for coeffs in self.h_norms:
             for i, coeff in enumerate(coeffs):
                 bit_norms[i] += coeff * power_ms[i]
-        assert len(bit_norms) % self.log_q == 0
-        norms = [
-            sum(bit_norms[i : i + self.log_q])
-            for i in range(0, len(bit_norms), self.log_q)
-        ]
+        assert len(bit_norms) % self.log_base_q == 0
+        norms = []
+        for i in range(0, len(bit_norms), self.log_base_q):
+            sum = 0
+            for j in range(self.log_base_q):
+                sum += bit_norms[self.log_base_q * i + j] * (base - 1) * n_sqrt * m_sqrt
+            norms.append(sum)
         return norms
 
     def __len__(self) -> int:

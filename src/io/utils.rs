@@ -232,9 +232,9 @@ mod test {
     #[test]
     fn test_simulate_norm_final_bits_circuit() {
         // 1. Set up parameters
-        let log_n = 13u32;
+        let log_n = 12u32;
         let n = 2u32.pow(log_n);
-        let crt_depth = 12;
+        let crt_depth = 8;
         let crt_bits = 51;
         let base_bits = 20;
         let params = DCRTPolyParams::new(n, crt_depth, crt_bits, base_bits);
@@ -268,8 +268,8 @@ mod test {
         let norm_json = serde_json::to_string(&norms).unwrap();
         use std::{fs::File, io::Write};
         let mut file = File::create(format!(
-            "final_bits_norm_n_{}_q_{}_base_{}.json",
-            log_n, log_q, base_bits
+            "final_bits_norm_n_{}_crt_{}_depth_{}_base_{}.json",
+            log_n, crt_bits, crt_depth, base_bits
         ))
         .unwrap();
         file.write_all(norm_json.as_bytes()).unwrap();

@@ -17,10 +17,11 @@ def log_params_to_file(
     secpar: int,
     n: int,
     d: int,
-    base: int,
+    base_bits: int,
     input_size: int,
     norms_path: str,
-    q: int,
+    crt_bits: int,
+    crt_depth: int,
     stddev_e_encoding: int,
     stddev_e_hardcode: int,
     stddev_e_p: int,
@@ -31,8 +32,9 @@ def log_params_to_file(
     """
     Log parameters to params.log file
     """
-    # Calculate log_q and log_p
-    log_q = math.log2(q)
+    # Calculate log_q, q, and log_p
+    log_q = crt_bits * crt_depth
+    q = 2 ** (log_q + 1) - 1
     log_p = math.log2(p)
 
     # Get current date and time
@@ -47,7 +49,9 @@ def log_params_to_file(
         f"secpar={secpar}, "
         f"n={n}, "
         f"d={d}, "
-        f"base={base}, "
+        f"crt_bits={crt_bits}, "
+        f"crt_depth={crt_depth}, "
+        f"base_bits={base_bits}, "
         f"input_size={input_size}, "
         f"norms_path={norms_path}, "
         f"q={q}, "
@@ -72,31 +76,33 @@ def find_params(
     target_secpar: int,
     n: int,
     d: int,
-    base: int,
-    max_log_q: int,
+    base_bits: int,
+    crt_bits: int,
+    max_crt_depth: int,
     input_size: int,
     norms_path: str,
 ):
-    min_q_k = target_secpar + 2
-    max_q_k = max_log_q
-    # middle_q_k = math.floor((min_q_k + max_q_k) // 2)
-    circuit_norms = CircuitNorms.load_from_file(norms_path, max_log_q)
+    # crt_bits * depth >= target_secpar+2 => depth >= (target_secpar+2) / crt_bits
+    min_crt_depth = math.ceil((target_secpar + 2) / crt_bits)
+    max_log_base_q = math.ceil(crt_bits / base_bits) * max_crt_depth
+    print(f"max_log_base_q: {max_log_base_q}")
+    circuit_norms = CircuitNorms.load_from_file(norms_path, max_log_base_q)
     found_params = []
     iters = 0
-    while min_q_k + 1 < max_q_k and iters < 100:
+    while min_crt_depth + 1 < max_crt_depth and iters < 100:
         iters += 1
-        q_k = math.floor((min_q_k + max_q_k) // 2)
-        q = 2 ** (q_k)
-        print(f"min_q_k: {min_q_k}")
-        print(f"max_q_k: {max_q_k}")
-        print(f"q_k: {q_k}")
+        crt_depth = math.floor((min_crt_depth + max_crt_depth) // 2)
+        q = 2 ** (crt_bits * crt_depth + 1) - 1
+        print(f"min_crt_depth: {min_crt_depth}")
+        print(f"max_crt_depth: {max_crt_depth}")
+        print(f"crt_depth: {crt_depth}")
         print(f"q: {q}")
 
         min_alpha_ks = []
         for i in range(3):
             found_alpha_ks = []
             dist = Binary
-            min_alpha_k = -q_k + 2
+            min_alpha_k = -crt_bits * crt_depth + 2
             max_alpha_k = -1
             if i == 0:
                 # encoding sigma
@@ -113,7 +119,7 @@ def find_params(
                 print(f"min_alpha_k: {min_alpha_k}")
                 print(f"max_alpha_k: {max_alpha_k}")
                 print(f"alpha_k: {alpha_k}")
-                stddev_e = Decimal(2 ** Decimal(q_k + alpha_k))
+                stddev_e = Decimal(2 ** Decimal(crt_bits * crt_depth + alpha_k))
                 estimated_secpar = estimate_secpar(total_n, q, dist, stddev_e)
                 print("target_secpar:", target_secpar)
                 print("estimated_secpar:", estimated_secpar)
@@ -132,7 +138,7 @@ def find_params(
             min_alpha_ks.append(min(found_alpha_ks))
         if len(min_alpha_ks) < 3:
             print("not enough alpha_ks")
-            max_q_k = q_k
+            max_crt_depth = crt_depth
             continue
         alpha_encoding_k = Decimal(min_alpha_ks[0])
         alpha_hardcode_k = Decimal(min_alpha_ks[1])
@@ -177,15 +183,16 @@ def find_params(
             print(
                 f"target_secpar {target_secpar} > estimated_secpar {min_estimated_secpar}"
             )
-            max_q_k = q_k
+            max_crt_depth = crt_depth
             continue
         try:
             p = find_p(
                 target_secpar,
                 n,
-                q,
+                crt_bits,
+                crt_depth,
                 d,
-                base,
+                base_bits,
                 stddev_e_encoding,
                 stddev_e_hardcode,
                 stddev_e_p,
@@ -193,10 +200,10 @@ def find_params(
                 circuit_norms,
             )
             print(f"found p: {p}")
-            max_q_k = q_k
+            max_crt_depth = crt_depth
             found_params.append(
                 (
-                    q,
+                    crt_depth,
                     stddev_e_encoding,
                     stddev_e_hardcode,
                     stddev_e_p,
@@ -206,24 +213,29 @@ def find_params(
             )
         except ValueError as e:
             print(f"ValueError: {e}")
-            min_q_k = q_k
+            min_crt_depth = crt_depth
     if found_params == []:
         raise ValueError("p is not found after binary search")
     # minimum q in found_params
-    (q, stddev_e_encoding, stddev_e_hardcode, stddev_e_p, p, estimated_secpar) = min(
-        found_params, key=lambda x: x[0]
-    )
-    log_q = math.ceil(math.log2(q))
+    (
+        crt_depth,
+        stddev_e_encoding,
+        stddev_e_hardcode,
+        stddev_e_p,
+        p,
+        estimated_secpar,
+    ) = min(found_params, key=lambda x: x[0])
     size = compute_obf_size(
         n,
-        log_q,
+        crt_bits,
+        crt_depth,
         d,
-        base,
+        2**base_bits,
         input_size,
         1,
     )
     return (
-        q,
+        crt_depth,
         stddev_e_encoding,
         stddev_e_hardcode,
         stddev_e_p,
@@ -236,22 +248,24 @@ def find_params(
 def find_p(
     secpar: int,
     n: int,
-    q: int,
+    crt_bits: int,
+    crt_depth: int,
     d: int,
-    base: int,
+    base_bits: int,
     stddev_e_encoding: int,
     stddev_e_hardcode: int,
     stddev_e_p: int,
     input_size: int,
     circuit_norms: CircuitNorms,
 ):
-    log_q = math.ceil(math.log2(q))
-    log_t_q = math.ceil(log_q / math.log2(base))
-    norm_b = compute_norm_b(n, log_t_q, d, base)
-    final_err = bound_final_error(
+    log_q = crt_bits * crt_depth
+    log_base_q = math.ceil(crt_bits / base_bits) * crt_depth
+    base = 2**base_bits
+    norm_b = compute_norm_b(n, log_base_q, d, base)
+    (final_err, bound_s) = bound_final_error(
         secpar,
         n,
-        log_t_q,
+        log_base_q,
         d,
         base,
         stddev_e_encoding,
@@ -263,13 +277,13 @@ def find_p(
     )
 
     # Convert final_err to Decimal for high precision
-    final_err_decimal = Decimal(str(final_err))
+    # final_err_decimal = Decimal(str(final_err))
     # Calculate log2 using Decimal
     # Handle infinity or very large numbers
     if math.isinf(final_err):
         raise ValueError(f"Error: final_err is infinity.")
-    elif final_err_decimal > 0:
-        log_final_err = math.ceil(math.log2(float(final_err_decimal)))
+    elif final_err > 0:
+        log_final_err = math.ceil(math.log2(float(final_err)))
     else:
         raise ValueError(f"Cannot calculate log2 of non-positive value: {final_err}")
 
@@ -281,11 +295,8 @@ def find_p(
     print(f"log_final_err: {log_final_err}")
     # Use Decimal for high precision arithmetic
     # Convert to Decimal for high precision calculations
-    q_decimal = Decimal(q)
-    p_decimal = (q_decimal / Decimal("4")).to_integral_exact(
-        rounding="ROUND_CEILING"
-    ) - final_err_decimal
-    p = int(p_decimal)
+    prf_bound = 2 ** (log_q - 2) - (2 ** (log_final_err + 1) - 1)
+    p = math.floor(prf_bound / bound_s / n / (d + 1))
     if p < 0:
         raise ValueError(f"p should be non-negative: {p}")
 
@@ -305,7 +316,7 @@ def find_p(
 
 def compute_norm_b(
     n: int,
-    log_t_q: int,
+    log_base_q: int,
     d: int,
     base: int,
 ):
@@ -317,7 +328,7 @@ def compute_norm_b(
         * c_0
         * sigma
         * ((base + 1) * sigma)
-        * (sqrt_ceil(2 * (d + 1) * n * log_t_q) + sqrt_ceil(2 * n) + c_1)
+        * (sqrt_ceil(2 * (d + 1) * n * log_base_q) + sqrt_ceil(2 * n) + c_1)
     )
 
 
@@ -341,7 +352,7 @@ def estimate_secpar(n: int, q: int, s_dist: NoiseDistribution, stddev: int):
 def bound_final_error(
     secpar: int,
     n: int,
-    log_t_q: int,
+    log_base_q: int,
     d: int,
     base: int,
     stddev_e_encoding: int,
@@ -353,42 +364,46 @@ def bound_final_error(
 ):
     # Convert all inputs to Decimal for high precision
     # secpar_d = Decimal(secpar)
-    n_d = Decimal(n)
-    log_t_q_d = Decimal(log_t_q)
-    d_d = Decimal(d)
-    stddev_e_encoding_d = Decimal(stddev_e_encoding)
-    stddev_e_hardcode_d = Decimal(stddev_e_hardcode)
-    stddev_e_p_d = Decimal(stddev_e_p)
-    b_norm_d = Decimal(norm_b)
-    print(f"b_norm_d: {b_norm_d}")
-    m_d = (d_d + Decimal(1)) * log_t_q_d
+    n = Decimal(n)
+    n_sqrt = sqrt_ceil(n)
+    log_base_q = Decimal(log_base_q)
+    d = Decimal(d)
+    stddev_e_encoding = Decimal(stddev_e_encoding)
+    stddev_e_hardcode = Decimal(stddev_e_hardcode)
+    stddev_e_p = Decimal(stddev_e_p)
+    b_norm = Decimal(norm_b)
+    print(f"b_norm_d: {b_norm}")
+    m = (d + Decimal(1)) * log_base_q
+    m_sqrt = sqrt_ceil(m)
     # [TODO] Support outputs larger than `log_t_q`
-    h_norms_d = [Decimal(x) for x in circuit_norms.compute_norms(m_d)]
-    print(f"h_norms_d: {h_norms_d}")
-    h_norm_sum_d = sum(h_norms_d)
+    h_norms = [Decimal(x) for x in circuit_norms.compute_norms(m_sqrt, n_sqrt, base)]
+    print(f"h_norms: {h_norms}")
+    h_norm_sum = sum(h_norms)
     # Calculate intermediate values with Decimal
-    # m_b_d = Decimal(2) * (d_d + Decimal(1)) * (log_t_q_d + Decimal(2))
-    sqrt_secpar_d = Decimal(sqrt_ceil(secpar))
-    base_d = Decimal(base)
+    m_b = Decimal(2) * (d + Decimal(1)) * (log_base_q + Decimal(2))
+    sqrt_secpar = Decimal(sqrt_ceil(secpar))
+    base = Decimal(base)
 
     # Use Decimal for all calculations to maintain precision
-    bound_p_d = stddev_e_p_d * sqrt_secpar_d
-    print(f"stddev_e_p_d: {stddev_e_p_d}")
-    print(f"sqrt_secpar_d: {sqrt_secpar_d}")
-    print(f"stddev_e_encoding_d : {stddev_e_encoding_d}")
-    bound_c_d = stddev_e_encoding_d * sqrt_secpar_d
-    print(f"init bound_c_d: {bound_c_d}")
-    if bound_c_d < 0:
-        raise ValueError(f"bound_c_d should be non-negative: {bound_c_d}")
+    bound_p = stddev_e_p * sqrt_secpar
+    print(f"stddev_e_p: {stddev_e_p}")
+    print(f"sqrt_secpar: {sqrt_secpar}")
+    print(f"stddev_e_encoding : {stddev_e_encoding}")
+    bound_c = stddev_e_encoding * sqrt_secpar
+    print(f"init bound_c: {bound_c}")
+    if bound_c < 0:
+        raise ValueError(f"bound_c should be non-negative: {bound_c}")
+    bound_s = Decimal(1.0)
 
     for _ in range(input_size):
-        bound_v_d = (b_norm_d ** Decimal(2)) * bound_p_d
-        bound_c_d = n_d * (base_d - 1) * m_d * bound_c_d + bound_v_d
+        bound_v = n * m_b * (b_norm ** Decimal(2)) * bound_p
+        bound_c = n_sqrt * (base - 1) * bound_c * m_sqrt + bound_v
         # print(f"base_d: {base_d}")
         # print(f"m_d: {m_d}")
         # print(f"bound_c_d: {bound_c_d}")
         # print(f"base-dependent error: {n_d * (base_d-1) * m_d * bound_c_d }")
-        bound_p_d = bound_v_d
+        bound_p = bound_v
+        bound_s = bound_s * n * d
 
     # Evaluate each polynomial in m_polys at the value of m using Decimal
     # evaluated_polys_d = []
@@ -404,17 +419,27 @@ def bound_final_error(
     #     max_evaluated_poly_d = max(evaluated_polys_d)
     # else:
     #     max_evaluated_poly_d = Decimal(1)  # Default if no polynomials
-
-    bound_c_final_d = bound_c_d * h_norm_sum_d
-    bound_v_final_d = bound_p_d * b_norm_d
+    packed_input_size = Decimal(math.ceil(input_size / n))
+    bound_c_final = n_sqrt * bound_c * h_norm_sum * (packed_input_size * m)
+    bound_v_final = n_sqrt * m_sqrt * b_norm * bound_p
+    bound_rounding = bound_s
+    print(f"bound_rounding: {bound_rounding}")
+    print(f"log2(bound_rounding): {math.log2(bound_rounding)}")
 
     # Return the final result as a Decimal
-    return bound_c_final_d + bound_v_final_d + stddev_e_hardcode_d * sqrt_secpar_d
+    return (
+        bound_c_final
+        + bound_v_final
+        + stddev_e_hardcode * sqrt_secpar
+        + bound_rounding,
+        bound_s,
+    )
 
 
 def compute_obf_size(
     n: int,
-    log_q: int,
+    crt_bits: int,
+    crt_depth: int,
     d: int,
     base: int,
     input_size: int,
@@ -422,10 +447,11 @@ def compute_obf_size(
 ):
     size = 256
     packed_input_size = math.ceil(input_size / n)
-    log_t_q = math.ceil(log_q / math.log2(base))
-    m = (d + 1) * log_t_q
+    log_q = crt_bits * crt_depth
+    log_base_q = math.ceil(crt_bits / base) * crt_depth
+    m = (d + 1) * log_base_q
     print("m", m)
-    m_b = 2 * (d + 1) * (log_t_q + 2)
+    m_b = 2 * (d + 1) * (log_base_q + 2)
     print("m_b", m_b)
     encoding_init_size = log_q * n * packed_input_size * m
     print("encoding_init_size GB", encoding_init_size / 8 / 10**9)
@@ -433,7 +459,7 @@ def compute_obf_size(
     p_init_size = log_q * n * m_b
     print("p_init_size GB", p_init_size / 8 / 10**9)
     size += p_init_size
-    b_norm = Decimal(compute_norm_b(n, log_t_q, d, base))
+    b_norm = Decimal(compute_norm_b(n, log_base_q, d, base))
     bound_b_log = math.ceil(math.log2(b_norm))
     m_n_preimages_size = 4 * input_size * bound_b_log * n * m_b * m_b
     print("m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9)
@@ -457,24 +483,28 @@ def sqrt_ceil(x):
 
 
 if __name__ == "__main__":
-    secpar = 80
-    n = 2**14
-    d = 3
-    base = 2**20
-    max_log_q = 1530
-    input_size = 8
-    norms_path = "final_bits_norm_n_14_q_1530.json"
+    secpar = 20
+    n = 2**12
+    d = 1
+    base_bits = 20
+    crt_bits = 51
+    max_crt_depth = 8
+    input_size = 1
+    norms_path = "final_bits_norm_n_12_crt_51_depth_8_base_20.json"
     (
-        q,
+        crt_depth,
         stddev_e_encoding,
         stddev_e_hardcode,
         stddev_e_p,
         p,
         estimated_secpar,
         size,
-    ) = find_params(secpar, n, d, base, max_log_q, input_size, norms_path)
+    ) = find_params(
+        secpar, n, d, base_bits, crt_bits, max_crt_depth, input_size, norms_path
+    )
 
-    print(f"q: {q}, log_2 q: {math.log2(q)}")
+    print(f"crt_depth: {crt_depth}")
+    print(f"q: {2**(crt_bits * crt_depth)}, log_2 q: {crt_bits * crt_depth}")
     print(f"stddev_e_encoding: {stddev_e_encoding}")
     print(f"stddev_e_hardcode: {stddev_e_hardcode}")
     print(f"stddev_e_p: {stddev_e_p}")
@@ -486,10 +516,11 @@ if __name__ == "__main__":
         secpar,
         n,
         d,
-        base,
+        base_bits,
         input_size,
         norms_path,
-        q,
+        crt_bits,
+        crt_depth,
         stddev_e_encoding,
         stddev_e_hardcode,
         stddev_e_p,
