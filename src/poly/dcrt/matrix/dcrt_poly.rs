@@ -126,7 +126,9 @@ impl PolyMatrix for DCRTPolyMatrix {
             let entries = self.block_entries(row_offsets, col_offsets);
             let decomposed_entries: Vec<Vec<Vec<DCRTPoly>>> = parallel_iter!(0..nrow)
                 .map(|i| {
-                    (0..ncol).map(|j| self.dcrt_decompose_poly(&entries[i][j], base_bits)).collect()
+                    parallel_iter!(0..ncol)
+                        .map(|j| self.dcrt_decompose_poly(&entries[i][j], base_bits))
+                        .collect()
                 })
                 .collect();
             parallel_iter!(0..new_nrow)
@@ -134,7 +136,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                     let i = idx / log_base_q;
                     let k = idx % log_base_q;
 
-                    (0..ncol).map(|j| decomposed_entries[i][j][k].clone()).collect()
+                    parallel_iter!(0..ncol).map(|j| decomposed_entries[i][j][k].clone()).collect()
                 })
                 .collect()
         };
