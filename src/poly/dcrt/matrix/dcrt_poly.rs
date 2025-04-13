@@ -185,11 +185,12 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         let output = (0..identity_size)
             .flat_map(|i| {
+                debug_mem(format!("mul_tensor_identity_decompose at {}", i));
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
                 (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
             })
             .collect_vec();
-
+        debug_mem(format!("mul_tensor_identity_decompose output computed"));
         output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 
