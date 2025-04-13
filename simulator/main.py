@@ -19,6 +19,7 @@ def log_params_to_file(
     d: int,
     base_bits: int,
     input_size: int,
+    input_width: int,
     norms_path: str,
     crt_bits: int,
     crt_depth: int,
@@ -53,6 +54,7 @@ def log_params_to_file(
         f"crt_depth={crt_depth}, "
         f"base_bits={base_bits}, "
         f"input_size={input_size}, "
+        f"input_width={input_width}, "
         f"norms_path={norms_path}, "
         f"q={q}, "
         f"log_q={log_q}, "
@@ -80,6 +82,7 @@ def find_params(
     crt_bits: int,
     max_crt_depth: int,
     input_size: int,
+    input_width: int,
     norms_path: str,
 ):
     # crt_bits * depth >= target_secpar+2 => depth >= (target_secpar+2) / crt_bits
@@ -197,6 +200,7 @@ def find_params(
                 stddev_e_hardcode,
                 stddev_e_p,
                 input_size,
+                input_width,
                 circuit_norms,
             )
             print(f"found p: {p}")
@@ -232,6 +236,7 @@ def find_params(
         d,
         2**base_bits,
         input_size,
+        input_width,
         1,
     )
     return (
@@ -256,6 +261,7 @@ def find_p(
     stddev_e_hardcode: int,
     stddev_e_p: int,
     input_size: int,
+    input_width: int,
     circuit_norms: CircuitNorms,
 ):
     log_q = crt_bits * crt_depth
@@ -273,6 +279,7 @@ def find_p(
         stddev_e_p,
         norm_b,
         input_size,
+        input_width,
         circuit_norms,
     )
 
@@ -360,6 +367,7 @@ def bound_final_error(
     stddev_e_p: int,
     norm_b: int,
     input_size: int,
+    input_width: int,
     circuit_norms: CircuitNorms,
 ):
     # Convert all inputs to Decimal for high precision
@@ -395,7 +403,8 @@ def bound_final_error(
         raise ValueError(f"bound_c should be non-negative: {bound_c}")
     bound_s = Decimal(1.0)
 
-    for _ in range(input_size):
+    input_depth = math.ceil(input_size / input_width)
+    for _ in range(input_depth):
         bound_v = n * m_b * (b_norm ** Decimal(2)) * bound_p
         bound_c = n_sqrt * (base - 1) * bound_c * m_sqrt + bound_v
         # print(f"base_d: {base_d}")
@@ -443,6 +452,7 @@ def compute_obf_size(
     d: int,
     base: int,
     input_size: int,
+    input_width: int,
     output_size: int,
 ):
     size = 256
@@ -461,15 +471,16 @@ def compute_obf_size(
     size += p_init_size
     b_norm = Decimal(compute_norm_b(n, log_base_q, d, base))
     bound_b_log = math.ceil(math.log2(b_norm))
-    m_n_preimages_size = 4 * input_size * bound_b_log * n * m_b * m_b
-    print("m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9)
-    print(
-        "indiv m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9 / 4 / input_size
+    input_depth = math.ceil(input_size / input_width)
+    m_n_preimages_size = (
+        2 * (2**input_width) * input_depth * bound_b_log * n * m_b * m_b
     )
+    print("m_n_preimages_size GB", m_n_preimages_size / 8 / 10**9)
     size += m_n_preimages_size
-    k_preimages_size = 2 * input_size * bound_b_log * n * m_b * (packed_input_size * m)
+    k_preimages_size = (
+        (2**input_width) * input_depth * bound_b_log * n * m_b * (packed_input_size * m)
+    )
     print("k_preimage_size GB", k_preimages_size / 8 / 10**9)
-    print("indiv k_preimage_size GB", k_preimages_size / 8 / 10**9 / 2 / input_size)
     size += k_preimages_size
     packed_output_size = math.ceil(output_size / n)
     final_preimage_size = bound_b_log * n * m_b * packed_output_size
@@ -483,14 +494,17 @@ def sqrt_ceil(x):
 
 
 if __name__ == "__main__":
-    secpar = 20
-    n = 2**12
+    secpar = 80
+    n = 2**13
     d = 1
     base_bits = 20
     crt_bits = 51
-    max_crt_depth = 8
-    input_size = 1
-    norms_path = "final_bits_norm_n_12_crt_51_depth_8_base_20.json"
+    max_crt_depth = 23
+    input_size = 56
+    input_width = 7
+    if input_size % input_width != 0:
+        raise ValueError("input_size should be divisible by input_width")
+    norms_path = "final_bits_norm_n_13_crt_51_depth_23_base_20.json"
     (
         crt_depth,
         stddev_e_encoding,
@@ -500,7 +514,15 @@ if __name__ == "__main__":
         estimated_secpar,
         size,
     ) = find_params(
-        secpar, n, d, base_bits, crt_bits, max_crt_depth, input_size, norms_path
+        secpar,
+        n,
+        d,
+        base_bits,
+        crt_bits,
+        max_crt_depth,
+        input_size,
+        input_width,
+        norms_path,
     )
 
     print(f"crt_depth: {crt_depth}")
@@ -518,6 +540,7 @@ if __name__ == "__main__":
         d,
         base_bits,
         input_size,
+        input_width,
         norms_path,
         crt_bits,
         crt_depth,
