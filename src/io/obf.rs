@@ -34,7 +34,6 @@ where
 {
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
-    // let log_q = obf_params.params.modulus_bits();
     let log_base_q = obf_params.params.modulus_digits();
     debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + obf_params.input_size);
     let d = obf_params.d;
@@ -120,10 +119,12 @@ where
     log_mem("Computed p_init");
 
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
-    let level_width = 2u64.pow(obf_params.level_width as u32);
-    let mut u_bits = Vec::with_capacity((level_width + 1) as usize);
+    assert_eq!(obf_params.input_size % obf_params.level_width_exp, 0);
+    assert_eq!(dim % obf_params.level_width_exp, 0);
+    let level_width = 2u64.pow(obf_params.level_width_exp as u32) as usize;
+    let mut u_bits = Vec::with_capacity(level_width + 1);
     for i in 0..level_width {
-        let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i as usize]]);
+        let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
         u_bits.push(u_i);
     }
     let u_star = {
@@ -134,9 +135,9 @@ where
     log_mem("Computed u_0, u_1, u_star");
 
     let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![Vec::with_capacity(2); obf_params.input_size],
-        vec![Vec::with_capacity(2); obf_params.input_size],
-        vec![Vec::with_capacity(2); obf_params.input_size],
+        vec![Vec::with_capacity(level_width); obf_params.input_size],
+        vec![Vec::with_capacity(level_width); obf_params.input_size],
+        vec![Vec::with_capacity(level_width); obf_params.input_size],
     );
 
     #[cfg(feature = "test")]

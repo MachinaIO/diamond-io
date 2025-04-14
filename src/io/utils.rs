@@ -50,7 +50,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let d = obf_params.d;
-        let level_width = 2u64.pow(obf_params.level_width as u32);
+        let level_width = 2u64.pow(obf_params.level_width_exp as u32);
         let mut rs = Vec::with_capacity(level_width as usize);
         let mut rgs = Vec::with_capacity(level_width as usize);
         let one = S::M::identity(params, 1, None);

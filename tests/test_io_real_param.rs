@@ -49,7 +49,7 @@ mod test {
             params: params.clone(),
             switched_modulus,
             input_size: 1,
-            level_width: 1,
+            level_width_exp: 1,
             public_circuit: public_circuit.clone(),
             d: 1,
             encoding_sigma: 12.05698,
