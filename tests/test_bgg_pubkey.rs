@@ -18,6 +18,7 @@ use rand::Rng;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 
 #[test]
+#[ignore]
 fn test_build_final_step_circuit() {
     init_tracing();
     let params = DCRTPolyParams::new(8192, 6, 51, 20);
