@@ -44,6 +44,7 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let level_width_exp = obf_params.level_width_exp;
         let level_width = 2u32.pow(level_width_exp as u32) as usize;
+        assert!(inputs.len() % level_width_exp == 0);
         let depth = obf_params.input_size / level_width_exp;
         let pubkeys = (0..depth + 1)
             .map(|id| {
@@ -73,7 +74,7 @@ where
             let inserted_poly_gadget = {
                 let mut polys = vec![];
                 polys.push(one.clone());
-                for _ in 0..(obf_params.input_size.div_ceil(params.ring_dimension() as usize)) {
+                for _ in 0..(packed_input_size - 1) {
                     polys.push(zero.clone());
                 }
                 polys.push(self.minus_t_bar.clone());
@@ -86,46 +87,65 @@ where
         }
         let log_base_q = params.as_ref().modulus_digits();
         let dim = params.as_ref().ring_dimension() as usize;
-        for (idx, input) in inputs.iter().enumerate() {
-            let m = if *input { &self.m_preimages[idx][1] } else { &self.m_preimages[idx][0] };
-            let q = ps[idx].clone() * m;
-            log_mem(format!("q at {} computed", idx));
-            let n = if *input { &self.n_preimages[idx][1] } else { &self.n_preimages[idx][0] };
+        let nums: Vec<u64> = inputs
+            .chunks(level_width_exp)
+            .map(|chunk| {
+                chunk
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
+            })
+            .collect();
+        assert_eq!(nums.len(), depth);
+        for (level, num) in nums.iter().enumerate() {
+            let m = &self.m_preimages[level][*num as usize];
+            let q = ps[level].clone() * m;
+            log_mem(format!("q at {} computed", level));
+            let n = &self.n_preimages[level][*num as usize];
             let p = q.clone() * n;
-            log_mem(format!("p at {} computed", idx));
-            let k = if *input { &self.k_preimages[idx][1] } else { &self.k_preimages[idx][0] };
+            log_mem(format!("p at {} computed", level));
+            let k = &self.k_preimages[level][*num as usize];
             let v = q.clone() * k;
-            log_mem(format!("v at {} computed", idx));
+            log_mem(format!("v at {} computed", level));
             let new_encode_vec = {
-                let rg = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
-                let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
+                let rg = &public_data.rgs[*num as usize];
+                let encode_vec = encodings[level][0].concat_vector(&encodings[level][1..]);
                 let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
                 encode_vec.mul_tensor_identity_decompose(rg, packed_input_size + 1) + v
             };
-            log_mem(format!("new_encode_vec at {} computed", idx));
+            log_mem(format!("new_encode_vec at {} computed", level));
             let mut new_encodings = vec![];
-            let inserted_poly_index = 1 + idx / dim;
-            for (j, encode) in encodings[idx].iter().enumerate() {
+            let inserted_poly_index = 1 + (level * level_width_exp) / dim;
+            for (j, encode) in encodings[level].iter().enumerate() {
                 let m = d1 * log_base_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
-                log_mem(format!("new_vec at {}, {} computed", idx, j));
+                log_mem(format!("new_vec at {}, {} computed", level, j));
                 let plaintext = if j == inserted_poly_index {
-                    let inserted_coeff_index = idx % dim;
+                    let inserted_coeff_indices = (0..level_width_exp)
+                        .map(|i| (i + (level * level_width_exp)) % dim)
+                        .collect_vec();
                     let mut coeffs = encode.plaintext.as_ref().unwrap().coeffs().clone();
-                    coeffs[inserted_coeff_index] = if *input {
-                        <M::P as Poly>::Elem::one(&params.modulus())
-                    } else {
-                        <M::P as Poly>::Elem::zero(&params.modulus())
-                    };
+                    let num_bits: Vec<bool> =
+                        (0..level_width_exp).map(|i| (num >> i) & 1 == 1).collect();
+                    assert_eq!(num_bits.len(), level_width_exp);
+                    for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
+                        let bit = num_bits[i];
+                        if bit {
+                            coeffs[*coeff_idx] = <M::P as Poly>::Elem::one(&params.modulus());
+                        } else {
+                            coeffs[*coeff_idx] = <M::P as Poly>::Elem::zero(&params.modulus());
+                        }
+                    }
                     Some(M::P::from_coeffs(params.as_ref(), &coeffs))
                 } else {
                     encode.plaintext.clone()
                 };
-                log_mem(format!("plaintext at {}, {} computed", idx, j));
-                let new_pubkey = pubkeys[idx + 1][j].clone();
+                log_mem(format!("plaintext at {}, {} computed", level, j));
+                let new_pubkey = pubkeys[level + 1][j].clone();
                 let new_encode: BggEncoding<M> =
                     BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
-                log_mem(format!("new_encode at {}, {} computed", idx, j));
+                log_mem(format!("new_encode at {}, {} computed", level, j));
                 new_encodings.push(new_encode);
             }
             ps.push(p.clone());
@@ -136,21 +156,15 @@ where
                 obf_params.p_sigma == 0.0
             {
                 let mut cur_s = self.s_init.clone();
-                for bit in inputs[0..idx].iter() {
-                    let r =
-                        if *bit { public_data.rs[1].clone() } else { public_data.rs[0].clone() };
+                for prev_num in nums[0..level].iter() {
+                    let r = public_data.rs[*prev_num as usize].clone();
                     cur_s = cur_s * r;
                 }
-                let new_s = if *input {
-                    cur_s.clone() * &public_data.rs[1]
-                } else {
-                    cur_s.clone() * &public_data.rs[0]
-                };
-                let b_next_bit =
-                    if *input { self.bs[idx + 1][1].clone() } else { self.bs[idx + 1][0].clone() };
+                let new_s = cur_s.clone() * &public_data.rs[*num as usize];
+                let b_next_bit = self.bs[level + 1][*num as usize].clone();
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[idx + 1][2];
+                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][2];
                 assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
@@ -159,15 +173,15 @@ where
                     let inserted_poly_gadget = {
                         let mut polys = vec![];
                         polys.push(one.clone());
-                        let mut coeffs = vec![];
-                        for bit in inputs[0..=idx].iter() {
+                        let mut coeffs: Vec<<<M as PolyMatrix>::P as Poly>::Elem> = vec![];
+                        for bit in inputs[0..(level_width_exp * (level + 1))].iter() {
                             if *bit {
                                 coeffs.push(<M::P as Poly>::Elem::one(&params.modulus()));
                             } else {
                                 coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));
                             }
                         }
-                        for _ in 0..(obf_params.input_size - idx - 1) {
+                        for _ in 0..(obf_params.input_size - level_width_exp * (level + 1)) {
                             coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));
                         }
                         let input_polys = coeffs
@@ -178,7 +192,7 @@ where
                         polys.push(self.minus_t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
-                    let pubkey = pubkeys[idx + 1][0].concat_matrix(&pubkeys[idx + 1][1..]);
+                    let pubkey = pubkeys[level + 1][0].concat_matrix(&pubkeys[level + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)
                 };
                 assert_eq!(new_encode_vec, expcted_new_encode);
@@ -202,7 +216,7 @@ where
         log_mem("final_circuit evaluated");
         let output_encoding_ints = output_encodings
             .par_chunks(log_base_q)
-            .map(|bits| BggEncoding::digits_to_int(bits, &params))
+            .map(|digits| BggEncoding::digits_to_int(digits, &params))
             .collect::<Vec<_>>();
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
@@ -219,8 +233,8 @@ where
             obf_params.p_sigma == 0.0
         {
             let mut last_s = self.s_init.clone();
-            for bit in inputs.iter() {
-                let r = if *bit { public_data.rs[1].clone() } else { public_data.rs[0].clone() };
+            for num in nums.iter() {
+                let r = public_data.rs[*num as usize].clone();
                 last_s = last_s * r;
             }
             {
