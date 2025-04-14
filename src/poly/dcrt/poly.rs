@@ -183,7 +183,7 @@ impl Poly for DCRTPoly {
         let base_bits = params.base_bits() as usize;
 
         // Calculate the number of digits needed in the decomposition
-        let num_digits = params.modulus_digits() as usize;
+        let num_digits = params.modulus_digits();
 
         // Create a mask for extracting the base_bits bits
         let base_mask = (BigUint::from(1u32) << base_bits) - BigUint::from(1u32);
@@ -198,7 +198,7 @@ impl Poly for DCRTPoly {
                 let digit_values = coeffs
                     .par_iter()
                     .map(|coeff| {
-                        if shift_amount >= log_q as usize {
+                        if shift_amount >= log_q {
                             BigUint::from(0u32) // Handle the case where shift exceeds modulus bits
                         } else {
                             (coeff.value() >> shift_amount) & &base_mask
@@ -496,7 +496,7 @@ mod tests {
         let sampler = DCRTPolyUniformSampler::new();
         let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
         let decomposed = poly.decompose_base(&params);
-        assert_eq!(decomposed.len(), params.modulus_digits() as usize);
+        assert_eq!(decomposed.len(), { params.modulus_digits() });
     }
 
     #[test]

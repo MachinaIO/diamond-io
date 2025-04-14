@@ -190,7 +190,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                 (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
             })
             .collect_vec();
-        debug_mem(format!("mul_tensor_identity_decompose output computed"));
+        debug_mem("mul_tensor_identity_decompose output computed".to_string());
         output[0].concat_columns(&output[1..].iter().collect::<Vec<_>>())
     }
 

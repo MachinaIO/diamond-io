@@ -208,7 +208,7 @@ impl PolyCircuit {
         let orders = self.topological_order();
         for gate_id in orders.into_iter() {
             let gate = self.gates.get(&gate_id).expect("gate not found");
-            if gate.input_gates.len() == 0 {
+            if gate.input_gates.is_empty() {
                 gate_levels.insert(gate_id, 0);
                 levels[0].push(gate_id);
                 continue;
@@ -263,14 +263,14 @@ impl PolyCircuit {
                     PolyGateType::Input => {
                         panic!("Input gate {:?} should already be preloaded", gate);
                     }
-                    PolyGateType::Const { digits } => E::from_digits(params, one, &digits),
+                    PolyGateType::Const { digits } => E::from_digits(params, one, digits),
                     PolyGateType::Add => {
                         debug_mem("Add gate start");
                         let left =
                             wires.get(&gate.input_gates[0]).expect("wire missing for Add").clone();
                         let right =
                             wires.get(&gate.input_gates[1]).expect("wire missing for Add").clone();
-                        let result = left.clone() + right;
+                        let result = left + right;
                         debug_mem("Add gate end");
                         result
                     }
@@ -280,7 +280,7 @@ impl PolyCircuit {
                             wires.get(&gate.input_gates[0]).expect("wire missing for Sub").clone();
                         let right =
                             wires.get(&gate.input_gates[1]).expect("wire missing for Sub").clone();
-                        let result = left.clone() - right;
+                        let result = left - right;
                         debug_mem("Sub gate end");
                         result
                     }
@@ -290,16 +290,14 @@ impl PolyCircuit {
                             wires.get(&gate.input_gates[0]).expect("wire missing for Mul").clone();
                         let right =
                             wires.get(&gate.input_gates[1]).expect("wire missing for Mul").clone();
-                        let result = left.clone() * right;
+                        let result = left * right;
                         debug_mem("Mul gate end");
                         result
                     }
                     PolyGateType::Rotate { shift } => {
                         debug_mem("Rotate gate start");
-                        let input = wires
-                            .get(&gate.input_gates[0])
-                            .expect("wire missing for Rotate")
-                            .clone();
+                        let input =
+                            wires.get(&gate.input_gates[0]).expect("wire missing for Rotate");
                         let result = input.rotate(params, *shift);
                         debug_mem("Rotate gate end");
                         result
