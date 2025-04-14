@@ -44,7 +44,7 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let pubkeys = (0..obf_params.input_size + 1)
             .map(|idx| {
-                sample_public_key_by_idx(
+                sample_public_key_by_id(
                     &bgg_pubkey_sampler,
                     &obf_params.params,
                     idx,
@@ -184,7 +184,7 @@ where
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
         let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
         log_mem("a,b decomposed");
-        let final_circuit = build_final_bits_circuit::<M::P, BggEncoding<M>>(
+        let final_circuit = build_final_digits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
             b_decomposed,
             obf_params.public_circuit.clone(),

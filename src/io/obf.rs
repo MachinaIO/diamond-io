@@ -1,10 +1,10 @@
-use super::{params::ObfuscationParams, utils::sample_public_key_by_idx, Obfuscation};
+use super::{params::ObfuscationParams, Obfuscation};
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         BggPublicKey, DigitsToInt,
     },
-    io::utils::{build_final_bits_circuit, PublicSampledData},
+    io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     poly::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
@@ -51,7 +51,7 @@ where
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
     let pub_key_init =
-        sample_public_key_by_idx(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
+        sample_public_key_by_id(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
 
     let params = Arc::new(obf_params.params);
@@ -89,7 +89,7 @@ where
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
 
-    log_mem("Decomposed RLWE ciphertext into {bits(a), bits(b)}");
+    log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
 
     let minus_t_bar = -t_bar_matrix.entry(0, 0);
 
@@ -119,9 +119,11 @@ where
     log_mem("Computed p_init");
 
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
-    assert_eq!(obf_params.input_size % obf_params.level_width_exp, 0);
-    assert_eq!(dim % obf_params.level_width_exp, 0);
-    let level_width = 2u64.pow(obf_params.level_width_exp as u32) as usize;
+    let level_width_exp = obf_params.level_width_exp; // number of bits to be inserted at each level
+    assert_eq!(obf_params.input_size % level_width_exp, 0);
+    assert_eq!(dim % level_width_exp, 0);
+    let level_width = 2u64.pow(level_width_exp as u32) as usize; // number of possible combination of bits for each level
+    let depth = obf_params.input_size / level_width_exp; // number of levels necessary to encode the input
     let mut u_bits = Vec::with_capacity(level_width + 1);
     for i in 0..level_width {
         let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
@@ -135,78 +137,87 @@ where
     log_mem("Computed u_0, u_1, u_star");
 
     let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![Vec::with_capacity(level_width); obf_params.input_size],
-        vec![Vec::with_capacity(level_width); obf_params.input_size],
-        vec![Vec::with_capacity(level_width); obf_params.input_size],
+        vec![Vec::with_capacity(level_width); depth],
+        vec![Vec::with_capacity(level_width); depth],
+        vec![Vec::with_capacity(level_width); depth],
     );
 
     #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> =
-        vec![vec![M::zero(params.as_ref(), 0, 0); 3]; obf_params.input_size + 1];
+        vec![vec![M::zero(params.as_ref(), 0, 0); level_width + 1]; depth + 1];
 
     #[cfg(feature = "test")]
     {
-        bs[0][2] = b_star_cur.clone();
+        bs[0][level_width] = b_star_cur.clone();
     }
 
     let mut pub_key_cur = pub_key_init;
 
-    for idx in 0..obf_params.input_size {
-        let (b_star_trapdoor_idx, b_star_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-        log_mem("Sampled b_star trapdoor for idx");
+    for level in 0..depth {
+        let (b_star_trapdoor_level, b_star_level) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+        log_mem("Sampled b_star trapdoor for level");
 
-        let pub_key_idx =
-            sample_public_key_by_idx(&bgg_pubkey_sampler, &params, idx + 1, &reveal_plaintexts);
-        log_mem("Sampled pub key idx");
+        let pub_key_level =
+            sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
+        log_mem("Sampled pub key level");
 
         #[cfg(feature = "test")]
         {
-            bs[idx + 1][2] = b_star_idx.clone();
+            bs[level + 1][level_width] = b_star_level.clone();
         }
 
-        // Precomputation for k_preimage that are not bit dependent
+        // Precomputation for k_preimage that are not num dependent
         let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
-        let inserted_poly_index = 1 + idx / dim;
-        let inserted_coeff_index = idx % dim;
+        let inserted_poly_index = 1 + (level * level_width_exp) / dim;
+        let inserted_coeff_indices =
+            (0..level_width_exp).map(|i| (i + (level * level_width_exp)) % dim).collect_vec();
+        assert_eq!(inserted_coeff_indices.len(), level_width_exp);
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
 
-        for bit in 0..=1 {
-            let (b_bit_trapdoor_idx, b_bit_idx) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-            log_mem("Sampled b trapdoor for idx and bit");
+        for num in 0..level_width {
+            let (b_num_trapdoor_level, b_num_level) =
+                sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+            log_mem("Sampled b trapdoor for level and num");
 
             #[cfg(feature = "test")]
             {
-                bs[idx + 1][bit] = b_bit_idx.clone();
+                bs[level + 1][num] = b_num_level.clone();
             }
 
-            let m_preimage_bit = sampler_trapdoor.preimage(
+            let m_preimage_num = sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
-                &(u_bits[bit].clone() * &b_bit_idx),
+                &(u_bits[num].clone() * &b_num_level),
             );
 
-            log_mem("Computed m_preimage_bit");
+            log_mem("Computed m_preimage_num");
 
-            m_preimages[idx].push(m_preimage_bit);
+            m_preimages[level].push(m_preimage_num);
 
-            let n_preimage_bit = sampler_trapdoor.preimage(
+            let n_preimage_num = sampler_trapdoor.preimage(
                 &params,
-                &b_bit_trapdoor_idx,
-                &b_bit_idx,
-                &(u_star.clone() * &b_star_idx.clone()),
+                &b_num_trapdoor_level,
+                &b_num_level,
+                &(u_star.clone() * &b_star_level.clone()),
             );
-            log_mem("Computed n_preimage_bit");
+            log_mem("Computed n_preimage_num");
 
-            n_preimages[idx].push(n_preimage_bit);
+            n_preimages[level].push(n_preimage_num);
 
-            let rg = &public_data.rgs[bit];
+            let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             log_mem("Computed top");
-            if bit != 0 {
-                coeffs[inserted_coeff_index] = <M::P as Poly>::Elem::one(&params.modulus())
-            };
+            // bit decompose num over level_width_exp bits
+            let num_bits: Vec<bool> = (0..level_width_exp).map(|i| (num >> i) & 1 == 1).collect();
+            assert_eq!(num_bits.len(), level_width_exp);
+            for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
+                let bit = num_bits[i];
+                if bit {
+                    coeffs[*coeff_idx] = <M::P as Poly>::Elem::one(&params.modulus());
+                }
+            }
             let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
             log_mem("Computed inserted_poly");
             let inserted_poly_gadget = {
@@ -223,24 +234,25 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
             log_mem("Computed inserted_poly_gadget");
-            let bottom = pub_key_idx[0].concat_matrix(&pub_key_idx[1..]) - &inserted_poly_gadget;
+            let bottom =
+                pub_key_level[0].concat_matrix(&pub_key_level[1..]) - &inserted_poly_gadget;
             log_mem("Computed bottom");
             let k_target = top.concat_rows(&[&bottom]);
             log_mem("Computed k_target");
-            let k_preimage_bit =
-                sampler_trapdoor.preimage(&params, &b_bit_trapdoor_idx, &b_bit_idx, &k_target);
-            log_mem("Computed k_preimage_bit");
+            let k_preimage_num =
+                sampler_trapdoor.preimage(&params, &b_num_trapdoor_level, &b_num_level, &k_target);
+            log_mem("Computed k_preimage_num");
 
-            k_preimages[idx].push(k_preimage_bit);
+            k_preimages[level].push(k_preimage_num);
         }
 
-        b_star_trapdoor_cur = b_star_trapdoor_idx;
-        b_star_cur = b_star_idx;
-        pub_key_cur = pub_key_idx;
+        b_star_trapdoor_cur = b_star_trapdoor_level;
+        b_star_cur = b_star_level;
+        pub_key_cur = pub_key_level;
     }
 
     let final_preimage_target = {
-        let final_circuit = build_final_bits_circuit::<M::P, BggPublicKey<M>>(
+        let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed,
             &b_decomposed,
             public_circuit.clone(),
@@ -251,7 +263,7 @@ where
         assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
-            .map(|bits| BggPublicKey::digits_to_int(bits, &params))
+            .map(|digits| BggPublicKey::digits_to_int(digits, &params))
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);

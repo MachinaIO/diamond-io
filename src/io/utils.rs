@@ -15,10 +15,10 @@ const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
 pub const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 
-pub fn sample_public_key_by_idx<K: AsRef<[u8]>, S>(
+pub fn sample_public_key_by_id<K: AsRef<[u8]>, S>(
     sampler: &BGGPublicKeySampler<K, S>,
     params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
-    idx: usize,
+    id: usize,
     reveal_plaintexts: &[bool],
 ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>>
 where
@@ -26,7 +26,7 @@ where
 {
     sampler.sample(
         params,
-        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(idx as u64).to_le_bytes()].concat(),
+        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(id as u64).to_le_bytes()].concat(),
         reveal_plaintexts,
     )
 }
@@ -84,7 +84,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
     }
 }
 
-pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
+pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
     a_decomposed_polys: &[P],
     b_decomposed_polys: &[P],
     public_circuit: PolyCircuit,
@@ -93,7 +93,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
     debug_assert_eq!(b_decomposed_polys.len(), log_base_q);
     let packed_eval_input_size = public_circuit.num_input() - (2 * log_base_q);
 
-    // circuit outputs the cipertext ct=(a,b) as a_bit_0, b_bit_0, a_bit_1, b_bit_1, ...
+    // circuit outputs the cipertext ct=(a,b) as a_base_0, b_base_0, a_base_1, b_base_1, ...
     let mut ct_output_circuit = PolyCircuit::new();
     {
         let inputs = ct_output_circuit.input(packed_eval_input_size);
@@ -189,7 +189,7 @@ mod test {
         let b_decomposed = b.entry(0, 0).decompose_base(&params);
 
         // 6. Build the final circuit with DCRTPoly as the Evaluable type
-        let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
+        let final_circuit = build_final_digits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed,
             &b_decomposed,
             public_circuit,
@@ -245,7 +245,7 @@ mod test {
 
         let a_decomposed_polys = a_rlwe_bar.decompose_base(&params);
         let b_decomposed_polys = enc_hardcoded_key.decompose_base(&params);
-        let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
+        let final_circuit = build_final_digits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &b_decomposed_polys,
             public_circuit,

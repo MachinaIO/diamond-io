@@ -32,8 +32,8 @@ mod test {
         let switched_modulus = Arc::new(BigUint::from_str_radix("242833611528216133864932738352844082358996736827870043467279656893386864455514587136", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();
 
-        // inputs: BITS(ct), eval_input
-        // outputs: BITS(ct) AND eval_input
+        // inputs: BaseDecompose(ct), eval_input
+        // outputs: BaseDecompose(ct) AND eval_input
         {
             let inputs = public_circuit.input((2 * log_base_q) + 1);
             let mut outputs = vec![];

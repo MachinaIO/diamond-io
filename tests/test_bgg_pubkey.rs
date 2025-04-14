@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use diamond_io::{
     bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
-    io::utils::build_final_bits_circuit,
+    io::utils::build_final_digits_circuit,
     poly::{
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
@@ -25,8 +25,8 @@ fn test_build_final_step_circuit() {
     let log_base_q = params.modulus_digits();
     let mut public_circuit = PolyCircuit::new();
 
-    // inputs: BITS(ct), eval_input
-    // outputs: BITS(ct) AND eval_input
+    // inputs: BaseDecompose(ct), eval_input
+    // outputs: BaseDecompose(ct) AND eval_input
     {
         let inputs = public_circuit.input((2 * log_base_q) + 1);
         let mut outputs = vec![];
@@ -65,9 +65,9 @@ fn test_build_final_step_circuit() {
 
     let a_decomposed = a_rlwe_bar.entry(0, 0).decompose_base(&params);
     let b_decomposed = b.entry(0, 0).decompose_base(&params);
-    log_mem("Decomposed RLWE ciphertext into {bits(a), bits(b)}");
+    log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
 
-    let final_circuit = build_final_bits_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
+    let final_circuit = build_final_digits_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
         &a_decomposed,
         &b_decomposed,
         public_circuit.clone(),
