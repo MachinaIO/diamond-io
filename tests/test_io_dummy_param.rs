@@ -50,8 +50,8 @@ mod test {
         let obf_params = ObfuscationParams {
             params: params.clone(),
             switched_modulus,
-            input_size: 2,
-            level_width_exp: 1,
+            input_size: 4,
+            level_width_exp: 4,
             public_circuit: public_circuit.clone(),
             d: 3,
             encoding_sigma: 0.0,
@@ -76,7 +76,7 @@ mod test {
         info!("Time to obfuscate: {:?}", obfuscation_time);
 
         let bool_in = rng.random::<bool>();
-        let input = [bool_in, false];
+        let input = [bool_in, false, false, false];
         let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
         let output =
             obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(obf_params, sampler_hash, &input);

@@ -90,11 +90,7 @@ where
         let nums: Vec<u64> = inputs
             .chunks(level_width_exp)
             .map(|chunk| {
-                chunk
-                    .iter()
-                    .rev()
-                    .enumerate()
-                    .fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
+                chunk.iter().enumerate().fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
             })
             .collect();
         assert_eq!(nums.len(), depth);
@@ -164,7 +160,7 @@ where
                 let b_next_bit = self.bs[level + 1][*num as usize].clone();
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][2];
+                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][level_width];
                 assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
