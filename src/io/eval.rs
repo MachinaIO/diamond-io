@@ -94,10 +94,10 @@ where
             let v = q.clone() * k;
             log_mem(format!("v at {} computed", idx));
             let new_encode_vec = {
-                let t = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
+                let rg = if *input { &public_data.rgs[1] } else { &public_data.rgs[0] };
                 let encode_vec = encodings[idx][0].concat_vector(&encodings[idx][1..]);
                 let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
-                encode_vec.mul_tensor_identity_decompose(t, packed_input_size + 1) + v
+                encode_vec.mul_tensor_identity_decompose(rg, packed_input_size + 1) + v
             };
             log_mem(format!("new_encode_vec at {} computed", idx));
             let mut new_encodings = vec![];
@@ -134,13 +134,14 @@ where
             {
                 let mut cur_s = self.s_init.clone();
                 for bit in inputs[0..idx].iter() {
-                    let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
+                    let r =
+                        if *bit { public_data.rs[1].clone() } else { public_data.rs[0].clone() };
                     cur_s = cur_s * r;
                 }
                 let new_s = if *input {
-                    cur_s.clone() * &public_data.r_1
+                    cur_s.clone() * &public_data.rs[1]
                 } else {
-                    cur_s.clone() * &public_data.r_0
+                    cur_s.clone() * &public_data.rs[0]
                 };
                 let b_next_bit =
                     if *input { self.bs[idx + 1][1].clone() } else { self.bs[idx + 1][0].clone() };
@@ -216,7 +217,7 @@ where
         {
             let mut last_s = self.s_init.clone();
             for bit in inputs.iter() {
-                let r = if *bit { public_data.r_1.clone() } else { public_data.r_0.clone() };
+                let r = if *bit { public_data.rs[1].clone() } else { public_data.rs[0].clone() };
                 last_s = last_s * r;
             }
             {

@@ -120,9 +120,12 @@ where
     log_mem("Computed p_init");
 
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
-    let u_0 = identity_d_plus_1.concat_diag(&[&public_data.r_0]);
-    let u_1 = identity_d_plus_1.concat_diag(&[&public_data.r_1]);
-    let u_bits = [u_0, u_1];
+    let level_width = 2u64.pow(obf_params.level_width as u32);
+    let mut u_bits = Vec::with_capacity((level_width + 1) as usize);
+    for i in 0..level_width {
+        let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i as usize]]);
+        u_bits.push(u_i);
+    }
     let u_star = {
         let zeros = M::zero(params.as_ref(), d + 1, 2 * (d + 1));
         let identities = identity_d_plus_1.concat_columns(&[&identity_d_plus_1]);

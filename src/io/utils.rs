@@ -10,8 +10,6 @@ use std::marker::PhantomData;
 
 use super::params::ObfuscationParams;
 
-const TAG_R_0: &[u8] = b"R_0";
-const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
 const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
@@ -35,10 +33,9 @@ where
 
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
-    pub r_0: S::M,
-    pub r_1: S::M,
+    pub rs: Vec<S::M>,
     pub a_rlwe_bar: S::M,
-    pub rgs: [S::M; 2],
+    pub rgs: Vec<S::M>,
     pub a_prf: S::M,
     pub packed_input_size: usize,
     pub packed_output_size: usize,
@@ -53,13 +50,20 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let d = obf_params.d;
-
-        let r_0_bar = hash_sampler.sample_hash(params, TAG_R_0, d, d, DistType::BitDist);
-        let r_1_bar = hash_sampler.sample_hash(params, TAG_R_1, d, d, DistType::BitDist);
+        let level_width = 2u64.pow(obf_params.level_width as u32);
+        let mut rs = Vec::with_capacity(level_width as usize);
+        let mut rgs = Vec::with_capacity(level_width as usize);
         let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[&one]);
-        let r_1 = r_1_bar.concat_diag(&[&one]);
-        // let log_q = params.modulus_bits();
+        let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
+        for i in 0..level_width {
+            let tag = format!("R_{}", i).into_bytes();
+            let r_bar_i = hash_sampler.sample_hash(params, &tag, d, d, DistType::BitDist);
+            let r_i = r_bar_i.concat_diag(&[&one]);
+            let rg = r_i.clone() * &gadget_d_plus_1;
+            rs.push(r_i);
+            rgs.push(rg);
+        }
+
         let log_base_q = params.modulus_digits();
         let dim = params.ring_dimension() as usize;
         // input bits, poly of the RLWE key
@@ -67,9 +71,6 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
-        let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
-        let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(r_0.clone() * &gadget_d_plus_1), (r_1.clone() * &gadget_d_plus_1)];
 
         let a_prf_raw = hash_sampler.sample_hash(
             params,
@@ -79,16 +80,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        Self {
-            r_0,
-            r_1,
-            a_rlwe_bar,
-            rgs,
-            a_prf,
-            packed_input_size,
-            packed_output_size,
-            _s: PhantomData,
-        }
+        Self { rs, a_rlwe_bar, rgs, a_prf, packed_input_size, packed_output_size, _s: PhantomData }
     }
 }
 
