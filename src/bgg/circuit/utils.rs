@@ -29,10 +29,10 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     // Process each pair (a_base, b_base) from the public circuit outputs
     // result = a_base * -t_bar + b_base
     for i in 0..num_output {
-        let a_bit = pub_circuit_outputs[i * 2];
-        let b_bit = pub_circuit_outputs[i * 2 + 1];
-        let mul = circuit.mul_gate(a_bit, *minus_t_bar);
-        let result = circuit.add_gate(b_bit, mul);
+        let a_digit = pub_circuit_outputs[i * 2];
+        let b_digit = pub_circuit_outputs[i * 2 + 1];
+        let mul = circuit.mul_gate(a_digit, *minus_t_bar);
+        let result = circuit.add_gate(b_digit, mul);
         outputs.push(result);
     }
 
