@@ -169,7 +169,7 @@ where
                     let inserted_poly_gadget = {
                         let mut polys = vec![];
                         polys.push(one.clone());
-                        let mut coeffs: Vec<<<M as PolyMatrix>::P as Poly>::Elem> = vec![];
+                        let mut coeffs = vec![];
                         for bit in inputs[0..(level_width_exp * (level + 1))].iter() {
                             if *bit {
                                 coeffs.push(<M::P as Poly>::Elem::one(&params.modulus()));
