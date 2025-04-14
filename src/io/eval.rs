@@ -42,12 +42,15 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
-        let pubkeys = (0..obf_params.input_size + 1)
-            .map(|idx| {
+        let level_width_exp = obf_params.level_width_exp;
+        let level_width = 2u32.pow(level_width_exp as u32) as usize;
+        let depth = obf_params.input_size / level_width_exp;
+        let pubkeys = (0..depth + 1)
+            .map(|id| {
                 sample_public_key_by_id(
                     &bgg_pubkey_sampler,
                     &obf_params.params,
-                    idx,
+                    id,
                     &reveal_plaintexts,
                 )
             })
@@ -61,7 +64,7 @@ where
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
-                s_connect * &self.bs[0][2]
+                s_connect * &self.bs[0][level_width]
             };
             assert_eq!(self.p_init, expected_p_init);
 

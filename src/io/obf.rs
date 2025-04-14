@@ -35,7 +35,6 @@ where
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_base_q = obf_params.params.modulus_digits();
-    debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
     sampler_hash.set_key(hash_key);
@@ -43,8 +42,8 @@ where
     let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     log_mem("Sampled public data");
-
     let packed_input_size = public_data.packed_input_size;
+    debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
     #[cfg(feature = "test")]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
     #[cfg(not(feature = "test"))]
