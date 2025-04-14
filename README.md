@@ -1,35 +1,28 @@
-## diamond-io
+# diamond-io
 
 Implementation of [Diamond iO](https://eprint.iacr.org/2025/236)
 
-### note
+### Note
 
-We currently have 2 different matrix implementation:
-1. (default) by using memory fully
-2. 1. (enable `disk` feature) by calling `mmap()` syscall, use disk space as default storage
+We currently support two different matrix implementations:
+1. **In-memory** (default): Uses memory for all matrix storage.
+2. **Disk-backed** (enable with `--features disk`): Uses the `mmap()` syscall to store matrices on disk.
 
-#### Full Test (with test feature)
+#### Test iO (without `test` feature)
 
-```
-cargo test -r
-```
+This disables helper logic and fields used only for testing, which are not required for iO security.
 
-#### Test iO (without test feature) 
-
-this will remove helper logic + helper fields for test which is not require for iO security.
-
-
-- dummy params
-```
-cargo test -r --test test_io_dummy_param --no-default-features -- --nocapture
+- **Dummy parameters**  
+```bash
+cargo test -r --test test_io_dummy_param --no-default-features -- --ignored --nocapture
 ```
 
-- real params (by default ignored)
-```
+- **Real parameters** (tests are ignored by default)  
+```bash
 cargo test -r --test test_io_real_param --no-default-features -- --ignored --nocapture
 ```
 
-- with memory profiler 
-```
+- **With memory profiler**  
+```bash
 uv run memory_profile.py cargo test -r --test test_io_dummy_param --no-default-features
 ```
