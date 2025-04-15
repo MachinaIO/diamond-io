@@ -43,7 +43,7 @@ where
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let level_width_exp = obf_params.level_width_exp;
-        let level_width = 2u32.pow(level_width_exp as u32) as usize;
+        let level_width = (1u64 << obf_params.level_width_exp) as usize;
         assert!(inputs.len() % level_width_exp == 0);
         let depth = obf_params.input_size / level_width_exp;
         let pubkeys = (0..depth + 1)
@@ -93,7 +93,7 @@ where
                 chunk.iter().enumerate().fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
             })
             .collect();
-        assert_eq!(nums.len(), depth);
+        debug_assert_eq!(nums.len(), depth);
         for (level, num) in nums.iter().enumerate() {
             let m = &self.m_preimages[level][*num as usize];
             let q = ps[level].clone() * m;
@@ -124,13 +124,11 @@ where
                     let mut coeffs = encode.plaintext.as_ref().unwrap().coeffs().clone();
                     let num_bits: Vec<bool> =
                         (0..level_width_exp).map(|i| (num >> i) & 1 == 1).collect();
-                    assert_eq!(num_bits.len(), level_width_exp);
+                    debug_assert_eq!(num_bits.len(), level_width_exp);
                     for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
                         let bit = num_bits[i];
                         if bit {
                             coeffs[*coeff_idx] = <M::P as Poly>::Elem::one(&params.modulus());
-                        } else {
-                            coeffs[*coeff_idx] = <M::P as Poly>::Elem::zero(&params.modulus());
                         }
                     }
                     Some(M::P::from_coeffs(params.as_ref(), &coeffs))

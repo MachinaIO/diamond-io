@@ -51,7 +51,7 @@ mod test {
             params: params.clone(),
             switched_modulus,
             input_size: 4,
-            level_width_exp: 4,
+            level_width_exp: 2,
             public_circuit: public_circuit.clone(),
             d: 3,
             encoding_sigma: 0.0,

@@ -1,10 +1,13 @@
-use super::{params::ObfuscationParams, Obfuscation};
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         BggPublicKey, DigitsToInt,
     },
-    io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+    io::{
+        params::ObfuscationParams,
+        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+        Obfuscation,
+    },
     poly::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
@@ -43,7 +46,7 @@ where
     let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
     log_mem("Sampled public data");
     let packed_input_size = public_data.packed_input_size;
-    debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
+    assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
     #[cfg(feature = "test")]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
     #[cfg(not(feature = "test"))]
@@ -121,12 +124,12 @@ where
     let level_width_exp = obf_params.level_width_exp; // number of bits to be inserted at each level
     assert_eq!(obf_params.input_size % level_width_exp, 0);
     assert_eq!(dim % level_width_exp, 0);
-    let level_width = 2u64.pow(level_width_exp as u32) as usize; // number of possible combination of bits for each level
+    let level_width = (1u64 << obf_params.level_width_exp) as usize;
     let depth = obf_params.input_size / level_width_exp; // number of levels necessary to encode the input
-    let mut u_bits = Vec::with_capacity(level_width + 1);
+    let mut u_nums = Vec::with_capacity(level_width);
     for i in 0..level_width {
         let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
-        u_bits.push(u_i);
+        u_nums.push(u_i);
     }
     let u_star = {
         let zeros = M::zero(params.as_ref(), d + 1, 2 * (d + 1));
@@ -170,7 +173,7 @@ where
         let inserted_poly_index = 1 + (level * level_width_exp) / dim;
         let inserted_coeff_indices =
             (0..level_width_exp).map(|i| (i + (level * level_width_exp)) % dim).collect_vec();
-        assert_eq!(inserted_coeff_indices.len(), level_width_exp);
+        debug_assert_eq!(inserted_coeff_indices.len(), level_width_exp);
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
 
@@ -188,7 +191,7 @@ where
                 &params,
                 &b_star_trapdoor_cur,
                 &b_star_cur,
-                &(u_bits[num].clone() * &b_num_level),
+                &(u_nums[num].clone() * &b_num_level),
             );
 
             log_mem("Computed m_preimage_num");
@@ -210,7 +213,7 @@ where
             log_mem("Computed top");
             // bit decompose num over level_width_exp bits
             let num_bits: Vec<bool> = (0..level_width_exp).map(|i| (num >> i) & 1 == 1).collect();
-            assert_eq!(num_bits.len(), level_width_exp);
+            debug_assert_eq!(num_bits.len(), level_width_exp);
             for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
                 let bit = num_bits[i];
                 if bit {
@@ -259,7 +262,7 @@ where
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         log_mem("Evaluated outputs");
-        assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
+        debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
             .map(|digits| BggPublicKey::digits_to_int(digits, &params))

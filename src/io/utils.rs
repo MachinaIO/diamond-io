@@ -11,7 +11,6 @@ use std::marker::PhantomData;
 use super::params::ObfuscationParams;
 
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
-const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
 pub const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 
@@ -50,15 +49,15 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let d = obf_params.d;
-        let level_width = 2u64.pow(obf_params.level_width_exp as u32);
-        let mut rs = Vec::with_capacity(level_width as usize);
-        let mut rgs = Vec::with_capacity(level_width as usize);
+        let level_width = (1u64 << obf_params.level_width_exp) as usize;
+        let mut rs = Vec::with_capacity(level_width);
+        let mut rgs = Vec::with_capacity(level_width);
         let one = S::M::identity(params, 1, None);
         let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
         for i in 0..level_width {
             let tag = format!("R_{}", i).into_bytes();
-            let r_bar_i = hash_sampler.sample_hash(params, &tag, d, d, DistType::BitDist);
-            let r_i = r_bar_i.concat_diag(&[&one]);
+            let r_i_bar = hash_sampler.sample_hash(params, &tag, d, d, DistType::BitDist);
+            let r_i = r_i_bar.concat_diag(&[&one]);
             let rg = r_i.clone() * &gadget_d_plus_1;
             rs.push(r_i);
             rgs.push(rg);
