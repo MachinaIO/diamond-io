@@ -8,7 +8,7 @@ use crate::{
     utils::debug_mem,
 };
 use rayon::prelude::*;
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
@@ -80,7 +80,7 @@ where
 #[derive(Clone)]
 pub struct BGGEncodingSampler<S: PolyUniformSampler> {
     pub(crate) secret_vec: S::M,
-    pub error_sampler: Arc<S>,
+    pub error_sampler: S,
     pub gauss_sigma: f64,
 }
 
@@ -98,7 +98,7 @@ where
     pub fn new(
         params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
         secrets: &[<S::M as PolyMatrix>::P],
-        error_sampler: Arc<S>,
+        error_sampler: S,
         gauss_sigma: f64,
     ) -> Self {
         let minus_one_poly = <S::M as PolyMatrix>::P::const_minus_one(params);
@@ -249,7 +249,7 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![DCRTPoly::const_one(&params); packed_input_size];
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
         let g = DCRTPolyMatrix::gadget_matrix(&params, d + 1);
         assert_eq!(bgg_encodings.len(), packed_input_size + 1);
@@ -282,7 +282,7 @@ mod tests {
         let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params); packed_input_size];
         // TODO: set the standard deviation to a non-zero value
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 
         for pair in bgg_encodings[1..].chunks(2) {
@@ -318,7 +318,7 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![create_random_poly(&params); packed_input_size];
-        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler.into(), 0.0);
+        let bgg_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
         let bgg_encodings = bgg_sampler.sample(&params, &sampled_pub_keys, &plaintexts);
 
         for pair in bgg_encodings[1..].chunks(2) {

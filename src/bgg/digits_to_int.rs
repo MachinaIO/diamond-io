@@ -73,7 +73,6 @@ mod tests {
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
-    use std::sync::Arc;
 
     #[test]
     fn test_dcrtpoly_digits_to_int_random() {
@@ -160,7 +159,7 @@ mod tests {
         let d = 3;
         let bgg_pubkey_sampler =
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -198,7 +197,7 @@ mod tests {
         let d = 3;
         let bgg_pubkey_sampler =
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();

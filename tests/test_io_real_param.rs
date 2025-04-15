@@ -8,7 +8,7 @@ mod test {
                 DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams,
                 DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler, FinRingElem,
             },
-            sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
+            sampler::{DistType, PolyUniformSampler},
             Poly, PolyElem, PolyParams,
         },
         utils::init_tracing,
@@ -19,8 +19,6 @@ mod test {
     use rand::Rng;
     use std::sync::Arc;
     use tracing::info;
-
-    const SIGMA: f64 = 4.578;
 
     #[test]
     #[ignore]
@@ -54,19 +52,19 @@ mod test {
             encoding_sigma: 12.05698,
             hardcoded_key_sigma: 40615715852990820734.97011,
             p_sigma: 12.05698,
+            trapdoor_sigma: 4.578,
         };
 
         let sampler_uniform = DCRTPolyUniformSampler::new();
-        let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
         let mut rng = rand::rng();
         let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
-        let obfuscation = obfuscate::<DCRTPolyMatrix, _, DCRTPolyHashSampler<Keccak256>, _, _>(
-            obf_params.clone(),
-            sampler_uniform,
-            sampler_trapdoor,
-            hardcoded_key.clone(),
-            &mut rng,
-        );
+        let obfuscation = obfuscate::<
+            DCRTPolyMatrix,
+            DCRTPolyUniformSampler,
+            DCRTPolyHashSampler<Keccak256>,
+            DCRTPolyTrapdoorSampler,
+            _,
+        >(obf_params.clone(), hardcoded_key.clone(), &mut rng);
         let obfuscation_time = start_time.elapsed();
         info!("Time to obfuscate: {:?}", obfuscation_time);
 

@@ -19,8 +19,6 @@ use std::sync::Arc;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
-    sampler_uniform: SU,
-    sampler_trapdoor: ST,
     hardcoded_key: M::P,
     rng: &mut R,
 ) -> Obfuscation<M>
@@ -40,7 +38,8 @@ where
     let hash_key = rng.random::<[u8; 32]>();
     // let sampler_hash  =SH::n
     // sampler_hash.set_key(hash_key);
-    let sampler_uniform = Arc::new(sampler_uniform);
+    let sampler_uniform = SU::new();
+    let sampler_trapdoor = ST::new(&obf_params.params, obf_params.trapdoor_sigma);
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
@@ -60,17 +59,8 @@ where
     let packed_output_size = public_data.packed_output_size;
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
-    let bgg_encode_sampler = BGGEncodingSampler::new(
-        params.as_ref(),
-        &s_bars,
-        sampler_uniform.clone(),
-        obf_params.encoding_sigma,
-    );
-
-    let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
-
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     log_mem("Sampled hardcoded_key_matrix");
 
@@ -78,7 +68,7 @@ where
 
     let b = rlwe_encrypt(
         params.as_ref(),
-        sampler_uniform.as_ref(),
+        &sampler_uniform,
         &t_bar_matrix,
         &a,
         &hardcoded_key_matrix,
@@ -86,6 +76,22 @@ where
     );
 
     log_mem("Generated RLWE ciphertext {a, b}");
+    let m_b = (2 * (d + 1)) * (2 + log_base_q);
+    let error = sampler_uniform.sample_uniform(
+        &params,
+        1,
+        m_b,
+        DistType::GaussDist { sigma: obf_params.p_sigma },
+    );
+
+    let bgg_encode_sampler = BGGEncodingSampler::new(
+        params.as_ref(),
+        &s_bars,
+        sampler_uniform,
+        obf_params.encoding_sigma,
+    );
+
+    let s_init = &bgg_encode_sampler.secret_vec;
 
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
@@ -106,15 +112,9 @@ where
     log_mem("b star trapdoor init sampled");
 
     let p_init = {
-        let m_b = (2 * (d + 1)) * (2 + log_base_q);
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &b_star_cur;
-        let error = sampler_uniform.sample_uniform(
-            &params,
-            1,
-            m_b,
-            DistType::GaussDist { sigma: obf_params.p_sigma },
-        );
+
         s_b + error
     };
     log_mem("Computed p_init");
