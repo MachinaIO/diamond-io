@@ -1,3 +1,4 @@
+pub mod cpp_matrix;
 pub mod element;
 pub mod matrix;
 pub mod params;

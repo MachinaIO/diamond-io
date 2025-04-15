@@ -1,8 +1,6 @@
-use std::path::PathBuf;
-
 use super::{Poly, PolyMatrix};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 /// Enum representing different types of distributions for random sampling.
 pub enum DistType {
     /// Distribution over a finite ring, typically samples elements from a ring in a uniform or
@@ -29,8 +27,8 @@ pub trait PolyHashSampler<K: AsRef<[u8]>> {
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         tag: B,
-        rows: usize,
-        columns: usize,
+        nrow: usize,
+        ncol: usize,
         dist: DistType,
     ) -> Self::M;
 
@@ -44,8 +42,8 @@ pub trait PolyUniformSampler {
     fn sample_uniform(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        rows: usize,
-        columns: usize,
+        nrow: usize,
+        ncol: usize,
         dist: DistType,
     ) -> Self::M;
 }
@@ -53,32 +51,17 @@ pub trait PolyUniformSampler {
 pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
     type Trapdoor;
-    type MatrixPtr;
 
     fn trapdoor(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M);
-    fn preimage_to_fs(
+    fn preimage(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         trapdoor: &Self::Trapdoor,
         public_matrix: &Self::M,
         target: &Self::M,
-        preimage_id: &str,
-    ) -> Vec<PathBuf>;
-    fn process_preimage_block_to_fs(
-        &self,
-        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        trapdoor: &Self::Trapdoor,
-        public_matrix: &Self::MatrixPtr,
-        target_block: &Self::M,
-        size: usize,
-        preimage_block_id: &str,
-    ) -> PathBuf;
-    fn preimage_from_fs(
-        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
-        preimages_paths: &[PathBuf],
     ) -> Self::M;
 }

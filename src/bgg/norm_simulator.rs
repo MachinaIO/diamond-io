@@ -7,17 +7,28 @@ use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul, Sub};
 
 impl PolyCircuit {
-    pub fn simulate_bgg_norm(&self, dim: u32, unpacked_input_size: usize) -> NormBounds {
-        let one = NormSimulator::new(MPolyCoeffs::new(vec![BigUint::one()]), BigUint::one(), dim);
+    pub fn simulate_bgg_norm(
+        &self,
+        dim: u32,
+        base_bits: u32,
+        unpacked_input_size: usize,
+    ) -> NormBounds {
+        let one = NormSimulator::new(
+            MPolyCoeffs::new(vec![BigUint::one()]),
+            BigUint::one(),
+            dim,
+            base_bits,
+        );
         let mut inputs = vec![];
         let mut remaining_inputs = unpacked_input_size;
         let n = dim as usize;
         while remaining_inputs > 0 {
             let num_bits = if remaining_inputs >= n { n } else { remaining_inputs };
             inputs.push(NormSimulator::new(
-                MPolyCoeffs::new(vec![BigUint::from(num_bits)]),
-                BigUint::from(num_bits),
+                MPolyCoeffs::new(vec![BigUint::one()]),
+                BigUint::one(),
                 dim,
+                base_bits,
             ));
             remaining_inputs -= num_bits;
         }
@@ -48,12 +59,15 @@ impl NormBounds {
 pub struct NormSimulator {
     pub h_norm: MPolyCoeffs,
     pub plaintext_norm: BigUint,
-    pub dim: u32,
+    pub dim_sqrt: u32,
+    pub base: u32,
 }
 
 impl NormSimulator {
-    pub fn new(h_norm: MPolyCoeffs, plaintext_norm: BigUint, dim: u32) -> Self {
-        Self { h_norm, plaintext_norm, dim }
+    pub fn new(h_norm: MPolyCoeffs, plaintext_norm: BigUint, dim: u32, base_bits: u32) -> Self {
+        let base = 1 << base_bits;
+        let dim_sqrt = (dim as f64).sqrt().ceil() as u32;
+        Self { h_norm, plaintext_norm, dim_sqrt, base }
     }
 }
 
@@ -61,7 +75,8 @@ impl_binop_with_refs!(NormSimulator => Add::add(self, rhs: &NormSimulator) -> No
     NormSimulator {
         h_norm: &self.h_norm + &rhs.h_norm,
         plaintext_norm: &self.plaintext_norm + &rhs.plaintext_norm,
-        dim: self.dim,
+        dim_sqrt: self.dim_sqrt,
+        base: self.base,
     }
 });
 
@@ -71,15 +86,17 @@ impl_binop_with_refs!(NormSimulator => Sub::sub(self, rhs: &NormSimulator) -> No
     NormSimulator {
         h_norm: &self.h_norm + &rhs.h_norm,
         plaintext_norm: &self.plaintext_norm + &rhs.plaintext_norm,
-        dim: self.dim,
+        dim_sqrt: self.dim_sqrt,
+        base: self.base,
     }
 });
 
 impl_binop_with_refs!(NormSimulator => Mul::mul(self, rhs: &NormSimulator) -> NormSimulator {
     NormSimulator {
-        h_norm: self.h_norm.right_rotate(self.dim) + &rhs.h_norm * &self.plaintext_norm,
+        h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) + &rhs.h_norm * &self.plaintext_norm,
         plaintext_norm: &self.plaintext_norm * &rhs.plaintext_norm,
-        dim: self.dim,
+        dim_sqrt: self.dim_sqrt,
+        base: self.base,
     }
 });
 
@@ -88,12 +105,13 @@ impl Evaluable for NormSimulator {
     fn rotate(&self, _: &Self::Params, _: usize) -> Self {
         self.clone()
     }
-    fn from_bits(_: &Self::Params, one: &Self, _: &[bool]) -> Self {
-        let n = BigUint::from(one.dim);
-        let h_norm = one.h_norm.clone() * &n;
-        let plaintext_norm = n;
-        let dim = one.dim;
-        Self { h_norm, plaintext_norm, dim }
+
+    fn from_digits(_: &Self::Params, one: &Self, digits: &[u32]) -> Self {
+        let digit_max = digits.iter().max().unwrap();
+        let dim_sqrt = one.dim_sqrt;
+        let h_norm = one.h_norm.clone() * BigUint::from(digit_max * dim_sqrt);
+        let plaintext_norm = one.plaintext_norm.clone() * BigUint::from(*digit_max);
+        Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
 }
 
@@ -105,7 +123,7 @@ impl MPolyCoeffs {
         Self(coeffs)
     }
 
-    pub fn right_rotate(&self, scale: u32) -> Self {
+    pub fn right_rotate(&self, scale: u64) -> Self {
         let mut coeffs = vec![BigUint::zero()];
         coeffs.extend(self.0.iter().map(|coeff| coeff * scale).collect_vec());
         Self(coeffs)
@@ -161,14 +179,14 @@ mod tests {
     ) -> NormSimulator {
         let h_norm = MPolyCoeffs::new(h_norm_values.into_iter().map(BigUint::from).collect());
         let plaintext_norm = BigUint::from(plaintext_norm);
-        NormSimulator::new(h_norm, plaintext_norm, ring_dim)
+        NormSimulator::new(h_norm, plaintext_norm, ring_dim, 1)
     }
 
     #[test]
     fn test_error_simulator_addition() {
         // Create two ErrorSimulator instances
-        let sim1 = create_test_error_simulator(8, vec![10u32], 5);
-        let sim2 = create_test_error_simulator(8, vec![20u32], 7);
+        let sim1 = create_test_error_simulator(16, vec![10u32], 5);
+        let sim2 = create_test_error_simulator(16, vec![20u32], 7);
 
         // Test addition
         let result = sim1 + sim2;
@@ -176,14 +194,14 @@ mod tests {
         // Verify the result
         assert_eq!(result.h_norm.0[0], BigUint::from(30u32)); // 10 + 20
         assert_eq!(result.plaintext_norm, BigUint::from(12u32)); // 5 + 7
-        assert_eq!(result.dim, 8);
+        assert_eq!(result.dim_sqrt.pow(2), 16);
     }
 
     #[test]
     fn test_error_simulator_subtraction() {
         // Create two ErrorSimulator instances
-        let sim1 = create_test_error_simulator(8, vec![10u32], 5);
-        let sim2 = create_test_error_simulator(8, vec![20u32], 7);
+        let sim1 = create_test_error_simulator(16, vec![10u32], 5);
+        let sim2 = create_test_error_simulator(16, vec![20u32], 7);
 
         // Test subtraction (which is actually addition in this implementation)
         let result = sim1 - sim2;
@@ -191,14 +209,14 @@ mod tests {
         // Verify the result (should be the same as addition)
         assert_eq!(result.h_norm.0[0], BigUint::from(30u32)); // 10 + 20
         assert_eq!(result.plaintext_norm, BigUint::from(12u32)); // 5 + 7
-        assert_eq!(result.dim, 8);
+        assert_eq!(result.dim_sqrt.pow(2), 16);
     }
 
     #[test]
     fn test_error_simulator_multiplication() {
         // Create two ErrorSimulator instances
-        let sim1 = create_test_error_simulator(8, vec![10u32], 5);
-        let sim2 = create_test_error_simulator(8, vec![20u32], 7);
+        let sim1 = create_test_error_simulator(16, vec![10u32], 5);
+        let sim2 = create_test_error_simulator(16, vec![20u32], 7);
 
         // Test multiplication
         let result = sim1 * sim2;
@@ -212,11 +230,11 @@ mod tests {
         // First element should be 20 * 5 (from sim2.h_norm * sim1.plaintext_norm)
         assert_eq!(result.h_norm.0[0], BigUint::from(100u32)); // 20 * 5
 
-        // Second element should be 10 * 8 (from right_rotate)
-        assert_eq!(result.h_norm.0[1], BigUint::from(80u32));
+        // Second element should be 10 * 4 (from right_rotate)
+        assert_eq!(result.h_norm.0[1], BigUint::from(40u32));
 
         assert_eq!(result.plaintext_norm, BigUint::from(35u32)); // 5 * 7
-        assert_eq!(result.dim, 8);
+        assert_eq!(result.dim_sqrt.pow(2), 16);
     }
 
     #[test]
@@ -229,12 +247,12 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Simulate norm using the circuit
-        let norms = circuit.simulate_bgg_norm(8, 3 * 8);
+        let norms = circuit.simulate_bgg_norm(16, 1, 3 * 16);
 
         // Manually calculate the expected norm
         // Create NormSimulator instances for inputs
         let input1 =
-            NormSimulator::new(MPolyCoeffs::new(vec![BigUint::from(8u8)]), BigUint::from(8u8), 8);
+            NormSimulator::new(MPolyCoeffs::new(vec![BigUint::one()]), BigUint::one(), 16, 1);
         let input2 = input1.clone();
         let input3 = input1.clone();
 

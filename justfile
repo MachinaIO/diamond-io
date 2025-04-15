@@ -19,10 +19,10 @@ docs:
 
 # Execute all unit tests in the workspace
 test:
-   cargo test -r --features="parallel"
+   cargo test -r
 
 test-io:
-   cargo test -r --test test_io_dummy_param --no-default-features --features parallel
+   cargo test -r --test test_io_dummy_param --no-default-features
 
 # Run the entire CI pipeline including format, clippy, docs, and test checks
 ci: format clippy docs test test-io

@@ -1,7 +1,7 @@
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, FinRingElem},
+        dcrt::{DCRTPoly, DCRTPolyMatrix, FinRingElem},
         sampler::{DistType, PolyHashSampler},
         Poly, PolyMatrix, PolyParams,
     },
@@ -9,9 +9,9 @@ use crate::{
 use bitvec::prelude::*;
 use digest::OutputSizeUser;
 use num_bigint::BigUint;
-#[cfg(feature = "parallel")]
+use num_traits::Zero;
 use rayon::prelude::*;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Range};
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
     key: [u8; 32],
@@ -33,35 +33,6 @@ where
     fn _expose_key(&self) -> &[u8] {
         &self.key
     }
-
-    fn ring_elems_to_matrix(
-        params: &DCRTPolyParams,
-        ring_elems: Vec<FinRingElem>,
-        nrow: usize,
-        ncol: usize,
-    ) -> DCRTPolyMatrix {
-        let n = params.ring_dimension() as usize;
-        // Check if we have enough field elements (not sure if this will ever happen)
-        if ring_elems.len() < nrow * ncol * n {
-            panic!("Not enough ring elements to sample hash")
-        }
-        // From field elements to nrow * ncol polynomials
-        DCRTPolyMatrix::from_poly_vec(
-            params,
-            parallel_iter!(0..nrow)
-                .map(|row_idx| {
-                    let row_offset = row_idx * ncol * n;
-                    parallel_iter!(0..ncol)
-                        .map(|col_idx| {
-                            let offset = row_offset + col_idx * n;
-                            let coeffs = &ring_elems[offset..offset + n];
-                            DCRTPoly::from_coeffs(params, coeffs)
-                        })
-                        .collect()
-                })
-                .collect(),
-        )
-    }
 }
 
 impl<H> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H>
@@ -81,83 +52,87 @@ where
         let hash_output_size = <H as digest::Digest>::output_size() * 8;
         let n = params.ring_dimension() as usize;
         let q = params.modulus();
-
-        let ring_elems = match dist {
-            DistType::FinRingDist => {
-                // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) /
-                // hash_output_size) field_elements = number of field elements
-                // sampled = (bits / ceil(log2(q)))
-                let bit_length = params.modulus_bits();
-                let index = (nrow * ncol * n * bit_length).div_ceil(hash_output_size);
-                // bits = number of resulting bits from hashing ops = hash_output_size * index
-                let mut og_hasher: H = H::new();
-                og_hasher.update(self.key);
-                og_hasher.update(tag.as_ref());
-                let collected_bits: Vec<BitVec<u8, Lsb0>> = parallel_iter!(0..index)
+        let log_q = params.modulus_bits();
+        let num_hash_fin_per_poly = (log_q * n).div_ceil(hash_output_size);
+        let num_hash_bit_per_poly = n.div_ceil(hash_output_size);
+        let mut new_matrix = DCRTPolyMatrix::new_empty(params, nrow, ncol);
+        let mut hasher: H = H::new();
+        hasher.update(self.key);
+        hasher.update(tag.as_ref());
+        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            match dist {
+                DistType::FinRingDist => parallel_iter!(row_offsets)
                     .map(|i| {
-                        let mut hasher = og_hasher.clone();
-                        hasher.update(i.to_le_bytes());
-                        let mut local_bits = bitvec![u8, Lsb0;];
-                        for &byte in hasher.finalize().iter() {
-                            for bit_index in 0..8 {
-                                local_bits.push((byte >> bit_index) & 1 != 0);
-                            }
-                        }
-                        local_bits
+                        parallel_iter!(col_offsets.clone())
+                            .map(|j| {
+                                let mut hasher = hasher.clone();
+                                hasher.update(i.to_le_bytes());
+                                hasher.update(j.to_le_bytes());
+                                let mut local_bits = bitvec![u8, Lsb0;];
+                                for hash_idx in 0..num_hash_fin_per_poly {
+                                    let mut hasher = hasher.clone();
+                                    hasher.update((hash_idx as u64).to_le_bytes());
+                                    for &byte in hasher.finalize().iter() {
+                                        for bit_index in 0..8 {
+                                            local_bits.push((byte >> bit_index) & 1 != 0);
+                                        }
+                                    }
+                                }
+                                let local_bits = local_bits.split_at(log_q * n).0;
+                                let coeffs = parallel_iter!(0..n)
+                                    .map(|coeff_idx| {
+                                        let bits =
+                                            &local_bits[coeff_idx * log_q..(coeff_idx + 1) * log_q];
+                                        let mut value = BigUint::zero();
+                                        for bit in bits.iter() {
+                                            value <<= 1;
+                                            if *bit {
+                                                value |= BigUint::from(1u32);
+                                            }
+                                        }
+                                        FinRingElem::new(value, q.clone())
+                                    })
+                                    .collect::<Vec<_>>();
+                                DCRTPoly::from_coeffs(params, &coeffs)
+                            })
+                            .collect()
                     })
-                    .collect();
-
-                // Flatten into a single `BitVec`
-                let bv: BitVec<u8, Lsb0> = collected_bits.into_iter().flatten().collect();
-                let num_chunks = bv.len() / bit_length;
-                let ring_elems: Vec<FinRingElem> = parallel_iter!(0..num_chunks)
+                    .collect::<Vec<Vec<DCRTPoly>>>(),
+                DistType::BitDist => parallel_iter!(row_offsets)
                     .map(|i| {
-                        let start = i * bit_length;
-                        let end = start + bit_length;
-                        let value_bits = &bv[start..end];
-
-                        let mut value = BigUint::default();
-                        for bit in value_bits.iter() {
-                            value <<= 1;
-                            if *bit {
-                                value |= BigUint::from(1u32);
-                            }
-                        }
-                        FinRingElem::new(value, q.clone())
+                        parallel_iter!(col_offsets.clone())
+                            .map(|j| {
+                                let mut hasher = hasher.clone();
+                                hasher.update(i.to_le_bytes());
+                                hasher.update(j.to_le_bytes());
+                                let mut local_bits = bitvec![u8, Lsb0;];
+                                for hash_idx in 0..num_hash_bit_per_poly {
+                                    let mut hasher = hasher.clone();
+                                    hasher.update((hash_idx as u64).to_le_bytes());
+                                    for &byte in hasher.finalize().iter() {
+                                        for bit_index in 0..8 {
+                                            local_bits.push((byte >> bit_index) & 1 != 0);
+                                        }
+                                    }
+                                }
+                                let local_bits = local_bits.split_at(n).0;
+                                let coeffs = parallel_iter!(0..n)
+                                    .map(|coeff_idx| {
+                                        FinRingElem::new(local_bits[coeff_idx] as u64, q.clone())
+                                    })
+                                    .collect::<Vec<_>>();
+                                DCRTPoly::from_coeffs(params, &coeffs)
+                            })
+                            .collect::<Vec<DCRTPoly>>()
                     })
-                    .collect();
-                debug_assert_eq!(ring_elems.len(), (index * hash_output_size) / bit_length);
-                ring_elems
-            }
-            DistType::BitDist => {
-                // index = number of hashes to be performed = ceil(nrow * ncol * n * ceil(log2(q)) /
-                // hash_output_size) field_elements = number of field elements
-                // sampled = (bits / ceil(log2(q)))
-                let index = (nrow * ncol * n).div_ceil(hash_output_size);
-                let mut ring_elems = Vec::with_capacity(hash_output_size * index);
-                for i in 0..index {
-                    //  H ( key || tag || i )
-                    let mut hasher = H::new();
-                    let mut combined = Vec::with_capacity(self.key.len() + tag.as_ref().len() + 1);
-                    combined.extend_from_slice(&self.key);
-                    combined.extend_from_slice(tag.as_ref());
-                    combined.push(i as u8);
-                    hasher.update(&combined);
-                    for &byte in hasher.finalize().iter() {
-                        for bit_index in 0..8 {
-                            let bit = (byte >> bit_index) & 1;
-                            ring_elems.push(FinRingElem::new(bit as u64, q.clone()));
-                        }
-                    }
+                    .collect::<Vec<Vec<DCRTPoly>>>(),
+                _ => {
+                    panic!("Unsupported distribution type")
                 }
-                ring_elems
-            }
-            _ => {
-                panic!("Unsupported distribution type")
             }
         };
-
-        Self::ring_elems_to_matrix(params, ring_elems, nrow, ncol)
+        new_matrix.replace_entries(0..nrow, 0..ncol, f);
+        new_matrix
     }
 
     fn set_key(&mut self, key: [u8; 32]) {
@@ -170,13 +145,8 @@ where
 mod tests {
     use super::*;
     use crate::poly::dcrt::DCRTPolyParams;
-    #[cfg(not(feature = "parallel"))]
-    use itertools::Itertools;
+
     use keccak_asm::Keccak256;
-    #[cfg(not(feature = "parallel"))]
-    use proptest::prelude::*;
-    #[cfg(not(feature = "parallel"))]
-    use std::sync::Arc;
 
     #[test]
     fn test_poly_hash_sampler() {
@@ -215,7 +185,7 @@ mod tests {
         assert_eq!(matrix.col_size(), ncol, "Matrix column count mismatch");
     }
 
-    #[cfg(not(feature = "parallel"))]
+    #[cfg(not(feature = "test"))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
 

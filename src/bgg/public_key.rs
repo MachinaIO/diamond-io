@@ -1,6 +1,9 @@
 use super::circuit::Evaluable;
-use crate::poly::{Poly, PolyMatrix};
-use itertools::Itertools;
+use crate::{
+    poly::{Poly, PolyMatrix},
+    utils::debug_mem,
+};
+use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +18,7 @@ impl<M: PolyMatrix> BggPublicKey<M> {
     }
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
-        self.matrix.concat_columns(&others.iter().map(|x| &x.matrix).collect_vec()[..])
+        self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
     }
 }
 
@@ -59,9 +62,13 @@ impl<M: PolyMatrix> Mul for BggPublicKey<M> {
 impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
     type Output = Self;
     fn mul(self, other: &Self) -> Self {
+        debug_mem(format!("BGGPublicKey::mul {:?}, {:?}", self.matrix.size(), other.matrix.size()));
         let decomposed = other.matrix.decompose();
-        let matrix = self.matrix.clone() * decomposed;
+        debug_mem("BGGPublicKey::mul decomposed");
+        let matrix = self.matrix * decomposed;
+        debug_mem("BGGPublicKey::mul matrix multiplied");
         let reveal_plaintext = self.reveal_plaintext & other.reveal_plaintext;
+        debug_mem("BGGPublicKey::mul reveal_plaintext");
         Self { matrix, reveal_plaintext }
     }
 }
@@ -69,14 +76,21 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+        debug_mem(format!("BGGPublicKey::rotate {:?}, {:?}", self.matrix.size(), shift));
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
+        debug_mem("BGGPublicKey::rotate rotate_poly");
         let matrix = self.matrix.clone() * rotate_poly;
+        debug_mem("BGGPublicKey::rotate matrix multiplied");
         Self { matrix, reveal_plaintext: self.reveal_plaintext }
     }
 
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
+    fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self {
+        debug_mem(format!("BGGPublicKey::from_digits {:?}, {:?}", one.matrix.size(), digits.len()));
+        let const_poly =
+            <M::P as Evaluable>::from_digits(params, &<M::P>::const_one(params), digits);
+        debug_mem("BGGPublicKey::from_digits const_poly");
         let matrix = one.matrix.clone() * const_poly;
+        debug_mem("BGGPublicKey::from_digits matrix multiplied");
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 }
@@ -86,7 +100,7 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
 mod tests {
     use crate::{
         bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},
-        poly::dcrt::{params::DCRTPolyParams, sampler::hash::DCRTPolyHashSampler},
+        poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
     };
     use keccak_asm::Keccak256;
     use std::sync::Arc;

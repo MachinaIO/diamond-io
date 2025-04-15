@@ -1,3 +1,7 @@
+use std::env;
+#[cfg(feature = "cpu")]
+use std::{thread, time};
+
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
     sampler::DistType,
@@ -6,6 +10,8 @@ use crate::poly::{
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
+#[cfg(feature = "cpu")]
+use sysinfo::{CpuRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
 
 pub fn ceil_log2(q: &BigUint) -> usize {
@@ -75,20 +81,32 @@ pub fn create_bit_poly(params: &DCRTPolyParams, bit: bool) -> DCRTPoly {
 pub fn log_mem<T: Into<String>>(tag: T) {
     if let Some(usage) = memory_stats() {
         info!(
-            "{} || Current physical/virtural memory usage: {} | {}",
+            "{} || Current physical/virtual memory usage: {} | {}",
             tag.into(),
             usage.physical_mem,
-            usage.virtual_mem
+            usage.virtual_mem,
         );
     } else {
         info!("Couldn't get the current memory usage :(");
+    }
+
+    #[cfg(feature = "cpu")]
+    {
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()),
+        );
+        sys.refresh_cpu_all();
+        thread::sleep(time::Duration::from_millis(200));
+        sys.refresh_cpu_all();
+        let cpu_usages: Vec<f32> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
+        info!("CPU usages: {:?} ", cpu_usages);
     }
 }
 
 pub fn debug_mem<T: Into<String>>(tag: T) {
     if let Some(usage) = memory_stats() {
         debug!(
-            "{} || Current physical/virtural memory usage: {} | {}",
+            "{} || Current physical/virtual memory usage: {} | {}",
             tag.into(),
             usage.physical_mem,
             usage.virtual_mem
@@ -96,37 +114,32 @@ pub fn debug_mem<T: Into<String>>(tag: T) {
     } else {
         debug!("Couldn't get the current memory usage :(");
     }
+
+    #[cfg(feature = "cpu")]
+    {
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()),
+        );
+        sys.refresh_cpu_all();
+        thread::sleep(time::Duration::from_millis(200));
+        sys.refresh_cpu_all();
+        let cpu_usages: Vec<f32> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
+        debug!("CPU usages: {:?} ", cpu_usages,);
+    }
 }
 
 pub fn init_tracing() {
     tracing_subscriber::fmt::init();
 }
 
-#[macro_export]
-macro_rules! parallel_iter {
-    ($i: expr) => {{
-        #[cfg(not(feature = "parallel"))]
-        {
-            IntoIterator::into_iter($i)
-        }
-        #[cfg(feature = "parallel")]
-        {
-            rayon::iter::IntoParallelIterator::into_par_iter($i)
-        }
-    }};
+pub fn block_size() -> usize {
+    env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(100)
 }
 
 #[macro_export]
-macro_rules! join {
-    ($a:expr, $b:expr $(,)?) => {{
-        #[cfg(not(feature = "parallel"))]
-        {
-            ($a(), $b())
-        }
-        #[cfg(feature = "parallel")]
-        {
-            rayon::join($a, $b)
-        }
+macro_rules! parallel_iter {
+    ($i: expr) => {{
+        rayon::iter::IntoParallelIterator::into_par_iter($i)
     }};
 }
 

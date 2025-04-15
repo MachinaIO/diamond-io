@@ -8,15 +8,17 @@ license = "MIT OR Apache-2.0"
 [features]
 default = ["test"]
 test = []
-parallel = ["rayon"]
 bgm = ["rodio", "reqwest"]
+disk = ["tempfile", "libc", "memmap2"]
+cpu = []
 
 [dependencies]
-openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git" }
+libc = { version = "0.2", optional = true }
+openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/reimpl_trapdoor" }
 digest = "0.10"
 num-bigint = { version = "0.4", default-features = false }
 num-traits = "0.2"
-rayon = { version = "1.5", optional = true }
+rayon = { version = "1.5" }
 rand = { version = "0.9.0", features = ["std_rng"] }
 itertools = "0.14.0"
 tracing = "0.1"
@@ -26,6 +28,13 @@ memory-stats = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rodio = { version = "0.20.1", git = "https://github.com/RustAudio/rodio.git", optional = true }
+# mmap-storage = "0.10.0"
+memmap2 = { version = "0.9.5", optional = true }
+tempfile = { version = "3.19.1", optional = true }
+sysinfo = "0.34.1"
+once_cell = "1.21.1"
+rand_distr = "0.5.1"
+dashmap = "6.1.0"
 # for now we put in test
 
 [dev-dependencies]

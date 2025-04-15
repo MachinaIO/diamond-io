@@ -5,7 +5,7 @@ use diamond_io::poly::{
 };
 
 pub fn dcrtpoly_operations_bench(c: &mut Criterion) {
-    let params = DCRTPolyParams::new(4, 2, 17);
+    let params = DCRTPolyParams::new(4, 2, 17, 1);
     let q = params.modulus();
 
     let coeffs1: Vec<FinRingElem> = (0..params.ring_dimension())

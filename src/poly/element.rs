@@ -30,7 +30,8 @@ pub trait PolyElem:
     fn to_bit(&self) -> bool;
     fn half_q(modulus: &Self::Modulus) -> Self;
     fn max_q(modulus: &Self::Modulus) -> Self;
-    fn extract_highest_bits(&self) -> bool;
     fn modulus(&self) -> &Self::Modulus;
+    fn from_bytes(modulus: &Self::Modulus, bytes: &[u8]) -> Self;
+    fn to_bytes(&self) -> Vec<u8>;
     fn to_biguint(&self) -> &num_bigint::BigUint;
 }

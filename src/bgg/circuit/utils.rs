@@ -2,39 +2,41 @@ use crate::bgg::circuit::Evaluable;
 
 use super::PolyCircuit;
 
-/// Build a circuit that takes as input a public circuit and a private input, and outputs inner
-/// products between the `num_priv_input`-sized output of the public circuit and the private input.
-pub fn build_circuit_ip_priv_and_pub_outputs<E: Evaluable>(
+/// Build a circuit that is a composition of two sub-circuits:
+/// 1. A public circuit that it is assumed to return one or more ciphertexts where each ciphertext
+///    is base decomposed -> BaseDecompose(ct_0), BaseDecompose(ct_1), ... where BaseDecompose(ct_k)
+///    = [a_base_0, b_base_0, a_base_1, b_base_1, ...]
+/// 2. An FHE decryption circuit that takes each ciphertext and the RLWE secret key -t_bar as inputs
+///    and returns the base decomposed plaintext for each cipheretxt
+pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     public_circuit: PolyCircuit,
-    num_priv_input: usize,
+    log_base_q: usize,
 ) -> PolyCircuit {
-    let num_pub_input = public_circuit.num_input();
-    debug_assert_eq!(public_circuit.num_output() % num_priv_input, 0);
-    let num_ip_outputs = public_circuit.num_output() / num_priv_input;
-    let num_input = num_pub_input + num_priv_input;
+    let num_pub_circuit_input = public_circuit.num_input();
+    let num_pub_circuit_output = public_circuit.num_output();
+    debug_assert_eq!(num_pub_circuit_output % (2 * log_base_q), 0);
+
+    let num_output = public_circuit.num_output() / 2;
+    let num_input = num_pub_circuit_input + 1;
     let mut circuit = PolyCircuit::new();
     let inputs = circuit.input(num_input);
-    let pub_inputs = &inputs[0..num_pub_input];
-    let priv_inputs = &inputs[num_pub_input..];
+    let pub_circuit_inputs = &inputs[0..num_pub_circuit_input];
+    let minus_t_bar = &inputs[num_pub_circuit_input];
     let circuit_id = circuit.register_sub_circuit(public_circuit);
-    let pub_outputs = circuit.call_sub_circuit(circuit_id, pub_inputs);
-    let mut ip_outputs = Vec::with_capacity(num_ip_outputs);
-    for out_idx in 0..num_ip_outputs {
-        let mut ip_output = 0;
-        for (priv_input, pub_output) in priv_inputs
-            .iter()
-            .zip(pub_outputs[(num_priv_input * out_idx)..(num_priv_input * (out_idx + 1))].iter())
-        {
-            let mul = circuit.mul_gate(*pub_output, *priv_input);
-            if ip_output == 0 {
-                ip_output = mul;
-            } else {
-                ip_output = circuit.add_gate(ip_output, mul);
-            }
-        }
-        ip_outputs.push(ip_output);
+    let pub_circuit_outputs = circuit.call_sub_circuit(circuit_id, pub_circuit_inputs);
+    let mut outputs = Vec::with_capacity(num_output);
+
+    // Process each pair (a_base, b_base) from the public circuit outputs
+    // result = a_base * -t_bar + b_base
+    for i in 0..num_output {
+        let a_digit = pub_circuit_outputs[i * 2];
+        let b_digit = pub_circuit_outputs[i * 2 + 1];
+        let mul = circuit.mul_gate(a_digit, *minus_t_bar);
+        let result = circuit.add_gate(b_digit, mul);
+        outputs.push(result);
     }
-    circuit.output(ip_outputs);
+
+    circuit.output(outputs);
     circuit
 }
 
@@ -43,106 +45,77 @@ pub fn build_circuit_ip_priv_and_pub_outputs<E: Evaluable>(
 mod tests {
     use super::*;
     use crate::{
+        bgg::DigitsToInt,
         poly::{
-            dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
-            Poly,
+            dcrt::{params::DCRTPolyParams, poly::DCRTPoly, DCRTPolyUniformSampler},
+            enc::rlwe_encrypt,
+            sampler::{DistType, PolyUniformSampler},
+            Poly, PolyParams,
         },
-        utils::create_random_poly,
     };
 
     #[test]
-    fn test_build_ip_priv_and_pub_circuit_outputs() {
-        // Create parameters for testing
+    fn test_build_composite_circuit_from_public_and_fhe_dec() {
+        // 1. Set up parameters
         let params = DCRTPolyParams::default();
+        let log_base_q = params.modulus_digits();
+        let sampler_uniform = DCRTPolyUniformSampler::new();
+        let sigma = 3.0;
 
-        // Create input polynomials
-        let priv_polys = vec![
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-        ];
-
-        let pub_polys = vec![
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-        ];
-
-        // Create a simple public circuit that adds its inputs
+        // 2. Create a simple public circuit that takes 2*log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
-        let pub_inputs = public_circuit.input(3);
-
-        // Create 6 outputs (2 groups of 3)
-        let out1 = public_circuit.add_gate(pub_inputs[0], pub_inputs[1]);
-        let out2 = public_circuit.add_gate(pub_inputs[1], pub_inputs[2]);
-        let out3 = public_circuit.add_gate(pub_inputs[0], pub_inputs[2]);
-        let out4 = public_circuit.mul_gate(pub_inputs[0], pub_inputs[1]);
-        let out5 = public_circuit.mul_gate(pub_inputs[1], pub_inputs[2]);
-        let out6 = public_circuit.mul_gate(pub_inputs[0], pub_inputs[2]);
-
-        public_circuit.output(vec![out1, out2, out3, out4, out5, out6]);
-
-        // Number of private inputs (we'll have 2 inner products)
-        let num_priv_input = 3;
-
-        // Create a copy of the public circuit for evaluation
-        let mut public_circuit_for_eval = PolyCircuit::new();
-        let pub_inputs_eval = public_circuit_for_eval.input(3);
-
-        let out1_eval = public_circuit_for_eval.add_gate(pub_inputs_eval[0], pub_inputs_eval[1]);
-        let out2_eval = public_circuit_for_eval.add_gate(pub_inputs_eval[1], pub_inputs_eval[2]);
-        let out3_eval = public_circuit_for_eval.add_gate(pub_inputs_eval[0], pub_inputs_eval[2]);
-        let out4_eval = public_circuit_for_eval.mul_gate(pub_inputs_eval[0], pub_inputs_eval[1]);
-        let out5_eval = public_circuit_for_eval.mul_gate(pub_inputs_eval[1], pub_inputs_eval[2]);
-        let out6_eval = public_circuit_for_eval.mul_gate(pub_inputs_eval[0], pub_inputs_eval[2]);
-
-        public_circuit_for_eval
-            .output(vec![out1_eval, out2_eval, out3_eval, out4_eval, out5_eval, out6_eval]);
-
-        // Evaluate the public circuit to get its outputs
-        let pub_circuit_outputs =
-            public_circuit_for_eval.eval(&params, &DCRTPoly::const_one(&params), &pub_polys);
-
-        // Verify that the public circuit outputs are as expected
-        let expected_out1 = pub_polys[0].clone() + pub_polys[1].clone(); // add_gate(pub_inputs[0], pub_inputs[1])
-        let expected_out2 = pub_polys[1].clone() + pub_polys[2].clone(); // add_gate(pub_inputs[1], pub_inputs[2])
-        let expected_out3 = pub_polys[0].clone() + pub_polys[2].clone(); // add_gate(pub_inputs[0], pub_inputs[2])
-        let expected_out4 = &pub_polys[0] * &pub_polys[1]; // mul_gate(pub_inputs[0], pub_inputs[1])
-        let expected_out5 = &pub_polys[1] * &pub_polys[2]; // mul_gate(pub_inputs[1], pub_inputs[2])
-        let expected_out6 = &pub_polys[0] * &pub_polys[2]; // mul_gate(pub_inputs[0], pub_inputs[2])
-
-        assert_eq!(pub_circuit_outputs.len(), 6);
-        assert_eq!(pub_circuit_outputs[0], expected_out1);
-        assert_eq!(pub_circuit_outputs[1], expected_out2);
-        assert_eq!(pub_circuit_outputs[2], expected_out3);
-        assert_eq!(pub_circuit_outputs[3], expected_out4);
-        assert_eq!(pub_circuit_outputs[4], expected_out5);
-        assert_eq!(pub_circuit_outputs[5], expected_out6);
-
-        // Build the inner product circuit
-        let ip_circuit =
-            build_circuit_ip_priv_and_pub_outputs::<DCRTPoly>(public_circuit, num_priv_input);
-
-        // Verify the circuit structure
-        assert_eq!(ip_circuit.num_input(), 6); // 3 private + 3 public inputs
-        assert_eq!(ip_circuit.num_output(), 2); // 2 inner products
-
-        // Manually calculate the expected inner products
-        let mut expected_ip1 = DCRTPoly::const_zero(&params);
-        let mut expected_ip2 = DCRTPoly::const_zero(&params);
-
-        for i in 0..num_priv_input {
-            expected_ip1 += &pub_circuit_outputs[i] * &priv_polys[i];
-            expected_ip2 += &pub_circuit_outputs[i + num_priv_input] * &priv_polys[i];
+        {
+            let inputs = public_circuit.input(2 * log_base_q);
+            public_circuit.output(inputs[0..2 * log_base_q].to_vec());
         }
 
-        // Evaluate the inner product circuit
-        let all_inputs = [pub_polys, priv_polys].concat();
-        let result = ip_circuit.eval(&params, &DCRTPoly::const_one(&params), &all_inputs);
+        // 3. Generate a random hardcoded key
+        let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
 
-        // Verify the results
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0], expected_ip1);
-        assert_eq!(result[1], expected_ip2);
+        // 4. Generate RLWE ciphertext for the hardcoded key
+        let a_rlwe_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+        let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+
+        let b = rlwe_encrypt(
+            &params,
+            &sampler_uniform,
+            &t_bar_matrix,
+            &a_rlwe_bar,
+            &hardcoded_key,
+            sigma,
+        );
+
+        // 5. Build a composite circuit from public circuit and FHE decryption
+        let circuit =
+            build_composite_circuit_from_public_and_fhe_dec::<DCRTPoly>(public_circuit, log_base_q);
+
+        // 6. Evaluate the circuit with inputs a_bit_0, b_bit_0, a_bit_1, b_bit_1, ..., -t_bar
+        let a_decomposed = a_rlwe_bar.entry(0, 0).decompose_base(&params);
+        let b_decomposed = b.entry(0, 0).decompose_base(&params);
+        let minus_t_bar = -t_bar_matrix.entry(0, 0);
+        let mut inputs = Vec::with_capacity(2 * log_base_q + 1);
+        for i in 0..log_base_q {
+            inputs.push(a_decomposed[i].clone());
+            inputs.push(b_decomposed[i].clone());
+        }
+        inputs.push(minus_t_bar.clone());
+
+        assert_eq!(inputs.len(), 2 * log_base_q + 1);
+        let one = DCRTPoly::const_one(&params);
+        let outputs = circuit.eval(&params, &one, &inputs);
+        assert_eq!(outputs.len(), log_base_q);
+
+        // 7. Verify the correctness of the output
+        for i in 0..log_base_q {
+            let a_digit = a_decomposed[i].clone();
+            let b_digit = b_decomposed[i].clone();
+            let expected_output = a_digit * minus_t_bar.clone() + b_digit;
+            assert_eq!(outputs[i], expected_output);
+        }
+
+        // 8. Recompose the output
+        let output_ints = DCRTPoly::digits_to_int(&outputs, &params);
+        let output_recovered_bits = output_ints.extract_bits_with_threshold(&params);
+        assert_eq!(output_recovered_bits, hardcoded_key.entry(0, 0).to_bool_vec());
     }
 }

@@ -1,4 +1,3 @@
-use crate::poly::PolyElem;
 use num_bigint::{BigInt, BigUint, ParseBigIntError, ToBigInt};
 use num_traits::Signed;
 use std::{
@@ -6,6 +5,8 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+use crate::poly::element::PolyElem;
 
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct FinRingElem {
@@ -30,6 +31,16 @@ impl FinRingElem {
         let value = BigInt::from_str(value)?;
         let modulus = BigUint::from_str(modulus)?.into();
         Ok(Self::new(value, modulus))
+    }
+
+    pub fn from_int64(value: i64, modulus: Arc<BigUint>) -> Self {
+        if value < 0 {
+            let abs_rem = value.unsigned_abs() % modulus.as_ref();
+            let value = modulus.as_ref() - abs_rem;
+            Self::new(value, modulus)
+        } else {
+            Self::new(value, modulus)
+        }
     }
 
     pub fn value(&self) -> &BigUint {
@@ -85,14 +96,20 @@ impl PolyElem for FinRingElem {
         Self::new(modulus.as_ref() - &BigUint::from(1u8), modulus.clone())
     }
 
-    fn extract_highest_bits(&self) -> bool {
-        let bits = self.modulus.bits();
-        let half_q_value = BigUint::from(1u8) << (bits - 1);
-        self.value >= half_q_value
-    }
-
     fn modulus(&self) -> &Self::Modulus {
         &self.modulus
+    }
+
+    fn from_bytes(modulus: &Self::Modulus, bytes: &[u8]) -> Self {
+        let value = BigUint::from_bytes_le(bytes);
+        Self::new(value, modulus.clone())
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let log_q_bytes = self.modulus.bits().div_ceil(8) as usize;
+        let mut bytes = self.value.to_bytes_le();
+        bytes.resize(log_q_bytes, 0);
+        bytes
     }
 
     fn to_biguint(&self) -> &num_bigint::BigUint {
@@ -269,15 +286,6 @@ mod tests {
         let minus_one = FinRingElem::minus_one(&modulus);
         assert_eq!(minus_one.value(), &BigUint::from((10000 - 1) as usize));
         assert_eq!(minus_one.modulus(), modulus.as_ref());
-    }
-
-    #[test]
-    fn test_element_higest_bit() {
-        let modulus = Arc::new(BigUint::from(17u8));
-        let small = FinRingElem::new(3, modulus.clone());
-        let large = FinRingElem::new(16, modulus.clone());
-        assert!(!small.extract_highest_bits()); // 3 < 16
-        assert!(large.extract_highest_bits()); // 16 >= 16
     }
 
     #[test]

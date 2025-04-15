@@ -1,6 +1,6 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix};
-use itertools::Itertools;
+use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ impl<M: PolyMatrix> BggEncoding<M> {
     }
 
     pub fn concat_vector(&self, others: &[Self]) -> M {
-        self.vector.concat_columns(&others.iter().map(|x| &x.vector).collect_vec()[..])
+        self.vector.concat_columns(&others.par_iter().map(|x| &x.vector).collect::<Vec<_>>()[..])
     }
 }
 
@@ -78,7 +78,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
             panic!("Unknown plaintext for the left-hand input of multiplication");
         }
         let decomposed_b = other.pubkey.matrix.decompose();
-        let first_term = self.vector.clone() * decomposed_b.clone();
+        let first_term = self.vector * decomposed_b.clone();
         let second_term = other.vector.clone() * self.plaintext.as_ref().unwrap();
         let new_vector = first_term + second_term;
         let new_plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
@@ -87,7 +87,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
         };
 
         let new_pubkey = BggPublicKey {
-            matrix: self.pubkey.matrix.clone() * decomposed_b,
+            matrix: self.pubkey.matrix * decomposed_b,
             reveal_plaintext: self.pubkey.reveal_plaintext & other.pubkey.reveal_plaintext,
         };
         Self { vector: new_vector, pubkey: new_pubkey, plaintext: new_plaintext }
@@ -104,10 +104,11 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         Self { vector, pubkey, plaintext }
     }
 
-    fn from_bits(params: &Self::Params, one: &Self, bits: &[bool]) -> Self {
-        let const_poly = <M::P as Evaluable>::from_bits(params, &<M::P>::const_one(params), bits);
+    fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self {
+        let const_poly =
+            <M::P as Evaluable>::from_digits(params, &<M::P>::const_one(params), digits);
         let vector = one.vector.clone() * &const_poly;
-        let pubkey = BggPublicKey::from_bits(params, &one.pubkey, bits);
+        let pubkey = BggPublicKey::from_digits(params, &one.pubkey, digits);
         let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
         Self { vector, pubkey, plaintext }
     }
