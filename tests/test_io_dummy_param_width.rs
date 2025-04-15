@@ -22,7 +22,7 @@ mod test {
     const SIGMA: f64 = 4.578;
 
     #[test]
-    fn test_io_just_mul_enc_and_and_bit() {
+    fn test_io_just_mul_enc_and_and_bit_large_width() {
         init_tracing();
         let start_time = std::time::Instant::now();
         let params = DCRTPolyParams::new(4, 2, 17, 10);
@@ -51,7 +51,7 @@ mod test {
             params: params.clone(),
             switched_modulus,
             input_size: 4,
-            level_width_exp: 1,
+            level_width_exp: 2,
             public_circuit: public_circuit.clone(),
             d: 3,
             encoding_sigma: 0.0,
