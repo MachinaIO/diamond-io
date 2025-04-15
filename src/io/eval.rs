@@ -42,10 +42,10 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
-        let level_width_exp = obf_params.level_width_exp;
-        let level_width = (1u64 << obf_params.level_width_exp) as usize;
-        assert!(inputs.len() % level_width_exp == 0);
-        let depth = obf_params.input_size / level_width_exp;
+        let level_width = obf_params.level_width;
+        let level_size = (1u64 << obf_params.level_width) as usize;
+        assert!(inputs.len() % level_width == 0);
+        let depth = obf_params.input_size / level_width;
         let pubkeys = (0..depth + 1)
             .map(|id| {
                 sample_public_key_by_id(
@@ -65,7 +65,7 @@ where
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
-                s_connect * &self.bs[0][level_width]
+                s_connect * &self.bs[0][level_size]
             };
             assert_eq!(self.p_init, expected_p_init);
 
@@ -88,7 +88,7 @@ where
         let log_base_q = params.as_ref().modulus_digits();
         let dim = params.as_ref().ring_dimension() as usize;
         let nums: Vec<u64> = inputs
-            .chunks(level_width_exp)
+            .chunks(level_width)
             .map(|chunk| {
                 chunk.iter().enumerate().fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
             })
@@ -112,19 +112,18 @@ where
             };
             log_mem(format!("new_encode_vec at {} computed", level));
             let mut new_encodings = vec![];
-            let inserted_poly_index = 1 + (level * level_width_exp) / dim;
+            let inserted_poly_index = 1 + (level * level_width) / dim;
             for (j, encode) in encodings[level].iter().enumerate() {
                 let m = d1 * log_base_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
                 log_mem(format!("new_vec at {}, {} computed", level, j));
                 let plaintext = if j == inserted_poly_index {
-                    let inserted_coeff_indices = (0..level_width_exp)
-                        .map(|i| (i + (level * level_width_exp)) % dim)
-                        .collect_vec();
+                    let inserted_coeff_indices =
+                        (0..level_width).map(|i| (i + (level * level_width)) % dim).collect_vec();
                     let mut coeffs = encode.plaintext.as_ref().unwrap().coeffs().clone();
                     let num_bits: Vec<bool> =
-                        (0..level_width_exp).map(|i| (num >> i) & 1 == 1).collect();
-                    debug_assert_eq!(num_bits.len(), level_width_exp);
+                        (0..level_width).map(|i| (num >> i) & 1 == 1).collect();
+                    debug_assert_eq!(num_bits.len(), level_width);
                     for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
                         let bit = num_bits[i];
                         if bit {
@@ -158,7 +157,7 @@ where
                 let b_next_bit = self.bs[level + 1][*num as usize].clone();
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][level_width];
+                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][level_size];
                 assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
@@ -168,14 +167,14 @@ where
                         let mut polys = vec![];
                         polys.push(one.clone());
                         let mut coeffs = vec![];
-                        for bit in inputs[0..(level_width_exp * (level + 1))].iter() {
+                        for bit in inputs[0..(level_width * (level + 1))].iter() {
                             if *bit {
                                 coeffs.push(<M::P as Poly>::Elem::one(&params.modulus()));
                             } else {
                                 coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));
                             }
                         }
-                        for _ in 0..(obf_params.input_size - level_width_exp * (level + 1)) {
+                        for _ in 0..(obf_params.input_size - level_width * (level + 1)) {
                             coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));
                         }
                         let input_polys = coeffs

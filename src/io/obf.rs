@@ -121,13 +121,13 @@ where
     log_mem("Computed p_init");
 
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
-    let level_width_exp = obf_params.level_width_exp; // number of bits to be inserted at each level
-    assert_eq!(obf_params.input_size % level_width_exp, 0);
-    assert_eq!(dim % level_width_exp, 0);
-    let level_width = (1u64 << obf_params.level_width_exp) as usize;
-    let depth = obf_params.input_size / level_width_exp; // number of levels necessary to encode the input
-    let mut u_nums = Vec::with_capacity(level_width);
-    for i in 0..level_width {
+    let level_width = obf_params.level_width; // number of bits to be inserted at each level
+    assert_eq!(obf_params.input_size % level_width, 0);
+    assert_eq!(dim % level_width, 0);
+    let level_size = (1u64 << obf_params.level_width) as usize;
+    let depth = obf_params.input_size / level_width; // number of levels necessary to encode the input
+    let mut u_nums = Vec::with_capacity(level_size);
+    for i in 0..level_size {
         let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
         u_nums.push(u_i);
     }
@@ -139,18 +139,17 @@ where
     log_mem("Computed u_0, u_1, u_star");
 
     let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![Vec::with_capacity(level_width); depth],
-        vec![Vec::with_capacity(level_width); depth],
-        vec![Vec::with_capacity(level_width); depth],
+        vec![Vec::with_capacity(level_size); depth],
+        vec![Vec::with_capacity(level_size); depth],
+        vec![Vec::with_capacity(level_size); depth],
     );
 
     #[cfg(feature = "test")]
-    let mut bs: Vec<Vec<M>> =
-        vec![vec![M::zero(params.as_ref(), 0, 0); level_width + 1]; depth + 1];
+    let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth + 1];
 
     #[cfg(feature = "test")]
     {
-        bs[0][level_width] = b_star_cur.clone();
+        bs[0][level_size] = b_star_cur.clone();
     }
 
     let mut pub_key_cur = pub_key_init;
@@ -165,19 +164,19 @@ where
 
         #[cfg(feature = "test")]
         {
-            bs[level + 1][level_width] = b_star_level.clone();
+            bs[level + 1][level_size] = b_star_level.clone();
         }
 
         // Precomputation for k_preimage that are not num dependent
         let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
-        let inserted_poly_index = 1 + (level * level_width_exp) / dim;
+        let inserted_poly_index = 1 + (level * level_width) / dim;
         let inserted_coeff_indices =
-            (0..level_width_exp).map(|i| (i + (level * level_width_exp)) % dim).collect_vec();
-        debug_assert_eq!(inserted_coeff_indices.len(), level_width_exp);
+            (0..level_width).map(|i| (i + (level * level_width)) % dim).collect_vec();
+        debug_assert_eq!(inserted_coeff_indices.len(), level_width);
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
 
-        for num in 0..level_width {
+        for num in 0..level_size {
             let (b_num_trapdoor_level, b_num_level) =
                 sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for level and num");
@@ -211,9 +210,9 @@ where
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             log_mem("Computed top");
-            // bit decompose num over level_width_exp bits
-            let num_bits: Vec<bool> = (0..level_width_exp).map(|i| (num >> i) & 1 == 1).collect();
-            debug_assert_eq!(num_bits.len(), level_width_exp);
+            // bit decompose num over level_width bits
+            let num_bits: Vec<bool> = (0..level_width).map(|i| (num >> i) & 1 == 1).collect();
+            debug_assert_eq!(num_bits.len(), level_width);
             for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
                 let bit = num_bits[i];
                 if bit {

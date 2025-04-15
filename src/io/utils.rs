@@ -49,12 +49,12 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let hash_sampler = &bgg_pubkey_sampler.sampler;
         let params = &obf_params.params;
         let d = obf_params.d;
-        let level_width = (1u64 << obf_params.level_width_exp) as usize;
-        let mut rs = Vec::with_capacity(level_width);
-        let mut rgs = Vec::with_capacity(level_width);
+        let level_size = (1u64 << obf_params.level_width) as usize;
+        let mut rs = Vec::with_capacity(level_size);
+        let mut rgs = Vec::with_capacity(level_size);
         let one = S::M::identity(params, 1, None);
         let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
-        for i in 0..level_width {
+        for i in 0..level_size {
             let tag = format!("R_{}", i).into_bytes();
             let r_i_bar = hash_sampler.sample_hash(params, &tag, d, d, DistType::BitDist);
             let r_i = r_i_bar.concat_diag(&[&one]);

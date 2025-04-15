@@ -14,7 +14,7 @@ This disables helper logic and fields used only for testing, which are not requi
 
 - **Dummy parameters**  
 ```bash
-cargo test -r --test test_io_dummy_param --no-default-features -- --ignored --nocapture
+cargo test -r --test test_io_dummy_param --no-default-features -- --nocapture
 ```
 
 - **Real parameters** (tests are ignored by default)  
