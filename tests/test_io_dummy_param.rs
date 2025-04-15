@@ -28,8 +28,8 @@ mod test {
         let switched_modulus = Arc::new(BigUint::from(1u32));
         let mut public_circuit = PolyCircuit::new();
 
-        // inputs: BITS(ct), eval_input
-        // outputs: BITS(ct) AND eval_input, BITS(ct) AND eval_input
+        // inputs: BaseDecompose(ct), eval_input
+        // outputs: BaseDecompose(ct) AND eval_input, BaseDecompose(ct) AND eval_input
         {
             let inputs = public_circuit.input((2 * log_base_q) + 1);
             let mut outputs = vec![];
@@ -48,7 +48,8 @@ mod test {
         let obf_params = ObfuscationParams {
             params: params.clone(),
             switched_modulus,
-            input_size: 1,
+            input_size: 4,
+            level_width: 1,
             public_circuit: public_circuit.clone(),
             d: 3,
             encoding_sigma: 0.0,
@@ -71,7 +72,7 @@ mod test {
         info!("Time to obfuscate: {:?}", obfuscation_time);
 
         let bool_in = rng.random::<bool>();
-        let input = [bool_in];
+        let input = [bool_in, false, false, false];
         let output = obfuscation
             .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(obf_params, &input);
         let total_time = start_time.elapsed();

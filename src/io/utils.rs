@@ -10,17 +10,14 @@ use std::marker::PhantomData;
 
 use super::params::ObfuscationParams;
 
-const TAG_R_0: &[u8] = b"R_0";
-const TAG_R_1: &[u8] = b"R_1";
 const TAG_A_RLWE_BAR: &[u8] = b"A_RLWE_BAR";
-const _TAG_BGG_PUBKEY_FHEKEY_PREFIX: &[u8] = b"BGG_PUBKEY_FHEKY:";
 const TAG_A_PRF: &[u8] = b"A_PRF:";
 pub const TAG_BGG_PUBKEY_INPUT_PREFIX: &[u8] = b"BGG_PUBKEY_INPUT:";
 
-pub fn sample_public_key_by_idx<K: AsRef<[u8]>, S>(
+pub fn sample_public_key_by_id<K: AsRef<[u8]>, S>(
     sampler: &BGGPublicKeySampler<K, S>,
     params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
-    idx: usize,
+    id: usize,
     reveal_plaintexts: &[bool],
 ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>>
 where
@@ -28,17 +25,16 @@ where
 {
     sampler.sample(
         params,
-        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(idx as u64).to_le_bytes()].concat(),
+        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(id as u64).to_le_bytes()].concat(),
         reveal_plaintexts,
     )
 }
 
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
-    pub r_0: S::M,
-    pub r_1: S::M,
+    pub rs: Vec<S::M>,
     pub a_rlwe_bar: S::M,
-    pub rgs: [S::M; 2],
+    pub rgs: Vec<S::M>,
     pub a_prf: S::M,
     pub packed_input_size: usize,
     pub packed_output_size: usize,
@@ -50,13 +46,20 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let hash_sampler = S::new();
         let params = &obf_params.params;
         let d = obf_params.d;
-
-        let r_0_bar = hash_sampler.sample_hash(params, hash_key, TAG_R_0, d, d, DistType::BitDist);
-        let r_1_bar = hash_sampler.sample_hash(params, hash_key, TAG_R_1, d, d, DistType::BitDist);
+        let level_size = (1u64 << obf_params.level_width) as usize;
+        let mut rs = Vec::with_capacity(level_size);
+        let mut rgs = Vec::with_capacity(level_size);
         let one = S::M::identity(params, 1, None);
-        let r_0 = r_0_bar.concat_diag(&[&one]);
-        let r_1 = r_1_bar.concat_diag(&[&one]);
-        // let log_q = params.modulus_bits();
+        let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
+        for i in 0..level_size {
+            let tag = format!("R_{}", i).into_bytes();
+            let r_i_bar = hash_sampler.sample_hash(params, hash_key, &tag, d, d, DistType::BitDist);
+            let r_i = r_i_bar.concat_diag(&[&one]);
+            let rg = r_i.clone() * &gadget_d_plus_1;
+            rs.push(r_i);
+            rgs.push(rg);
+        }
+
         let log_base_q = params.modulus_digits();
         let dim = params.ring_dimension() as usize;
         // input bits, poly of the RLWE key
@@ -64,9 +67,6 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let a_rlwe_bar =
             hash_sampler.sample_hash(params, hash_key, TAG_A_RLWE_BAR, 1, 1, DistType::FinRingDist);
-        let gadget_d_plus_1 = S::M::gadget_matrix(params, d + 1);
-        let rgs: [<S as PolyHashSampler<[u8; 32]>>::M; 2] =
-            [(r_0.clone() * &gadget_d_plus_1), (r_1.clone() * &gadget_d_plus_1)];
 
         let a_prf_raw = hash_sampler.sample_hash(
             params,
@@ -77,20 +77,11 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        Self {
-            r_0,
-            r_1,
-            a_rlwe_bar,
-            rgs,
-            a_prf,
-            packed_input_size,
-            packed_output_size,
-            _s: PhantomData,
-        }
+        Self { rs, a_rlwe_bar, rgs, a_prf, packed_input_size, packed_output_size, _s: PhantomData }
     }
 }
 
-pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
+pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
     a_decomposed_polys: &[P],
     b_decomposed_polys: &[P],
     public_circuit: PolyCircuit,
@@ -99,7 +90,7 @@ pub fn build_final_bits_circuit<P: Poly, E: Evaluable>(
     debug_assert_eq!(b_decomposed_polys.len(), log_base_q);
     let packed_eval_input_size = public_circuit.num_input() - (2 * log_base_q);
 
-    // circuit outputs the cipertext ct=(a,b) as a_bit_0, b_bit_0, a_bit_1, b_bit_1, ...
+    // circuit outputs the cipertext ct=(a,b) as a_base_0, b_base_0, a_base_1, b_base_1, ...
     let mut ct_output_circuit = PolyCircuit::new();
     {
         let inputs = ct_output_circuit.input(packed_eval_input_size);
@@ -195,7 +186,7 @@ mod test {
         let b_decomposed = b.entry(0, 0).decompose_base(&params);
 
         // 6. Build the final circuit with DCRTPoly as the Evaluable type
-        let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
+        let final_circuit = build_final_digits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed,
             &b_decomposed,
             public_circuit,
@@ -251,7 +242,7 @@ mod test {
 
         let a_decomposed_polys = a_rlwe_bar.decompose_base(&params);
         let b_decomposed_polys = enc_hardcoded_key.decompose_base(&params);
-        let final_circuit = build_final_bits_circuit::<DCRTPoly, DCRTPoly>(
+        let final_circuit = build_final_digits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &b_decomposed_polys,
             public_circuit,

@@ -35,8 +35,8 @@ mod test {
         );
         let mut public_circuit = PolyCircuit::new();
 
-        // inputs: BITS(ct), eval_input
-        // outputs: BITS(ct) AND eval_input
+        // inputs: BaseDecompose(ct), eval_input
+        // outputs: BaseDecompose(ct) AND eval_input
         {
             let inputs = public_circuit.input((2 * log_base_q) + 1);
             let mut outputs = vec![];
@@ -52,6 +52,7 @@ mod test {
             params: params.clone(),
             switched_modulus,
             input_size: 1,
+            level_width: 1,
             public_circuit: public_circuit.clone(),
             d: 1,
             encoding_sigma: 15.82764,
