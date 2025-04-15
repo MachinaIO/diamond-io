@@ -122,9 +122,12 @@ mod tests {
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         },
-        poly::dcrt::{
-            params::DCRTPolyParams,
-            sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+        poly::{
+            dcrt::{
+                params::DCRTPolyParams,
+                sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+            },
+            sampler::PolyUniformSampler,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -138,9 +141,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -188,9 +191,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -238,9 +241,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -288,9 +291,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -353,9 +356,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -439,9 +442,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling
@@ -517,9 +520,9 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
 
         // Generate random tag for sampling

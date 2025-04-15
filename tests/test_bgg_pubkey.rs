@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use diamond_io::{
     bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::utils::build_final_bits_circuit,
@@ -39,18 +37,18 @@ fn test_build_final_step_circuit() {
     }
 
     let mut rng = rand::rng();
-    let mut hash_sampler = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
     let hash_key = rng.random::<[u8; 32]>();
-    hash_sampler.set_key(hash_key);
     let d = 1;
     let sampler_uniform = DCRTPolyUniformSampler::new();
+    let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
     let hardcoded_key = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     log_mem("Sampled hardcoded_key_matrix");
 
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
 
-    let a_rlwe_bar = hash_sampler.sample_hash(&params, "TEST_RLWE_A", 1, 1, DistType::FinRingDist);
+    let a_rlwe_bar =
+        hash_sampler.sample_hash(&params, hash_key, "TEST_RLWE_A", 1, 1, DistType::FinRingDist);
     let hardcoded_key_sigma = 40615715852990820734.97011;
 
     let b = rlwe_encrypt(
@@ -79,7 +77,8 @@ fn test_build_final_step_circuit() {
     let log_base_q = params.modulus_digits();
     let packed_input_size = input_size.div_ceil(dim) + 1;
 
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(hash_sampler), d);
+    let bgg_pubkey_sampler =
+        BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(hash_key, d);
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
     let pubkeys = bgg_pubkey_sampler.sample(&params, b"BGG_PUBKEY_INPUT:", &reveal_plaintexts);
     log_mem("Sampled pubkeys");

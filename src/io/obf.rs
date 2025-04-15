@@ -20,7 +20,6 @@ use std::sync::Arc;
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
     sampler_uniform: SU,
-    mut sampler_hash: SH,
     sampler_trapdoor: ST,
     hardcoded_key: M::P,
     rng: &mut R,
@@ -39,10 +38,11 @@ where
     debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
-    sampler_hash.set_key(hash_key);
+    // let sampler_hash  =SH::n
+    // sampler_hash.set_key(hash_key);
     let sampler_uniform = Arc::new(sampler_uniform);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
-    let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+    let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
 
     let packed_input_size = public_data.packed_input_size;

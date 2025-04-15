@@ -1,7 +1,7 @@
 use crate::{
     parallel_iter,
     poly::{
-        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
+        dcrt::{DCRTPoly, DCRTPolyMatrix},
         sampler::{DistType, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
@@ -19,12 +19,18 @@ impl Default for DCRTPolyUniformSampler {
     }
 }
 
-impl DCRTPolyUniformSampler {
-    pub fn new() -> Self {
+impl PolyUniformSampler for DCRTPolyUniformSampler {
+    type M = DCRTPolyMatrix;
+
+    fn new() -> Self {
         Self {}
     }
 
-    pub fn sample_poly(&self, params: &DCRTPolyParams, dist: &DistType) -> DCRTPoly {
+    fn sample_poly(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        dist: &DistType,
+    ) -> <Self::M as PolyMatrix>::P {
         let sampled_poly = match dist {
             DistType::FinRingDist => ffi::DCRTPolyGenFromDug(
                 params.ring_dimension(),
@@ -48,10 +54,6 @@ impl DCRTPolyUniformSampler {
         }
         DCRTPoly::new(sampled_poly)
     }
-}
-
-impl PolyUniformSampler for DCRTPolyUniformSampler {
-    type M = DCRTPolyMatrix;
 
     fn sample_uniform(
         &self,
@@ -100,6 +102,7 @@ impl PolyUniformSampler for DCRTPolyUniformSampler {
 #[cfg(feature = "test")]
 mod tests {
     use super::*;
+    use crate::poly::dcrt::DCRTPolyParams;
 
     #[test]
     fn test_ring_dist() {

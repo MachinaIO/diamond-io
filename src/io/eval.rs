@@ -12,24 +12,18 @@ impl<M> Obfuscation<M>
 where
     M: PolyMatrix,
 {
-    pub fn eval<SH, ST>(
-        &self,
-        obf_params: ObfuscationParams<M>,
-        mut sampler_hash: SH,
-        inputs: &[bool],
-    ) -> Vec<bool>
+    pub fn eval<SH, ST>(&self, obf_params: ObfuscationParams<M>, inputs: &[bool]) -> Vec<bool>
     where
         SH: PolyHashSampler<[u8; 32], M = M>,
         ST: PolyTrapdoorSampler<M = M>,
     {
-        sampler_hash.set_key(self.hash_key);
         let params = Arc::new(obf_params.params.clone());
         let d = obf_params.d;
         let d1 = d + 1;
-        let sampler = Arc::new(sampler_hash);
+
         debug_assert_eq!(inputs.len(), obf_params.input_size);
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
-        let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+        let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(self.hash_key, d);
+        let public_data = PublicSampledData::<SH>::sample(&obf_params, self.hash_key);
         log_mem("Sampled public data");
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;

@@ -36,7 +36,7 @@ mod tests {
     use crate::poly::{
         dcrt::{DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler},
         enc::rlwe_encrypt,
-        sampler::DistType,
+        sampler::{DistType, PolyUniformSampler},
         Poly, PolyMatrix,
     };
 

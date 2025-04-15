@@ -13,9 +13,10 @@ use std::{marker::PhantomData, sync::Arc};
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
 pub struct BGGPublicKeySampler<K: AsRef<[u8]>, S: PolyHashSampler<K>> {
-    pub sampler: Arc<S>,
+    hash_key: [u8; 32],
     pub d: usize,
     _k: PhantomData<K>,
+    _s: PhantomData<S>,
 }
 
 impl<K: AsRef<[u8]>, S> BGGPublicKeySampler<K, S>
@@ -28,8 +29,8 @@ where
     /// * `d`: The number of secret polynomials used with the sampled public key matrices.
     /// # Returns
     /// A new public key sampler
-    pub fn new(sampler: Arc<S>, d: usize) -> Self {
-        Self { sampler, d, _k: PhantomData }
+    pub fn new(hash_key: [u8; 32], d: usize) -> Self {
+        Self { hash_key, d, _k: PhantomData, _s: PhantomData }
     }
 
     /// Sample a public key matrix
@@ -45,12 +46,14 @@ where
         tag: &[u8],
         reveal_plaintexts: &[bool],
     ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
+        let sampler = S::new();
         let log_base_q = params.modulus_digits();
         let secret_vec_size = self.d + 1;
         let columns = secret_vec_size * log_base_q;
         let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
-        let all_matrix = self.sampler.sample_hash(
+        let all_matrix = sampler.sample_hash(
             params,
+            self.hash_key,
             tag,
             secret_vec_size,
             columns * packed_input_size,
@@ -176,9 +179,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
-        let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
         let d = 3;
-        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         assert_eq!(sampled_pub_keys.len(), packed_input_size + 1);
@@ -191,9 +193,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
-        let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
         let d = 3;
-        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let log_base_q = params.modulus_digits();
@@ -216,9 +217,8 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
-        let poly_hash_sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
         let d = 3;
-        let bgg_sampler = BGGPublicKeySampler::new(poly_hash_sampler.into(), d);
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let log_base_q = params.modulus_digits();
@@ -243,8 +243,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
         let d = 3;
-        let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -276,8 +275,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
         let d = 3;
-        let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -314,8 +312,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let packed_input_size = 2;
         let d = 3;
-        let bgg_sampler =
-            BGGPublicKeySampler::new(DCRTPolyHashSampler::<Keccak256>::new(key).into(), d);
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; packed_input_size];
         let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let uniform_sampler = DCRTPolyUniformSampler::new();

@@ -4,7 +4,7 @@ use std::{thread, time};
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
-    sampler::DistType,
+    sampler::{DistType, PolyUniformSampler},
     Poly,
 };
 use memory_stats::memory_stats;

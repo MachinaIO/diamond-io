@@ -14,25 +14,7 @@ use rayon::prelude::*;
 use std::{marker::PhantomData, ops::Range};
 
 pub struct DCRTPolyHashSampler<H: OutputSizeUser + digest::Digest> {
-    key: [u8; 32],
     _h: PhantomData<H>,
-}
-
-impl<H> DCRTPolyHashSampler<H>
-where
-    H: OutputSizeUser + digest::Digest,
-{
-    pub fn new(key: [u8; 32]) -> Self {
-        Self { key, _h: PhantomData }
-    }
-
-    fn _set_key(&mut self, key: [u8; 32]) {
-        self.key = key
-    }
-
-    fn _expose_key(&self) -> &[u8] {
-        &self.key
-    }
 }
 
 impl<H> PolyHashSampler<[u8; 32]> for DCRTPolyHashSampler<H>
@@ -41,9 +23,14 @@ where
 {
     type M = DCRTPolyMatrix;
 
+    fn new() -> Self {
+        Self { _h: PhantomData }
+    }
+
     fn sample_hash<B: AsRef<[u8]>>(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        hash_key: [u8; 32],
         tag: B,
         nrow: usize,
         ncol: usize,
@@ -57,7 +44,7 @@ where
         let num_hash_bit_per_poly = n.div_ceil(hash_output_size);
         let mut new_matrix = DCRTPolyMatrix::new_empty(params, nrow, ncol);
         let mut hasher: H = H::new();
-        hasher.update(self.key);
+        hasher.update(hash_key);
         hasher.update(tag.as_ref());
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
             match dist {
@@ -134,10 +121,6 @@ where
         new_matrix.replace_entries(0..nrow, 0..ncol, f);
         new_matrix
     }
-
-    fn set_key(&mut self, key: [u8; 32]) {
-        self._set_key(key)
-    }
 }
 
 #[cfg(test)]
@@ -152,15 +135,12 @@ mod tests {
     fn test_poly_hash_sampler() {
         let key = [0u8; 32];
         let params = DCRTPolyParams::default();
-        let mut sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
+        let sampler = DCRTPolyHashSampler::<Keccak256>::new();
         let nrow = 100;
         let ncol = 300;
         let tag = b"MyTag";
-        let matrix_result = sampler.sample_hash(&params, tag, nrow, ncol, DistType::BitDist);
+        let matrix_result = sampler.sample_hash(&params, key, tag, nrow, ncol, DistType::BitDist);
         // [TODO] Test the norm of each coefficient of polynomials in the matrix.
-
-        let new_key = [1u8; 32];
-        sampler.set_key(new_key);
 
         let matrix = matrix_result;
         assert_eq!(matrix.row_size(), nrow, "Matrix row count mismatch");
@@ -171,14 +151,12 @@ mod tests {
     fn test_poly_hash_sampler_fin_ring_dist() {
         let key = [0u8; 32];
         let params = DCRTPolyParams::default();
-        let mut sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
+        let sampler = DCRTPolyHashSampler::<Keccak256>::new();
         let nrow = 100;
         let ncol = 300;
         let tag = b"MyTag";
-        let matrix_result = sampler.sample_hash(&params, tag, nrow, ncol, DistType::FinRingDist);
-
-        let new_key = [1u8; 32];
-        sampler.set_key(new_key);
+        let matrix_result =
+            sampler.sample_hash(&params, key, tag, nrow, ncol, DistType::FinRingDist);
 
         let matrix = matrix_result;
         assert_eq!(matrix.row_size(), nrow, "Matrix row count mismatch");

@@ -1,3 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["cli", "."]
+
 [package]
 name = "diamond-io"
 version = "0.1.0"
@@ -59,6 +63,7 @@ codegen-units = 16
 inherits = "release"
 debug = "full"
 strip = "none"
+
 
 [[bench]]
 name = "dcrtpoly"
