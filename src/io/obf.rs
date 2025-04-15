@@ -184,12 +184,11 @@ where
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
 
-         #[cfg(feature = "bgm")]
-         {
-            player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * idx + bit) % 3 + 2));
-         }
-
         for num in 0..level_size {
+            #[cfg(feature = "bgm")]
+            {
+                player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
+            }
 
             let (b_num_trapdoor_level, b_num_level) =
                 sampler_trapdoor.trapdoor(&params, 2 * (d + 1));

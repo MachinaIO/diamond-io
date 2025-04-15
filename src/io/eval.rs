@@ -202,12 +202,11 @@ where
                 assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
-      
+
         #[cfg(feature = "bgm")]
         {
             player.play_music("bgm/eval_bgm2.mp3");
         }
-
 
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
         let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
