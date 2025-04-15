@@ -50,7 +50,7 @@ where
             sample_public_key_by_id(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
         log_mem("Sampled pub_key_init");
 
-        let mut pub_key_cur = pub_key_init.clone();
+        let mut pub_key_cur = pub_key_init;
 
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
@@ -76,7 +76,7 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let expected_encoding_init = self.s_init.clone() *
-                &(pub_key_init[0].concat_matrix(&pub_key_init[1..]) - inserted_poly_gadget);
+                &(pub_key_cur[0].concat_matrix(&pub_key_cur[1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
         let log_base_q = params.as_ref().modulus_digits();
