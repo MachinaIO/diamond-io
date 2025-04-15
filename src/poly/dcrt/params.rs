@@ -1,11 +1,12 @@
 use num_bigint::BigUint;
 use num_traits::Num;
 use openfhe::ffi;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 use crate::poly::PolyParams;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DCRTPolyParams {
     /// polynomial ring dimension
     ring_dimension: u32,
@@ -14,6 +15,7 @@ pub struct DCRTPolyParams {
     /// number of bits of each tower's modulus
     crt_bits: usize,
     /// ring modulus
+    #[serde(skip)]
     modulus: Arc<BigUint>,
     /// bit size of the base for the gadget vector and decomposition
     base_bits: u32,
@@ -39,7 +41,7 @@ impl PolyParams for DCRTPolyParams {
     }
 
     fn modulus(&self) -> Self::Modulus {
-        self.modulus.clone()
+        self.modulus.clone().into()
     }
 
     fn base_bits(&self) -> u32 {
