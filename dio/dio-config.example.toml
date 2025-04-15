@@ -5,7 +5,7 @@ crt_bits = 17
 base_bits = 10
 
 [obfuscation_params]
-switched_modulus = [1]
+switched_modulus = "1"
 d = 3
 input_size = 4
 level_width = 1

@@ -45,7 +45,6 @@ fn main() {
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
     let dio_config: Config = toml::from_str(&contents).unwrap();
-    println!("{dio_config:#?}");
     let start_time = std::time::Instant::now();
     let params = DCRTPolyParams::new(
         dio_config.dcrt_poly_params.ring_dimension(),
@@ -62,9 +61,6 @@ fn main() {
     let serialized_public_circuit: SerializablePolyCircuit =
         serde_json::from_str(&contents).expect("JSON was not well-formatted");
     let public_circuit = serialized_public_circuit.to_circuit();
-
-    let json_public_circuit = SerializablePolyCircuit::from_circuit(&public_circuit).to_json_str();
-    println!("{json_public_circuit:#?}");
 
     let obf_params = ObfuscationParams {
         params: params.clone(),

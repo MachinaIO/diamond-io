@@ -1,0 +1,8 @@
+# dio
+
+diamond-io cli implementation
+
+### run 
+```
+cargo run -- -c dio-config.example.toml
+```
