@@ -25,7 +25,7 @@ where
 {
     /// Create a new public key sampler
     /// # Arguments
-    /// * `sampler`: The sampler to generate the public key matrix
+    /// * `hash_key`: The hash key to be used in sampler
     /// * `d`: The number of secret polynomials used with the sampled public key matrices.
     /// # Returns
     /// A new public key sampler

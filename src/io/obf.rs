@@ -36,8 +36,6 @@ where
     debug_assert_eq!(public_circuit.num_input(), (2 * log_base_q) + obf_params.input_size);
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
-    // let sampler_hash  =SH::n
-    // sampler_hash.set_key(hash_key);
     let sampler_uniform = SU::new();
     let sampler_trapdoor = ST::new(&obf_params.params, obf_params.trapdoor_sigma);
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
