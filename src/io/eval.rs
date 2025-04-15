@@ -1,3 +1,6 @@
+#[cfg(feature = "bgm")]
+use super::bgm::Player;
+
 use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, BitToInt},
@@ -21,6 +24,14 @@ where
         ST: PolyTrapdoorSampler<M = M>,
         for<'a> &'a M: Mul<&'a M, Output = M>,
     {
+        #[cfg(feature = "bgm")]
+        let player = Player::new();
+
+        #[cfg(feature = "bgm")]
+        {
+            player.play_music("bgm/eval_bgm1.mp3");
+        }
+
         sampler_hash.set_key(self.hash_key);
         let params = Arc::new(obf_params.params.clone());
         let d = obf_params.d;
@@ -185,6 +196,12 @@ where
                 debug_assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
+
+        #[cfg(feature = "bgm")]
+        {
+            player.play_music("bgm/eval_bgm2.mp3");
+        }
+
         let enc_hardcoded_key_decomposed =
             &self.enc_hardcoded_key.get_column_matrix_decompose(0).get_column(0);
         let a_decomposed_polys =

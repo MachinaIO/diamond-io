@@ -31,7 +31,16 @@ fn main() {
             ("obf_bgm3.mp3", "https://bgmer.net/wp-content/uploads/2021/12/251_BPM150.mp3"),
             ("obf_bgm4.mp3", "https://bgmer.net/wp-content/uploads/2021/09/157_BPM175.mp3"),
             ("obf_bgm5.mp3", "https://bgmer.net/wp-content/uploads/2021/05/075_BPM140.mp3"),
+            (
+                "eval_bgm1.mp3",
+                "https://www.dropbox.com/scl/fi/a29p739qel80nfdgj3r8d/04BNE.mp3?rlkey=orn1jrcpdy2ggd845invaykez&st=6hpk0lyb&dl=1",
+            ),
+            (
+                "eval_bgm2.mp3",
+                "https://www.dropbox.com/scl/fi/z07sk9829bjvs78g1ddgk/01VD.mp3?rlkey=z7ywvv1suvwsa947osg2zwnlg&st=pl2d79f4&dl=1",
+            ),
         ];
+
         for (file_name, url) in bgm_files {
             let bgm_file = bgm_dir.join(file_name);
             if !bgm_file.exists() {
