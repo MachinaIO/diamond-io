@@ -47,13 +47,13 @@ Writing a rust program to simulate a norm corresponding to the circuit you want 
 
 Running `simulator/main.py` to get parameters satisfying correctness and security for your circuit.
 
-6. Move the json file generated in Step 1.5 under the `simulator` directory.
+6. Move the json file generated in Step 5 under the `simulator` directory.
 
 7. Modify parameters after the line `if __name__ == "__main__":`. Specifically,
     - `secpar` denotes the minimum security parameter you want to guarantee.
     - `d` denotes the number of secret polynomials. We recommend setting it to `1` first and then increasing it when the simulator cannnot find any parameters with the current value.
-    - `n`, `base_bits`, `crt_bits`, `max_crt_depth` should be the same as ones in Step 1.1.
-    - `norms_path` is the file name you moved in Step 2.1.
+    - `n`, `base_bits`, `crt_bits`, `max_crt_depth` should be the same as ones in Step 1.
+    - `norms_path` is the file name you moved in Step 6.
 
 8. Install sagemath if you have not installed it. Ref: https://doc.sagemath.org/html/en/installation/conda.html
 
