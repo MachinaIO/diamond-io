@@ -41,7 +41,7 @@ impl PolyParams for DCRTPolyParams {
     }
 
     fn modulus(&self) -> Self::Modulus {
-        self.modulus.clone().into()
+        self.modulus.clone()
     }
 
     fn base_bits(&self) -> u32 {
