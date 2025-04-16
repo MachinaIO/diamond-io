@@ -6,7 +6,6 @@ use crate::{bgg::BggEncoding, poly::PolyMatrix};
 pub mod eval;
 pub mod obf;
 pub mod params;
-pub mod serde;
 pub mod utils;
 
 #[derive(Debug, Clone)]

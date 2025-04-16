@@ -84,7 +84,7 @@ where
 
     log_mem("Generated RLWE ciphertext {a, b}");
     let m_b = (2 * (d + 1)) * (2 + log_base_q);
-    let error = sampler_uniform.sample_uniform(
+    let p_init_error = sampler_uniform.sample_uniform(
         &params,
         1,
         m_b,
@@ -121,8 +121,7 @@ where
     let p_init = {
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &b_star_cur;
-
-        s_b + error
+        s_b + p_init_error
     };
     log_mem("Computed p_init");
 

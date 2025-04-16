@@ -1,10 +1,7 @@
-[dcrt_poly_params]
 ring_dimension = 4
 crt_depth = 2
 crt_bits = 17
 base_bits = 10
-
-[obfuscation_params]
 switched_modulus = "1"
 d = 3
 input_size = 4
@@ -14,3 +11,4 @@ encoding_sigma = 0.0
 hardcoded_key_sigma = 0.0
 p_sigma = 0.0
 trapdoor_sigma = 4.578
+input = [1, 1, 1, 1]
