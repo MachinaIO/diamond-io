@@ -11,7 +11,13 @@ use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::{ops::Range, path::Path};
 
-use super::base::{memory::block_offsets, BaseMatrix};
+use super::base::BaseMatrix;
+
+#[cfg(not(feature = "disk"))]
+use super::base::memory::block_offsets;
+
+#[cfg(feature = "disk")]
+use super::base::disk::block_offsets;
 
 impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
