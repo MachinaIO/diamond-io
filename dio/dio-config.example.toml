@@ -10,5 +10,4 @@ public_circuit_path = "public_circuit.example.json"
 encoding_sigma = 0.0
 hardcoded_key_sigma = 0.0
 p_sigma = 0.0
-trapdoor_sigma = 4.578
 input = [true, false, false, false]

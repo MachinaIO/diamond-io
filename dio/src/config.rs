@@ -18,6 +18,10 @@ where
     BigUint::from_str(&s).map_err(de::Error::custom)
 }
 
+fn default_trapdoor_sigma() -> Option<f64> {
+    Some(4.578)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(serialize_with = "biguint_to_string", deserialize_with = "biguint_from_string")]
@@ -29,7 +33,8 @@ pub struct Config {
     pub encoding_sigma: f64,
     pub hardcoded_key_sigma: f64,
     pub p_sigma: f64,
-    pub trapdoor_sigma: f64,
+    #[serde(default = "default_trapdoor_sigma")]
+    pub trapdoor_sigma: Option<f64>,
     /// polynomial ring dimension
     pub ring_dimension: u32,
     /// size of the tower

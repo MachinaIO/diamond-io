@@ -68,7 +68,7 @@ fn main() {
         encoding_sigma: dio_config.encoding_sigma,
         hardcoded_key_sigma: dio_config.hardcoded_key_sigma,
         p_sigma: dio_config.p_sigma,
-        trapdoor_sigma: dio_config.trapdoor_sigma,
+        trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
     };
 
     let sampler_uniform = DCRTPolyUniformSampler::new();
