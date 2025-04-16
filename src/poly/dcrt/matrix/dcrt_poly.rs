@@ -728,15 +728,15 @@ mod tests {
         let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
 
         for dist in dists {
-            let ncol = rng().random_range(1..=10);
-            let nrow = rng().random_range(1..=10);
+            let ncol = 4;
+            let nrow = 136;
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
             let matrix_id = format!("test_matrix_{:?}", dist);
 
             // Create a temporary directory for testing
-            let test_dir = Path::new("test_matrix_io");
+            let test_dir = Path::new("test_matrix_write_read");
             if !test_dir.exists() {
                 fs::create_dir(test_dir).unwrap();
             }
