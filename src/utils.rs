@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, fs, path::Path};
 #[cfg(feature = "cpu")]
 use std::{thread, time};
 
@@ -134,6 +134,20 @@ pub fn init_tracing() {
 
 pub fn block_size() -> usize {
     env::var("BLOCK_SIZE").map(|str| str.parse::<usize>().unwrap()).unwrap_or(100)
+}
+
+/// Calculate the total size of a directory in bytes
+/// Assumes all entries in the directory are files
+pub fn calculate_directory_size<P: AsRef<Path>>(path: P) -> u64 {
+    let path = path.as_ref();
+    match fs::read_dir(path) {
+        Ok(entries) => entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| fs::metadata(entry.path()).ok())
+            .map(|metadata| metadata.len())
+            .sum(),
+        Err(_) => 0,
+    }
 }
 
 #[macro_export]
