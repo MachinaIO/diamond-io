@@ -1,3 +1,6 @@
+#[cfg(feature = "bgm")]
+use super::bgm::Player;
+
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -32,6 +35,11 @@ where
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
 {
+    #[cfg(feature = "bgm")]
+    let player = Player::new();
+    #[cfg(feature = "bgm")]
+    player.play_music("bgm/obf_bgm1.mp3");
+
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
     let log_base_q = obf_params.params.modulus_digits();
@@ -175,6 +183,11 @@ where
         let mut coeffs = vec![zero_coeff; dim];
 
         for num in 0..level_size {
+            #[cfg(feature = "bgm")]
+            {
+                player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
+            }
+
             let (b_num_trapdoor_level, b_num_level) =
                 sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for level and num");
@@ -248,6 +261,10 @@ where
         b_star_trapdoor_cur = b_star_trapdoor_level;
         b_star_cur = b_star_level;
         pub_key_cur = pub_key_level;
+    }
+    #[cfg(feature = "bgm")]
+    {
+        player.play_music("bgm/obf_bgm5.mp3");
     }
 
     let final_preimage_target = {
