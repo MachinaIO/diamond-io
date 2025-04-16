@@ -121,6 +121,7 @@ mod tests {
         poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
     };
     use keccak_asm::Keccak256;
+    use rand::Rng;
     use std::{fs, path::Path, sync::Arc};
 
     #[test]
@@ -519,8 +520,14 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintext = [true, true, true, true];
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintext);
+        let mut rng = rand::rng();
+        let reveal_plaintexts = [
+            rng.random::<bool>(),
+            rng.random::<bool>(),
+            rng.random::<bool>(),
+            rng.random::<bool>(),
+        ];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create a temporary directory for testing
         let test_dir = Path::new("test_pubkey_write_read");
@@ -553,7 +560,7 @@ mod tests {
                     ncol,
                     test_dir,
                     &id,
-                    reveal_plaintext[idx - 1],
+                    reveal_plaintexts[idx - 1],
                 );
                 assert_eq!(pubkey.matrix, read_pk.matrix);
             }
