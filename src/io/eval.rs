@@ -1,3 +1,6 @@
+#[cfg(feature = "bgm")]
+use super::bgm::Player;
+
 use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
@@ -17,6 +20,14 @@ where
         SH: PolyHashSampler<[u8; 32], M = M>,
         ST: PolyTrapdoorSampler<M = M>,
     {
+        #[cfg(feature = "bgm")]
+        let player = Player::new();
+
+        #[cfg(feature = "bgm")]
+        {
+            player.play_music("bgm/eval_bgm1.mp3");
+        }
+
         let params = Arc::new(obf_params.params.clone());
         let d = obf_params.d;
         let d1 = d + 1;
@@ -185,6 +196,12 @@ where
                 assert_eq!(new_encode_vec, expcted_new_encode);
             }
         }
+
+        #[cfg(feature = "bgm")]
+        {
+            player.play_music("bgm/eval_bgm2.mp3");
+        }
+
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
         let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
         log_mem("a,b decomposed");

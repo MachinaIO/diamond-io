@@ -1,3 +1,6 @@
+#[cfg(feature = "bgm")]
+pub mod bgm;
+
 use crate::{bgg::BggEncoding, poly::PolyMatrix};
 
 pub mod eval;

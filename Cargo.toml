@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 [features]
 default = ["test"]
 test = []
+bgm = ["rodio", "reqwest"]
 disk = ["tempfile", "libc", "memmap2"]
 cpu = []
 
@@ -30,6 +31,7 @@ bitvec = "1"
 memory-stats = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+rodio = { version = "0.20.1", git = "https://github.com/RustAudio/rodio.git", optional = true }
 memmap2 = { version = "0.9.5", optional = true }
 tempfile = { version = "3.19.1", optional = true }
 sysinfo = "0.34.1"
@@ -43,6 +45,8 @@ keccak-asm = { version = "0.1.4" }
 proptest = "1.0.0"
 criterion = "0.5.0"
 
+[build-dependencies]
+reqwest = { version = "0.11", features = ["blocking"], optional = true }
 
 [profile.dev]
 debug = "line-tables-only"
