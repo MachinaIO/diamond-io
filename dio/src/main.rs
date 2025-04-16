@@ -14,6 +14,7 @@ use diamond_io::{
     utils::init_tracing,
 };
 use keccak_asm::Keccak256;
+use rand::Rng;
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -92,8 +93,9 @@ fn main() {
     let n = output.len() / 2;
     let output_1st_gate = output[..n].to_vec();
     let output_2nd_gate = output[n..].to_vec();
+    let bool_in = rng.random::<bool>();
     let input_poly =
-        DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), input[0] as u64));
+        DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
     assert_eq!(output_1st_gate, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());
     assert_eq!(output_2nd_gate, (hardcoded_key * input_poly).to_bool_vec());
 }
