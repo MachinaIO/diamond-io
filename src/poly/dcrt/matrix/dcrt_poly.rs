@@ -217,32 +217,36 @@ impl PolyMatrix for DCRTPolyMatrix {
     ) -> Self {
         let block_size = block_size();
         let mut matrix = Self::new_empty(params, nrow, ncol);
-        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-            let mut path = dir_path.as_ref().to_path_buf();
-            path.push(format!(
-                "{}_{}_{}.{}_{}.{}.matrix",
-                id,
-                block_size,
-                row_offsets.start,
-                row_offsets.end,
-                col_offsets.start,
-                col_offsets.end
-            ));
-            let bytes = std::fs::read(&path)
-                .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
-            let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
-            parallel_iter!(0..row_offsets.len())
-                .map(|i| {
-                    parallel_iter!(0..col_offsets.len())
-                        .map(|j| {
-                            let entry_bytes = &entries_bytes[i][j];
-                            DCRTPoly::from_compact_bytes(params, entry_bytes)
+
+        let (row_offsets, col_offsets) = block_offsets(0..nrow, 0..ncol);
+
+        for (row_start, row_end) in row_offsets.iter().tuple_windows() {
+            for (col_start, col_end) in col_offsets.iter().tuple_windows() {
+                let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+                    let mut path = dir_path.as_ref().to_path_buf();
+                    path.push(format!(
+                        "{}_{}_{}.{}_{}.{}.matrix",
+                        id, block_size, row_start, row_end, col_start, col_end
+                    ));
+                    let bytes = std::fs::read(&path)
+                        .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
+                    let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
+
+                    parallel_iter!(0..row_range.len())
+                        .map(|i| {
+                            parallel_iter!(0..col_range.len())
+                                .map(|j| {
+                                    let entry_bytes = &entries_bytes[i][j];
+                                    DCRTPoly::from_compact_bytes(params, entry_bytes)
+                                })
+                                .collect::<Vec<_>>()
                         })
                         .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        };
-        matrix.replace_entries(0..nrow, 0..ncol, f);
+                };
+
+                matrix.replace_entries(*row_start..*row_end, *col_start..*col_end, f);
+            }
+        }
         matrix
     }
 
@@ -726,10 +730,10 @@ mod tests {
         let sampler = DCRTPolyUniformSampler::new();
 
         let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
-
+        std::env::set_var("BLOCK_SIZE", "10");
         for dist in dists {
-            let ncol = 4;
-            let nrow = 136;
+            let ncol = rng().random_range(5..=15);
+            let nrow = rng().random_range(5..=15);
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
@@ -738,6 +742,10 @@ mod tests {
             // Create a temporary directory for testing
             let test_dir = Path::new("test_matrix_write_read");
             if !test_dir.exists() {
+                fs::create_dir(test_dir).unwrap();
+            } else {
+                // Clean it first to ensure no old files interfere
+                fs::remove_dir_all(test_dir).unwrap();
                 fs::create_dir(test_dir).unwrap();
             }
 
@@ -751,7 +759,6 @@ mod tests {
             // Verify the matrices are equal
             assert_eq!(matrix, read_matrix);
 
-            // Clean up the test directory
             fs::remove_dir_all(test_dir).unwrap();
         }
     }
