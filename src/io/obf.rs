@@ -21,7 +21,7 @@ use crate::{
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -30,7 +30,7 @@ pub fn obfuscate<M, SU, SH, ST, R>(
     sampler_trapdoor: ST,
     hardcoded_key: M::P,
     rng: &mut R,
-) -> Obfuscation<M>
+) -> Obfuscation<M, PathBuf>
 where
     M: PolyMatrix,
     SU: PolyUniformSampler<M = M>,
@@ -301,6 +301,14 @@ where
     );
     log_mem("Sampled final_preimage");
 
+    let timestamp_id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_nanos() as u64;
+
+    // Generate a directory path based on the current timestamp
+    let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
+
     Obfuscation {
         hash_key,
         ct_b: b,
@@ -310,6 +318,7 @@ where
         n_preimages,
         k_preimages,
         final_preimage,
+        dir_path,
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]

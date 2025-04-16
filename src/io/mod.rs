@@ -9,7 +9,8 @@ pub mod params;
 pub mod utils;
 
 #[derive(Debug, Clone)]
-pub struct Obfuscation<M: PolyMatrix> {
+pub struct Obfuscation<M: PolyMatrix, P: AsRef<std::path::Path> + Send + Sync = std::path::PathBuf>
+{
     pub hash_key: [u8; 32],
     pub ct_b: M,
     pub encodings_init: Vec<BggEncoding<M>>,
@@ -18,6 +19,7 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub n_preimages: Vec<Vec<M>>,
     pub k_preimages: Vec<Vec<M>>,
     pub final_preimage: M,
+    pub dir_path: P,
     #[cfg(feature = "test")]
     pub s_init: M,
     #[cfg(feature = "test")]
