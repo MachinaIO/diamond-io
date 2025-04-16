@@ -213,14 +213,20 @@ impl PolyMatrix for DCRTPolyMatrix {
         nrow: usize,
         ncol: usize,
         dir_path: P,
+        id: &str,
     ) -> Self {
         let block_size = block_size();
         let mut matrix = Self::new_empty(params, nrow, ncol);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
             let mut path = dir_path.as_ref().to_path_buf();
             path.push(format!(
-                "{}_{}.{}_{}.{}.matrix",
-                block_size, row_offsets.start, row_offsets.end, col_offsets.start, col_offsets.end
+                "{}_{}_{}.{}_{}.{}.matrix",
+                id,
+                block_size,
+                row_offsets.start,
+                row_offsets.end,
+                col_offsets.start,
+                col_offsets.end
             ));
             let bytes = std::fs::read(&path)
                 .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
@@ -240,7 +246,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix
     }
 
-    fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P) {
+    fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
         let block_size = block_size();
         let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
         parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
@@ -253,7 +259,8 @@ impl PolyMatrix for DCRTPolyMatrix {
                         );
                         let mut path = dir_path.as_ref().to_path_buf();
                         path.push(format!(
-                            "{}_{}.{}_{}.{}.matrix",
+                            "{}_{}_{}.{}_{}.{}.matrix",
+                            id,
                             block_size,
                             cur_block_row_idx,
                             next_block_row_idx,
@@ -726,6 +733,7 @@ mod tests {
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
+            let matrix_id = format!("test_matrix_{:?}", dist);
 
             // Create a temporary directory for testing
             let test_dir = Path::new("test_matrix_io");
@@ -734,10 +742,11 @@ mod tests {
             }
 
             // Write the matrix to files
-            matrix.write_to_files(test_dir);
+            matrix.write_to_files(test_dir, &matrix_id);
 
             // Read the matrix back
-            let read_matrix = DCRTPolyMatrix::read_from_files(&params, nrow, ncol, test_dir);
+            let read_matrix =
+                DCRTPolyMatrix::read_from_files(&params, nrow, ncol, test_dir, &matrix_id);
 
             // Verify the matrices are equal
             assert_eq!(matrix, read_matrix);
