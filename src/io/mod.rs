@@ -1,7 +1,7 @@
 #[cfg(feature = "bgm")]
 pub mod bgm;
 
-use crate::{bgg::BggEncoding, poly::PolyMatrix};
+use crate::poly::PolyMatrix;
 
 pub mod eval;
 pub mod obf;
@@ -12,7 +12,6 @@ pub mod utils;
 pub struct Obfuscation<M: PolyMatrix, P: AsRef<std::path::Path> + Send + Sync = std::path::PathBuf>
 {
     pub hash_key: [u8; 32],
-    pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
     pub m_preimages: Vec<Vec<M>>,
     pub n_preimages: Vec<Vec<M>>,

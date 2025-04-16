@@ -40,13 +40,13 @@ impl<M: PolyMatrix> BggEncoding<M> {
     /// Reads an encoding with id from files under the given directory.
     pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(
         params: &<M::P as Poly>::Params,
-        d: usize,
+        d1: usize,
         log_base_q: usize,
         dir_path: P,
         id: &str,
         reveal_plaintext: bool,
     ) -> Self {
-        let ncol = (d + 1) * log_base_q;
+        let ncol = d1 * log_base_q;
 
         // Read the vector
         let vector = M::read_from_files(params, 1, ncol, &dir_path, &format!("{}_vector", id));
@@ -54,7 +54,7 @@ impl<M: PolyMatrix> BggEncoding<M> {
         // Read the pubkey
         let pubkey = BggPublicKey::read_from_files(
             params,
-            d + 1,
+            d1,
             ncol,
             &dir_path,
             &format!("{}_pubkey", id),
@@ -644,8 +644,8 @@ mod tests {
             main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
 
         // Expected result: ((enc1 * enc2) + enc3)^2
-        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone())
-            * ((enc1.clone() * enc2.clone()) + enc3.clone());
+        let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
+            ((enc1.clone() * enc2.clone()) + enc3.clone());
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -663,6 +663,7 @@ mod tests {
         let key: [u8; 32] = rand::random();
         let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
+        let d1 = d + 1;
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
         let log_base_q = params.modulus_digits();
@@ -713,7 +714,7 @@ mod tests {
             if idx == 0 || (idx > 0 && reveal_plaintexts[idx - 1]) {
                 // first encoding (for one) is always true
                 let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
-                    BggEncoding::read_from_files(&params, d, log_base_q, test_dir, &id, true);
+                    BggEncoding::read_from_files(&params, d1, log_base_q, test_dir, &id, true);
                 assert_eq!(read_enc.vector, encoding.vector);
                 assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
                 assert_eq!(
@@ -722,7 +723,7 @@ mod tests {
                 );
             } else {
                 let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
-                    BggEncoding::read_from_files(&params, d, log_base_q, test_dir, &id, false);
+                    BggEncoding::read_from_files(&params, d1, log_base_q, test_dir, &id, false);
                 assert_eq!(read_enc.vector, encoding.vector);
                 assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
                 assert!(read_enc.plaintext.is_none());

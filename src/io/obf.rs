@@ -124,6 +124,10 @@ where
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
 
+    for (i, encoding) in encodings_init.iter().enumerate() {
+        encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
+    }
+
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
@@ -316,7 +320,6 @@ where
 
     Obfuscation {
         hash_key,
-        encodings_init,
         p_init,
         m_preimages,
         n_preimages,

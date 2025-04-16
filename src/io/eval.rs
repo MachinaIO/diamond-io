@@ -38,6 +38,8 @@ where
         let params = Arc::new(obf_params.params.clone());
         let d = obf_params.d;
         let d1 = d + 1;
+        let log_base_q = params.as_ref().modulus_digits();
+        let dim = params.as_ref().ring_dimension() as usize;
         let sampler = Arc::new(sampler_hash);
         debug_assert_eq!(inputs.len(), obf_params.input_size);
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
@@ -47,20 +49,44 @@ where
         let packed_output_size = public_data.packed_output_size;
         let dir_path = &self.dir_path;
 
-        // Load artifacts from files
-        let start = std::time::Instant::now();
-        let b = M::read_from_files(&params, 1, 1, dir_path, "b");
-        let end = std::time::Instant::now();
-
-        let (mut ps, mut encodings) = (vec![], vec![]);
-        ps.push(self.p_init.clone());
-        encodings.push(self.encodings_init.clone());
-
-        // Sample public keys
         #[cfg(feature = "test")]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+
+        // Load artifacts from files
+        let mut encodings_init = vec![];
+        let start = std::time::Instant::now();
+        let b = M::read_from_files(&params, 1, 1, dir_path, "b");
+        let encoding_init_one = BggEncoding::<M>::read_from_files(
+            &params,
+            d1,
+            log_base_q,
+            dir_path,
+            "encoding_init_0",
+            true,
+        );
+        encodings_init.push(encoding_init_one);
+
+        for (i, bool) in reveal_plaintexts.iter().enumerate() {
+            let encoding_init = BggEncoding::<M>::read_from_files(
+                &params,
+                d1,
+                log_base_q,
+                dir_path,
+                &format!("encoding_init_{}", i + 1),
+                *bool,
+            );
+            encodings_init.push(encoding_init);
+        }
+
+        let end = std::time::Instant::now();
+
+        let (mut ps, mut encodings) = (vec![], vec![]);
+        ps.push(self.p_init.clone());
+        encodings.push(encodings_init.clone());
+
+        // Sample public keys
         let level_width = obf_params.level_width;
         let level_size = (1u64 << obf_params.level_width) as usize;
         assert!(inputs.len() % level_width == 0);
@@ -78,9 +104,9 @@ where
         log_mem("Sampled public keys");
 
         #[cfg(feature = "test")]
-        if obf_params.encoding_sigma == 0.0
-            && obf_params.hardcoded_key_sigma == 0.0
-            && obf_params.p_sigma == 0.0
+        if obf_params.encoding_sigma == 0.0 &&
+            obf_params.hardcoded_key_sigma == 0.0 &&
+            obf_params.p_sigma == 0.0
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
@@ -100,12 +126,10 @@ where
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = self.s_init.clone()
-                * &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
+            let expected_encoding_init = self.s_init.clone() *
+                &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
-        let log_base_q = params.as_ref().modulus_digits();
-        let dim = params.as_ref().ring_dimension() as usize;
         let nums: Vec<u64> = inputs
             .chunks(level_width)
             .map(|chunk| {
@@ -163,9 +187,9 @@ where
             ps.push(p.clone());
             encodings.push(new_encodings);
             #[cfg(feature = "test")]
-            if obf_params.encoding_sigma == 0.0
-                && obf_params.hardcoded_key_sigma == 0.0
-                && obf_params.p_sigma == 0.0
+            if obf_params.encoding_sigma == 0.0 &&
+                obf_params.hardcoded_key_sigma == 0.0 &&
+                obf_params.p_sigma == 0.0
             {
                 let mut cur_s = self.s_init.clone();
                 for prev_num in nums[0..level].iter() {
@@ -246,9 +270,9 @@ where
         log_mem("z computed");
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(feature = "test")]
-        if obf_params.encoding_sigma == 0.0
-            && obf_params.hardcoded_key_sigma == 0.0
-            && obf_params.p_sigma == 0.0
+        if obf_params.encoding_sigma == 0.0 &&
+            obf_params.hardcoded_key_sigma == 0.0 &&
+            obf_params.p_sigma == 0.0
         {
             let mut last_s = self.s_init.clone();
             for num in nums.iter() {
@@ -256,10 +280,10 @@ where
                 last_s = last_s * r;
             }
             {
-                let expected = last_s
-                    * (output_encoding_ints[0].pubkey.matrix.clone()
-                        - M::unit_column_vector(params.as_ref(), d1, d1 - 1)
-                            * output_encoding_ints[0].plaintext.clone().unwrap());
+                let expected = last_s *
+                    (output_encoding_ints[0].pubkey.matrix.clone() -
+                        M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
+                            output_encoding_ints[0].plaintext.clone().unwrap());
                 assert_eq!(output_encoding_ints[0].vector, expected);
             }
             assert_eq!(z.size(), (1, packed_output_size));
