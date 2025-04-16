@@ -394,6 +394,8 @@ impl SubAssign<&DCRTPoly> for DCRTPoly {
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::poly::{dcrt::DCRTPolyUniformSampler, sampler::DistType, PolyParams};
     use rand::prelude::*;
@@ -625,5 +627,42 @@ mod tests {
             original_poly, reconstructed_poly,
             "Reconstructed polynomial does not match original (GaussDist)"
         );
+    }
+
+    #[test]
+    fn test_dcrtpoly_write_read_file() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+
+        // Test with different distribution types
+        let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
+
+        // Create a temporary directory for testing
+        let test_dir = Path::new("test_poly_write_read");
+        if !test_dir.exists() {
+            std::fs::create_dir(test_dir).unwrap();
+        } else {
+            // Clean it first to ensure no old files interfere
+            std::fs::remove_dir_all(test_dir).unwrap();
+            std::fs::create_dir(test_dir).unwrap();
+        }
+
+        for dist in dists {
+            // Create a random polynomial
+            let poly = sampler.sample_poly(&params, &dist);
+            let poly_id = format!("test_poly_{:?}", dist);
+
+            // Write the polynomial to a file
+            poly.write_to_file(test_dir, &poly_id);
+
+            // Read the polynomial back
+            let read_poly = DCRTPoly::read_from_file(&params, test_dir, &poly_id);
+
+            // Verify the polynomials are equal
+            assert_eq!(poly, read_poly, "Read polynomial does not match original for {:?}", dist);
+        }
+
+        // Clean up
+        std::fs::remove_dir_all(test_dir).unwrap();
     }
 }

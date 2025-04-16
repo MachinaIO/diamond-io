@@ -1,6 +1,7 @@
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    path::Path,
 };
 
 use itertools::Itertools;
@@ -96,4 +97,29 @@ pub trait Poly:
     }
     fn to_bool_vec(&self) -> Vec<bool>;
     fn to_compact_bytes(&self) -> Vec<u8>;
+
+    /// Reads a polynomial with id from files under the given directory.
+    fn read_from_file<P: AsRef<Path> + Send + Sync>(
+        params: &Self::Params,
+        dir_path: P,
+        id: &str,
+    ) -> Self {
+        let mut path = dir_path.as_ref().to_path_buf();
+        path.push(format!("{}.poly", id));
+        
+        let bytes = std::fs::read(&path)
+            .unwrap_or_else(|_| panic!("Failed to read polynomial file {:?}", path));
+            
+        Self::from_compact_bytes(params, &bytes)
+    }
+
+    /// Writes a polynomial with id to files under the given directory.
+    fn write_to_file<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
+        let mut path = dir_path.as_ref().to_path_buf();
+        path.push(format!("{}.poly", id));
+        
+        let bytes = self.to_compact_bytes();
+        std::fs::write(&path, &bytes)
+            .unwrap_or_else(|_| panic!("Failed to write polynomial file {:?}", path));
+    }
 }
