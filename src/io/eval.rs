@@ -10,6 +10,7 @@ use crate::{
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::sync::Arc;
+use tracing::info;
 
 impl<M> Obfuscation<M>
 where
@@ -44,6 +45,13 @@ where
         log_mem("Sampled public data");
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
+        let dir_path = &self.dir_path;
+
+        // Load artifacts from files
+        let start = std::time::Instant::now();
+        let b = M::read_from_files(&params, 1, 1, dir_path, "b");
+        let end = std::time::Instant::now();
+
         let (mut ps, mut encodings) = (vec![], vec![]);
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
@@ -70,9 +78,9 @@ where
         log_mem("Sampled public keys");
 
         #[cfg(feature = "test")]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
+        if obf_params.encoding_sigma == 0.0
+            && obf_params.hardcoded_key_sigma == 0.0
+            && obf_params.p_sigma == 0.0
         {
             let expected_p_init = {
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
@@ -92,8 +100,8 @@ where
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = self.s_init.clone() *
-                &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
+            let expected_encoding_init = self.s_init.clone()
+                * &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
         let log_base_q = params.as_ref().modulus_digits();
@@ -155,9 +163,9 @@ where
             ps.push(p.clone());
             encodings.push(new_encodings);
             #[cfg(feature = "test")]
-            if obf_params.encoding_sigma == 0.0 &&
-                obf_params.hardcoded_key_sigma == 0.0 &&
-                obf_params.p_sigma == 0.0
+            if obf_params.encoding_sigma == 0.0
+                && obf_params.hardcoded_key_sigma == 0.0
+                && obf_params.p_sigma == 0.0
             {
                 let mut cur_s = self.s_init.clone();
                 for prev_num in nums[0..level].iter() {
@@ -209,7 +217,7 @@ where
         }
 
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
-        let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
+        let b_decomposed = &b.entry(0, 0).decompose_base(params.as_ref());
         log_mem("a,b decomposed");
         let final_circuit = build_final_digits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
@@ -238,9 +246,9 @@ where
         log_mem("z computed");
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(feature = "test")]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
+        if obf_params.encoding_sigma == 0.0
+            && obf_params.hardcoded_key_sigma == 0.0
+            && obf_params.p_sigma == 0.0
         {
             let mut last_s = self.s_init.clone();
             for num in nums.iter() {
@@ -248,10 +256,10 @@ where
                 last_s = last_s * r;
             }
             {
-                let expected = last_s *
-                    (output_encoding_ints[0].pubkey.matrix.clone() -
-                        M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
-                            output_encoding_ints[0].plaintext.clone().unwrap());
+                let expected = last_s
+                    * (output_encoding_ints[0].pubkey.matrix.clone()
+                        - M::unit_column_vector(params.as_ref(), d1, d1 - 1)
+                            * output_encoding_ints[0].plaintext.clone().unwrap());
                 assert_eq!(output_encoding_ints[0].vector, expected);
             }
             assert_eq!(z.size(), (1, packed_output_size));
@@ -266,6 +274,7 @@ where
                 );
             }
         }
+        info!("Time to load artifacts: {:?}", end - start);
         z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
     }
 }

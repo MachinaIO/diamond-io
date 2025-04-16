@@ -60,6 +60,17 @@ where
     #[cfg(not(feature = "test"))]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
+    let timestamp_id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_nanos() as u64;
+
+    let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
+
+    if !dir_path.exists() {
+        std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
+    }
+
     let pub_key_init =
         sample_public_key_by_id(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
@@ -93,6 +104,8 @@ where
         &hardcoded_key_matrix,
         obf_params.hardcoded_key_sigma,
     );
+
+    b.write_to_files(&dir_path, "b");
 
     log_mem("Generated RLWE ciphertext {a, b}");
 
@@ -301,17 +314,8 @@ where
     );
     log_mem("Sampled final_preimage");
 
-    let timestamp_id = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_nanos() as u64;
-
-    // Generate a directory path based on the current timestamp
-    let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
-
     Obfuscation {
         hash_key,
-        ct_b: b,
         encodings_init,
         p_init,
         m_preimages,

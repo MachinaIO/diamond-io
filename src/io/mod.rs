@@ -12,7 +12,6 @@ pub mod utils;
 pub struct Obfuscation<M: PolyMatrix, P: AsRef<std::path::Path> + Send + Sync = std::path::PathBuf>
 {
     pub hash_key: [u8; 32],
-    pub ct_b: M,
     pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
     pub m_preimages: Vec<Vec<M>>,

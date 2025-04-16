@@ -92,5 +92,7 @@ mod test {
         );
         assert_eq!(output_1st_gate, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());
         assert_eq!(output_2nd_gate, (hardcoded_key * input_poly).to_bool_vec());
+
+        let _ = std::fs::remove_dir_all(&obfuscation.dir_path);
     }
 }
