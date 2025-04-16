@@ -36,6 +36,40 @@ impl<M: PolyMatrix> BggEncoding<M> {
             plaintext.write_to_file(&dir_path, &format!("{}_plaintext", id));
         }
     }
+
+    /// Reads an encoding with id from files under the given directory.
+    pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(
+        params: &<M::P as Poly>::Params,
+        d: usize,
+        log_base_q: usize,
+        dir_path: P,
+        id: &str,
+        reveal_plaintext: bool,
+    ) -> Self {
+        let ncol = (d + 1) * log_base_q;
+
+        // Read the vector
+        let vector = M::read_from_files(params, 1, ncol, &dir_path, &format!("{}_vector", id));
+
+        // Read the pubkey
+        let pubkey = BggPublicKey::read_from_files(
+            params,
+            d + 1,
+            ncol,
+            &dir_path,
+            &format!("{}_pubkey", id),
+            reveal_plaintext,
+        );
+
+        // If reveal_plaintext is true, read the plaintext
+        let plaintext = if reveal_plaintext {
+            Some(M::P::read_from_file(params, &dir_path, &format!("{}_plaintext", id)))
+        } else {
+            None
+        };
+
+        Self { vector, pubkey, plaintext }
+    }
 }
 
 impl<M: PolyMatrix> Add for BggEncoding<M> {
@@ -135,10 +169,16 @@ mod tests {
         bgg::{
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+            BggEncoding,
         },
-        poly::dcrt::{
-            params::DCRTPolyParams,
-            sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+        poly::{
+            dcrt::{
+                matrix::base::BaseMatrix,
+                params::DCRTPolyParams,
+                sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+                DCRTPoly,
+            },
+            PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -625,6 +665,7 @@ mod tests {
         let d = 3;
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
         let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let log_base_q = params.modulus_digits();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -668,18 +709,25 @@ mod tests {
             let id = format!("test_encoding_{}", idx);
             encoding.write_to_files(test_dir, &id);
 
-            let plaintext_file_name = format!("{}_plaintext.poly", id);
-
-            // The corresponding plaintext file should be exist only if the corresponding boolean flag is true
-            if idx == 0 {
-                assert!(test_dir.join(plaintext_file_name).exists()); // first encoding (for one) is always true
-            } else if reveal_plaintexts[idx - 1] {
-                assert!(test_dir.join(plaintext_file_name).exists());
+            // Read the encoding from files and verify it matches the original
+            if idx == 0 || (idx > 0 && reveal_plaintexts[idx - 1]) {
+                // first encoding (for one) is always true
+                let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
+                    BggEncoding::read_from_files(&params, d, log_base_q, test_dir, &id, true);
+                assert_eq!(read_enc.vector, encoding.vector);
+                assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
+                assert_eq!(
+                    read_enc.plaintext.as_ref().unwrap(),
+                    encoding.plaintext.as_ref().unwrap()
+                );
             } else {
-                assert!(!test_dir.join(plaintext_file_name).exists());
+                let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
+                    BggEncoding::read_from_files(&params, d, log_base_q, test_dir, &id, false);
+                assert_eq!(read_enc.vector, encoding.vector);
+                assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
+                assert!(read_enc.plaintext.is_none());
             }
         }
-
         // Clean up the test directory
         std::fs::remove_dir_all(test_dir).unwrap();
     }
