@@ -106,16 +106,15 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
-    /// Create a polynomial from a compact byte representation
-    /// The bytes should have the format created by to_compact_bytes
+    /// Create a polynomial from a compact byte representation based on `to_compact_bytes` encoding
     fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
         let ring_dimension = params.ring_dimension() as usize;
         let modulus = params.modulus();
 
-        // First four bytes contain the byte size per coefficient
+        // First four bytes contain the maximum byte size per coefficient
         let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
 
-        // Next n/8 bytes contain the bit vector
+        // Next ceil(n/8) bytes contain the bit vector indicating if coefficients are negative
         let bit_vector_byte_size = ring_dimension.div_ceil(8);
         let bit_vector = &bytes[4..4 + bit_vector_byte_size];
 
@@ -225,7 +224,7 @@ impl Poly for DCRTPoly {
     /// 1. The first four bytes contain the `max_byte_size`, namely the maximum byte size of any
     ///    coefficient in the poly
     /// 2. The next `ceil(n/8)` bytes contain a bit vector, where each bit indicates if the
-    ///    corresponding coefficient is negative and `n` is the ring dimension
+    ///    corresponding coefficient is negative (> `q_half`) and `n` is the ring dimension
     /// 3. The remaining `n * max_byte_size` contain the coefficient values
     fn to_compact_bytes(&self) -> Vec<u8> {
         let modulus = self.ptr_poly.GetModulus();
@@ -235,21 +234,21 @@ impl Poly for DCRTPoly {
         let coeffs = self.coeffs();
         let ring_dimension = coeffs.len();
 
-        // Create a bit vector to store flags for negative coefficients
+        // Create a bit vector of `ceil(n/8)` bytes to store flags for negative coefficients
         let bit_vector_byte_size = ring_dimension.div_ceil(8);
         let mut bit_vector = vec![0u8; bit_vector_byte_size];
 
         let mut max_byte_size = 0;
         let mut processed_values = Vec::with_capacity(ring_dimension);
 
-        // First pass: Process coefficients and calculate max_byte_size
+        // First pass: Process coefficients, fill up `bit_vector`` and calculate `max_byte_size`
         for (i, coeff) in coeffs.iter().enumerate() {
             // Center coefficients around 0
             let value = if coeff.value() > &q_half {
-                let byte_idx = i / 8;
-                let bit_idx = i % 8;
+                let byte_idx = i / 8; // Determines which byte in the bit vector the flag for the i-th coeffs belongs to
+                let bit_idx = i % 8; // Determines the bit position within that byte
                 bit_vector[byte_idx] |= 1 << bit_idx; // Set flag for negative coefficient
-                &modulus_big - coeff.value() // Convert to absolute value: q - a
+                &modulus_big - coeff.value() // Convert to absolute value: q - coeff.value
             } else if coeff.value() == &BigUint::ZERO {
                 BigUint::ZERO
             } else {
@@ -269,11 +268,11 @@ impl Poly for DCRTPoly {
         let max_byte_size_bytes = (max_byte_size as u32).to_le_bytes();
         result[0..4].copy_from_slice(&max_byte_size_bytes);
 
-        // Store bit vector
+        // Store bit vector in the next `ceil(n/8)` bytes
         result[4..4 + bit_vector_byte_size].copy_from_slice(&bit_vector);
 
-        // Second pass: Store preprocessed coefficient values s.t. each coefficient is max_byte_size
-        // bytes long
+        // Second pass: Store preprocessed coefficient values s.t. each coefficient is
+        // `max_byte_size` bytes long
         for (i, value) in processed_values.iter().enumerate() {
             let value_bytes = value.to_bytes_le();
             let start_pos = 4 + bit_vector_byte_size + (i * max_byte_size);
@@ -500,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dcrtpoly_to_compact_bytes() {
+    fn test_dcrtpoly_to_compact_bytes_bit_dist() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
         let poly = sampler.sample_poly(&params, &DistType::BitDist);
@@ -510,7 +509,7 @@ mod tests {
 
         // First four bytes contain `max_byte_size` (maximum byte size of any coefficient)
         // Since we're using BitDist, we expect max_byte_size to be equal to 1
-        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
         assert_eq!(max_byte_size, 1, "Max byte size size should be 1 for BitDist");
 
         // Next ceil(n/8) bytes are the bit vector (1 bit per coefficient)
@@ -518,8 +517,7 @@ mod tests {
 
         // Expected total size
         // 4 bytes for `max_byte_size` + bit_vector_byte_size + (ring_dimension * max_byte_size)
-        let expected_total_size =
-            4 + bit_vector_byte_size + (ring_dimension * max_byte_size as usize);
+        let expected_total_size = 4 + bit_vector_byte_size + (ring_dimension * max_byte_size);
         assert_eq!(bytes.len(), expected_total_size, "Incorrect total byte size");
 
         // Check that the structure is as expected
@@ -529,7 +527,11 @@ mod tests {
 
         // Verify coefficient values section exists
         let coeffs_section = &bytes[4 + bit_vector_byte_size..];
-        assert_eq!(coeffs_section.len(), ring_dimension, "Coefficient section size is incorrect");
+        assert_eq!(
+            coeffs_section.len(),
+            ring_dimension * max_byte_size,
+            "Coefficient section size is incorrect"
+        );
 
         // Since we're using BitDist, each coefficient should be either 0 or 1
         // This means each byte in the coefficient section should be 0 or 1
@@ -541,6 +543,49 @@ mod tests {
                 coeff_byte
             );
         }
+    }
+
+    #[test]
+    fn test_dcrtpoly_to_compact_bytes_uniform_dist() {
+        let params = DCRTPolyParams::default();
+        let sampler = DCRTPolyUniformSampler::new();
+        let poly = sampler.sample_poly(&params, &DistType::FinRingDist);
+        let bytes = poly.to_compact_bytes();
+        let modulus = params.modulus();
+        let modulus_byte_size = modulus.to_bytes_le().len();
+
+        let ring_dimension = params.ring_dimension() as usize;
+
+        // First four bytes contain `max_byte_size` (maximum byte size of any coefficient)
+        // Since we're using BitDist, we expect max_byte_size to be equal less or equal the byte
+        // size of the modulus
+        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+        assert!(
+            max_byte_size <= modulus_byte_size,
+            "Max byte size should be less than or equal to modulus byte size"
+        );
+
+        // Next ceil(n/8) bytes are the bit vector (1 bit per coefficient)
+        let bit_vector_byte_size = ring_dimension.div_ceil(8);
+
+        // Expected total size
+        // 4 bytes for `max_byte_size` + bit_vector_byte_size + (ring_dimension * max_byte_size)
+        let expected_total_size = 4 + bit_vector_byte_size + (ring_dimension * max_byte_size);
+        assert_eq!(bytes.len(), expected_total_size, "Incorrect total byte size");
+
+        // Check that the structure is as expected
+        // Verify bit vector section exists
+        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
+        assert_eq!(bit_vector.len(), bit_vector_byte_size, "Bit vector size is incorrect");
+
+        // Verify coefficient values section exists
+        let coeffs_section = &bytes[4 + bit_vector_byte_size..];
+        assert_eq!(
+            coeffs_section.len(),
+            ring_dimension * max_byte_size,
+            "Coefficient section size is
+        incorrect"
+        );
     }
 
     #[test]
