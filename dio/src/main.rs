@@ -115,11 +115,7 @@ fn main() {
                     .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
                     .collect();
                 let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
-                println!(
-                    "input_poly {:?} |  hardcoded_key {:?}",
-                    input_poly.to_bool_vec(),
-                    hardcoded_key.to_bool_vec()
-                );
+
                 let eval = verify_circuit.eval(
                     &params,
                     &DCRTPoly::const_one(&params),

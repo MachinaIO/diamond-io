@@ -33,16 +33,16 @@ impl BenchCircuit {
         {
             let inputs = public_circuit.input(2);
             let mut outputs = vec![];
-            let eval_input = inputs[1];
+            let input_poly = inputs[1];
             let hardcoded_key = inputs[0];
             let num = add_n.checked_div(mul_n).unwrap_or(1);
             for _ in 0..num {
-                let added = public_circuit.add_gate(hardcoded_key, eval_input);
+                let added = public_circuit.add_gate(hardcoded_key, input_poly);
                 outputs.push(added);
             }
             let num = mul_n.checked_div(add_n).unwrap_or(1);
             for _ in 0..num {
-                let muled = public_circuit.mul_gate(hardcoded_key, eval_input);
+                let muled = public_circuit.mul_gate(hardcoded_key, input_poly);
                 outputs.push(muled);
             }
             public_circuit.output(outputs);
