@@ -54,6 +54,7 @@ where
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let level_width = obf_params.level_width;
+        #[cfg(feature = "test")]
         let level_size = (1u64 << obf_params.level_width) as usize;
         assert!(inputs.len() % level_width == 0);
         let depth = obf_params.input_size / level_width;

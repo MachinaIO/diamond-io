@@ -355,7 +355,7 @@ where
         let end = SystemTime::now();
 
         let dir_size = calculate_directory_size(&dir_path);
-        info!("Directory size: {dir_size} bytes");
+        info!("Obfuscation size: {dir_size} bytes");
         info!("Time taken to write files: {:?}", end.duration_since(start).unwrap());
 
         let _ = std::fs::remove_dir_all(&dir_path);
