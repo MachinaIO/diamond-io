@@ -106,10 +106,10 @@ pub trait Poly:
     ) -> Self {
         let mut path = dir_path.as_ref().to_path_buf();
         path.push(format!("{}.poly", id));
-        
+
         let bytes = std::fs::read(&path)
             .unwrap_or_else(|_| panic!("Failed to read polynomial file {:?}", path));
-            
+
         Self::from_compact_bytes(params, &bytes)
     }
 
@@ -117,7 +117,7 @@ pub trait Poly:
     fn write_to_file<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
         let mut path = dir_path.as_ref().to_path_buf();
         path.push(format!("{}.poly", id));
-        
+
         let bytes = self.to_compact_bytes();
         std::fs::write(&path, &bytes)
             .unwrap_or_else(|_| panic!("Failed to write polynomial file {:?}", path));
