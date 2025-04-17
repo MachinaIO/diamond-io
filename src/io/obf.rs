@@ -340,17 +340,18 @@ where
             for num in 0..level_size {
                 m_preimages[level][num]
                     .write_to_files(&dir_path, &format!("m_preimage_{level}_{num}"));
-                log_mem("Written m_preimage to files");
+                log_mem("Written m_preimage_level_num to files");
                 n_preimages[level][num]
                     .write_to_files(&dir_path, &format!("n_preimage_{level}_{num}"));
-                log_mem("Written n_preimage to files");
+                log_mem("Written n_preimage_level_num to files");
                 k_preimages[level][num]
                     .write_to_files(&dir_path, &format!("k_preimage_{level}_{num}"));
-                log_mem("Written k_preimage to files");
+                log_mem("Written k_preimage_level_num to files");
             }
         }
 
         final_preimage.write_to_files(&dir_path, "final_preimage");
+        log_mem("Written final_preimage to files");
 
         let end = SystemTime::now();
 
