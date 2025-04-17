@@ -36,8 +36,8 @@ impl<M: PolyMatrix> Add<&Self> for BggEncoding<M> {
     fn add(self, other: &Self) -> Self {
         let vector = self.vector + &other.vector;
         let pubkey = self.pubkey + &other.pubkey;
-        let plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
-            (Some(a), Some(b)) => Some(a.clone() + b),
+        let plaintext = match (self.plaintext, other.plaintext.as_ref()) {
+            (Some(a), Some(b)) => Some(a + b),
             _ => None,
         };
         Self { vector, pubkey, plaintext }
@@ -56,8 +56,8 @@ impl<M: PolyMatrix> Sub<&Self> for BggEncoding<M> {
     fn sub(self, other: &Self) -> Self {
         let vector = self.vector - &other.vector;
         let pubkey = self.pubkey - &other.pubkey;
-        let plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
-            (Some(a), Some(b)) => Some(a.clone() - b),
+        let plaintext = match (self.plaintext, other.plaintext.as_ref()) {
+            (Some(a), Some(b)) => Some(a - b),
             _ => None,
         };
         Self { vector, pubkey, plaintext }
@@ -81,8 +81,8 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
         let first_term = self.vector * decomposed_b.clone();
         let second_term = other.vector.clone() * self.plaintext.as_ref().unwrap();
         let new_vector = first_term + second_term;
-        let new_plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
-            (Some(a), Some(b)) => Some(a.clone() * b),
+        let new_plaintext = match (self.plaintext, other.plaintext.as_ref()) {
+            (Some(a), Some(b)) => Some(a * b),
             _ => None,
         };
 

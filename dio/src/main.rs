@@ -1,8 +1,7 @@
-use circuit::{BenchCircuit, BenchCircuitType};
+use circuit::BenchCircuit;
 use clap::{Parser, Subcommand};
 use config::Config;
 use diamond_io::{
-    bgg::circuit::serde::SerializablePolyCircuit,
     io::{obf::obfuscate, params::ObfuscationParams},
     poly::{
         Poly, PolyElem, PolyParams,
@@ -15,8 +14,6 @@ use diamond_io::{
     utils::init_tracing,
 };
 use keccak_asm::Keccak256;
-use rand::Rng;
-use serde_json::from_str;
 use std::{
     fs::{self},
     path::PathBuf,
@@ -41,19 +38,14 @@ enum Commands {
         #[arg(short, long)]
         config: PathBuf,
 
-        #[arg(short, long)]
-        verify: Option<PathBuf>,
-    },
-    GenBenchCircuit {
-        /// output path to print circuit
-        #[arg(short, long)]
-        output: PathBuf,
+        #[arg(short, long, default_value = "true")]
+        verify: bool,
 
-        #[arg(short, long)]
-        circuit_type: BenchCircuitType,
+        #[arg(long)]
+        add_num: usize,
 
-        #[arg(short, long)]
-        n: usize,
+        #[arg(long)]
+        mul_num: usize,
     },
 }
 
@@ -61,7 +53,7 @@ fn main() {
     init_tracing();
     let command = Args::parse().command;
     match command {
-        Commands::Run { config, verify } => {
+        Commands::Run { config, verify, add_num, mul_num } => {
             let contents = fs::read_to_string(&config).unwrap();
             let dio_config: Config = toml::from_str(&contents).unwrap();
             let start_time = std::time::Instant::now();
@@ -71,18 +63,18 @@ fn main() {
                 dio_config.crt_bits,
                 dio_config.base_bits,
             );
-
+            let log_base_q = params.modulus_digits();
             let switched_modulus = Arc::new(dio_config.switched_modulus);
-            let json = fs::read_to_string(&dio_config.public_circuit_path).unwrap();
-            let serialized_public_circuit: SerializablePolyCircuit = from_str(&json).unwrap();
-            let public_circuit = serialized_public_circuit.to_circuit();
-
+            let dim = params.ring_dimension() as usize;
+            assert_eq!(add_num + mul_num, log_base_q * 2);
+            let public_circuit = BenchCircuit::new_add_mul(add_num, mul_num).as_poly_circuit();
+            let public_circuit_num_input = public_circuit.num_input();
             let obf_params = ObfuscationParams {
                 params: params.clone(),
                 switched_modulus,
                 input_size: dio_config.input_size,
                 level_width: dio_config.level_width,
-                public_circuit: public_circuit.clone(),
+                public_circuit,
                 d: dio_config.d,
                 encoding_sigma: dio_config.encoding_sigma,
                 hardcoded_key_sigma: dio_config.hardcoded_key_sigma,
@@ -90,6 +82,8 @@ fn main() {
                 trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
             };
 
+            let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
+            assert_eq!(public_circuit_num_input, (2 * log_base_q) + packed_input_size - 1);
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
             let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
@@ -112,27 +106,26 @@ fn main() {
 
             info!("Time for evaluation: {:?}", total_time - obfuscation_time);
             info!("Total time: {:?}", total_time);
-            if let Some(verify_circuit_path) = verify {
-                // load verify circuit
-                let json = fs::read_to_string(&verify_circuit_path).unwrap();
-                let serialized_verify_circuit: SerializablePolyCircuit = from_str(&json).unwrap();
-                let verify_circuit = serialized_verify_circuit.to_circuit();
-
+            if verify {
+                let verify_circuit =
+                    BenchCircuit::new_add_mul_verify(add_num, mul_num).as_poly_circuit();
                 let input_coeffs: Vec<_> = input
                     .iter()
                     .cloned()
                     .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
                     .collect();
                 let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
-                let bool_poly = DCRTPoly::from_const(
-                    &params,
-                    &FinRingElem::constant(&params.modulus(), rng.random::<bool>() as u64),
+                println!(
+                    "input_poly {:?} |  hardcoded_key {:?}",
+                    input_poly.to_bool_vec(),
+                    hardcoded_key.to_bool_vec()
                 );
                 let eval = verify_circuit.eval(
                     &params,
                     &DCRTPoly::const_one(&params),
-                    &[bool_poly, hardcoded_key, input_poly],
+                    &[hardcoded_key, input_poly],
                 );
+
                 let mut bool_eval = vec![];
                 for e in eval {
                     let decompose_poly = e.to_bool_vec();
@@ -141,12 +134,6 @@ fn main() {
 
                 assert_eq!(output, bool_eval);
             }
-        }
-        Commands::GenBenchCircuit { output, circuit_type, n } => {
-            let public_circuit = BenchCircuit::new(circuit_type, n);
-            let poly_circuit = public_circuit.as_poly_circuit();
-            let serialize = SerializablePolyCircuit::from_circuit(poly_circuit).to_json_str();
-            fs::write(output, serialize).unwrap();
         }
     }
 }

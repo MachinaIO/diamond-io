@@ -4,10 +4,5 @@ diamond-io cli implementation
 
 ### run 
 ```
-cargo run -- run -c dio-config.example.toml -v verify_circuit.example.json
-```
-
-### save circuit to file
-```
-cargo run -- gen-bench-circuit -o verify_circuit.example.json -c AND -n 2
+dio run -c ../e2e/dio-config.dummy.toml --add-num 8 --mul-num 1
 ```

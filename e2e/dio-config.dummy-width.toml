@@ -6,7 +6,6 @@ switched_modulus = "1"
 d = 3
 input_size = 4
 level_width = 2
-public_circuit_path = "e2e/circuits/public_circuit.dummy.json"
 encoding_sigma = 0.0
 hardcoded_key_sigma = 0.0
 p_sigma = 0.0

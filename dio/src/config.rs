@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::str::FromStr;
 
 use num_bigint::BigUint;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
@@ -28,7 +28,6 @@ pub struct Config {
     pub switched_modulus: BigUint,
     pub input_size: usize,
     pub level_width: usize,
-    pub public_circuit_path: PathBuf,
     pub d: usize,
     pub encoding_sigma: f64,
     pub hardcoded_key_sigma: f64,

@@ -1,60 +1,60 @@
-use clap::ValueEnum;
 use diamond_io::bgg::circuit::PolyCircuit;
 
-#[derive(Debug, Clone, ValueEnum)]
-pub enum BenchCircuitType {
-    And,
-    AndVerify,
-}
-
 pub enum BenchCircuit {
-    AND(PolyCircuit),
-    AndVerify(PolyCircuit),
+    AddMul(PolyCircuit),
+    AddMulVerify(PolyCircuit),
 }
 
 impl BenchCircuit {
-    pub fn new(circuit_type: BenchCircuitType, n: usize) -> Self {
+    pub fn new_add_mul(add_n: usize, mul_n: usize) -> Self {
         let mut public_circuit = PolyCircuit::new();
-        match circuit_type {
-            BenchCircuitType::And => {
-                // inputs: binary polynomial, hardcoded_key, eval_input
-                // outputs: binary AND eval_input | hardcoded_key AND eval_input
-                {
-                    let inputs = public_circuit.input(n);
-                    let mut outputs = vec![];
-                    let eval_input = inputs[n - 1];
-                    for ct_input in inputs[0..(n - 1)].iter() {
-                        let muled = public_circuit.and_gate(*ct_input, eval_input);
-                        outputs.push(muled);
-                    }
-                    for ct_input in inputs[0..(n - 1)].iter() {
-                        let muled = public_circuit.and_gate(*ct_input, eval_input);
-                        outputs.push(muled);
-                    }
-                    public_circuit.output(outputs);
-                }
+        let n = add_n + mul_n + 1;
 
-                Self::AND(public_circuit)
+        {
+            let inputs = public_circuit.input(n);
+            let mut outputs = vec![];
+            let eval_input = inputs[n - 1];
+            for ct_input in inputs[0..add_n].iter() {
+                let added = public_circuit.add_gate(*ct_input, eval_input);
+                outputs.push(added);
             }
-            BenchCircuitType::AndVerify => {
-                let inputs = public_circuit.input(n);
-                let mut outputs = vec![];
-                let eval_input = inputs[n - 1];
-                for ct_input in inputs[0..(n - 1)].iter() {
-                    let muled = public_circuit.and_gate(*ct_input, eval_input);
-                    outputs.push(muled);
-                }
-
-                public_circuit.output(outputs);
-                Self::AndVerify(public_circuit)
+            for ct_input in inputs[add_n..add_n + mul_n].iter() {
+                let muled = public_circuit.mul_gate(*ct_input, eval_input);
+                outputs.push(muled);
             }
+            public_circuit.output(outputs);
         }
+
+        Self::AddMul(public_circuit)
     }
 
-    pub fn as_poly_circuit(&self) -> &PolyCircuit {
+    pub fn new_add_mul_verify(add_n: usize, mul_n: usize) -> Self {
+        let mut public_circuit = PolyCircuit::new();
+        {
+            let inputs = public_circuit.input(2);
+            let mut outputs = vec![];
+            let eval_input = inputs[1];
+            let hardcoded_key = inputs[0];
+            let num = add_n.checked_div(mul_n).unwrap_or(1);
+            for _ in 0..num {
+                let added = public_circuit.add_gate(hardcoded_key, eval_input);
+                outputs.push(added);
+            }
+            let num = mul_n.checked_div(add_n).unwrap_or(1);
+            for _ in 0..num {
+                let muled = public_circuit.mul_gate(hardcoded_key, eval_input);
+                outputs.push(muled);
+            }
+            public_circuit.output(outputs);
+        }
+
+        Self::AddMulVerify(public_circuit)
+    }
+
+    pub fn as_poly_circuit(self) -> PolyCircuit {
         match self {
-            BenchCircuit::AND(poly_circuit) => poly_circuit,
-            BenchCircuit::AndVerify(poly_circuit) => poly_circuit,
+            BenchCircuit::AddMul(poly_circuit) => poly_circuit,
+            BenchCircuit::AddMulVerify(poly_circuit) => poly_circuit,
         }
     }
 }

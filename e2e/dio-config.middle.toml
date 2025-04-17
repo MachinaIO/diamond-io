@@ -6,7 +6,6 @@ switched_modulus = "431359146674410224742050828377557384853608161148858662676258
 d = 1
 input_size = 1
 level_width = 1
-public_circuit_path = "e2e/circuits/public_circuit.middle.json"
 encoding_sigma = 15.82764
 hardcoded_key_sigma = 15.82764
 p_sigma = 15.82764
