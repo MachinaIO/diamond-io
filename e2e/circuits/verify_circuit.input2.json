@@ -1,1 +1,0 @@
-{"gates":{"0":{"gate_id":0,"gate_type":"Input","input_gates":[]},"1":{"gate_id":1,"gate_type":"Input","input_gates":[]},"2":{"gate_id":2,"gate_type":"Input","input_gates":[]},"3":{"gate_id":3,"gate_type":"Mul","input_gates":[1,2]}},"sub_circuits":{},"output_ids":[3],"num_input":2}

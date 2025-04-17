@@ -1,0 +1,27 @@
+## public circuit
+
+### dummy
+
+```
+dio gen-bench-circuit -o circuits/public_circuit.dummy.json -c and -n 9
+```
+
+### middle
+
+```
+dio gen-bench-circuit -o circuits/public_circuit.middle.json -c and -n 31
+```
+
+### real
+
+```
+dio gen-bench-circuit -o circuits/public_circuit.real.json -c and -n 37
+```
+
+## verify
+
+### AND
+
+```
+dio gen-bench-circuit -o circuits/verify_circuit.json -c and-verify -n 3
+```

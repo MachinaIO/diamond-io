@@ -1,1 +1,846 @@
-{"gates":{"0":{"gate_id":0,"gate_type":"Input","input_gates":[]},"1":{"gate_id":1,"gate_type":"Input","input_gates":[]},"2":{"gate_id":2,"gate_type":"Input","input_gates":[]},"3":{"gate_id":3,"gate_type":"Input","input_gates":[]},"4":{"gate_id":4,"gate_type":"Input","input_gates":[]},"5":{"gate_id":5,"gate_type":"Input","input_gates":[]},"6":{"gate_id":6,"gate_type":"Input","input_gates":[]},"7":{"gate_id":7,"gate_type":"Input","input_gates":[]},"8":{"gate_id":8,"gate_type":"Input","input_gates":[]},"9":{"gate_id":9,"gate_type":"Input","input_gates":[]},"10":{"gate_id":10,"gate_type":"Input","input_gates":[]},"11":{"gate_id":11,"gate_type":"Input","input_gates":[]},"12":{"gate_id":12,"gate_type":"Input","input_gates":[]},"13":{"gate_id":13,"gate_type":"Input","input_gates":[]},"14":{"gate_id":14,"gate_type":"Input","input_gates":[]},"15":{"gate_id":15,"gate_type":"Input","input_gates":[]},"16":{"gate_id":16,"gate_type":"Input","input_gates":[]},"17":{"gate_id":17,"gate_type":"Input","input_gates":[]},"18":{"gate_id":18,"gate_type":"Input","input_gates":[]},"19":{"gate_id":19,"gate_type":"Input","input_gates":[]},"20":{"gate_id":20,"gate_type":"Input","input_gates":[]},"21":{"gate_id":21,"gate_type":"Input","input_gates":[]},"22":{"gate_id":22,"gate_type":"Input","input_gates":[]},"23":{"gate_id":23,"gate_type":"Input","input_gates":[]},"24":{"gate_id":24,"gate_type":"Input","input_gates":[]},"25":{"gate_id":25,"gate_type":"Input","input_gates":[]},"26":{"gate_id":26,"gate_type":"Input","input_gates":[]},"27":{"gate_id":27,"gate_type":"Input","input_gates":[]},"28":{"gate_id":28,"gate_type":"Input","input_gates":[]},"29":{"gate_id":29,"gate_type":"Input","input_gates":[]},"30":{"gate_id":30,"gate_type":"Input","input_gates":[]},"31":{"gate_id":31,"gate_type":"Input","input_gates":[]},"32":{"gate_id":32,"gate_type":"Input","input_gates":[]},"33":{"gate_id":33,"gate_type":"Input","input_gates":[]},"34":{"gate_id":34,"gate_type":"Input","input_gates":[]},"35":{"gate_id":35,"gate_type":"Input","input_gates":[]},"36":{"gate_id":36,"gate_type":"Input","input_gates":[]},"37":{"gate_id":37,"gate_type":"Input","input_gates":[]},"38":{"gate_id":38,"gate_type":"Mul","input_gates":[1,37]},"39":{"gate_id":39,"gate_type":"Mul","input_gates":[2,37]},"40":{"gate_id":40,"gate_type":"Mul","input_gates":[3,37]},"41":{"gate_id":41,"gate_type":"Mul","input_gates":[4,37]},"42":{"gate_id":42,"gate_type":"Mul","input_gates":[5,37]},"43":{"gate_id":43,"gate_type":"Mul","input_gates":[6,37]},"44":{"gate_id":44,"gate_type":"Mul","input_gates":[7,37]},"45":{"gate_id":45,"gate_type":"Mul","input_gates":[8,37]},"46":{"gate_id":46,"gate_type":"Mul","input_gates":[9,37]},"47":{"gate_id":47,"gate_type":"Mul","input_gates":[10,37]},"48":{"gate_id":48,"gate_type":"Mul","input_gates":[11,37]},"49":{"gate_id":49,"gate_type":"Mul","input_gates":[12,37]},"50":{"gate_id":50,"gate_type":"Mul","input_gates":[13,37]},"51":{"gate_id":51,"gate_type":"Mul","input_gates":[14,37]},"52":{"gate_id":52,"gate_type":"Mul","input_gates":[15,37]},"53":{"gate_id":53,"gate_type":"Mul","input_gates":[16,37]},"54":{"gate_id":54,"gate_type":"Mul","input_gates":[17,37]},"55":{"gate_id":55,"gate_type":"Mul","input_gates":[18,37]},"56":{"gate_id":56,"gate_type":"Mul","input_gates":[19,37]},"57":{"gate_id":57,"gate_type":"Mul","input_gates":[20,37]},"58":{"gate_id":58,"gate_type":"Mul","input_gates":[21,37]},"59":{"gate_id":59,"gate_type":"Mul","input_gates":[22,37]},"60":{"gate_id":60,"gate_type":"Mul","input_gates":[23,37]},"61":{"gate_id":61,"gate_type":"Mul","input_gates":[24,37]},"62":{"gate_id":62,"gate_type":"Mul","input_gates":[25,37]},"63":{"gate_id":63,"gate_type":"Mul","input_gates":[26,37]},"64":{"gate_id":64,"gate_type":"Mul","input_gates":[27,37]},"65":{"gate_id":65,"gate_type":"Mul","input_gates":[28,37]},"66":{"gate_id":66,"gate_type":"Mul","input_gates":[29,37]},"67":{"gate_id":67,"gate_type":"Mul","input_gates":[30,37]},"68":{"gate_id":68,"gate_type":"Mul","input_gates":[31,37]},"69":{"gate_id":69,"gate_type":"Mul","input_gates":[32,37]},"70":{"gate_id":70,"gate_type":"Mul","input_gates":[33,37]},"71":{"gate_id":71,"gate_type":"Mul","input_gates":[34,37]},"72":{"gate_id":72,"gate_type":"Mul","input_gates":[35,37]},"73":{"gate_id":73,"gate_type":"Mul","input_gates":[36,37]}},"sub_circuits":{},"output_ids":[38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73],"num_input":37}
+{
+    "gates": {
+        "0": {
+            "gate_id": 0,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "1": {
+            "gate_id": 1,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "2": {
+            "gate_id": 2,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "3": {
+            "gate_id": 3,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "4": {
+            "gate_id": 4,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "5": {
+            "gate_id": 5,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "6": {
+            "gate_id": 6,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "7": {
+            "gate_id": 7,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "8": {
+            "gate_id": 8,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "9": {
+            "gate_id": 9,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "10": {
+            "gate_id": 10,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "11": {
+            "gate_id": 11,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "12": {
+            "gate_id": 12,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "13": {
+            "gate_id": 13,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "14": {
+            "gate_id": 14,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "15": {
+            "gate_id": 15,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "16": {
+            "gate_id": 16,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "17": {
+            "gate_id": 17,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "18": {
+            "gate_id": 18,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "19": {
+            "gate_id": 19,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "20": {
+            "gate_id": 20,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "21": {
+            "gate_id": 21,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "22": {
+            "gate_id": 22,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "23": {
+            "gate_id": 23,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "24": {
+            "gate_id": 24,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "25": {
+            "gate_id": 25,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "26": {
+            "gate_id": 26,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "27": {
+            "gate_id": 27,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "28": {
+            "gate_id": 28,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "29": {
+            "gate_id": 29,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "30": {
+            "gate_id": 30,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "31": {
+            "gate_id": 31,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "32": {
+            "gate_id": 32,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "33": {
+            "gate_id": 33,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "34": {
+            "gate_id": 34,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "35": {
+            "gate_id": 35,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "36": {
+            "gate_id": 36,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "37": {
+            "gate_id": 37,
+            "gate_type": "Input",
+            "input_gates": []
+        },
+        "38": {
+            "gate_id": 38,
+            "gate_type": "Mul",
+            "input_gates": [
+                1,
+                37
+            ]
+        },
+        "39": {
+            "gate_id": 39,
+            "gate_type": "Mul",
+            "input_gates": [
+                2,
+                37
+            ]
+        },
+        "40": {
+            "gate_id": 40,
+            "gate_type": "Mul",
+            "input_gates": [
+                3,
+                37
+            ]
+        },
+        "41": {
+            "gate_id": 41,
+            "gate_type": "Mul",
+            "input_gates": [
+                4,
+                37
+            ]
+        },
+        "42": {
+            "gate_id": 42,
+            "gate_type": "Mul",
+            "input_gates": [
+                5,
+                37
+            ]
+        },
+        "43": {
+            "gate_id": 43,
+            "gate_type": "Mul",
+            "input_gates": [
+                6,
+                37
+            ]
+        },
+        "44": {
+            "gate_id": 44,
+            "gate_type": "Mul",
+            "input_gates": [
+                7,
+                37
+            ]
+        },
+        "45": {
+            "gate_id": 45,
+            "gate_type": "Mul",
+            "input_gates": [
+                8,
+                37
+            ]
+        },
+        "46": {
+            "gate_id": 46,
+            "gate_type": "Mul",
+            "input_gates": [
+                9,
+                37
+            ]
+        },
+        "47": {
+            "gate_id": 47,
+            "gate_type": "Mul",
+            "input_gates": [
+                10,
+                37
+            ]
+        },
+        "48": {
+            "gate_id": 48,
+            "gate_type": "Mul",
+            "input_gates": [
+                11,
+                37
+            ]
+        },
+        "49": {
+            "gate_id": 49,
+            "gate_type": "Mul",
+            "input_gates": [
+                12,
+                37
+            ]
+        },
+        "50": {
+            "gate_id": 50,
+            "gate_type": "Mul",
+            "input_gates": [
+                13,
+                37
+            ]
+        },
+        "51": {
+            "gate_id": 51,
+            "gate_type": "Mul",
+            "input_gates": [
+                14,
+                37
+            ]
+        },
+        "52": {
+            "gate_id": 52,
+            "gate_type": "Mul",
+            "input_gates": [
+                15,
+                37
+            ]
+        },
+        "53": {
+            "gate_id": 53,
+            "gate_type": "Mul",
+            "input_gates": [
+                16,
+                37
+            ]
+        },
+        "54": {
+            "gate_id": 54,
+            "gate_type": "Mul",
+            "input_gates": [
+                17,
+                37
+            ]
+        },
+        "55": {
+            "gate_id": 55,
+            "gate_type": "Mul",
+            "input_gates": [
+                18,
+                37
+            ]
+        },
+        "56": {
+            "gate_id": 56,
+            "gate_type": "Mul",
+            "input_gates": [
+                19,
+                37
+            ]
+        },
+        "57": {
+            "gate_id": 57,
+            "gate_type": "Mul",
+            "input_gates": [
+                20,
+                37
+            ]
+        },
+        "58": {
+            "gate_id": 58,
+            "gate_type": "Mul",
+            "input_gates": [
+                21,
+                37
+            ]
+        },
+        "59": {
+            "gate_id": 59,
+            "gate_type": "Mul",
+            "input_gates": [
+                22,
+                37
+            ]
+        },
+        "60": {
+            "gate_id": 60,
+            "gate_type": "Mul",
+            "input_gates": [
+                23,
+                37
+            ]
+        },
+        "61": {
+            "gate_id": 61,
+            "gate_type": "Mul",
+            "input_gates": [
+                24,
+                37
+            ]
+        },
+        "62": {
+            "gate_id": 62,
+            "gate_type": "Mul",
+            "input_gates": [
+                25,
+                37
+            ]
+        },
+        "63": {
+            "gate_id": 63,
+            "gate_type": "Mul",
+            "input_gates": [
+                26,
+                37
+            ]
+        },
+        "64": {
+            "gate_id": 64,
+            "gate_type": "Mul",
+            "input_gates": [
+                27,
+                37
+            ]
+        },
+        "65": {
+            "gate_id": 65,
+            "gate_type": "Mul",
+            "input_gates": [
+                28,
+                37
+            ]
+        },
+        "66": {
+            "gate_id": 66,
+            "gate_type": "Mul",
+            "input_gates": [
+                29,
+                37
+            ]
+        },
+        "67": {
+            "gate_id": 67,
+            "gate_type": "Mul",
+            "input_gates": [
+                30,
+                37
+            ]
+        },
+        "68": {
+            "gate_id": 68,
+            "gate_type": "Mul",
+            "input_gates": [
+                31,
+                37
+            ]
+        },
+        "69": {
+            "gate_id": 69,
+            "gate_type": "Mul",
+            "input_gates": [
+                32,
+                37
+            ]
+        },
+        "70": {
+            "gate_id": 70,
+            "gate_type": "Mul",
+            "input_gates": [
+                33,
+                37
+            ]
+        },
+        "71": {
+            "gate_id": 71,
+            "gate_type": "Mul",
+            "input_gates": [
+                34,
+                37
+            ]
+        },
+        "72": {
+            "gate_id": 72,
+            "gate_type": "Mul",
+            "input_gates": [
+                35,
+                37
+            ]
+        },
+        "73": {
+            "gate_id": 73,
+            "gate_type": "Mul",
+            "input_gates": [
+                36,
+                37
+            ]
+        },
+        "74": {
+            "gate_id": 74,
+            "gate_type": "Mul",
+            "input_gates": [
+                1,
+                37
+            ]
+        },
+        "75": {
+            "gate_id": 75,
+            "gate_type": "Mul",
+            "input_gates": [
+                2,
+                37
+            ]
+        },
+        "76": {
+            "gate_id": 76,
+            "gate_type": "Mul",
+            "input_gates": [
+                3,
+                37
+            ]
+        },
+        "77": {
+            "gate_id": 77,
+            "gate_type": "Mul",
+            "input_gates": [
+                4,
+                37
+            ]
+        },
+        "78": {
+            "gate_id": 78,
+            "gate_type": "Mul",
+            "input_gates": [
+                5,
+                37
+            ]
+        },
+        "79": {
+            "gate_id": 79,
+            "gate_type": "Mul",
+            "input_gates": [
+                6,
+                37
+            ]
+        },
+        "80": {
+            "gate_id": 80,
+            "gate_type": "Mul",
+            "input_gates": [
+                7,
+                37
+            ]
+        },
+        "81": {
+            "gate_id": 81,
+            "gate_type": "Mul",
+            "input_gates": [
+                8,
+                37
+            ]
+        },
+        "82": {
+            "gate_id": 82,
+            "gate_type": "Mul",
+            "input_gates": [
+                9,
+                37
+            ]
+        },
+        "83": {
+            "gate_id": 83,
+            "gate_type": "Mul",
+            "input_gates": [
+                10,
+                37
+            ]
+        },
+        "84": {
+            "gate_id": 84,
+            "gate_type": "Mul",
+            "input_gates": [
+                11,
+                37
+            ]
+        },
+        "85": {
+            "gate_id": 85,
+            "gate_type": "Mul",
+            "input_gates": [
+                12,
+                37
+            ]
+        },
+        "86": {
+            "gate_id": 86,
+            "gate_type": "Mul",
+            "input_gates": [
+                13,
+                37
+            ]
+        },
+        "87": {
+            "gate_id": 87,
+            "gate_type": "Mul",
+            "input_gates": [
+                14,
+                37
+            ]
+        },
+        "88": {
+            "gate_id": 88,
+            "gate_type": "Mul",
+            "input_gates": [
+                15,
+                37
+            ]
+        },
+        "89": {
+            "gate_id": 89,
+            "gate_type": "Mul",
+            "input_gates": [
+                16,
+                37
+            ]
+        },
+        "90": {
+            "gate_id": 90,
+            "gate_type": "Mul",
+            "input_gates": [
+                17,
+                37
+            ]
+        },
+        "91": {
+            "gate_id": 91,
+            "gate_type": "Mul",
+            "input_gates": [
+                18,
+                37
+            ]
+        },
+        "92": {
+            "gate_id": 92,
+            "gate_type": "Mul",
+            "input_gates": [
+                19,
+                37
+            ]
+        },
+        "93": {
+            "gate_id": 93,
+            "gate_type": "Mul",
+            "input_gates": [
+                20,
+                37
+            ]
+        },
+        "94": {
+            "gate_id": 94,
+            "gate_type": "Mul",
+            "input_gates": [
+                21,
+                37
+            ]
+        },
+        "95": {
+            "gate_id": 95,
+            "gate_type": "Mul",
+            "input_gates": [
+                22,
+                37
+            ]
+        },
+        "96": {
+            "gate_id": 96,
+            "gate_type": "Mul",
+            "input_gates": [
+                23,
+                37
+            ]
+        },
+        "97": {
+            "gate_id": 97,
+            "gate_type": "Mul",
+            "input_gates": [
+                24,
+                37
+            ]
+        },
+        "98": {
+            "gate_id": 98,
+            "gate_type": "Mul",
+            "input_gates": [
+                25,
+                37
+            ]
+        },
+        "99": {
+            "gate_id": 99,
+            "gate_type": "Mul",
+            "input_gates": [
+                26,
+                37
+            ]
+        },
+        "100": {
+            "gate_id": 100,
+            "gate_type": "Mul",
+            "input_gates": [
+                27,
+                37
+            ]
+        },
+        "101": {
+            "gate_id": 101,
+            "gate_type": "Mul",
+            "input_gates": [
+                28,
+                37
+            ]
+        },
+        "102": {
+            "gate_id": 102,
+            "gate_type": "Mul",
+            "input_gates": [
+                29,
+                37
+            ]
+        },
+        "103": {
+            "gate_id": 103,
+            "gate_type": "Mul",
+            "input_gates": [
+                30,
+                37
+            ]
+        },
+        "104": {
+            "gate_id": 104,
+            "gate_type": "Mul",
+            "input_gates": [
+                31,
+                37
+            ]
+        },
+        "105": {
+            "gate_id": 105,
+            "gate_type": "Mul",
+            "input_gates": [
+                32,
+                37
+            ]
+        },
+        "106": {
+            "gate_id": 106,
+            "gate_type": "Mul",
+            "input_gates": [
+                33,
+                37
+            ]
+        },
+        "107": {
+            "gate_id": 107,
+            "gate_type": "Mul",
+            "input_gates": [
+                34,
+                37
+            ]
+        },
+        "108": {
+            "gate_id": 108,
+            "gate_type": "Mul",
+            "input_gates": [
+                35,
+                37
+            ]
+        },
+        "109": {
+            "gate_id": 109,
+            "gate_type": "Mul",
+            "input_gates": [
+                36,
+                37
+            ]
+        }
+    },
+    "sub_circuits": {},
+    "output_ids": [
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109
+    ],
+    "num_input": 37
+}
