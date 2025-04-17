@@ -2,6 +2,7 @@ use super::{Poly, PolyParams};
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
+    path::Path,
 };
 
 pub trait PolyMatrix:
@@ -102,13 +103,14 @@ pub trait PolyMatrix:
     fn mul_tensor_identity_decompose(&self, other: &Self, identity_size: usize) -> Self;
     /// j is column and return decomposed matrix of target column
     fn get_column_matrix_decompose(&self, j: usize) -> Self;
-    // /// Reads a matrix from files under the given directory.
-    // fn read_from_files<P: AsRef<Path> + Send + Sync>(
-    //     params: &<Self::P as Poly>::Params,
-    //     nrow: usize,
-    //     ncol: usize,
-    //     dir_path: P,
-    // ) -> Self;
-    // /// Writes a matrix to files under the given directory.
-    // fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P);
+    /// Reads a matrix of given rows and cols with id from files under the given directory.
+    fn read_from_files<P: AsRef<Path> + Send + Sync>(
+        params: &<Self::P as Poly>::Params,
+        nrow: usize,
+        ncol: usize,
+        dir_path: P,
+        id: &str,
+    ) -> Self;
+    /// Writes a matrix with id to files under the given directory.
+    fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str);
 }

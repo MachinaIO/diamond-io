@@ -11,7 +11,7 @@ pub mod utils;
 #[derive(Debug, Clone)]
 pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
-    pub ct_b: M,
+    pub b: M,
     pub encodings_init: Vec<BggEncoding<M>>,
     pub p_init: M,
     pub m_preimages: Vec<Vec<M>>,

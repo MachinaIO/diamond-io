@@ -22,6 +22,54 @@ impl<M: PolyMatrix> BggEncoding<M> {
     pub fn concat_vector(&self, others: &[Self]) -> M {
         self.vector.concat_columns(&others.par_iter().map(|x| &x.vector).collect::<Vec<_>>()[..])
     }
+
+    /// Writes the encoding with id to files under the given directory.
+    pub fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(&self, dir_path: P, id: &str) {
+        // Write the vector
+        self.vector.write_to_files(&dir_path, &format!("{}_vector", id));
+
+        // Write the pubkey
+        self.pubkey.write_to_files(&dir_path, &format!("{}_pubkey", id));
+
+        // Write the plaintext component if it exists
+        if let Some(plaintext) = &self.plaintext {
+            plaintext.write_to_file(&dir_path, &format!("{}_plaintext", id));
+        }
+    }
+
+    /// Reads an encoding with id from files under the given directory.
+    pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(
+        params: &<M::P as Poly>::Params,
+        d1: usize,
+        log_base_q: usize,
+        dir_path: P,
+        id: &str,
+        reveal_plaintext: bool,
+    ) -> Self {
+        let ncol = d1 * log_base_q;
+
+        // Read the vector
+        let vector = M::read_from_files(params, 1, ncol, &dir_path, &format!("{}_vector", id));
+
+        // Read the pubkey
+        let pubkey = BggPublicKey::read_from_files(
+            params,
+            d1,
+            ncol,
+            &dir_path,
+            &format!("{}_pubkey", id),
+            reveal_plaintext,
+        );
+
+        // If reveal_plaintext is true, read the plaintext
+        let plaintext = if reveal_plaintext {
+            Some(M::P::read_from_file(params, &dir_path, &format!("{}_plaintext", id)))
+        } else {
+            None
+        };
+
+        Self { vector, pubkey, plaintext }
+    }
 }
 
 impl<M: PolyMatrix> Add for BggEncoding<M> {
@@ -121,15 +169,22 @@ mod tests {
         bgg::{
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+            BggEncoding,
         },
-        poly::dcrt::{
-            params::DCRTPolyParams,
-            sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+        poly::{
+            dcrt::{
+                matrix::base::BaseMatrix,
+                params::DCRTPolyParams,
+                sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+                DCRTPoly,
+            },
+            PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
-    use std::sync::Arc;
+    use rand::Rng;
+    use std::{fs, path::Path, sync::Arc};
 
     #[test]
     fn test_encoding_add() {
@@ -597,5 +652,84 @@ mod tests {
         assert_eq!(result[0].vector, expected.vector);
         assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
         assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
+
+    #[test]
+    fn test_encoding_write_read() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create samplers
+        let key: [u8; 32] = rand::random();
+        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        let d = 3;
+        let d1 = d + 1;
+        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
+        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let log_base_q = params.modulus_digits();
+
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        // Create random public keys with different reveal_plaintext flags
+        let mut rng = rand::rng();
+        let reveal_plaintexts = [
+            rng.random::<bool>(),
+            rng.random::<bool>(),
+            rng.random::<bool>(),
+            rng.random::<bool>(),
+        ];
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+
+        // Create secret and plaintexts
+        let secrets = vec![create_bit_random_poly(&params); d];
+        let plaintexts = vec![
+            create_random_poly(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+            create_random_poly(&params),
+        ];
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+
+        // Create a temporary directory for testing
+        let test_dir = Path::new("test_encoding_write_read");
+        if !test_dir.exists() {
+            fs::create_dir(test_dir).unwrap();
+        } else {
+            // Clean it first to ensure no old files interfere
+            fs::remove_dir_all(test_dir).unwrap();
+            fs::create_dir(test_dir).unwrap();
+        }
+
+        for (idx, encoding) in encodings.iter().enumerate() {
+            // Write the encoding to files
+            let id = format!("test_encoding_{}", idx);
+            encoding.write_to_files(test_dir, &id);
+
+            // Read the encoding from files and verify it matches the original
+            if idx == 0 || (idx > 0 && reveal_plaintexts[idx - 1]) {
+                // first encoding (for one) is always true
+                let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
+                    BggEncoding::read_from_files(&params, d1, log_base_q, test_dir, &id, true);
+                assert_eq!(read_enc.vector, encoding.vector);
+                assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
+                assert_eq!(
+                    read_enc.plaintext.as_ref().unwrap(),
+                    encoding.plaintext.as_ref().unwrap()
+                );
+            } else {
+                let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
+                    BggEncoding::read_from_files(&params, d1, log_base_q, test_dir, &id, false);
+                assert_eq!(read_enc.vector, encoding.vector);
+                assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
+                assert!(read_enc.plaintext.is_none());
+            }
+        }
+        // Clean up the test directory
+        std::fs::remove_dir_all(test_dir).unwrap();
     }
 }

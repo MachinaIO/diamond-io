@@ -1,6 +1,15 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 
+#[cfg(feature = "store")]
+use std::{path::PathBuf, time::SystemTime};
+
+#[cfg(feature = "store")]
+use crate::utils::calculate_directory_size;
+
+#[cfg(feature = "store")]
+use tracing::info;
+
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -305,9 +314,61 @@ where
     );
     log_mem("Sampled final_preimage");
 
+    #[cfg(feature = "store")]
+    {
+        let timestamp_id = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_nanos() as u64;
+
+        let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
+
+        if !dir_path.exists() {
+            std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
+        }
+
+        let start = SystemTime::now();
+
+        b.write_to_files(&dir_path, "b");
+        log_mem("Written b to files");
+
+        for (i, encoding) in encodings_init.iter().enumerate() {
+            encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
+            log_mem("Written i-th encoding to files");
+        }
+
+        p_init.write_to_files(&dir_path, "p_init");
+        log_mem("Written p_init to files");
+
+        for level in 0..depth {
+            for num in 0..level_size {
+                m_preimages[level][num]
+                    .write_to_files(&dir_path, &format!("m_preimage_{level}_{num}"));
+                log_mem("Written m_preimage_level_num to files");
+                n_preimages[level][num]
+                    .write_to_files(&dir_path, &format!("n_preimage_{level}_{num}"));
+                log_mem("Written n_preimage_level_num to files");
+                k_preimages[level][num]
+                    .write_to_files(&dir_path, &format!("k_preimage_{level}_{num}"));
+                log_mem("Written k_preimage_level_num to files");
+            }
+        }
+
+        final_preimage.write_to_files(&dir_path, "final_preimage");
+        log_mem("Written final_preimage to files");
+
+        let end = SystemTime::now();
+
+        let dir_size = calculate_directory_size(&dir_path);
+        info!("Obfuscation size: {dir_size} bytes");
+        info!("Time taken to write files: {:?}", end.duration_since(start).unwrap());
+
+        let _ = std::fs::remove_dir_all(&dir_path);
+    }
+
     Obfuscation {
         hash_key,
-        ct_b: b,
+        b,
         encodings_init,
         p_init,
         m_preimages,

@@ -49,6 +49,7 @@ where
         encodings.push(self.encodings_init.clone());
 
         let level_width = obf_params.level_width;
+        #[cfg(feature = "test")]
         let level_size = (1u64 << obf_params.level_width) as usize;
         assert!(inputs.len() % level_width == 0);
         let depth = obf_params.input_size / level_width;
@@ -210,7 +211,7 @@ where
         }
 
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
-        let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
+        let b_decomposed = &self.b.entry(0, 0).decompose_base(params.as_ref());
         log_mem("a,b decomposed");
         let final_circuit = build_final_digits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
