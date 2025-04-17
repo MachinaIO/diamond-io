@@ -4,5 +4,10 @@ diamond-io cli implementation
 
 ### run 
 ```
-cargo run -- -c dio-config.example.toml
+cargo run -- run -c dio-config.example.toml -v verify_circuit.example.json
+```
+
+### save circuit to file
+```
+cargo run -- circuit -o verify_circuit.example.json 
 ```

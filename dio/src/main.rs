@@ -1,7 +1,7 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use config::Config;
 use diamond_io::{
-    bgg::circuit::serde::SerializablePolyCircuit,
+    bgg::circuit::{PolyCircuit, serde::SerializablePolyCircuit},
     io::{obf::obfuscate, params::ObfuscationParams},
     poly::{
         Poly, PolyElem, PolyParams,
@@ -15,9 +15,9 @@ use diamond_io::{
 };
 use keccak_asm::Keccak256;
 use rand::Rng;
+use serde_json::from_str;
 use std::{
-    fs::File,
-    io::{BufReader, Read},
+    fs::{self},
     path::PathBuf,
     sync::Arc,
 };
@@ -29,73 +29,128 @@ pub mod config;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
-    config: PathBuf,
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    Run {
+        #[arg(short, long)]
+        config: PathBuf,
+
+        #[arg(short, long)]
+        verify: Option<PathBuf>,
+    },
+    Circuit {
+        /// output path to print circuit
+        #[arg(short, long)]
+        output: PathBuf,
+    },
 }
 
 fn main() {
     init_tracing();
-    let args = Args::parse();
-    let file = File::open(args.config).expect("invalid path");
-    let mut buf_reader = BufReader::new(file);
-    let mut contents = String::new();
-    buf_reader.read_to_string(&mut contents).unwrap();
-    let dio_config: Config = toml::from_str(&contents).unwrap();
-    let start_time = std::time::Instant::now();
-    let params = DCRTPolyParams::new(
-        dio_config.ring_dimension,
-        dio_config.crt_depth,
-        dio_config.crt_bits,
-        dio_config.base_bits,
-    );
+    let command = Args::parse().command;
+    match command {
+        Commands::Run { config, verify } => {
+            let contents = fs::read_to_string(&config).unwrap();
+            let dio_config: Config = toml::from_str(&contents).unwrap();
+            let start_time = std::time::Instant::now();
+            let params = DCRTPolyParams::new(
+                dio_config.ring_dimension,
+                dio_config.crt_depth,
+                dio_config.crt_bits,
+                dio_config.base_bits,
+            );
 
-    let switched_modulus = Arc::new(dio_config.switched_modulus);
-    let file = File::open(dio_config.public_circuit_path).unwrap();
-    let mut buf_reader = BufReader::new(file);
-    let mut contents = String::new();
-    buf_reader.read_to_string(&mut contents).unwrap();
-    let serialized_public_circuit: SerializablePolyCircuit =
-        serde_json::from_str(&contents).expect("JSON was not well-formatted");
-    let public_circuit = serialized_public_circuit.to_circuit();
+            let switched_modulus = Arc::new(dio_config.switched_modulus);
+            let json = fs::read_to_string(&dio_config.public_circuit_path).unwrap();
+            let serialized_public_circuit: SerializablePolyCircuit = from_str(&json).unwrap();
+            let public_circuit = serialized_public_circuit.to_circuit();
 
-    let obf_params = ObfuscationParams {
-        params: params.clone(),
-        switched_modulus,
-        input_size: dio_config.input_size,
-        level_width: dio_config.level_width,
-        public_circuit,
-        d: dio_config.d,
-        encoding_sigma: dio_config.encoding_sigma,
-        hardcoded_key_sigma: dio_config.hardcoded_key_sigma,
-        p_sigma: dio_config.p_sigma,
-        trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
-    };
+            let obf_params = ObfuscationParams {
+                params: params.clone(),
+                switched_modulus,
+                input_size: dio_config.input_size,
+                level_width: dio_config.level_width,
+                public_circuit: public_circuit.clone(),
+                d: dio_config.d,
+                encoding_sigma: dio_config.encoding_sigma,
+                hardcoded_key_sigma: dio_config.hardcoded_key_sigma,
+                p_sigma: dio_config.p_sigma,
+                trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
+            };
 
-    let sampler_uniform = DCRTPolyUniformSampler::new();
-    let mut rng = rand::rng();
-    let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
-    let obfuscation = obfuscate::<
-        DCRTPolyMatrix,
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-        DCRTPolyTrapdoorSampler,
-        _,
-    >(obf_params.clone(), hardcoded_key.clone(), &mut rng);
-    let obfuscation_time = start_time.elapsed();
-    info!("Time to obfuscate: {:?}", obfuscation_time);
-    let input = dio_config.input;
-    assert_eq!(input.len(), dio_config.input_size);
-    let output = obfuscation
-        .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(obf_params, &input);
-    let total_time = start_time.elapsed();
-    info!("Time for evaluation: {:?}", total_time - obfuscation_time);
-    info!("Total time: {:?}", total_time);
-    let n = output.len() / 2;
-    let output_1st_gate = output[..n].to_vec();
-    let output_2nd_gate = output[n..].to_vec();
-    let bool_in = rng.random::<bool>();
-    let input_poly =
-        DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
-    assert_eq!(output_1st_gate, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());
-    assert_eq!(output_2nd_gate, (hardcoded_key * input_poly).to_bool_vec());
+            let sampler_uniform = DCRTPolyUniformSampler::new();
+            let mut rng = rand::rng();
+            let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+            let obfuscation = obfuscate::<
+                DCRTPolyMatrix,
+                DCRTPolyUniformSampler,
+                DCRTPolyHashSampler<Keccak256>,
+                DCRTPolyTrapdoorSampler,
+                _,
+            >(obf_params.clone(), hardcoded_key.clone(), &mut rng);
+            let obfuscation_time = start_time.elapsed();
+            info!("Time to obfuscate: {:?}", obfuscation_time);
+            let input = dio_config.input;
+            assert_eq!(input.len(), dio_config.input_size);
+            let output = obfuscation
+                .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(
+                    obf_params, &input,
+                );
+            let total_time = start_time.elapsed();
+
+            info!("Time for evaluation: {:?}", total_time - obfuscation_time);
+            info!("Total time: {:?}", total_time);
+            if let Some(verify_circuit_path) = verify {
+                // load verify circuit
+                let json = fs::read_to_string(&verify_circuit_path).unwrap();
+                let serialized_verify_circuit: SerializablePolyCircuit = from_str(&json).unwrap();
+                let verify_circuit = serialized_verify_circuit.to_circuit();
+
+                let input_coeffs: Vec<_> = input
+                    .iter()
+                    .cloned()
+                    .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
+                    .collect();
+                let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
+                let bool_poly = DCRTPoly::from_const(
+                    &params,
+                    &FinRingElem::constant(&params.modulus(), rng.random::<bool>() as u64),
+                );
+                let eval = verify_circuit.eval(
+                    &params,
+                    &DCRTPoly::const_one(&params),
+                    &[bool_poly, hardcoded_key, input_poly],
+                );
+                let mut bool_eval = vec![];
+                for e in eval {
+                    let decompose_poly = e.to_bool_vec();
+                    bool_eval.extend(decompose_poly);
+                }
+
+                assert_eq!(output, bool_eval);
+            }
+        }
+        Commands::Circuit { output } => {
+            let mut public_circuit = PolyCircuit::new();
+
+            // inputs: binary polynomial, hardcoded_key, eval_input
+            // outputs: binary AND eval_input | hardcoded_key AND eval_input
+            {
+                let inputs = public_circuit.input(3);
+                let mut outputs = vec![];
+                let muled = public_circuit.and_gate(inputs[0], inputs[2]);
+                outputs.push(muled);
+                let muled = public_circuit.and_gate(inputs[1], inputs[2]);
+                outputs.push(muled);
+                public_circuit.output(outputs);
+            }
+
+            let serialize = SerializablePolyCircuit::from_circuit(&public_circuit).to_json_str();
+            fs::write(output, serialize).unwrap();
+        }
+    }
 }
