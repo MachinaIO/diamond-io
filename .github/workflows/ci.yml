@@ -81,8 +81,8 @@ jobs:
 
       - name: Build binary
         run: cargo install --path dio
-      
-      - name e2e
+
+      - name: e2e
         run: |
           dio run -c e2e/dio-config.dummy.toml -v e2e/circuits/verify_circuit.input3.json
           dio run -c e2e/dio-config.dummy-width.toml -v e2e/circuits/verify_circuit.input3.json
