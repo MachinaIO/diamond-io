@@ -165,11 +165,7 @@ where
     };
     log_mem("Computed u_0, u_1, u_star");
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![Vec::with_capacity(level_size); depth],
-        vec![Vec::with_capacity(level_size); depth],
-        vec![Vec::with_capacity(level_size); depth],
-    );
+    let mut k_preimages = vec![Vec::with_capacity(level_size); depth];
 
     #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth + 1];
@@ -227,7 +223,7 @@ where
 
             log_mem("Computed m_preimage_num");
 
-            m_preimages[level].push(m_preimage_num);
+            m_preimage_num.write_to_files(&dir_path, &format!("m_preimage_num_{level}_{num}"));
 
             let n_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -237,7 +233,7 @@ where
             );
             log_mem("Computed n_preimage_num");
 
-            n_preimages[level].push(n_preimage_num);
+            n_preimage_num.write_to_files(&dir_path, &format!("n_preimage_num_{level}_{num}"));
 
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -322,8 +318,6 @@ where
 
     Obfuscation {
         hash_key,
-        m_preimages,
-        n_preimages,
         k_preimages,
         final_preimage,
         dir_path,

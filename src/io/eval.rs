@@ -41,6 +41,10 @@ where
         let log_base_q = params.as_ref().modulus_digits();
         let m_b = (2 * d1) * (2 + log_base_q);
         let dim = params.as_ref().ring_dimension() as usize;
+        let level_width = obf_params.level_width;
+        let level_size = (1u64 << obf_params.level_width) as usize;
+        assert!(inputs.len() % level_width == 0);
+        let depth = obf_params.input_size / level_width;
         let sampler = Arc::new(sampler_hash);
         debug_assert_eq!(inputs.len(), obf_params.input_size);
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
@@ -56,6 +60,10 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
         let mut encodings_init = vec![];
+        let (mut m_preimages, mut n_preimages) = (
+            vec![Vec::with_capacity(level_size); depth],
+            vec![Vec::with_capacity(level_size); depth],
+        );
         // Load artifacts from files
         let start = std::time::Instant::now();
         let b = M::read_from_files(&params, 1, 1, dir_path, "b");
@@ -83,6 +91,27 @@ where
 
         let p_init = M::read_from_files(&params, 1, m_b, dir_path, "p_init");
 
+        for level in 0..depth {
+            for num in 0..level_size {
+                let m = M::read_from_files(
+                    &params,
+                    m_b,
+                    m_b,
+                    dir_path,
+                    &format!("m_preimage_num_{}_{}", level, num),
+                );
+                let n = M::read_from_files(
+                    &params,
+                    m_b,
+                    m_b,
+                    dir_path,
+                    &format!("n_preimage_num_{}_{}", level, num),
+                );
+                m_preimages[level].push(m);
+                n_preimages[level].push(n);
+            }
+        }
+
         let end = std::time::Instant::now();
 
         let (mut ps, mut encodings) = (vec![], vec![]);
@@ -90,10 +119,6 @@ where
         encodings.push(encodings_init.clone());
 
         // Sample public keys
-        let level_width = obf_params.level_width;
-        let level_size = (1u64 << obf_params.level_width) as usize;
-        assert!(inputs.len() % level_width == 0);
-        let depth = obf_params.input_size / level_width;
         let pubkeys = (0..depth + 1)
             .map(|id| {
                 sample_public_key_by_id(
@@ -141,10 +166,10 @@ where
             .collect();
         debug_assert_eq!(nums.len(), depth);
         for (level, num) in nums.iter().enumerate() {
-            let m = &self.m_preimages[level][*num as usize];
+            let m = &m_preimages[level][*num as usize];
             let q = ps[level].clone() * m;
             log_mem(format!("q at {} computed", level));
-            let n = &self.n_preimages[level][*num as usize];
+            let n = &n_preimages[level][*num as usize];
             let p = q.clone() * n;
             log_mem(format!("p at {} computed", level));
             let k = &self.k_preimages[level][*num as usize];
