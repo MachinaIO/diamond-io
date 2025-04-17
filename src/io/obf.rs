@@ -145,6 +145,8 @@ where
     };
     log_mem("Computed p_init");
 
+    p_init.write_to_files(&dir_path, "p_init");
+
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
     let level_width = obf_params.level_width; // number of bits to be inserted at each level
     assert_eq!(obf_params.input_size % level_width, 0);
@@ -320,7 +322,6 @@ where
 
     Obfuscation {
         hash_key,
-        p_init,
         m_preimages,
         n_preimages,
         k_preimages,

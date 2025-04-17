@@ -39,6 +39,7 @@ where
         let d = obf_params.d;
         let d1 = d + 1;
         let log_base_q = params.as_ref().modulus_digits();
+        let m_b = (2 * d1) * (2 + log_base_q);
         let dim = params.as_ref().ring_dimension() as usize;
         let sampler = Arc::new(sampler_hash);
         debug_assert_eq!(inputs.len(), obf_params.input_size);
@@ -54,8 +55,8 @@ where
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
-        // Load artifacts from files
         let mut encodings_init = vec![];
+        // Load artifacts from files
         let start = std::time::Instant::now();
         let b = M::read_from_files(&params, 1, 1, dir_path, "b");
         let encoding_init_one = BggEncoding::<M>::read_from_files(
@@ -80,10 +81,12 @@ where
             encodings_init.push(encoding_init);
         }
 
+        let p_init = M::read_from_files(&params, 1, m_b, dir_path, "p_init");
+
         let end = std::time::Instant::now();
 
         let (mut ps, mut encodings) = (vec![], vec![]);
-        ps.push(self.p_init.clone());
+        ps.push(p_init.clone());
         encodings.push(encodings_init.clone());
 
         // Sample public keys
@@ -112,7 +115,7 @@ where
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
                 s_connect * &self.bs[0][level_size]
             };
-            assert_eq!(self.p_init, expected_p_init);
+            assert_eq!(p_init, expected_p_init);
 
             let zero = <M::P as Poly>::const_zero(&params);
             let one = <M::P as Poly>::const_one(&params);
