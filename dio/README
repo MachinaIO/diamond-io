@@ -2,7 +2,16 @@
 
 diamond-io cli implementation
 
+### install
+```
+cargo install --path .
+```
+
+```
+cargo install --features test --path .
+```
+
 ### run 
 ```
-dio run -c ../e2e/dio-config.dummy.toml --add-num 8 --mul-num 1
+dio run -c {CONFIG-TOML-PATH} --add-num {ADD-GATE-NUMBER} --mul-num {MUL-GATE-NUMBER}
 ```

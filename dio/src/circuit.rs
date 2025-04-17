@@ -17,7 +17,11 @@ impl BenchCircuit {
             let eval_input = inputs[2 * log_base_q];
 
             // compute acc according to add_n and mul_n logic
-            let mut acc = public_circuit.const_zero_gate();
+            let mut acc = if add_n == 0 {
+                public_circuit.const_one_gate()
+            } else {
+                public_circuit.const_zero_gate()
+            };
             for _ in 0..add_n {
                 acc = public_circuit.add_gate(acc, eval_input);
             }
@@ -44,7 +48,11 @@ impl BenchCircuit {
             let eval_input = inputs[1];
 
             // compute acc according to add_n and mul_n logic
-            let mut acc = public_circuit.const_zero_gate();
+            let mut acc = if add_n == 0 {
+                public_circuit.const_one_gate()
+            } else {
+                public_circuit.const_zero_gate()
+            };
             for _ in 0..add_n {
                 acc = public_circuit.add_gate(acc, eval_input);
             }

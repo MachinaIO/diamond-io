@@ -1,10 +1,10 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 
-use super::{params::ObfuscationParams, utils::*, Obfuscation};
+use super::{Obfuscation, params::ObfuscationParams, utils::*};
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
-    poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
+    bgg::{BggEncoding, DigitsToInt, sampler::BGGPublicKeySampler},
+    poly::{Poly, PolyElem, PolyMatrix, PolyParams, sampler::*},
     utils::log_mem,
 };
 use itertools::Itertools;
@@ -48,6 +48,7 @@ where
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let level_width = obf_params.level_width;
+        #[cfg(feature = "test")]
         let level_size = (1u64 << obf_params.level_width) as usize;
         assert!(inputs.len() % level_width == 0);
         let depth = obf_params.input_size / level_width;

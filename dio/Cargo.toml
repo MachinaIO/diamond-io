@@ -3,9 +3,12 @@ name = "dio"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test = ["diamond-io/test"]
+
 [dependencies]
+diamond-io = { path = "../", default-features = false }
 clap = { version = "4.5.36", features = ["derive"] }
-diamond-io = { path = "../" }
 num-bigint = { version = "0.4", features = ["serde"] }
 rand = { version = "0.9.0", features = ["std_rng"] }
 keccak-asm = { version = "0.1.4" }
