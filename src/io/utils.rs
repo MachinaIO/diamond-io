@@ -1,3 +1,5 @@
+use tracing::info;
+
 use crate::{
     bgg::{
         circuit::{build_composite_circuit_from_public_and_fhe_dec, Evaluable, PolyCircuit},
@@ -59,6 +61,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             let r_i_bar = hash_sampler.sample_hash(params, &tag, d, d, DistType::BitDist);
             let r_i = r_i_bar.concat_diag(&[&one]);
             let rg = r_i.clone() * &gadget_d_plus_1;
+            // print the size of rg
+            info!("rg size: {:?}", rg.size());
             rs.push(r_i);
             rgs.push(rg);
         }

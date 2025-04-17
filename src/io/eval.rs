@@ -60,7 +60,8 @@ where
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
         let mut encodings_init = vec![];
-        let (mut m_preimages, mut n_preimages) = (
+        let (mut m_preimages, mut n_preimages, mut k_preimages) = (
+            vec![Vec::with_capacity(level_size); depth],
             vec![Vec::with_capacity(level_size); depth],
             vec![Vec::with_capacity(level_size); depth],
         );
@@ -93,22 +94,30 @@ where
 
         for level in 0..depth {
             for num in 0..level_size {
-                let m = M::read_from_files(
+                let m_preimage_num = M::read_from_files(
                     &params,
                     m_b,
                     m_b,
                     dir_path,
                     &format!("m_preimage_num_{}_{}", level, num),
                 );
-                let n = M::read_from_files(
+                let n_preimage_num = M::read_from_files(
                     &params,
                     m_b,
                     m_b,
                     dir_path,
                     &format!("n_preimage_num_{}_{}", level, num),
                 );
-                m_preimages[level].push(m);
-                n_preimages[level].push(n);
+                let k_preimage_num = M::read_from_files(
+                    &params,
+                    m_b,
+                    (packed_input_size + 1) * log_base_q * d1,
+                    dir_path,
+                    &format!("k_preimage_num_{}_{}", level, num),
+                );
+                m_preimages[level].push(m_preimage_num);
+                n_preimages[level].push(n_preimage_num);
+                k_preimages[level].push(k_preimage_num);
             }
         }
 
@@ -172,7 +181,7 @@ where
             let n = &n_preimages[level][*num as usize];
             let p = q.clone() * n;
             log_mem(format!("p at {} computed", level));
-            let k = &self.k_preimages[level][*num as usize];
+            let k = &k_preimages[level][*num as usize];
             let v = q.clone() * k;
             log_mem(format!("v at {} computed", level));
             let new_encode_vec = {

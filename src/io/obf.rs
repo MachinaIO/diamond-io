@@ -126,6 +126,7 @@ where
 
     for (i, encoding) in encodings_init.iter().enumerate() {
         encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
+        log_mem("Written i-th encoding to files");
     }
 
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -147,6 +148,8 @@ where
 
     p_init.write_to_files(&dir_path, "p_init");
 
+    log_mem("Written p_init to files");
+
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
     let level_width = obf_params.level_width; // number of bits to be inserted at each level
     assert_eq!(obf_params.input_size % level_width, 0);
@@ -164,8 +167,6 @@ where
         zeros.concat_rows(&[&identities])
     };
     log_mem("Computed u_0, u_1, u_star");
-
-    let mut k_preimages = vec![Vec::with_capacity(level_size); depth];
 
     #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth + 1];
@@ -224,6 +225,7 @@ where
             log_mem("Computed m_preimage_num");
 
             m_preimage_num.write_to_files(&dir_path, &format!("m_preimage_num_{level}_{num}"));
+            log_mem("Written m_preimage_num to files");
 
             let n_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -234,6 +236,7 @@ where
             log_mem("Computed n_preimage_num");
 
             n_preimage_num.write_to_files(&dir_path, &format!("n_preimage_num_{level}_{num}"));
+            log_mem("Written n_preimage_num to files");
 
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -268,11 +271,13 @@ where
             log_mem("Computed bottom");
             let k_target = top.concat_rows(&[&bottom]);
             log_mem("Computed k_target");
+
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_num_trapdoor_level, &b_num_level, &k_target);
             log_mem("Computed k_preimage_num");
 
-            k_preimages[level].push(k_preimage_num);
+            k_preimage_num.write_to_files(&dir_path, &format!("k_preimage_num_{level}_{num}"));
+            log_mem("Written k_preimage_num to files");
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
@@ -318,7 +323,6 @@ where
 
     Obfuscation {
         hash_key,
-        k_preimages,
         final_preimage,
         dir_path,
         #[cfg(feature = "test")]
