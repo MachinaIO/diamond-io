@@ -11,7 +11,7 @@ mod test {
             sampler::DistType,
             Poly, PolyElem, PolyParams,
         },
-        utils::{calculate_directory_size, init_tracing},
+        utils::init_tracing,
     };
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
@@ -91,10 +91,5 @@ mod test {
             &FinRingElem::constant(&params.modulus(), bool_in as u64),
         );
         assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
-
-        let obf_size = calculate_directory_size(&obfuscation.dir_path);
-        info!("Obfuscation size: {} bytes", obf_size);
-
-        let _ = std::fs::remove_dir_all(&obfuscation.dir_path);
     }
 }

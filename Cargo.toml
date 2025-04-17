@@ -11,6 +11,7 @@ test = []
 bgm = ["rodio", "reqwest"]
 disk = ["tempfile", "libc", "memmap2"]
 cpu = []
+store = []
 
 [dependencies]
 libc = { version = "0.2", optional = true }

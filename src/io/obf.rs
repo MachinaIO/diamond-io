@@ -21,7 +21,16 @@ use crate::{
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
-use std::{path::PathBuf, sync::Arc, time::SystemTime};
+use std::sync::Arc;
+
+#[cfg(feature = "store")]
+use std::{path::PathBuf, time::SystemTime};
+
+#[cfg(feature = "store")]
+use crate::utils::calculate_directory_size;
+
+#[cfg(feature = "store")]
+use tracing::info;
 
 pub fn obfuscate<M, SU, SH, ST, R>(
     obf_params: ObfuscationParams<M>,
@@ -30,7 +39,7 @@ pub fn obfuscate<M, SU, SH, ST, R>(
     sampler_trapdoor: ST,
     hardcoded_key: M::P,
     rng: &mut R,
-) -> Obfuscation<M, PathBuf>
+) -> Obfuscation<M>
 where
     M: PolyMatrix,
     SU: PolyUniformSampler<M = M>,
@@ -59,17 +68,6 @@ where
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
     #[cfg(not(feature = "test"))]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
-
-    let timestamp_id = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_nanos() as u64;
-
-    let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
-
-    if !dir_path.exists() {
-        std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
-    }
 
     let pub_key_init =
         sample_public_key_by_id(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
@@ -105,8 +103,6 @@ where
         obf_params.hardcoded_key_sigma,
     );
 
-    b.write_to_files(&dir_path, "b");
-
     log_mem("Generated RLWE ciphertext {a, b}");
 
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
@@ -123,11 +119,6 @@ where
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
-
-    for (i, encoding) in encodings_init.iter().enumerate() {
-        encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
-        log_mem("Written i-th encoding to files");
-    }
 
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
@@ -146,14 +137,14 @@ where
     };
     log_mem("Computed p_init");
 
-    p_init.write_to_files(&dir_path, "p_init");
-
-    log_mem("Written p_init to files");
-
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
     let level_width = obf_params.level_width; // number of bits to be inserted at each level
     assert_eq!(obf_params.input_size % level_width, 0);
-    assert_eq!(dim % level_width, 0);
+    assert!(level_width <= dim); // otherwise we need >1 polynomial to insert the bits for each level
+    if obf_params.input_size > dim {
+        assert_eq!(dim % level_width, 0); // otherwise we get to a point in which the inserted bits
+                                          // have to be split between two polynomials
+    }
     let level_size = (1u64 << obf_params.level_width) as usize;
     let depth = obf_params.input_size / level_width; // number of levels necessary to encode the input
     let mut u_nums = Vec::with_capacity(level_size);
@@ -167,6 +158,12 @@ where
         zeros.concat_rows(&[&identities])
     };
     log_mem("Computed u_0, u_1, u_star");
+
+    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
+        vec![Vec::with_capacity(level_size); depth],
+        vec![Vec::with_capacity(level_size); depth],
+        vec![Vec::with_capacity(level_size); depth],
+    );
 
     #[cfg(feature = "test")]
     let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth + 1];
@@ -224,8 +221,7 @@ where
 
             log_mem("Computed m_preimage_num");
 
-            m_preimage_num.write_to_files(&dir_path, &format!("m_preimage_num_{level}_{num}"));
-            log_mem("Written m_preimage_num to files");
+            m_preimages[level].push(m_preimage_num);
 
             let n_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -235,8 +231,7 @@ where
             );
             log_mem("Computed n_preimage_num");
 
-            n_preimage_num.write_to_files(&dir_path, &format!("n_preimage_num_{level}_{num}"));
-            log_mem("Written n_preimage_num to files");
+            n_preimages[level].push(n_preimage_num);
 
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -271,13 +266,11 @@ where
             log_mem("Computed bottom");
             let k_target = top.concat_rows(&[&bottom]);
             log_mem("Computed k_target");
-
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_num_trapdoor_level, &b_num_level, &k_target);
             log_mem("Computed k_preimage_num");
 
-            k_preimage_num.write_to_files(&dir_path, &format!("k_preimage_num_{level}_{num}"));
-            log_mem("Written k_preimage_num to files");
+            k_preimages[level].push(k_preimage_num);
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
@@ -321,12 +314,66 @@ where
     );
     log_mem("Sampled final_preimage");
 
-    final_preimage.write_to_files(&dir_path, "final_preimage");
-    log_mem("Written final_preimage to files");
+    #[cfg(feature = "store")]
+    {
+        let timestamp_id = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_nanos() as u64;
+
+        let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
+
+        if !dir_path.exists() {
+            std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
+        }
+
+        let start = SystemTime::now();
+
+        b.write_to_files(&dir_path, "b");
+        log_mem("Written b to files");
+
+        for (i, encoding) in encodings_init.iter().enumerate() {
+            encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
+            log_mem("Written i-th encoding to files");
+        }
+
+        p_init.write_to_files(&dir_path, "p_init");
+        log_mem("Written p_init to files");
+
+        for level in 0..depth {
+            for num in 0..level_size {
+                m_preimages[level][num]
+                    .write_to_files(&dir_path, &format!("m_preimage_{level}_{num}"));
+                log_mem("Written m_preimage to files");
+                n_preimages[level][num]
+                    .write_to_files(&dir_path, &format!("n_preimage_{level}_{num}"));
+                log_mem("Written n_preimage to files");
+                k_preimages[level][num]
+                    .write_to_files(&dir_path, &format!("k_preimage_{level}_{num}"));
+                log_mem("Written k_preimage to files");
+            }
+        }
+
+        final_preimage.write_to_files(&dir_path, "final_preimage");
+
+        let end = SystemTime::now();
+
+        let dir_size = calculate_directory_size(&dir_path);
+        info!("Directory size: {dir_size} bytes");
+        info!("Time taken to write files: {:?}", end.duration_since(start).unwrap());
+
+        let _ = std::fs::remove_dir_all(&dir_path);
+    }
 
     Obfuscation {
         hash_key,
-        dir_path,
+        b,
+        encodings_init,
+        p_init,
+        m_preimages,
+        n_preimages,
+        k_preimages,
+        final_preimage,
         #[cfg(feature = "test")]
         s_init: s_init.clone(),
         #[cfg(feature = "test")]

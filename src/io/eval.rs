@@ -10,7 +10,6 @@ use crate::{
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::sync::Arc;
-use tracing::info;
 
 impl<M> Obfuscation<M>
 where
@@ -38,13 +37,6 @@ where
         let params = Arc::new(obf_params.params.clone());
         let d = obf_params.d;
         let d1 = d + 1;
-        let log_base_q = params.as_ref().modulus_digits();
-        let m_b = (2 * d1) * (2 + log_base_q);
-        let dim = params.as_ref().ring_dimension() as usize;
-        let level_width = obf_params.level_width;
-        let level_size = (1u64 << obf_params.level_width) as usize;
-        assert!(inputs.len() % level_width == 0);
-        let depth = obf_params.input_size / level_width;
         let sampler = Arc::new(sampler_hash);
         debug_assert_eq!(inputs.len(), obf_params.input_size);
         let bgg_pubkey_sampler = BGGPublicKeySampler::new(sampler.clone(), d);
@@ -52,96 +44,24 @@ where
         log_mem("Sampled public data");
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
-        let dir_path = &self.dir_path;
+        let (mut ps, mut encodings) = (vec![], vec![]);
+        ps.push(self.p_init.clone());
+        encodings.push(self.encodings_init.clone());
+
+        let level_width = obf_params.level_width;
+        let level_size = (1u64 << obf_params.level_width) as usize;
+        assert!(inputs.len() % level_width == 0);
+        let depth = obf_params.input_size / level_width;
 
         #[cfg(feature = "test")]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+        let pub_key_init =
+            sample_public_key_by_id(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
+        log_mem("Sampled pub_key_init");
 
-        let mut encodings_init = vec![];
-        let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-            vec![Vec::with_capacity(level_size); depth],
-            vec![Vec::with_capacity(level_size); depth],
-            vec![Vec::with_capacity(level_size); depth],
-        );
-        // Load artifacts from files
-        let start = std::time::Instant::now();
-        let b = M::read_from_files(&params, 1, 1, dir_path, "b");
-        let encoding_init_one = BggEncoding::<M>::read_from_files(
-            &params,
-            d1,
-            log_base_q,
-            dir_path,
-            "encoding_init_0",
-            true,
-        );
-        encodings_init.push(encoding_init_one);
-
-        for (i, bool) in reveal_plaintexts.iter().enumerate() {
-            let encoding_init = BggEncoding::<M>::read_from_files(
-                &params,
-                d1,
-                log_base_q,
-                dir_path,
-                &format!("encoding_init_{}", i + 1),
-                *bool,
-            );
-            encodings_init.push(encoding_init);
-        }
-
-        let p_init = M::read_from_files(&params, 1, m_b, dir_path, "p_init");
-
-        for level in 0..depth {
-            for num in 0..level_size {
-                let m_preimage_num = M::read_from_files(
-                    &params,
-                    m_b,
-                    m_b,
-                    dir_path,
-                    &format!("m_preimage_num_{}_{}", level, num),
-                );
-                let n_preimage_num = M::read_from_files(
-                    &params,
-                    m_b,
-                    m_b,
-                    dir_path,
-                    &format!("n_preimage_num_{}_{}", level, num),
-                );
-                let k_preimage_num = M::read_from_files(
-                    &params,
-                    m_b,
-                    (packed_input_size + 1) * log_base_q * d1,
-                    dir_path,
-                    &format!("k_preimage_num_{}_{}", level, num),
-                );
-                m_preimages[level].push(m_preimage_num);
-                n_preimages[level].push(n_preimage_num);
-                k_preimages[level].push(k_preimage_num);
-            }
-        }
-
-        let final_preimage =
-            M::read_from_files(&params, m_b, packed_output_size, dir_path, "final_preimage");
-
-        let end = std::time::Instant::now();
-
-        let (mut ps, mut encodings) = (vec![], vec![]);
-        ps.push(p_init.clone());
-        encodings.push(encodings_init.clone());
-
-        // Sample public keys
-        let pubkeys = (0..depth + 1)
-            .map(|id| {
-                sample_public_key_by_id(
-                    &bgg_pubkey_sampler,
-                    &obf_params.params,
-                    id,
-                    &reveal_plaintexts,
-                )
-            })
-            .collect_vec();
-        log_mem("Sampled public keys");
+        let mut pub_key_cur = pub_key_init;
 
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
@@ -152,7 +72,7 @@ where
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
                 s_connect * &self.bs[0][level_size]
             };
-            assert_eq!(p_init, expected_p_init);
+            assert_eq!(self.p_init, expected_p_init);
 
             let zero = <M::P as Poly>::const_zero(&params);
             let one = <M::P as Poly>::const_one(&params);
@@ -167,9 +87,11 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let expected_encoding_init = self.s_init.clone() *
-                &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
+                &(pub_key_cur[0].concat_matrix(&pub_key_cur[1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
+        let log_base_q = params.as_ref().modulus_digits();
+        let dim = params.as_ref().ring_dimension() as usize;
         let nums: Vec<u64> = inputs
             .chunks(level_width)
             .map(|chunk| {
@@ -178,13 +100,13 @@ where
             .collect();
         debug_assert_eq!(nums.len(), depth);
         for (level, num) in nums.iter().enumerate() {
-            let m = &m_preimages[level][*num as usize];
+            let m = &self.m_preimages[level][*num as usize];
             let q = ps[level].clone() * m;
             log_mem(format!("q at {} computed", level));
-            let n = &n_preimages[level][*num as usize];
+            let n = &self.n_preimages[level][*num as usize];
             let p = q.clone() * n;
             log_mem(format!("p at {} computed", level));
-            let k = &k_preimages[level][*num as usize];
+            let k = &self.k_preimages[level][*num as usize];
             let v = q.clone() * k;
             log_mem(format!("v at {} computed", level));
             let new_encode_vec = {
@@ -196,6 +118,13 @@ where
             log_mem(format!("new_encode_vec at {} computed", level));
             let mut new_encodings = vec![];
             let inserted_poly_index = 1 + (level * level_width) / dim;
+            let pub_key_level = sample_public_key_by_id(
+                &bgg_pubkey_sampler,
+                &obf_params.params,
+                level + 1,
+                &reveal_plaintexts,
+            );
+            log_mem(format!("pub_key_level at {} computed", level));
             for (j, encode) in encodings[level].iter().enumerate() {
                 let m = d1 * log_base_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
@@ -218,13 +147,13 @@ where
                     encode.plaintext.clone()
                 };
                 log_mem(format!("plaintext at {}, {} computed", level, j));
-                let new_pubkey = pubkeys[level + 1][j].clone();
                 let new_encode: BggEncoding<M> =
-                    BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
+                    BggEncoding::new(new_vec, pub_key_level[j].clone(), plaintext);
                 log_mem(format!("new_encode at {}, {} computed", level, j));
                 new_encodings.push(new_encode);
             }
             ps.push(p.clone());
+            pub_key_cur = pub_key_level;
             encodings.push(new_encodings);
             #[cfg(feature = "test")]
             if obf_params.encoding_sigma == 0.0 &&
@@ -268,7 +197,7 @@ where
                         polys.push(self.minus_t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
-                    let pubkey = pubkeys[level + 1][0].concat_matrix(&pubkeys[level + 1][1..]);
+                    let pubkey = pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
                     new_s * (pubkey - inserted_poly_gadget)
                 };
                 assert_eq!(new_encode_vec, expcted_new_encode);
@@ -281,7 +210,7 @@ where
         }
 
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
-        let b_decomposed = &b.entry(0, 0).decompose_base(params.as_ref());
+        let b_decomposed = &self.b.entry(0, 0).decompose_base(params.as_ref());
         log_mem("a,b decomposed");
         let final_circuit = build_final_digits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
@@ -303,6 +232,7 @@ where
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
         log_mem("final_circuit evaluated and recomposed");
+        let final_preimage = &self.final_preimage;
         let final_v = ps.last().unwrap().clone() * final_preimage;
         log_mem("final_v computed");
         let z = output_encodings_vec.clone() - final_v.clone();
@@ -337,7 +267,6 @@ where
                 );
             }
         }
-        info!("Time to load artifacts: {:?}", end - start);
         z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
     }
 }
