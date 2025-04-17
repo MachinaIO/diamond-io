@@ -48,20 +48,26 @@ where
         ps.push(self.p_init.clone());
         encodings.push(self.encodings_init.clone());
 
-        let level_width = obf_params.level_width;
-        let level_size = (1u64 << obf_params.level_width) as usize;
-        assert!(inputs.len() % level_width == 0);
-        let depth = obf_params.input_size / level_width;
-
+        // Sample public keys
         #[cfg(feature = "test")]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
         #[cfg(not(feature = "test"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
-        let pub_key_init =
-            sample_public_key_by_id(&bgg_pubkey_sampler, &obf_params.params, 0, &reveal_plaintexts);
-        log_mem("Sampled pub_key_init");
-
-        let mut pub_key_cur = pub_key_init;
+        let level_width = obf_params.level_width;
+        let level_size = (1u64 << obf_params.level_width) as usize;
+        assert!(inputs.len() % level_width == 0);
+        let depth = obf_params.input_size / level_width;
+        let pubkeys = (0..depth + 1)
+            .map(|id| {
+                sample_public_key_by_id(
+                    &bgg_pubkey_sampler,
+                    &obf_params.params,
+                    id,
+                    &reveal_plaintexts,
+                )
+            })
+            .collect_vec();
+        log_mem("Sampled public keys");
 
         #[cfg(feature = "test")]
         if obf_params.encoding_sigma == 0.0 &&
@@ -87,7 +93,7 @@ where
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
             };
             let expected_encoding_init = self.s_init.clone() *
-                &(pub_key_cur[0].concat_matrix(&pub_key_cur[1..]) - inserted_poly_gadget);
+                &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
         let log_base_q = params.as_ref().modulus_digits();
@@ -118,13 +124,6 @@ where
             log_mem(format!("new_encode_vec at {} computed", level));
             let mut new_encodings = vec![];
             let inserted_poly_index = 1 + (level * level_width) / dim;
-            let pub_key_level = sample_public_key_by_id(
-                &bgg_pubkey_sampler,
-                &obf_params.params,
-                level + 1,
-                &reveal_plaintexts,
-            );
-            log_mem(format!("pub_key_level at {} computed", level));
             for (j, encode) in encodings[level].iter().enumerate() {
                 let m = d1 * log_base_q;
                 let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
@@ -147,13 +146,13 @@ where
                     encode.plaintext.clone()
                 };
                 log_mem(format!("plaintext at {}, {} computed", level, j));
+                let new_pubkey = pubkeys[level + 1][j].clone();
                 let new_encode: BggEncoding<M> =
-                    BggEncoding::new(new_vec, pub_key_level[j].clone(), plaintext);
+                    BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
                 log_mem(format!("new_encode at {}, {} computed", level, j));
                 new_encodings.push(new_encode);
             }
             ps.push(p.clone());
-            pub_key_cur = pub_key_level;
             encodings.push(new_encodings);
             #[cfg(feature = "test")]
             if obf_params.encoding_sigma == 0.0 &&
@@ -197,7 +196,7 @@ where
                         polys.push(self.minus_t_bar.clone());
                         M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
                     };
-                    let pubkey = pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
+                    let pubkey = pubkeys[level + 1][0].concat_matrix(&pubkeys[level + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)
                 };
                 assert_eq!(new_encode_vec, expcted_new_encode);
