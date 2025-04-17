@@ -84,8 +84,9 @@ jobs:
 
       - name: e2e
         run: |
-          dio run -c e2e/dio-config.dummy.toml -v e2e/circuits/verify_circuit.input3.json
-          dio run -c e2e/dio-config.dummy-width.toml -v e2e/circuits/verify_circuit.input3.json
+          dio run -c e2e/dio-config.dummy.toml -v e2e/circuits/verify_circuit.json
+          dio run -c e2e/dio-config.dummy-width.toml -v e2e/circuits/verify_circuit.json
+          dio run -c e2e/dio-config.middle.toml -v e2e/circuits/verify_circuit.json
   
   ci-success:
     name: ci success
