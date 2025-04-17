@@ -11,7 +11,7 @@ impl PolyCircuit {
         &self,
         dim: u32,
         base_bits: u32,
-        unpacked_input_size: usize,
+        packed_input_norms: &[BigUint],
     ) -> NormBounds {
         let one = NormSimulator::new(
             MPolyCoeffs::new(vec![BigUint::one()]),
@@ -19,19 +19,29 @@ impl PolyCircuit {
             dim,
             base_bits,
         );
-        let mut inputs = vec![];
-        let mut remaining_inputs = unpacked_input_size;
-        let n = dim as usize;
-        while remaining_inputs > 0 {
-            let num_bits = if remaining_inputs >= n { n } else { remaining_inputs };
-            inputs.push(NormSimulator::new(
-                MPolyCoeffs::new(vec![BigUint::one()]),
-                BigUint::one(),
-                dim,
-                base_bits,
-            ));
-            remaining_inputs -= num_bits;
-        }
+        let inputs = packed_input_norms
+            .into_iter()
+            .map(|plaintext_norm| {
+                NormSimulator::new(
+                    MPolyCoeffs::new(vec![BigUint::one()]),
+                    plaintext_norm.clone(),
+                    dim,
+                    base_bits,
+                )
+            })
+            .collect::<Vec<_>>();
+        // let mut remaining_inputs = unpacked_input_size;
+        // let n = dim as usize;
+        // while remaining_inputs > 0 {
+        //     let num_bits = if remaining_inputs >= n { n } else { remaining_inputs };
+        //     inputs.push(NormSimulator::new(
+        //         MPolyCoeffs::new(vec![BigUint::one()]),
+        //         BigUint::one(),
+        //         dim,
+        //         base_bits,
+        //     ));
+        //     remaining_inputs -= num_bits;
+        // }
         let outputs = self.eval(&(), &one, &inputs);
         NormBounds::from_norm_simulators(&outputs)
     }
@@ -55,6 +65,8 @@ impl NormBounds {
     }
 }
 
+// Note: h_norm and plaintext_norm computed here can be larger than the modulus `q`.
+// In such a case, the error after circuit evaluation could be too large.
 #[derive(Debug, Clone)]
 pub struct NormSimulator {
     pub h_norm: MPolyCoeffs,
@@ -93,8 +105,8 @@ impl_binop_with_refs!(NormSimulator => Sub::sub(self, rhs: &NormSimulator) -> No
 
 impl_binop_with_refs!(NormSimulator => Mul::mul(self, rhs: &NormSimulator) -> NormSimulator {
     NormSimulator {
-        h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) + &rhs.h_norm * &self.plaintext_norm,
-        plaintext_norm: &self.plaintext_norm * &rhs.plaintext_norm,
+        h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) + &rhs.h_norm * &(&self.plaintext_norm * BigUint::from(self.dim_sqrt)),
+        plaintext_norm: &self.plaintext_norm * &rhs.plaintext_norm * self.dim_sqrt,
         dim_sqrt: self.dim_sqrt,
         base: self.base,
     }
@@ -227,13 +239,13 @@ mod tests {
         // Check the length of the h_norm vector
         assert_eq!(result.h_norm.0.len(), 2);
 
-        // First element should be 20 * 5 (from sim2.h_norm * sim1.plaintext_norm)
-        assert_eq!(result.h_norm.0[0], BigUint::from(100u32)); // 20 * 5
+        // First element should be 20 * 5 * 4 (from sim2.h_norm * sim1.plaintext_norm * dim_sqrt)
+        assert_eq!(result.h_norm.0[0], BigUint::from(400u32)); // 20 * 5
 
         // Second element should be 10 * 4 (from right_rotate)
         assert_eq!(result.h_norm.0[1], BigUint::from(40u32));
 
-        assert_eq!(result.plaintext_norm, BigUint::from(35u32)); // 5 * 7
+        assert_eq!(result.plaintext_norm, BigUint::from(140u32)); // 5 * 7 * 4
         assert_eq!(result.dim_sqrt.pow(2), 16);
     }
 
@@ -247,7 +259,8 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Simulate norm using the circuit
-        let norms = circuit.simulate_bgg_norm(16, 1, 3 * 16);
+        let plaintext_norms = vec![BigUint::from(1u32); 3];
+        let norms = circuit.simulate_bgg_norm(16, 1, plaintext_norms.as_slice());
 
         // Manually calculate the expected norm
         // Create NormSimulator instances for inputs

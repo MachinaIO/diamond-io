@@ -142,6 +142,9 @@ pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod test {
+    use num_bigint::BigUint;
+    use num_traits::One;
+
     use super::*;
     use crate::{
         bgg::DigitsToInt,
@@ -159,12 +162,21 @@ mod test {
         let log_q = params.modulus_bits();
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sigma = 3.0;
+        let log_base_q = params.modulus_digits();
 
         // 2. Create a simple public circuit that takes 2*log_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
+        // inputs: BaseDecompose(ct), eval_input
+        // outputs: BaseDecompose(ct) AND eval_input
         {
-            let inputs = public_circuit.input(2 * log_q + 1);
-            public_circuit.output(inputs[0..2 * log_q].to_vec());
+            let inputs = public_circuit.input((2 * log_base_q) + 1);
+            let mut outputs = vec![];
+            let eval_input = inputs[2 * log_base_q];
+            for ct_input in inputs[0..2 * log_base_q].iter() {
+                let muled = public_circuit.and_gate(*ct_input, eval_input);
+                outputs.push(muled);
+            }
+            public_circuit.output(outputs);
         }
 
         // 3. Generate a random hardcoded key
@@ -234,26 +246,35 @@ mod test {
 
         // 2. Create a simple public circuit that takes log_base_q inputs and outputs them directly
         let mut public_circuit = PolyCircuit::new();
+        // inputs: BaseDecompose(ct), eval_input
+        // outputs: BaseDecompose(ct) AND eval_input
         {
             let inputs = public_circuit.input((2 * log_base_q) + 1);
-            public_circuit.output(inputs[0..(2 * log_base_q)].to_vec());
+            let mut outputs = vec![];
+            let eval_input = inputs[2 * log_base_q];
+            for ct_input in inputs[0..2 * log_base_q].iter() {
+                let muled = public_circuit.and_gate(*ct_input, eval_input);
+                outputs.push(muled);
+            }
+            public_circuit.output(outputs);
         }
 
         let a_rlwe_bar = DCRTPoly::const_max(&params);
-        let enc_hardcoded_key = DCRTPoly::const_max(&params);
+        let b = DCRTPoly::const_max(&params);
 
         let a_decomposed_polys = a_rlwe_bar.decompose_base(&params);
-        let b_decomposed_polys = enc_hardcoded_key.decompose_base(&params);
+        let b_decomposed_polys = b.decompose_base(&params);
         let final_circuit = build_final_digits_circuit::<DCRTPoly, DCRTPoly>(
             &a_decomposed_polys,
             &b_decomposed_polys,
             public_circuit,
         );
 
+        let packed_input_norms = vec![BigUint::one(), params.modulus().as_ref().clone()];
         let norms = final_circuit.simulate_bgg_norm(
             params.ring_dimension(),
             params.base_bits(),
-            1 + params.ring_dimension() as usize,
+            &packed_input_norms,
         );
         let norm_json = serde_json::to_string(&norms).unwrap();
         use std::{fs::File, io::Write};
