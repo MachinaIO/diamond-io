@@ -321,9 +321,11 @@ where
     );
     log_mem("Sampled final_preimage");
 
+    final_preimage.write_to_files(&dir_path, "final_preimage");
+    log_mem("Written final_preimage to files");
+
     Obfuscation {
         hash_key,
-        final_preimage,
         dir_path,
         #[cfg(feature = "test")]
         s_init: s_init.clone(),

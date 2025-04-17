@@ -121,6 +121,9 @@ where
             }
         }
 
+        let final_preimage =
+            M::read_from_files(&params, m_b, packed_output_size, dir_path, "final_preimage");
+
         let end = std::time::Instant::now();
 
         let (mut ps, mut encodings) = (vec![], vec![]);
@@ -300,7 +303,6 @@ where
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
         log_mem("final_circuit evaluated and recomposed");
-        let final_preimage = &self.final_preimage;
         let final_v = ps.last().unwrap().clone() * final_preimage;
         log_mem("final_v computed");
         let z = output_encodings_vec.clone() - final_v.clone();
