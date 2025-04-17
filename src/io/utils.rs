@@ -236,7 +236,7 @@ mod test {
         // 1. Set up parameters
         let log_n = 13u32;
         let n = 2u32.pow(log_n);
-        let crt_depth = 23;
+        let crt_depth = 12;
         let crt_bits = 51;
         let base_bits = 20;
         let params = DCRTPolyParams::new(n, crt_depth, crt_bits, base_bits);

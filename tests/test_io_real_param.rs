@@ -27,9 +27,9 @@ mod test {
     fn test_io_just_mul_enc_and_bit_real_params() {
         init_tracing();
         let start_time = std::time::Instant::now();
-        let params = DCRTPolyParams::new(8192, 6, 51, 20);
+        let params = DCRTPolyParams::new(8192, 7, 51, 20);
         let log_base_q = params.modulus_digits();
-        let switched_modulus = Arc::new(BigUint::from_str_radix("242833611528216133864932738352844082358996736827870043467279656893386864455514587136", 10).unwrap());
+        let switched_modulus = Arc::new(BigUint::from_str_radix("546812681195752981093125556779405341132604288058152353837071503782819436677001997601680811337187328", 10).unwrap());
         let mut public_circuit = PolyCircuit::new();
 
         // inputs: BaseDecompose(ct), eval_input
@@ -52,9 +52,9 @@ mod test {
             level_width: 1,
             public_circuit: public_circuit.clone(),
             d: 1,
-            encoding_sigma: 12.05698,
-            hardcoded_key_sigma: 40615715852990820734.97011,
-            p_sigma: 12.05698,
+            encoding_sigma: 12.91885,
+            hardcoded_key_sigma: 108910396484176728921799104269415406.33545,
+            p_sigma: 12.91885,
         };
 
         let sampler_uniform = DCRTPolyUniformSampler::new();

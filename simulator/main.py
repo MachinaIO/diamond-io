@@ -500,12 +500,12 @@ if __name__ == "__main__":
     d = 1
     base_bits = 20
     crt_bits = 51
-    max_crt_depth = 23
-    input_size = 56
-    input_width = 7
+    max_crt_depth = 12
+    input_size = 1
+    input_width = 1
     if input_size % input_width != 0:
         raise ValueError("input_size should be divisible by input_width")
-    norms_path = "final_bits_norm_n_13_crt_51_depth_23_base_20.json"
+    norms_path = "final_bits_norm_n_13_crt_51_depth_12_base_20.json"
     (
         crt_depth,
         stddev_e_encoding,

@@ -30,7 +30,7 @@ mod test {
         let log_base_q = params.modulus_digits();
         let switched_modulus = Arc::new(
             BigUint::from_str_radix(
-                "431359146674410224742050828377557384853608161148858662676258371928064",
+                "431359140246658059678711139224465721413543900671837184566486422781952",
                 10,
             )
             .unwrap(),
