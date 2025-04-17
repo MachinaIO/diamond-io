@@ -1,7 +1,8 @@
+use circuit::{BenchCircuit, BenchCircuitType};
 use clap::{Parser, Subcommand};
 use config::Config;
 use diamond_io::{
-    bgg::circuit::{PolyCircuit, serde::SerializablePolyCircuit},
+    bgg::circuit::serde::SerializablePolyCircuit,
     io::{obf::obfuscate, params::ObfuscationParams},
     poly::{
         Poly, PolyElem, PolyParams,
@@ -23,6 +24,7 @@ use std::{
 };
 use tracing::info;
 
+pub mod circuit;
 pub mod config;
 
 /// Simple program to obfuscate and evaluate
@@ -42,10 +44,16 @@ enum Commands {
         #[arg(short, long)]
         verify: Option<PathBuf>,
     },
-    Circuit {
+    GenBenchCircuit {
         /// output path to print circuit
         #[arg(short, long)]
         output: PathBuf,
+
+        #[arg(short, long)]
+        circuit_type: BenchCircuitType,
+
+        #[arg(short, long)]
+        n: usize,
     },
 }
 
@@ -134,22 +142,10 @@ fn main() {
                 assert_eq!(output, bool_eval);
             }
         }
-        Commands::Circuit { output } => {
-            let mut public_circuit = PolyCircuit::new();
-
-            // inputs: binary polynomial, hardcoded_key, eval_input
-            // outputs: binary AND eval_input | hardcoded_key AND eval_input
-            {
-                let inputs = public_circuit.input(3);
-                let mut outputs = vec![];
-                let muled = public_circuit.and_gate(inputs[0], inputs[2]);
-                outputs.push(muled);
-                let muled = public_circuit.and_gate(inputs[1], inputs[2]);
-                outputs.push(muled);
-                public_circuit.output(outputs);
-            }
-
-            let serialize = SerializablePolyCircuit::from_circuit(&public_circuit).to_json_str();
+        Commands::GenBenchCircuit { output, circuit_type, n } => {
+            let public_circuit = BenchCircuit::new(circuit_type, n);
+            let poly_circuit = public_circuit.as_poly_circuit();
+            let serialize = SerializablePolyCircuit::from_circuit(poly_circuit).to_json_str();
             fs::write(output, serialize).unwrap();
         }
     }
