@@ -6,20 +6,28 @@ pub enum BenchCircuit {
 }
 
 impl BenchCircuit {
-    pub fn new_add_mul(add_n: usize, mul_n: usize) -> Self {
+    pub fn new_add_mul(add_n: usize, mul_n: usize, log_base_q: usize) -> Self {
         let mut public_circuit = PolyCircuit::new();
-        let n = add_n + mul_n + 1;
 
+        // inputs: BaseDecompose(ct), eval_input
+        // outputs: BaseDecompose(ct) * acc
         {
-            let inputs = public_circuit.input(n);
+            let inputs = public_circuit.input((2 * log_base_q) + 1);
             let mut outputs = vec![];
-            let eval_input = inputs[n - 1];
-            for ct_input in inputs[0..add_n].iter() {
-                let added = public_circuit.add_gate(*ct_input, eval_input);
-                outputs.push(added);
+            let eval_input = inputs[2 * log_base_q];
+
+            // compute acc according to add_n and mul_n logic
+            let mut acc = public_circuit.const_zero_gate();
+            for _ in 0..add_n {
+                acc = public_circuit.add_gate(acc, eval_input);
             }
-            for ct_input in inputs[add_n..add_n + mul_n].iter() {
-                let muled = public_circuit.mul_gate(*ct_input, eval_input);
+            for _ in 0..mul_n {
+                acc = public_circuit.mul_gate(acc, eval_input);
+            }
+
+            // compute the output
+            for ct_input in inputs[0..2 * log_base_q].iter() {
+                let muled = public_circuit.mul_gate(*ct_input, acc);
                 outputs.push(muled);
             }
             public_circuit.output(outputs);
@@ -33,12 +41,22 @@ impl BenchCircuit {
         {
             let inputs = public_circuit.input(2);
             let mut outputs = vec![];
-            let input_poly = inputs[1];
-            let hardcoded_key = inputs[0];
-            // ? if add_n is 0 all gates are mul this works but how can i perform verification if
-            // add_n and mul_n is mixed?
-            let muled = public_circuit.mul_gate(hardcoded_key, input_poly);
-            outputs.push(muled);
+            let eval_input = inputs[1];
+
+            // compute acc according to add_n and mul_n logic
+            let mut acc = public_circuit.const_zero_gate();
+            for _ in 0..add_n {
+                acc = public_circuit.add_gate(acc, eval_input);
+            }
+            for _ in 0..mul_n {
+                acc = public_circuit.mul_gate(acc, eval_input);
+            }
+
+            // compute the output
+            for ct_input in inputs[0..2].iter() {
+                let muled = public_circuit.mul_gate(*ct_input, acc);
+                outputs.push(muled);
+            }
             public_circuit.output(outputs);
         }
 

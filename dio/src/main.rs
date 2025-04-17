@@ -65,10 +65,9 @@ fn main() {
             );
             let log_base_q = params.modulus_digits();
             let switched_modulus = Arc::new(dio_config.switched_modulus);
-            let dim = params.ring_dimension() as usize;
-            assert_eq!(add_num + mul_num, log_base_q * 2);
-            let public_circuit = BenchCircuit::new_add_mul(add_num, mul_num).as_poly_circuit();
-            let public_circuit_num_input = public_circuit.num_input();
+            let public_circuit =
+                BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
+
             let obf_params = ObfuscationParams {
                 params: params.clone(),
                 switched_modulus,
@@ -81,9 +80,6 @@ fn main() {
                 p_sigma: dio_config.p_sigma,
                 trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
             };
-
-            let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
-            assert_eq!(public_circuit_num_input, (2 * log_base_q) + packed_input_size - 1);
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
             let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
@@ -122,13 +118,11 @@ fn main() {
                     &[hardcoded_key, input_poly],
                 );
 
-                let mut bool_eval = vec![];
+                // let mut bool_eval = vec![];
                 for e in eval {
                     let decompose_poly = e.to_bool_vec();
-                    bool_eval.extend(decompose_poly);
+                    assert_eq!(output, decompose_poly);
                 }
-
-                assert_eq!(output, bool_eval);
             }
         }
     }
