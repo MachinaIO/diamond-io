@@ -128,7 +128,11 @@ where
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
     let level_width = obf_params.level_width; // number of bits to be inserted at each level
     assert_eq!(obf_params.input_size % level_width, 0);
-    assert_eq!(dim % level_width, 0);
+    assert!(level_width <= dim); // otherwise we need >1 polynomial to insert the bits for each level
+    if obf_params.input_size > dim {
+        assert_eq!(dim % level_width, 0); // otherwise we get to a point in which the inserted bits
+                                          // have to be split between two polynomials
+    }
     let level_size = (1u64 << obf_params.level_width) as usize;
     let depth = obf_params.input_size / level_width; // number of levels necessary to encode the input
     let mut u_nums = Vec::with_capacity(level_size);
