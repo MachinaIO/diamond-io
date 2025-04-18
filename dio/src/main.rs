@@ -14,12 +14,9 @@ use diamond_io::{
     utils::init_tracing,
 };
 use keccak_asm::Keccak256;
-use num_bigint::BigUint;
-use num_integer::Integer;
 use std::{
     fs::{self},
     path::PathBuf,
-    str::FromStr,
     sync::Arc,
 };
 use tracing::info;
@@ -113,16 +110,16 @@ fn main() {
                     .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
                     .collect();
                 let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
-                // hardcoded_key * [q/2]
+                /*
+                    Since we are computing b' - a' * t in the decryption part of the final circuit,
+                    where a' = acc * a and b' = acc * b are the outputs of the public circuit,
+                    b' - a' * t = acc * b - acc * a * t = acc * (a * t + e + [q/2] x - a*t) = acc * (e + [q/2] x) should hold,
+                    where e is the LWE error and x is the hardcoded key.
+                    If e = 0, it follows that b' - a' * t = acc * [q/2] x.
+                */
                 let half_q = FinRingElem::half_q(&params.modulus());
                 let multiplied_hardcoded_key =
-                    hardcoded_key.clone() * DCRTPoly::from_const(&params, &half_q);
-
-                println!(
-                    "multiplied_hardcoded_key: {:?} hardcoded_key: {:?}",
-                    multiplied_hardcoded_key.coeffs(),
-                    hardcoded_key.coeffs()
-                );
+                    hardcoded_key * DCRTPoly::from_const(&params, &half_q);
                 let eval = verify_circuit.eval(
                     &params,
                     &DCRTPoly::const_one(&params),
@@ -130,12 +127,7 @@ fn main() {
                 );
                 assert_eq!(eval.len(), 1);
                 for e in eval {
-                    println!("e: {:?}", e.coeffs());
-                    // let e = e. DCRTPoly::from_const(
-                    //     &params,
-                    //     &FinRingElem::new(multiplier, params.modulus()),
-                    // );
-                    let decompose_poly = e.to_bool_vec();
+                    let decompose_poly = e.extract_bits_with_threshold(&params);
                     assert_eq!(output, decompose_poly);
                 }
             }

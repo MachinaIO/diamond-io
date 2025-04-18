@@ -10,7 +10,6 @@ debug = ["diamond-io/debug"]
 diamond-io = { path = "../", default-features = false }
 clap = { version = "4.5.36", features = ["derive"] }
 num-bigint = { version = "0.4", features = ["serde"] }
-num-integer = { version = "0.1.46" }
 rand = { version = "0.9.0", features = ["std_rng"] }
 keccak-asm = { version = "0.1.4" }
 tracing = "0.1"
