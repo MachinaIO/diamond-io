@@ -12,7 +12,7 @@ use std::{
     fs::File,
     ops::{Add, Mul, Neg, Range, Sub},
 };
-use tempfile::tempfile;
+use tempfile::NamedTempFile;
 
 // static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
 
@@ -31,7 +31,9 @@ impl<T: MatrixElem> BaseMatrix<T> {
     pub fn new_empty(params: &T::Params, nrow: usize, ncol: usize) -> Self {
         let entry_size = params.entry_size();
         let len = entry_size * nrow * ncol;
-        let file = tempfile().expect("failed to open file");
+        let file = NamedTempFile::new().expect("failed to create file");
+        let path = file.path().to_path_buf();
+        let file = file.persist(path).expect("failed to persist file");
         file.set_len(len as u64).expect("failed to set file length");
         Self { params: params.clone(), file, nrow, ncol }
     }

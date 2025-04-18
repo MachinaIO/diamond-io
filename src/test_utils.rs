@@ -1,3 +1,5 @@
+#[cfg(feature = "disk")]
+use crate::utils::calculate_tmp_size;
 use crate::{
     bgg::circuit::PolyCircuit,
     io::{obf::obfuscate, params::ObfuscationParams, Obfuscation},
@@ -98,16 +100,26 @@ pub async fn test_io_common(
     let bool_in = rng.random::<bool>();
     let mut input = vec![bool_in];
     input.append(&mut vec![false; input_size - 1]);
+    // #[cfg(feature = "disk")]
+    // clean_tmp().unwrap();
+    #[cfg(feature = "disk")]
+    let tmp_start_size = calculate_tmp_size();
     let start_time = std::time::Instant::now();
     let obfuscation = Obfuscation::read_dir(&obf_params, dir_path);
     let load_time = start_time.elapsed();
     info!("Time to load obfuscation: {:?}", load_time);
+    #[cfg(feature = "disk")]
+    let tmp_end_size = calculate_tmp_size();
+    #[cfg(feature = "disk")]
+    log_mem(format!("Obfuscation size after loading: {} bytes", tmp_end_size - tmp_start_size));
+
     let start_time = std::time::Instant::now();
     let output = obfuscation
         .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(obf_params, &input);
     let eval_time = start_time.elapsed();
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + load_time + eval_time);
+
     let input_poly =
         DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
     assert_eq!(output, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());

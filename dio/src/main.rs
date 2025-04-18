@@ -1,6 +1,8 @@
 use circuit::BenchCircuit;
 use clap::{Parser, Subcommand};
 use config::Config;
+#[cfg(feature = "disk")]
+use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
     io::{Obfuscation, obf::obfuscate, params::ObfuscationParams},
     poly::{
@@ -114,11 +116,19 @@ async fn main() {
             let input = dio_config.input;
             assert_eq!(input.len(), dio_config.input_size);
 
+            #[cfg(feature = "disk")]
+            let tmp_start_size = calculate_tmp_size();
             let start_time = std::time::Instant::now();
             let obfuscation = Obfuscation::read_dir(&obf_params, &obf_dir);
             let load_time = start_time.elapsed();
             info!("Time to load obfuscation: {:?}", load_time);
-
+            #[cfg(feature = "disk")]
+            let tmp_end_size = calculate_tmp_size();
+            #[cfg(feature = "disk")]
+            log_mem(format!(
+                "Obfuscation size after loading: {} bytes",
+                tmp_end_size - tmp_start_size
+            ));
             let start_time = std::time::Instant::now();
             let output = obfuscation
                 .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(
