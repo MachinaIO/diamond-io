@@ -15,7 +15,7 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
     },
-    utils::{calculate_directory_size, log_mem},
+    utils::log_mem,
 };
 use futures::future::join_all;
 use itertools::Itertools;
@@ -414,8 +414,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     futures.push(Box::pin(store_hash_key));
     join_all(futures).await;
-    let obf_size = calculate_directory_size(&dir_path);
-    log_mem(format!("Obfuscation size: {obf_size} bytes"));
+
     // Obfuscation {
     //     hash_key,
     //     b,
@@ -479,7 +478,7 @@ fn store_and_drop_poly<M: Poly>(
     let future = async move {
         poly.write_to_file(&dir_path, &id_str).await;
         drop(poly);
+        log_mem(format!("Stored {id_str}"));
     };
-    log_mem(format!("Stored {id}"));
     future
 }

@@ -32,7 +32,7 @@ venv
 /test_encoding_write_read
 /test_pubkey_write_read
 /test_matrix_write_read
-/tests/test_io_dummy_param_width
-/tests/test_io_param
-/tests/test_io_middle_param
-/tests/test_io_real_param
+/tests/io_dummy_param_width
+/tests/io_dummy_param
+/tests/io_middle_param
+/tests/io_real_param

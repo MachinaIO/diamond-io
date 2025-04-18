@@ -10,6 +10,7 @@ use crate::poly::{
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[cfg(feature = "cpu")]
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
@@ -144,6 +145,8 @@ pub fn calculate_directory_size<P: AsRef<Path>>(path: P) -> u64 {
         Ok(entries) => entries
             .filter_map(Result::ok)
             .filter_map(|entry| fs::metadata(entry.path()).ok())
+            .collect::<Vec<_>>()
+            .into_par_iter()
             .map(|metadata| metadata.len())
             .sum(),
         Err(_) => 0,

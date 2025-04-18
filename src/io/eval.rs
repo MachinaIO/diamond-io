@@ -29,11 +29,11 @@ where
         let d1 = d + 1;
         let log_base_q = obf_params.params.modulus_digits();
         #[cfg(feature = "test")]
-        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
+        let reveal_plaintexts = [vec![true; packed_input_size], vec![true; 1]].concat();
         #[cfg(not(feature = "test"))]
-        let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+        let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
         let params = Arc::new(obf_params.params.clone());
-        let encodings_init = parallel_iter!(0..packed_input_size)
+        let encodings_init = parallel_iter!(0..packed_input_size + 1)
             .map(|idx| {
                 BggEncoding::read_from_files(
                     params.as_ref(),
@@ -133,17 +133,21 @@ where
         #[cfg(feature = "test")]
         let bs = parallel_iter!(0..depth + 1)
             .map(|level| {
-                let mut b_nums = parallel_iter!(0..level_size)
-                    .map(|num| {
-                        M::read_from_files(
-                            params.as_ref(),
-                            2 * d1,
-                            m_b,
-                            &dir_path,
-                            &format!("b_{level}_{num}"),
-                        )
-                    })
-                    .collect::<Vec<_>>();
+                let mut b_nums = if level == 0 {
+                    vec![M::zero(params.as_ref(), 2 * d1, m_b); level_size]
+                } else {
+                    parallel_iter!(0..level_size)
+                        .map(|num| {
+                            M::read_from_files(
+                                params.as_ref(),
+                                2 * d1,
+                                m_b,
+                                &dir_path,
+                                &format!("b_{level}_{num}"),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
                 let b_star = M::read_from_files(
                     params.as_ref(),
                     2 * d1,

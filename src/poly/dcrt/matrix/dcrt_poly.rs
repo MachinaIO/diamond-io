@@ -14,9 +14,6 @@ use tokio::fs::write;
 
 use super::base::BaseMatrix;
 
-#[cfg(not(feature = "disk"))]
-use super::base::memory::block_offsets;
-
 #[cfg(feature = "disk")]
 use super::base::disk::block_offsets;
 
@@ -241,37 +238,6 @@ impl PolyMatrix for DCRTPolyMatrix {
                 .collect::<Vec<_>>()
         };
         matrix.replace_entries(0..nrow, 0..ncol, f);
-
-        // let (row_offsets, col_offsets) = block_offsets(0..nrow, 0..ncol);
-
-        // for (row_start, row_end) in row_offsets.iter().tuple_windows() {
-        //     for (col_start, col_end) in col_offsets.iter().tuple_windows() {
-        //         let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>>
-        // {             let mut path = dir_path.as_ref().to_path_buf();
-        //             path.push(format!(
-        //                 "{}_{}_{}.{}_{}.{}.matrix",
-        //                 id, block_size, row_start, row_end, col_start, col_end
-        //             ));
-        //             let bytes = std::fs::read(&path)
-        //                 .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
-        //             let entries_bytes: Vec<Vec<Vec<u8>>> =
-        // serde_json::from_slice(&bytes).unwrap();
-
-        //             parallel_iter!(0..row_range.len())
-        //                 .map(|i| {
-        //                     parallel_iter!(0..col_range.len())
-        //                         .map(|j| {
-        //                             let entry_bytes = &entries_bytes[i][j];
-        //                             DCRTPoly::from_compact_bytes(params, entry_bytes)
-        //                         })
-        //                         .collect::<Vec<_>>()
-        //                 })
-        //                 .collect::<Vec<_>>()
-        //         };
-
-        //         matrix.replace_entries(*row_start..*row_end, *col_start..*col_end, f);
-        //     }
-        // }
         matrix
     }
 
@@ -381,16 +347,15 @@ impl DCRTPolyMatrix {
 #[cfg(test)]
 #[cfg(feature = "test")]
 mod tests {
-    use std::{fs, sync::Arc};
-
-    use num_bigint::BigUint;
-    use rand::{rng, Rng};
-
     use super::*;
     use crate::poly::{
         dcrt::{DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
         sampler::{DistType, PolyUniformSampler},
     };
+    use num_bigint::BigUint;
+    use rand::{rng, Rng};
+    use serial_test::serial;
+    use std::{fs, sync::Arc};
 
     #[test]
     fn test_matrix_gadget_matrix() {
@@ -766,6 +731,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_matrix_write_read() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();

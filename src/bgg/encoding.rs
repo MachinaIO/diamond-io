@@ -188,6 +188,7 @@ mod tests {
     };
     use keccak_asm::Keccak256;
     use rand::Rng;
+    use serial_test::serial;
     use std::{fs, path::Path, sync::Arc};
     use tokio;
 
@@ -660,6 +661,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_encoding_write_read() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
