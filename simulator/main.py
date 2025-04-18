@@ -9,18 +9,23 @@ import datetime
 import os
 from decimal import Decimal, getcontext
 from norms import CircuitNorms
+import os
+import subprocess
+import json
 
 getcontext().prec = 300
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def log_params_to_file(
+    input_size: int,
+    input_width: int,
+    add_num: int,
+    mul_num: int,
     secpar: int,
     n: int,
     d: int,
     base_bits: int,
-    input_size: int,
-    input_width: int,
-    norms_path: str,
     crt_bits: int,
     crt_depth: int,
     stddev_e_encoding: int,
@@ -47,15 +52,16 @@ def log_params_to_file(
     # Create log entry with key information
     log_entry = (
         f"{current_date}, "
+        f"input_size={input_size}, "
+        f"input_width={input_width}, "
+        f"add_num={add_num}, "
+        f"mul_num={mul_num}, "
         f"secpar={secpar}, "
         f"n={n}, "
         f"d={d}, "
         f"crt_bits={crt_bits}, "
         f"crt_depth={crt_depth}, "
         f"base_bits={base_bits}, "
-        f"input_size={input_size}, "
-        f"input_width={input_width}, "
-        f"norms_path={norms_path}, "
         f"q={q}, "
         f"log2(q)={log_q}, "
         f"encoding_sigma={stddev_e_encoding}, "
@@ -75,6 +81,97 @@ def log_params_to_file(
 
 
 def find_params(
+    target_secpar: int,
+    log2_n: int,
+    max_d: int,
+    min_base_bits: int,
+    max_base_bits: int,
+    crt_bits: int,
+    max_crt_depth: int,
+    input_size: int,
+    input_width: int,
+    add_num: int,
+    mul_num: int,
+):
+    for d in range(1, max_d + 1):
+        found_params = []
+        for base_bits in range(min_base_bits, max_base_bits + 1):
+            config = {
+                "log_ring_dim": log2_n,
+                "max_crt_depth": max_crt_depth,
+                "crt_bits": crt_bits,
+                "base_bits": base_bits,
+            }
+            config_file = f"sim_norm_config_{input_size}_{input_width}_{add_num}_{mul_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json"
+            with open(
+                os.path.join(
+                    script_dir,
+                    config_file,
+                ),
+                "w",
+            ) as f:
+                f.write(json.dumps(config, indent=4))
+            norms_path = os.path.join(
+                script_dir,
+                f"norms_{input_size}_{input_width}_{add_num}_{mul_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json",
+            )
+            subprocess.run(
+                [
+                    "dio",
+                    "sim-bench-norm",
+                    "-c",
+                    config_file,
+                    "-o",
+                    norms_path,
+                    "--add-num",
+                    str(add_num),
+                    "--mul-num",
+                    str(mul_num),
+                ]
+            )
+            n = 2**log2_n
+            try:
+                (
+                    crt_depth,
+                    stddev_e_encoding,
+                    stddev_e_hardcode,
+                    stddev_e_p,
+                    p,
+                    estimated_secpar,
+                    size,
+                ) = find_params_fixed_n_d_base(
+                    target_secpar,
+                    n,
+                    d,
+                    base_bits,
+                    crt_bits,
+                    max_crt_depth,
+                    input_size,
+                    input_width,
+                    norms_path,
+                )
+                found_params.append(
+                    (
+                        d,
+                        base_bits,
+                        crt_depth,
+                        stddev_e_encoding,
+                        stddev_e_hardcode,
+                        stddev_e_p,
+                        p,
+                        estimated_secpar,
+                        size,
+                    )
+                )
+            except ValueError as e:
+                print(f"ValueError: {e}")
+                continue
+        if len(found_params) > 0:
+            return min(found_params, key=lambda x: x[8])
+    raise ValueError("Cannot find parameters")
+
+
+def find_params_fixed_n_d_base(
     target_secpar: int,
     n: int,
     d: int,
@@ -496,17 +593,21 @@ def sqrt_ceil(x):
 
 if __name__ == "__main__":
     secpar = 80
-    n = 2**13
-    d = 1
-    base_bits = 20
+    log2_n = 13
+    max_d = 3
+    min_base_bits = 10
+    max_base_bits = 15
     crt_bits = 51
-    max_crt_depth = 12
-    input_size = 1
-    input_width = 1
+    max_crt_depth = 10
+    input_size = 8 * 1
+    input_width = 8
+    add_num = 1
+    mul_num = 1
     if input_size % input_width != 0:
         raise ValueError("input_size should be divisible by input_width")
-    norms_path = "final_bits_norm_n_13_crt_51_depth_12_base_20.json"
     (
+        d,
+        base_bits,
         crt_depth,
         stddev_e_encoding,
         stddev_e_hardcode,
@@ -516,17 +617,19 @@ if __name__ == "__main__":
         size,
     ) = find_params(
         secpar,
-        n,
-        d,
-        base_bits,
+        log2_n,
+        max_d,
+        min_base_bits,
+        max_base_bits,
         crt_bits,
         max_crt_depth,
         input_size,
         input_width,
-        norms_path,
+        add_num,
+        mul_num,
     )
-
     print(f"crt_depth: {crt_depth}")
+    print(f"base_bits: {base_bits}")
     print(f"q: {2**(crt_bits * crt_depth)}, log_2 q: {crt_bits * crt_depth}")
     print(f"stddev_e_encoding: {stddev_e_encoding}")
     print(f"stddev_e_hardcode: {stddev_e_hardcode}")
@@ -536,13 +639,14 @@ if __name__ == "__main__":
     print(f"size: {size} [GB]")
     # Log parameters to params.log file
     log_params_to_file(
-        secpar,
-        n,
-        d,
-        base_bits,
         input_size,
         input_width,
-        norms_path,
+        add_num,
+        mul_num,
+        secpar,
+        2**log2_n,
+        d,
+        base_bits,
         crt_bits,
         crt_depth,
         stddev_e_encoding,
@@ -552,78 +656,3 @@ if __name__ == "__main__":
         estimated_secpar,
         size,
     )
-
-
-# input=1, output=1, depth=2, q = 2**1024, alpha = 2**(-200), n = 2**13, secpar = 105, log_e = 986
-# input=1, output=1, depth=2, q = 2**256, alpha = 2**(-200), n = 2**13, secpar = 105, log_e = 206.36068319307367
-# input=2, output=1, depth=2, q = 2**256, alpha = 2**(-200), n = 2**13, secpar = 105, log_e = 252.29242579686007
-# input=4, output=1, depth=2, q = 2**512, alpha = 2**(-400), n = 2**14, secpar = 105, log_e = 490.20420897474514
-# input=8, output=1, depth=2, q = 2**1024, alpha = 2**(-800), n = 2**15, secpar = 106, log_e = 987.5056715963805
-# input=16, output=1, depth=2, q = 2**2048, alpha = 2**(-1600), n = 2**16, secpar = 106, log_e = 2027.6967419442458
-# input=32, output=1, depth=2, q = 2**4096, alpha = 2**(-3320), n = 2**17, secpar = 101, log_e = 4080.1957810365197
-# input=64, output=1, depth=2, q = 2**8196, alpha = 2**(-6950), n = 2**18, secpar = 94, log_e = 8186.687219336921
-# input=128, output=1, depth=2, q = 2**16392, alpha = 2**(-14600), n = 2**19, secpar = 87, log_e = 16384.15472322582
-# input=2, output=1, depth=4, q = 2**256, alpha = 2**(-225), n = 2**13, secpar = 88, log_e = 255.76379431529352
-#
-# + 2 * secpar
-# input=2, output=1, depth=4, q = 2**512, alpha = 2**(-400), n = 2**14, secpar = 105, log_e = 362.4993302188647
-# input=4, output=1, depth=4, q = 2**1024, alpha = 2**(-800), n = 2**15, secpar = 106, log_e = 629.7919250697457
-# input=8, output=1, depth=4, q = 2**2048, alpha = 2**(-1600), n = 2**16, secpar = 106, log_e = 1263.4141811117784
-# input=16, output=1, depth=4, q = 2**4096, alpha = 2**(-3200), n = 2**17, secpar = 106, log_e = 2576.3387780273965
-# input=32, output=1, depth=4, q = 2**8192, alpha = 2**(-6400), n = 2**18, secpar = 106, log_e = 5296.521833879402
-# input=64, output=1, depth=4, q = 2**16384, alpha = 2**(-12800), n = 2**19, secpar = 106, log_e = 10928.456653016947
-# input=128, output=1, depth=4, q = 2**32768, alpha = 2**(-25600), n = 2**20, secpar = 106, log_e = 22578.237454920152
-# input=256, output=1, depth=4, q = 2**65536, alpha = 2**(-51200), n = 2**21, secpar = 106, log_e = 46652.16947979474
-
-# input=16, output=1, depth=32, q = 2**4096, alpha = 2**(-3200), n = 2**17, secpar = 106, log_e = 2744.914181351132
-# input=16, output=1, depth=128, q = 2**4096, alpha = 2**(-3200), n = 2**17, secpar = 106, log_e = 5912.915237886846
-
-# input=2, output=1, depth=2, 2**13, 2**13, 2 + 512, 2**512, 2 ** (512 - 263), 2 ** (512 - 500), secpar = 70, size = 94068.46295686903 GB
-
-# Jan 30, 2025
-# input=1, output=1, depth=1, n=2**13, q=2**256, p=2**16, sigma_e=2 ** (256 - 245), sigma_b=3.3, secpar=78, size = 802.0288007854358 GB
-# Uniform secret
-# input=1, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.144327554 GB
-# input=2, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.154365204 GB
-# input=4, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.174440504 GB
-# input=8, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.214591104 GB
-# input=16, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.294892304 GB
-# input=32, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.455494704 GB
-# input=64, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 41.776699504 GB
-# input=128, output=1, depth=1, n=2**12, q=2**140, p=2**6, sigma_e=2 ** (140 - 135), sigma_b=0.01, secpar=72, size = 42.419109104 GB
-# The above results seem to invalid because the bound_b is just one.
-# Jan 31, 2025
-# m = inf in output_secpar
-# input=1, output=1, depth=1, n=2**12, q=2**160, p=2**22, sigma_e=2 ** (160 - 139), sigma_b=0.2, secpar=81, size = 64.91435137376314 GB
-# input=2, output=1, depth=1, n=2**12, q=2**161, p=2**22, sigma_e=2 ** (161 - 140), sigma_b=0.15, secpar=80, size = 76.92146251976315 GB
-# input=4, output=1, depth=1, n=2**12, q=2**163, p=2**23, sigma_e=2 ** (163 - 141), sigma_b=0.15, secpar=80, size = 103.28398017749898 GB
-
-# base = 2**20
-# stddev_e_p_d: 3.190600825411292529310003374121151864528656005859375
-# sqrt_secpar_d: 9
-# base_d: 1048576
-# m_d: 54
-# bound_c_d: 1864799774993447876594399.948890683020389953429795654643834961427216467821921241920790635049343109131
-# base-dependent error: 864998612168234998077837623509275354.7074875601141009832394687499579344347466758335940539836883544923
-# final_err: 8746810258343107065957007438076535207.556248084800279398452795173157270930067594587421772665651598100
-# log_final_err: 123
-
-# base = 2**10
-# stddev_e_p_d: 3.190600825411292529310003374121151864528656005859375
-# sqrt_secpar_d: 9
-# base_d: 1024
-# m_d: 105
-# bound_c_d: 3226032414224086806.362468960186188167017787808787734525376673639954715720745692664195303223095834255
-# base-dependent error: 2838726834371627289030038350.712007900858086829923815457123003588900747584666817147081019356846809387
-# final_err: 27825131015929632855862032467540.17738662940100282680672935342417228936988880152276760954647193919046
-# log_final_err: 105
-
-# base = 2**5
-# stddev_e_p_d: 3.190600825411292529310003374121151864528656005859375
-# sqrt_secpar_d: 9
-# base_d: 32
-# m_d: 210
-# bound_c_d: 6329877527671136.947140365292906179514225175286667173341021758352098275888301509009212231227081701945
-# base-dependent error: 337571862160499519700039.9098414631209992674600239374209028230911767328852610484113405675543617689982
-# final_err: 109188471321800357965049573411.3224853691748555365478958752828378103720729733878934854573778100501152
-# log_final_err: 97

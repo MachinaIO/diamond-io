@@ -23,7 +23,7 @@ fn default_trapdoor_sigma() -> Option<f64> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
+pub struct RunBenchConfig {
     #[serde(serialize_with = "biguint_to_string", deserialize_with = "biguint_from_string")]
     pub switched_modulus: BigUint,
     pub input_size: usize,
@@ -43,4 +43,16 @@ pub struct Config {
     /// bit size of the base for the gadget vector and decomposition
     pub base_bits: u32,
     pub input: Vec<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimBenchNormConfig {
+    /// Log2 of the ring dimension
+    pub log_ring_dim: u32,
+    /// maximum size of the tower
+    pub max_crt_depth: usize,
+    /// number of bits of each tower's modulus
+    pub crt_bits: usize,
+    /// bit size of the base for the gadget vector and decomposition
+    pub base_bits: u32,
 }

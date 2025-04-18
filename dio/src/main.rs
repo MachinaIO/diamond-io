@@ -1,10 +1,12 @@
 use circuit::BenchCircuit;
 use clap::{Parser, Subcommand};
-use config::Config;
+use config::{RunBenchConfig, SimBenchNormConfig};
 #[cfg(feature = "disk")]
 use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
-    io::{Obfuscation, obf::obfuscate, params::ObfuscationParams},
+    io::{
+        Obfuscation, obf::obfuscate, params::ObfuscationParams, utils::build_final_digits_circuit,
+    },
     poly::{
         Poly, PolyElem, PolyParams,
         dcrt::{
@@ -15,10 +17,12 @@ use diamond_io::{
     },
     utils::{calculate_directory_size, init_tracing},
 };
+use num_traits::identities::One;
 
 #[cfg(feature = "disk")]
 use diamond_io::utils::log_mem;
 use keccak_asm::Keccak256;
+use num_bigint::BigUint;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
@@ -56,6 +60,19 @@ enum Commands {
         #[arg(long)]
         mul_num: usize,
     },
+    SimBenchNorm {
+        #[arg(short, long)]
+        config: PathBuf,
+
+        #[arg(short, long)]
+        out_path: PathBuf,
+
+        #[arg(long)]
+        add_num: usize,
+
+        #[arg(long)]
+        mul_num: usize,
+    },
 }
 
 #[tokio::main]
@@ -65,7 +82,7 @@ async fn main() {
     match command {
         Commands::RunBench { config, obf_dir, verify, add_num, mul_num } => {
             let contents = fs::read_to_string(&config).unwrap();
-            let dio_config: Config = toml::from_str(&contents).unwrap();
+            let dio_config: RunBenchConfig = toml::from_str(&contents).unwrap();
             let dir = Path::new(&obf_dir);
             if !dir.exists() {
                 fs::create_dir(dir).unwrap();
@@ -171,6 +188,41 @@ async fn main() {
                     assert_eq!(output, decompose_poly);
                 }
             }
+        }
+        Commands::SimBenchNorm { config, out_path, add_num, mul_num } => {
+            let dio_config: SimBenchNormConfig =
+                serde_json::from_reader(fs::File::open(&config).unwrap()).unwrap();
+            let log_n = dio_config.log_ring_dim;
+            let n = 2u32.pow(log_n);
+            let max_crt_depth = dio_config.max_crt_depth;
+            let crt_bits = dio_config.crt_bits;
+            let base_bits = dio_config.base_bits;
+            let params = DCRTPolyParams::new(n, max_crt_depth, crt_bits, base_bits);
+            let log_q = params.modulus_bits();
+            debug_assert_eq!(crt_bits * max_crt_depth, log_q);
+            let log_base_q = params.modulus_digits();
+
+            let public_circuit =
+                BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
+            let a_rlwe_bar = DCRTPoly::const_max(&params);
+            let b = DCRTPoly::const_max(&params);
+
+            let a_decomposed_polys = a_rlwe_bar.decompose_base(&params);
+            let b_decomposed_polys = b.decompose_base(&params);
+            let final_circuit = build_final_digits_circuit::<DCRTPoly, DCRTPoly>(
+                &a_decomposed_polys,
+                &b_decomposed_polys,
+                public_circuit,
+            );
+
+            let packed_input_norms = vec![BigUint::one(), params.modulus().as_ref().clone()];
+            let norms = final_circuit.simulate_bgg_norm(
+                params.ring_dimension(),
+                params.base_bits(),
+                packed_input_norms,
+            );
+            let norm_json = serde_json::to_string(&norms).unwrap();
+            fs::write(out_path, norm_json.as_bytes()).unwrap()
         }
     }
 }
