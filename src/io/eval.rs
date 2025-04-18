@@ -4,7 +4,11 @@ use super::bgm::Player;
 use super::{params::ObfuscationParams, Obfuscation};
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
-    poly::{Poly, PolyElem, PolyMatrix, PolyParams},
+    io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+    poly::{
+        sampler::{PolyHashSampler, PolyTrapdoorSampler},
+        Poly, PolyElem, PolyMatrix, PolyParams,
+    },
     utils::log_mem,
 };
 use itertools::Itertools;
