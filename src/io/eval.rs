@@ -40,12 +40,12 @@ where
         encodings.push(self.encodings_init.clone());
 
         // Sample public keys
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-        #[cfg(not(feature = "test"))]
+        #[cfg(not(feature = "debug"))]
         let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
         let level_width = obf_params.level_width;
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         let level_size = (1u64 << obf_params.level_width) as usize;
         assert!(inputs.len() % level_width == 0);
         let depth = obf_params.input_size / level_width;
@@ -54,7 +54,7 @@ where
             .collect_vec();
         log_mem("Sampled public keys");
 
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
@@ -137,7 +137,7 @@ where
             }
             ps.push(p.clone());
             encodings.push(new_encodings);
-            #[cfg(feature = "test")]
+            #[cfg(feature = "debug")]
             if obf_params.encoding_sigma == 0.0 &&
                 obf_params.hardcoded_key_sigma == 0.0 &&
                 obf_params.p_sigma == 0.0
@@ -220,7 +220,7 @@ where
         let z = output_encodings_vec - final_v;
         log_mem("z computed");
         debug_assert_eq!(z.size(), (1, packed_output_size));
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0

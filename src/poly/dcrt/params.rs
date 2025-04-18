@@ -57,8 +57,8 @@ impl PolyParams for DCRTPolyParams {
     }
 }
 
-#[cfg(feature = "test")]
 impl Default for DCRTPolyParams {
+    /// **note**  these parameters are insecure and only for test purpose
     fn default() -> Self {
         Self::new(4, 2, 17, 1)
     }

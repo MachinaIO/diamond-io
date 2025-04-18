@@ -31,7 +31,6 @@ where
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use crate::poly::{
         dcrt::{DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler},

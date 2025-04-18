@@ -206,7 +206,6 @@ pub(crate) fn gauss_samp_gq_arb_base(
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod test {
     use super::*;
     use crate::poly::{

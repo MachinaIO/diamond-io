@@ -7,8 +7,9 @@ diamond-io cli implementation
 cargo install --path .
 ```
 
+debug feature enable
 ```
-cargo install --features test --path .
+cargo install --features debug --path .
 ```
 
 ### run 

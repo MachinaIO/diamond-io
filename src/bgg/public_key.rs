@@ -96,7 +96,6 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use crate::{
         bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},

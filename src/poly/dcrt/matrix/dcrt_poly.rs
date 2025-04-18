@@ -321,7 +321,6 @@ impl DCRTPolyMatrix {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use std::sync::Arc;
 

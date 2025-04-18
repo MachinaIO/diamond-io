@@ -52,9 +52,9 @@ where
     log_mem("Sampled public data");
     let packed_input_size = public_data.packed_input_size;
     assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-    #[cfg(not(feature = "test"))]
+    #[cfg(not(feature = "debug"))]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
     let pub_key_init =
@@ -149,10 +149,10 @@ where
         vec![Vec::with_capacity(level_size); depth],
     );
 
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth + 1];
 
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     {
         bs[0][level_size] = b_star_cur.clone();
     }
@@ -167,7 +167,7 @@ where
             sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
         log_mem("Sampled pub key level");
 
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         {
             bs[level + 1][level_size] = b_star_level.clone();
         }
@@ -191,7 +191,7 @@ where
                 sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for level and num");
 
-            #[cfg(feature = "test")]
+            #[cfg(feature = "debug")]
             {
                 bs[level + 1][num] = b_num_level.clone();
             }
@@ -307,15 +307,15 @@ where
         n_preimages,
         k_preimages,
         final_preimage,
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         s_init: s_init.clone(),
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         minus_t_bar,
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         bs,
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         hardcoded_key,
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         final_preimage_target,
     }
 }

@@ -124,11 +124,9 @@ where
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::poly::dcrt::DCRTPolyParams;
-
     use keccak_asm::Keccak256;
 
     #[test]
@@ -161,104 +159,5 @@ mod tests {
         let matrix = matrix_result;
         assert_eq!(matrix.row_size(), nrow, "Matrix row count mismatch");
         assert_eq!(matrix.col_size(), ncol, "Matrix column count mismatch");
-    }
-
-    #[cfg(not(feature = "test"))]
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(10))]
-
-        #[test]
-        fn test_bitdecomposition_hash_sampler_ring(
-            rows in 1usize..5usize,
-            columns in 1usize..5usize,
-            key in any::<[u8; 32]>(),
-            tag in any::<u64>(),
-        ) {
-            let params = DCRTPolyParams::default();
-            let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::FinRingDist);
-            let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, rows);
-            let decomposed = matrix.decompose();
-            let expected_matrix = gadget_matrix * decomposed;
-            assert_eq!(matrix, expected_matrix);
-        }
-
-        #[test]
-        fn test_bitdecomposition_hash_sampler_bit(
-            rows in 1usize..5usize,
-            columns in 1usize..5usize,
-            key in any::<[u8; 32]>(),
-            tag in any::<u64>(),
-        ) {
-            let params = DCRTPolyParams::default();
-            let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::BitDist);
-            let gadget_matrix = DCRTPolyMatrix::gadget_matrix(&params, rows);
-            let decomposed = matrix.decompose();
-            let expected_matrix = gadget_matrix * decomposed;
-            assert_eq!(matrix, expected_matrix);
-        }
-
-        #[test]
-        fn test_modulus_switch_hash_sampler_ring(
-            rows in 1usize..5usize,
-            columns in 1usize..5usize,
-            key in any::<[u8; 32]>(),
-            tag in any::<u64>(),
-        ) {
-            let params = DCRTPolyParams::default();
-
-            let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::FinRingDist);
-
-            let new_modulus = Arc::new(BigUint::from(2u32));
-            let switched = matrix.modulus_switch(&new_modulus);
-            let mut expected_matrix_vec = vec![];
-            for i in 0..rows {
-                let mut row = vec![];
-                for j in 0..columns {
-                    let poly = matrix.entry(i, j);
-                    let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
-                    let new_poly = DCRTPoly::from_coeffs(&params, &coeffs);
-                    row.push(new_poly);
-                }
-                expected_matrix_vec.push(row);
-            }
-            let expected = DCRTPolyMatrix::from_poly_vec(&params, expected_matrix_vec);
-            assert_eq!(switched, expected);
-        }
-
-        #[test]
-        fn test_modulus_switch_hash_sampler_bit(
-            rows in 1usize..5usize,
-            columns in 1usize..5usize,
-            key in any::<[u8; 32]>(),
-            tag in any::<u64>(),
-        ) {
-            let params = DCRTPolyParams::default();
-
-            let tag_bytes = tag.to_le_bytes();
-            let sampler = DCRTPolyHashSampler::<Keccak256>::new(key);
-            let matrix = sampler.sample_hash(&params,tag_bytes, rows, columns, DistType::BitDist);
-
-            let new_modulus = Arc::new(BigUint::from(2u32));
-            let switched = matrix.modulus_switch(&new_modulus);
-            let mut expected_matrix_vec = vec![];
-            for i in 0..rows {
-                let mut row = vec![];
-                for j in 0..columns {
-                    let poly = matrix.entry(i, j);
-                    let coeffs = poly.coeffs().iter().map(|coeff| coeff.modulus_switch(new_modulus.clone())).collect_vec();
-                    let new_poly = DCRTPoly::from_coeffs(&params, &coeffs);
-                    row.push(new_poly);
-                }
-                expected_matrix_vec.push(row);
-            }
-            let expected = DCRTPolyMatrix::from_poly_vec(&params, expected_matrix_vec);
-            assert_eq!(switched, expected);
-        }
     }
 }

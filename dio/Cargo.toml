@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-test = ["diamond-io/test"]
+debug = ["diamond-io/debug"]
 
 [dependencies]
 diamond-io = { path = "../", default-features = false }

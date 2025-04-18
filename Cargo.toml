@@ -10,8 +10,8 @@ rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["test"]
-test = []
+default = ["debug"]
+debug = []
 bgm = ["rodio", "reqwest"]
 disk = ["tempfile", "libc", "memmap2"]
 cpu = []

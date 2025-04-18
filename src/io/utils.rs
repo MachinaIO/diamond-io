@@ -138,7 +138,6 @@ pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod test {
     use super::*;
     use crate::{
