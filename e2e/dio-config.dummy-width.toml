@@ -9,4 +9,4 @@ level_width = 2
 encoding_sigma = 0.0
 hardcoded_key_sigma = 0.0
 p_sigma = 0.0
-input = [false, false, false, false]
+input = [true, false, false, false]
