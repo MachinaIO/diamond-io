@@ -266,7 +266,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                         async move {
                             let entries = self_arc
                                 .as_ref()
-                                .block_entries((&row_range).clone(), (&col_range).clone());
+                                .block_entries(row_range.clone(), col_range.clone());
                             let mut path = dir_path;
                             path.push(format!(
                                 "{}_{}_{}.{}_{}.{}.matrix",

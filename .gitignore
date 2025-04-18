@@ -36,3 +36,7 @@ venv
 /tests/io_dummy_param
 /tests/io_middle_param
 /tests/io_real_param
+
+hash_key
+*.matrix
+*.poly

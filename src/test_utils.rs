@@ -92,7 +92,7 @@ pub async fn test_io_common(
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
 
-    let obf_size = calculate_directory_size(&dir_path);
+    let obf_size = calculate_directory_size(dir_path);
     log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
     let bool_in = rng.random::<bool>();
