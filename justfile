@@ -25,9 +25,14 @@ test-io:
    cargo test -r --test test_io_dummy_param --no-default-features
 
 e2e:
-    dio run -c e2e/dio-config.dummy.toml -v e2e/circuits/verify_circuit.json
-    dio run -c e2e/dio-config.dummy-width.toml -v e2e/circuits/verify_circuit.json
-    dio run -c e2e/dio-config.middle.toml -v e2e/circuits/verify_circuit.json
+    dio run -c e2e/dio-config.dummy.toml --add-num 0 --mul-num 1
+    dio run -c e2e/dio-config.dummy.toml --add-num 1 --mul-num 1
+    dio run -c e2e/dio-config.dummy.toml --add-num 1 --mul-num 0
+    dio run -c e2e/dio-config.dummy.toml --add-num 2 --mul-num 4
+    dio run -c e2e/dio-config.dummy-width.toml --add-num 0 --mul-num 1
+    dio run -c e2e/dio-config.dummy-width.toml --add-num 1 --mul-num 1
+    dio run -c e2e/dio-config.dummy-width.toml --add-num 1 --mul-num 0
+    dio run -c e2e/dio-config.dummy-width.toml --add-num 2 --mul-num 4
 
 # Run the entire CI pipeline including format, clippy, docs, and test checks
 ci: format clippy docs test test-io

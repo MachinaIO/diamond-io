@@ -1,10 +1,10 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 
-use super::{Obfuscation, params::ObfuscationParams, utils::*};
+use super::{params::ObfuscationParams, utils::*, Obfuscation};
 use crate::{
-    bgg::{BggEncoding, DigitsToInt, sampler::BGGPublicKeySampler},
-    poly::{Poly, PolyElem, PolyMatrix, PolyParams, sampler::*},
+    bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
+    poly::{sampler::*, Poly, PolyElem, PolyMatrix, PolyParams},
     utils::log_mem,
 };
 use itertools::Itertools;
