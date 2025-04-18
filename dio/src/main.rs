@@ -99,7 +99,6 @@ fn main() {
                     obf_params, &input,
                 );
             let total_time = start_time.elapsed();
-
             info!("Time for evaluation: {:?}", total_time - obfuscation_time);
             info!("Total time: {:?}", total_time);
             if verify {
@@ -111,14 +110,11 @@ fn main() {
                     .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
                     .collect();
                 let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
-
                 let eval = verify_circuit.eval(
                     &params,
                     &DCRTPoly::const_one(&params),
                     &[hardcoded_key, input_poly],
                 );
-
-                // let mut bool_eval = vec![];
                 for e in eval {
                     let decompose_poly = e.to_bool_vec();
                     assert_eq!(output, decompose_poly);

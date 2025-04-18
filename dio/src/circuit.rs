@@ -61,10 +61,8 @@ impl BenchCircuit {
             }
 
             // compute the output
-            for ct_input in inputs[0..1].iter() {
-                let muled = public_circuit.mul_gate(*ct_input, acc);
-                outputs.push(muled);
-            }
+            let muled = public_circuit.mul_gate(inputs[0], acc);
+            outputs.push(muled);
             public_circuit.output(outputs);
         }
 
