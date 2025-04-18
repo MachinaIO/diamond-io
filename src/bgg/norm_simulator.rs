@@ -11,7 +11,7 @@ impl PolyCircuit {
         &self,
         dim: u32,
         base_bits: u32,
-        packed_input_norms: &[BigUint],
+        packed_input_norms: Vec<BigUint>,
     ) -> NormBounds {
         let one = NormSimulator::new(
             MPolyCoeffs::new(vec![BigUint::one()]),
@@ -24,24 +24,12 @@ impl PolyCircuit {
             .map(|plaintext_norm| {
                 NormSimulator::new(
                     MPolyCoeffs::new(vec![BigUint::one()]),
-                    plaintext_norm.clone(),
+                    plaintext_norm,
                     dim,
                     base_bits,
                 )
             })
             .collect::<Vec<_>>();
-        // let mut remaining_inputs = unpacked_input_size;
-        // let n = dim as usize;
-        // while remaining_inputs > 0 {
-        //     let num_bits = if remaining_inputs >= n { n } else { remaining_inputs };
-        //     inputs.push(NormSimulator::new(
-        //         MPolyCoeffs::new(vec![BigUint::one()]),
-        //         BigUint::one(),
-        //         dim,
-        //         base_bits,
-        //     ));
-        //     remaining_inputs -= num_bits;
-        // }
         let outputs = self.eval(&(), &one, &inputs);
         NormBounds::from_norm_simulators(&outputs)
     }
@@ -260,7 +248,7 @@ mod tests {
 
         // Simulate norm using the circuit
         let plaintext_norms = vec![BigUint::from(1u32); 3];
-        let norms = circuit.simulate_bgg_norm(16, 1, plaintext_norms.as_slice());
+        let norms = circuit.simulate_bgg_norm(16, 1, plaintext_norms);
 
         // Manually calculate the expected norm
         // Create NormSimulator instances for inputs

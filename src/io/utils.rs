@@ -274,7 +274,7 @@ mod test {
         let norms = final_circuit.simulate_bgg_norm(
             params.ring_dimension(),
             params.base_bits(),
-            &packed_input_norms,
+            packed_input_norms,
         );
         let norm_json = serde_json::to_string(&norms).unwrap();
         use std::{fs::File, io::Write};
