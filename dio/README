@@ -14,5 +14,5 @@ cargo install --features debug --path .
 
 ### run 
 ```
-dio run -c {CONFIG-TOML-PATH} --add-num {ADD-GATE-NUMBER} --mul-num {MUL-GATE-NUMBER}
+dio run-bench -c {CONFIG-TOML-PATH} -o {OBFUSCATION-DIRECTORY-PATH} --add-num {ADD-GATE-NUMBER} --mul-num {MUL-GATE-NUMBER}
 ```

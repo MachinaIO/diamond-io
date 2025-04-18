@@ -2,7 +2,7 @@ use circuit::BenchCircuit;
 use clap::{Parser, Subcommand};
 use config::Config;
 use diamond_io::{
-    io::{obf::obfuscate, params::ObfuscationParams},
+    io::{Obfuscation, obf::obfuscate, params::ObfuscationParams},
     poly::{
         Poly, PolyElem, PolyParams,
         dcrt::{
@@ -11,14 +11,15 @@ use diamond_io::{
         },
         sampler::{DistType, PolyUniformSampler},
     },
-    utils::init_tracing,
+    utils::{calculate_directory_size, init_tracing},
 };
 use keccak_asm::Keccak256;
 use std::{
     fs::{self},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
+use tokio;
 use tracing::info;
 
 pub mod circuit;
@@ -34,9 +35,12 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    Run {
+    RunBench {
         #[arg(short, long)]
         config: PathBuf,
+
+        #[arg(short, long)]
+        obf_dir: PathBuf,
 
         #[arg(short, long, default_value = "true")]
         verify: bool,
@@ -49,13 +53,22 @@ enum Commands {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     init_tracing();
     let command = Args::parse().command;
     match command {
-        Commands::Run { config, verify, add_num, mul_num } => {
+        Commands::RunBench { config, obf_dir, verify, add_num, mul_num } => {
             let contents = fs::read_to_string(&config).unwrap();
             let dio_config: Config = toml::from_str(&contents).unwrap();
+            let dir = Path::new(&obf_dir);
+            if !dir.exists() {
+                fs::create_dir(dir).unwrap();
+            } else {
+                // Clean it first to ensure no old files interfere
+                fs::remove_dir_all(dir).unwrap();
+                fs::create_dir(dir).unwrap();
+            }
             let start_time = std::time::Instant::now();
             let params = DCRTPolyParams::new(
                 dio_config.ring_dimension,
@@ -83,23 +96,37 @@ fn main() {
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
             let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
-            let obfuscation = obfuscate::<
+            obfuscate::<
                 DCRTPolyMatrix,
                 DCRTPolyUniformSampler,
                 DCRTPolyHashSampler<Keccak256>,
                 DCRTPolyTrapdoorSampler,
                 _,
-            >(obf_params.clone(), hardcoded_key.clone(), &mut rng);
+                _,
+            >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &obf_dir)
+            .await;
             let obfuscation_time = start_time.elapsed();
             info!("Time to obfuscate: {:?}", obfuscation_time);
+
+            let obf_size = calculate_directory_size(&obf_dir);
+            info!("Obfuscation size: {obf_size} bytes");
+
             let input = dio_config.input;
             assert_eq!(input.len(), dio_config.input_size);
+
+            let start_time = std::time::Instant::now();
+            let obfuscation = Obfuscation::read_dir(&obf_params, &obf_dir);
+            let load_time = start_time.elapsed();
+            info!("Time to load obfuscation: {:?}", load_time);
+
+            let start_time = std::time::Instant::now();
             let output = obfuscation
                 .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(
                     obf_params, &input,
                 );
-            let total_time = start_time.elapsed();
-            info!("Time for evaluation: {:?}", total_time - obfuscation_time);
+            let eval_time = start_time.elapsed();
+            let total_time = obfuscation_time + load_time + eval_time;
+            info!("Time for evaluation: {:?}", eval_time);
             info!("Total time: {:?}", total_time);
             if verify {
                 let verify_circuit =
