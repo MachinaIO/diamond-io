@@ -7,6 +7,12 @@ diamond-io cli implementation
 cargo install --path .
 ```
 
+disk feature enable
+```
+cargo install --features disk --path .
+```
+
+
 debug feature enable
 ```
 cargo install --features debug --path .

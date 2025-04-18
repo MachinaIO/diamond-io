@@ -15,6 +15,9 @@ use diamond_io::{
     },
     utils::{calculate_directory_size, init_tracing},
 };
+
+#[cfg(feature = "disk")]
+use diamond_io::utils::log_mem;
 use keccak_asm::Keccak256;
 use std::{
     fs::{self},

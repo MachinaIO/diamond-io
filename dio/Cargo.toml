@@ -5,6 +5,7 @@ edition = "2024"
 
 [features]
 debug = ["diamond-io/debug"]
+disk = ["diamond-io/disk"]
 
 [dependencies]
 diamond-io = { path = "../", default-features = false }
