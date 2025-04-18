@@ -9,7 +9,6 @@ use crate::{
 };
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
-use std::sync::Arc;
 
 impl<M> Obfuscation<M>
 where
@@ -27,14 +26,12 @@ where
         {
             player.play_music("bgm/eval_bgm1.mp3");
         }
-
-        let params = Arc::new(obf_params.params.clone());
         let d = obf_params.d;
         let d1 = d + 1;
-
-        debug_assert_eq!(inputs.len(), obf_params.input_size);
+        assert_eq!(inputs.len(), obf_params.input_size);
         let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(self.hash_key, d);
         let public_data = PublicSampledData::<SH>::sample(&obf_params, self.hash_key);
+        let params = obf_params.params;
         log_mem("Sampled public data");
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
@@ -53,14 +50,7 @@ where
         assert!(inputs.len() % level_width == 0);
         let depth = obf_params.input_size / level_width;
         let pubkeys = (0..depth + 1)
-            .map(|id| {
-                sample_public_key_by_id(
-                    &bgg_pubkey_sampler,
-                    &obf_params.params,
-                    id,
-                    &reveal_plaintexts,
-                )
-            })
+            .map(|id| sample_public_key_by_id(&bgg_pubkey_sampler, &params, id, &reveal_plaintexts))
             .collect_vec();
         log_mem("Sampled public keys");
 
@@ -74,25 +64,24 @@ where
                 s_connect * &self.bs[0][level_size]
             };
             assert_eq!(self.p_init, expected_p_init);
-
-            let zero = <M::P as Poly>::const_zero(&params);
-            let one = <M::P as Poly>::const_one(&params);
             let inserted_poly_gadget = {
+                let zero = <M::P as Poly>::const_zero(&params);
+                let one = <M::P as Poly>::const_one(&params);
                 let mut polys = vec![];
-                polys.push(one.clone());
+                polys.push(one);
                 for _ in 0..(packed_input_size - 1) {
                     polys.push(zero.clone());
                 }
                 polys.push(self.minus_t_bar.clone());
                 let gadget_d1 = M::gadget_matrix(&params, d1);
-                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
+                M::from_poly_vec_row(&params, polys).tensor(&gadget_d1)
             };
             let expected_encoding_init = self.s_init.clone() *
                 &(pubkeys[0][0].concat_matrix(&pubkeys[0][1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
-        let log_base_q = params.as_ref().modulus_digits();
-        let dim = params.as_ref().ring_dimension() as usize;
+        let log_base_q = params.modulus_digits();
+        let dim = params.ring_dimension() as usize;
         let nums: Vec<u64> = inputs
             .chunks(level_width)
             .map(|chunk| {
@@ -126,7 +115,7 @@ where
                 let plaintext = if j == inserted_poly_index {
                     let inserted_coeff_indices =
                         (0..level_width).map(|i| (i + (level * level_width)) % dim).collect_vec();
-                    let mut coeffs = encode.plaintext.as_ref().unwrap().coeffs().clone();
+                    let mut coeffs = encode.plaintext.as_ref().unwrap().coeffs();
                     let num_bits: Vec<bool> =
                         (0..level_width).map(|i| (num >> i) & 1 == 1).collect();
                     debug_assert_eq!(num_bits.len(), level_width);
@@ -136,14 +125,13 @@ where
                             coeffs[*coeff_idx] = <M::P as Poly>::Elem::one(&params.modulus());
                         }
                     }
-                    Some(M::P::from_coeffs(params.as_ref(), &coeffs))
+                    Some(M::P::from_coeffs(&params, &coeffs))
                 } else {
                     encode.plaintext.clone()
                 };
                 log_mem(format!("plaintext at {}, {} computed", level, j));
                 let new_pubkey = pubkeys[level + 1][j].clone();
-                let new_encode: BggEncoding<M> =
-                    BggEncoding::new(new_vec, new_pubkey.clone(), plaintext);
+                let new_encode: BggEncoding<M> = BggEncoding::new(new_vec, new_pubkey, plaintext);
                 log_mem(format!("new_encode at {}, {} computed", level, j));
                 new_encodings.push(new_encode);
             }
@@ -171,7 +159,7 @@ where
                     let gadget_d1 = M::gadget_matrix(&params, d1);
                     let inserted_poly_gadget = {
                         let mut polys = vec![];
-                        polys.push(one.clone());
+                        polys.push(one);
                         let mut coeffs = vec![];
                         for bit in inputs[0..(level_width * (level + 1))].iter() {
                             if *bit {
@@ -189,7 +177,7 @@ where
                             .collect_vec();
                         polys.extend(input_polys);
                         polys.push(self.minus_t_bar.clone());
-                        M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d1)
+                        M::from_poly_vec_row(&params, polys).tensor(&gadget_d1)
                     };
                     let pubkey = pubkeys[level + 1][0].concat_matrix(&pubkeys[level + 1][1..]);
                     new_s * (pubkey - inserted_poly_gadget)
@@ -203,18 +191,18 @@ where
             player.play_music("bgm/eval_bgm2.mp3");
         }
 
-        let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(params.as_ref());
-        let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(params.as_ref());
+        let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(&params);
+        let b_decomposed = &self.ct_b.entry(0, 0).decompose_base(&params);
         log_mem("a,b decomposed");
         let final_circuit = build_final_digits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
             b_decomposed,
-            obf_params.public_circuit.clone(),
+            obf_params.public_circuit,
         );
         log_mem("final_circuit built");
         let last_input_encodings = encodings.last().unwrap();
         let output_encodings = final_circuit.eval::<BggEncoding<M>>(
-            params.as_ref(),
+            &params,
             &last_input_encodings[0],
             &last_input_encodings[1..],
         );
@@ -229,7 +217,7 @@ where
         let final_preimage = &self.final_preimage;
         let final_v = ps.last().unwrap().clone() * final_preimage;
         log_mem("final_v computed");
-        let z = output_encodings_vec.clone() - final_v.clone();
+        let z = output_encodings_vec - final_v;
         log_mem("z computed");
         debug_assert_eq!(z.size(), (1, packed_output_size));
         #[cfg(feature = "test")]
@@ -245,7 +233,7 @@ where
             {
                 let expected = last_s *
                     (output_encoding_ints[0].pubkey.matrix.clone() -
-                        M::unit_column_vector(params.as_ref(), d1, d1 - 1) *
+                        M::unit_column_vector(&params, d1, d1 - 1) *
                             output_encoding_ints[0].plaintext.clone().unwrap());
                 assert_eq!(output_encoding_ints[0].vector, expected);
             }
