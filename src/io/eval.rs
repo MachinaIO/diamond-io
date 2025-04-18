@@ -1,13 +1,13 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 
-use super::{params::ObfuscationParams, Obfuscation};
+use super::{Obfuscation, params::ObfuscationParams};
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
-    io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+    bgg::{BggEncoding, DigitsToInt, sampler::BGGPublicKeySampler},
+    io::utils::{PublicSampledData, build_final_digits_circuit, sample_public_key_by_id},
     poly::{
-        sampler::{PolyHashSampler, PolyTrapdoorSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
+        sampler::{PolyHashSampler, PolyTrapdoorSampler},
     },
     utils::log_mem,
 };

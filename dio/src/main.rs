@@ -14,9 +14,12 @@ use diamond_io::{
     utils::init_tracing,
 };
 use keccak_asm::Keccak256;
+use num_bigint::BigUint;
+use num_integer::Integer;
 use std::{
     fs::{self},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
 };
 use tracing::info;
@@ -110,12 +113,28 @@ fn main() {
                     .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
                     .collect();
                 let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
+                // hardcoded_key * [q/2]
+                let half_q = FinRingElem::half_q(&params.modulus());
+                let multiplied_hardcoded_key =
+                    hardcoded_key.clone() * DCRTPoly::from_const(&params, &half_q);
+
+                println!(
+                    "multiplied_hardcoded_key: {:?} hardcoded_key: {:?}",
+                    multiplied_hardcoded_key.coeffs(),
+                    hardcoded_key.coeffs()
+                );
                 let eval = verify_circuit.eval(
                     &params,
                     &DCRTPoly::const_one(&params),
-                    &[hardcoded_key, input_poly],
+                    &[multiplied_hardcoded_key, input_poly],
                 );
+                assert_eq!(eval.len(), 1);
                 for e in eval {
+                    println!("e: {:?}", e.coeffs());
+                    // let e = e. DCRTPoly::from_const(
+                    //     &params,
+                    //     &FinRingElem::new(multiplier, params.modulus()),
+                    // );
                     let decompose_poly = e.to_bool_vec();
                     assert_eq!(output, decompose_poly);
                 }
