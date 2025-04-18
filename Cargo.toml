@@ -15,7 +15,6 @@ debug = []
 bgm = ["rodio", "reqwest"]
 disk = ["tempfile", "libc", "memmap2"]
 cpu = []
-# store = []
 
 [dependencies]
 tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros"] }
@@ -43,7 +42,6 @@ rand_distr = "0.5.1"
 dashmap = "6.1.0"
 keccak-asm = { version = "0.1.4" }
 
-# for now we put in test
 
 [dev-dependencies]
 proptest = "1.0.0"
