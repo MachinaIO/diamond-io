@@ -3,17 +3,17 @@ use super::bgm::Player;
 
 use crate::{
     bgg::{
-        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
         BggEncoding, BggPublicKey, DigitsToInt,
+        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
     },
     io::{
         params::ObfuscationParams,
-        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+        utils::{PublicSampledData, build_final_digits_circuit, sample_public_key_by_id},
     },
     poly::{
+        Poly, PolyElem, PolyMatrix, PolyParams,
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
-        Poly, PolyElem, PolyMatrix, PolyParams,
     },
     utils::log_mem,
 };
@@ -29,9 +29,6 @@ use std::{
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
-    sampler_uniform: SU,
-    mut sampler_hash: SH,
-    sampler_trapdoor: ST,
     hardcoded_key: M::P,
     rng: &mut R,
     dir_path: P,
@@ -59,16 +56,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let log_base_q = obf_params.params.modulus_digits();
     let d = obf_params.d;
     let hash_key = rng.random::<[u8; 32]>();
-    sampler_hash.set_key(hash_key);
-    let sampler_uniform = Arc::new(sampler_uniform);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::new(Arc::new(sampler_hash), d);
-    let public_data = PublicSampledData::sample(&obf_params, &bgg_pubkey_sampler);
+    let sampler_uniform = SU::new();
+    let sampler_trapdoor = ST::new(&obf_params.params, obf_params.trapdoor_sigma);
+    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+    let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
     let packed_input_size = public_data.packed_input_size;
     assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-    #[cfg(not(feature = "test"))]
+    #[cfg(not(feature = "debug"))]
     let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
 
     let pub_key_init =
@@ -80,33 +77,40 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let packed_output_size = public_data.packed_output_size;
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
-    let bgg_encode_sampler = BGGEncodingSampler::new(
-        params.as_ref(),
-        &s_bars,
-        sampler_uniform.clone(),
-        obf_params.encoding_sigma,
-    );
-
-    let s_init = &bgg_encode_sampler.secret_vec;
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
-
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     log_mem("Sampled hardcoded_key_matrix");
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     futures.push(Box::pin(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key")));
 
     let a = public_data.a_rlwe_bar;
 
     let b = rlwe_encrypt(
         params.as_ref(),
-        sampler_uniform.as_ref(),
+        &sampler_uniform,
         &t_bar_matrix,
         &a,
         &hardcoded_key_matrix,
         obf_params.hardcoded_key_sigma,
     );
     log_mem("Generated RLWE ciphertext {a, b}");
+    let m_b = (2 * (d + 1)) * (2 + log_base_q);
+    let p_init_error = sampler_uniform.sample_uniform(
+        &params,
+        1,
+        m_b,
+        DistType::GaussDist { sigma: obf_params.p_sigma },
+    );
+
+    let bgg_encode_sampler = BGGEncodingSampler::new(
+        params.as_ref(),
+        &s_bars,
+        sampler_uniform,
+        obf_params.encoding_sigma,
+    );
+
+    let s_init = &bgg_encode_sampler.secret_vec;
 
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
@@ -121,7 +125,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         .collect_vec();
     plaintexts.push(minus_t_bar.clone());
 
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     futures.push(Box::pin(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar")));
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
@@ -138,21 +142,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("b star trapdoor init sampled");
 
     let p_init = {
-        let m_b = (2 * (d + 1)) * (2 + log_base_q);
         let s_connect = s_init.concat_columns(&[s_init]);
         let s_b = s_connect * &b_star_cur;
-        let error = sampler_uniform.sample_uniform(
-            &params,
-            1,
-            m_b,
-            DistType::GaussDist { sigma: obf_params.p_sigma },
-        );
-        s_b + error
+        s_b + p_init_error
     };
     log_mem("Computed p_init");
     futures.push(Box::pin(store_and_drop_matrix(p_init, &dir_path, "p_init")));
 
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     futures.push(Box::pin(store_and_drop_matrix(
         bgg_encode_sampler.secret_vec,
         &dir_path,
@@ -165,7 +162,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     assert!(level_width <= dim); // otherwise we need >1 polynomial to insert the bits for each level
     if obf_params.input_size > dim {
         assert_eq!(dim % level_width, 0); // otherwise we get to a point in which the inserted bits
-                                          // have to be split between two polynomials
+        // have to be split between two polynomials
     }
     let level_size = (1u64 << obf_params.level_width) as usize;
     let depth = obf_params.input_size / level_width; // number of levels necessary to encode the input
@@ -181,11 +178,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     log_mem("Computed u_0, u_1, u_star");
 
-    // #[cfg(feature = "test")]
+    // #[cfg(feature = "debug")]
     // let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth +
     // 1];
 
-    #[cfg(feature = "test")]
+    #[cfg(feature = "debug")]
     futures.push(Box::pin(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0")));
 
     let mut pub_key_cur = pub_key_init;
@@ -198,17 +195,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
         log_mem("Sampled pub key level");
 
-        #[cfg(feature = "test")]
+        #[cfg(feature = "debug")]
         futures.push(Box::pin(store_and_drop_matrix(
             b_star_level.clone(),
             &dir_path,
             &format!("b_star_{}", level + 1),
         )));
-
-        // #[cfg(feature = "test")]
-        // {
-        //     bs[level + 1][level_size] = b_star_level.clone();
-        // }
 
         // Precomputation for k_preimage that are not num dependent
         let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
@@ -229,16 +221,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for level and num");
 
-            #[cfg(feature = "test")]
+            #[cfg(feature = "debug")]
             futures.push(Box::pin(store_and_drop_matrix(
                 b_num_level.clone(),
                 &dir_path,
                 &format!("b_{}_{num}", level + 1),
             )));
-            // #[cfg(feature = "test")]
-            // {
-            //     bs[level + 1][num] = b_num_level.clone();
-            // }
 
             let m_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -424,15 +412,15 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     //     n_preimages,
     //     k_preimages,
     //     final_preimage,
-    //     #[cfg(feature = "test")]
+    //     #[cfg(feature = "debug")]
     //     s_init: s_init.clone(),
-    //     #[cfg(feature = "test")]
+    //     #[cfg(feature = "debug")]
     //     minus_t_bar,
-    //     #[cfg(feature = "test")]
+    //     #[cfg(feature = "debug")]
     //     bs,
-    //     #[cfg(feature = "test")]
+    //     #[cfg(feature = "debug")]
     //     hardcoded_key,
-    //     #[cfg(feature = "test")]
+    //     #[cfg(feature = "debug")]
     //     final_preimage_target,
     // }
 }
@@ -467,7 +455,7 @@ fn store_and_drop_bgg_encoding<M: PolyMatrix>(
     future
 }
 
-#[cfg(feature = "test")]
+#[cfg(feature = "debug")]
 fn store_and_drop_poly<M: Poly>(
     poly: M,
     dir_path: &PathBuf,

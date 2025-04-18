@@ -24,17 +24,18 @@ pub struct DCRTPolyTrapdoorSampler {
     c: f64,
 }
 
-impl DCRTPolyTrapdoorSampler {
-    pub fn new(params: &DCRTPolyParams, sigma: f64) -> Self {
+impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
+    type M = DCRTPolyMatrix;
+    type Trapdoor = DCRTTrapdoor;
+
+    fn new(
+        params: &<<Self::M as crate::poly::PolyMatrix>::P as crate::poly::Poly>::Params,
+        sigma: f64,
+    ) -> Self {
         let base = 1 << params.base_bits();
         let c = (base as f64 + 1.0) * SIGMA;
         Self { sigma, base, c }
     }
-}
-
-impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
-    type M = DCRTPolyMatrix;
-    type Trapdoor = DCRTTrapdoor;
 
     fn trapdoor(
         &self,
@@ -205,7 +206,6 @@ pub(crate) fn gauss_samp_gq_arb_base(
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod test {
     use super::*;
     use crate::poly::{

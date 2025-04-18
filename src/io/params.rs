@@ -14,4 +14,5 @@ pub struct ObfuscationParams<M: PolyMatrix> {
     pub encoding_sigma: f64,
     pub hardcoded_key_sigma: f64,
     pub p_sigma: f64,
+    pub trapdoor_sigma: f64,
 }

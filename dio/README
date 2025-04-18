@@ -1,0 +1,18 @@
+# dio
+
+diamond-io cli implementation
+
+### install
+```
+cargo install --path .
+```
+
+debug feature enable
+```
+cargo install --features debug --path .
+```
+
+### run 
+```
+dio run -c {CONFIG-TOML-PATH} --add-num {ADD-GATE-NUMBER} --mul-num {MUL-GATE-NUMBER}
+```

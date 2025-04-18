@@ -1,3 +1,7 @@
+[workspace]
+resolver = "2"
+members = [".", "dio"]
+
 [package]
 name = "diamond-io"
 version = "0.1.0"
@@ -6,8 +10,8 @@ rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["test"]
-test = []
+default = ["debug"]
+debug = []
 bgm = ["rodio", "reqwest"]
 disk = ["tempfile", "libc", "memmap2"]
 cpu = []
@@ -19,7 +23,7 @@ futures = "0.3"
 libc = { version = "0.2", optional = true }
 openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/reimpl_trapdoor" }
 digest = "0.10"
-num-bigint = { version = "0.4", default-features = false }
+num-bigint = { version = "0.4", features = ["serde"] }
 num-traits = "0.2"
 rayon = { version = "1.5" }
 rand = { version = "0.9.0", features = ["std_rng"] }
@@ -30,8 +34,7 @@ bitvec = "1"
 memory-stats = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rodio = { version = "0.20.1", git = "https://github.com/RustAudio/rodio.git", optional = true }
-# mmap-storage = "0.10.0"
+rodio = { git = "https://github.com/RustAudio/rodio.git", optional = true }
 memmap2 = { version = "0.9.5", optional = true }
 tempfile = { version = "3.19.1", optional = true }
 sysinfo = "0.34.1"
@@ -48,7 +51,7 @@ criterion = "0.5.0"
 serial_test = "3.2.0"
 
 [build-dependencies]
-reqwest = { version = "0.11", features = ["blocking"], optional = true }
+reqwest = { version = "0.12", features = ["blocking"], optional = true }
 
 [profile.dev]
 debug = "line-tables-only"
@@ -68,6 +71,7 @@ codegen-units = 16
 inherits = "release"
 debug = "full"
 strip = "none"
+
 
 [[bench]]
 name = "dcrtpoly"

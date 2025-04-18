@@ -1,4 +1,4 @@
-use super::{circuit::Evaluable, BggPublicKey};
+use super::{BggPublicKey, circuit::Evaluable};
 use crate::poly::{Poly, PolyMatrix};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
@@ -88,8 +88,8 @@ impl<M: PolyMatrix> Add<&Self> for BggEncoding<M> {
     fn add(self, other: &Self) -> Self {
         let vector = self.vector + &other.vector;
         let pubkey = self.pubkey + &other.pubkey;
-        let plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
-            (Some(a), Some(b)) => Some(a.clone() + b),
+        let plaintext = match (self.plaintext, other.plaintext.as_ref()) {
+            (Some(a), Some(b)) => Some(a + b),
             _ => None,
         };
         Self { vector, pubkey, plaintext }
@@ -108,8 +108,8 @@ impl<M: PolyMatrix> Sub<&Self> for BggEncoding<M> {
     fn sub(self, other: &Self) -> Self {
         let vector = self.vector - &other.vector;
         let pubkey = self.pubkey - &other.pubkey;
-        let plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
-            (Some(a), Some(b)) => Some(a.clone() - b),
+        let plaintext = match (self.plaintext, other.plaintext.as_ref()) {
+            (Some(a), Some(b)) => Some(a - b),
             _ => None,
         };
         Self { vector, pubkey, plaintext }
@@ -133,8 +133,8 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
         let first_term = self.vector * decomposed_b.clone();
         let second_term = other.vector.clone() * self.plaintext.as_ref().unwrap();
         let new_vector = first_term + second_term;
-        let new_plaintext = match (self.plaintext.as_ref(), other.plaintext.as_ref()) {
-            (Some(a), Some(b)) => Some(a.clone() * b),
+        let new_plaintext = match (self.plaintext, other.plaintext.as_ref()) {
+            (Some(a), Some(b)) => Some(a * b),
             _ => None,
         };
 
@@ -167,29 +167,29 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use crate::{
         bgg::{
+            BggEncoding,
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-            BggEncoding,
         },
         poly::{
+            PolyParams,
             dcrt::{
+                DCRTPoly,
                 matrix::base::BaseMatrix,
                 params::DCRTPolyParams,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
-                DCRTPoly,
             },
-            PolyParams,
+            sampler::PolyUniformSampler,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
-    use std::{fs, path::Path, sync::Arc};
+    use std::{fs, path::Path};
     use tokio;
 
     #[test]
@@ -199,10 +199,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -249,10 +249,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -299,10 +299,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -349,10 +349,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -414,10 +414,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -500,10 +500,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -578,10 +578,10 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
 
         // Generate random tag for sampling
         let tag: u64 = rand::random();
@@ -668,11 +668,12 @@ mod tests {
 
         // Create samplers
         let key: [u8; 32] = rand::random();
-        let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
+        // let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
         let d = 3;
         let d1 = d + 1;
-        let bgg_pubkey_sampler = BGGPublicKeySampler::new(hash_sampler, d);
-        let uniform_sampler = Arc::new(DCRTPolyUniformSampler::new());
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
         let log_base_q = params.modulus_digits();
 
         // Generate random tag for sampling

@@ -390,7 +390,6 @@ impl PolyCircuit {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::{
@@ -400,7 +399,7 @@ mod tests {
                 DCRTPolyMatrix, FinRingElem,
             },
             enc::rlwe_encrypt,
-            sampler::DistType,
+            sampler::{DistType, PolyUniformSampler},
             Poly, PolyMatrix, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},

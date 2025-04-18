@@ -345,7 +345,6 @@ impl DCRTPolyMatrix {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::poly::{

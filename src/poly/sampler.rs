@@ -19,6 +19,9 @@ pub enum DistType {
 /// Trait for sampling a polynomial based on a hash function.
 pub trait PolyHashSampler<K: AsRef<[u8]>> {
     type M: PolyMatrix;
+
+    fn new() -> Self;
+
     /// Samples a matrix of ring elements from a pseudorandom source defined by a hash function `H`
     /// Compute H(key || tag || i)
     ///
@@ -26,18 +29,24 @@ pub trait PolyHashSampler<K: AsRef<[u8]>> {
     fn sample_hash<B: AsRef<[u8]>>(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        key: [u8; 32],
         tag: B,
         nrow: usize,
         ncol: usize,
         dist: DistType,
     ) -> Self::M;
-
-    // Set the key of the sampler.
-    fn set_key(&mut self, key: K);
 }
 
 pub trait PolyUniformSampler {
     type M: PolyMatrix;
+
+    fn new() -> Self;
+
+    fn sample_poly(
+        &self,
+        params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
+        dist: &DistType,
+    ) -> <Self::M as PolyMatrix>::P;
 
     fn sample_uniform(
         &self,
@@ -52,11 +61,14 @@ pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
     type Trapdoor;
 
+    fn new(params: &<<Self::M as PolyMatrix>::P as Poly>::Params, sigma: f64) -> Self;
+
     fn trapdoor(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,
         size: usize,
     ) -> (Self::Trapdoor, Self::M);
+
     fn preimage(
         &self,
         params: &<<Self::M as PolyMatrix>::P as Poly>::Params,

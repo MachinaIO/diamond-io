@@ -1,13 +1,13 @@
 use crate::{
     bgg::circuit::PolyCircuit,
-    io::{obf::obfuscate, params::ObfuscationParams, Obfuscation},
+    io::{Obfuscation, obf::obfuscate, params::ObfuscationParams},
     poly::{
+        Poly, PolyElem, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
-        sampler::DistType,
-        Poly, PolyElem, PolyParams,
+        sampler::{DistType, PolyUniformSampler},
     },
     utils::{calculate_directory_size, init_tracing, log_mem},
 };
@@ -73,23 +73,21 @@ pub async fn test_io_common(
         encoding_sigma,
         hardcoded_key_sigma,
         p_sigma,
+        trapdoor_sigma: SIGMA,
     };
 
     let sampler_uniform = DCRTPolyUniformSampler::new();
-    let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
-    let sampler_trapdoor = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
     let mut rng = rand::rng();
     let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
 
-    obfuscate::<DCRTPolyMatrix, _, _, _, _, _>(
-        obf_params.clone(),
-        sampler_uniform,
-        sampler_hash,
-        sampler_trapdoor,
-        hardcoded_key.clone(),
-        &mut rng,
-        &dir_path,
-    )
+    obfuscate::<
+        DCRTPolyMatrix,
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+        DCRTPolyTrapdoorSampler,
+        _,
+        _,
+    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
     .await;
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
@@ -100,13 +98,13 @@ pub async fn test_io_common(
     let bool_in = rng.random::<bool>();
     let mut input = vec![bool_in];
     input.append(&mut vec![false; input_size - 1]);
-    let sampler_hash = DCRTPolyHashSampler::<Keccak256>::new([0; 32]);
     let start_time = std::time::Instant::now();
     let obfuscation = Obfuscation::read_dir(&obf_params, dir_path);
     let load_time = start_time.elapsed();
     info!("Time to load obfuscation: {:?}", load_time);
     let start_time = std::time::Instant::now();
-    let output = obfuscation.eval::<_, DCRTPolyTrapdoorSampler>(&obf_params, sampler_hash, &input);
+    let output = obfuscation
+        .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(obf_params, &input);
     let eval_time = start_time.elapsed();
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + load_time + eval_time);

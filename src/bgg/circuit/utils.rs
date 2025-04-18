@@ -41,7 +41,6 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
 }
 
 #[cfg(test)]
-#[cfg(feature = "test")]
 mod tests {
     use super::*;
     use crate::{
