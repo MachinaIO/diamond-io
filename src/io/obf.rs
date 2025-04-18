@@ -3,17 +3,17 @@ use super::bgm::Player;
 
 use crate::{
     bgg::{
-        BggEncoding, BggPublicKey, DigitsToInt,
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+        BggEncoding, BggPublicKey, DigitsToInt,
     },
     io::{
         params::ObfuscationParams,
-        utils::{PublicSampledData, build_final_digits_circuit, sample_public_key_by_id},
+        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     },
     poly::{
-        Poly, PolyElem, PolyMatrix, PolyParams,
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
+        Poly, PolyElem, PolyMatrix, PolyParams,
     },
     utils::log_mem,
 };
@@ -162,7 +162,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     assert!(level_width <= dim); // otherwise we need >1 polynomial to insert the bits for each level
     if obf_params.input_size > dim {
         assert_eq!(dim % level_width, 0); // otherwise we get to a point in which the inserted bits
-        // have to be split between two polynomials
+                                          // have to be split between two polynomials
     }
     let level_size = (1u64 << obf_params.level_width) as usize;
     let depth = obf_params.input_size / level_width; // number of levels necessary to encode the input

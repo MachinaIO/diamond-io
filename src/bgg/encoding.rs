@@ -1,4 +1,4 @@
-use super::{BggPublicKey, circuit::Evaluable};
+use super::{circuit::Evaluable, BggPublicKey};
 use crate::poly::{Poly, PolyMatrix};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
@@ -170,19 +170,19 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 mod tests {
     use crate::{
         bgg::{
-            BggEncoding,
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+            BggEncoding,
         },
         poly::{
-            PolyParams,
             dcrt::{
-                DCRTPoly,
                 matrix::base::BaseMatrix,
                 params::DCRTPolyParams,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
+                DCRTPoly,
             },
             sampler::PolyUniformSampler,
+            PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };

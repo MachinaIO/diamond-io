@@ -120,8 +120,8 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        bgg::{BggPublicKey, circuit::PolyCircuit, sampler::BGGPublicKeySampler},
-        poly::dcrt::{DCRTPolyHashSampler, params::DCRTPolyParams},
+        bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler, BggPublicKey},
+        poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
     };
     use keccak_asm::Keccak256;
     use rand::Rng;

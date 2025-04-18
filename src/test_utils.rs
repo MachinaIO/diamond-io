@@ -1,13 +1,13 @@
 use crate::{
     bgg::circuit::PolyCircuit,
-    io::{Obfuscation, obf::obfuscate, params::ObfuscationParams},
+    io::{obf::obfuscate, params::ObfuscationParams, Obfuscation},
     poly::{
-        Poly, PolyElem, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
         sampler::{DistType, PolyUniformSampler},
+        Poly, PolyElem, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing, log_mem},
 };

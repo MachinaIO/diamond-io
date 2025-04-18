@@ -1,9 +1,9 @@
 use crate::{
     parallel_iter,
     poly::{
-        Poly, PolyMatrix, PolyParams,
         dcrt::{DCRTPoly, DCRTPolyMatrix, FinRingElem},
         sampler::{DistType, PolyHashSampler},
+        Poly, PolyMatrix, PolyParams,
     },
 };
 use bitvec::prelude::*;
