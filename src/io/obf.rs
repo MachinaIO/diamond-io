@@ -1,56 +1,58 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 
-#[cfg(feature = "store")]
-use std::{path::PathBuf, time::SystemTime};
-
-#[cfg(feature = "store")]
-use crate::utils::calculate_directory_size;
-
-#[cfg(feature = "store")]
-use tracing::info;
-
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggPublicKey, DigitsToInt,
+        BggEncoding, BggPublicKey, DigitsToInt,
     },
     io::{
         params::ObfuscationParams,
         utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
-        Obfuscation,
     },
     poly::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyElem, PolyMatrix, PolyParams,
     },
-    utils::log_mem,
+    utils::{calculate_directory_size, log_mem},
 };
+use futures::future::join_all;
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
-use std::sync::Arc;
+use std::{
+    future::Future,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-pub fn obfuscate<M, SU, SH, ST, R>(
+pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
     sampler_uniform: SU,
     mut sampler_hash: SH,
     sampler_trapdoor: ST,
     hardcoded_key: M::P,
     rng: &mut R,
-) -> Obfuscation<M>
-where
+    dir_path: P,
+) where
     M: PolyMatrix,
     SU: PolyUniformSampler<M = M>,
     SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M>,
     R: RngCore,
+    P: AsRef<Path>,
 {
     #[cfg(feature = "bgm")]
     let player = Player::new();
     #[cfg(feature = "bgm")]
     player.play_music("bgm/obf_bgm1.mp3");
+
+    let mut futures: Vec<std::pin::Pin<Box<dyn Future<Output = ()> + Send>>> = Vec::new();
+    let dir_path = dir_path.as_ref().to_path_buf();
+    if !dir_path.exists() {
+        std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
+    }
 
     let public_circuit = &obf_params.public_circuit;
     let dim = obf_params.params.ring_dimension() as usize;
@@ -91,6 +93,8 @@ where
 
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     log_mem("Sampled hardcoded_key_matrix");
+    #[cfg(feature = "test")]
+    futures.push(Box::pin(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key")));
 
     let a = public_data.a_rlwe_bar;
 
@@ -102,13 +106,13 @@ where
         &hardcoded_key_matrix,
         obf_params.hardcoded_key_sigma,
     );
-
     log_mem("Generated RLWE ciphertext {a, b}");
 
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
 
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
+    futures.push(Box::pin(store_and_drop_matrix(b, &dir_path, "b")));
 
     let minus_t_bar = -t_bar_matrix.entry(0, 0);
 
@@ -117,8 +121,18 @@ where
         .collect_vec();
     plaintexts.push(minus_t_bar.clone());
 
+    #[cfg(feature = "test")]
+    futures.push(Box::pin(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar")));
+
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
+    for (i, encoding) in encodings_init.into_iter().enumerate() {
+        futures.push(Box::pin(store_and_drop_bgg_encoding(
+            encoding,
+            &dir_path,
+            &format!("encoding_init_{i}"),
+        )));
+    }
 
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
@@ -136,6 +150,14 @@ where
         s_b + error
     };
     log_mem("Computed p_init");
+    futures.push(Box::pin(store_and_drop_matrix(p_init, &dir_path, "p_init")));
+
+    #[cfg(feature = "test")]
+    futures.push(Box::pin(store_and_drop_matrix(
+        bgg_encode_sampler.secret_vec,
+        &dir_path,
+        "s_init",
+    )));
 
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
     let level_width = obf_params.level_width; // number of bits to be inserted at each level
@@ -159,19 +181,12 @@ where
     };
     log_mem("Computed u_0, u_1, u_star");
 
-    let (mut m_preimages, mut n_preimages, mut k_preimages) = (
-        vec![Vec::with_capacity(level_size); depth],
-        vec![Vec::with_capacity(level_size); depth],
-        vec![Vec::with_capacity(level_size); depth],
-    );
+    // #[cfg(feature = "test")]
+    // let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth +
+    // 1];
 
     #[cfg(feature = "test")]
-    let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth + 1];
-
-    #[cfg(feature = "test")]
-    {
-        bs[0][level_size] = b_star_cur.clone();
-    }
+    futures.push(Box::pin(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0")));
 
     let mut pub_key_cur = pub_key_init;
 
@@ -184,9 +199,16 @@ where
         log_mem("Sampled pub key level");
 
         #[cfg(feature = "test")]
-        {
-            bs[level + 1][level_size] = b_star_level.clone();
-        }
+        futures.push(Box::pin(store_and_drop_matrix(
+            b_star_level.clone(),
+            &dir_path,
+            &format!("b_star_{}", level + 1),
+        )));
+
+        // #[cfg(feature = "test")]
+        // {
+        //     bs[level + 1][level_size] = b_star_level.clone();
+        // }
 
         // Precomputation for k_preimage that are not num dependent
         let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
@@ -208,9 +230,15 @@ where
             log_mem("Sampled b trapdoor for level and num");
 
             #[cfg(feature = "test")]
-            {
-                bs[level + 1][num] = b_num_level.clone();
-            }
+            futures.push(Box::pin(store_and_drop_matrix(
+                b_num_level.clone(),
+                &dir_path,
+                &format!("b_{}_{num}", level + 1),
+            )));
+            // #[cfg(feature = "test")]
+            // {
+            //     bs[level + 1][num] = b_num_level.clone();
+            // }
 
             let m_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -218,10 +246,14 @@ where
                 &b_star_cur,
                 &(u_nums[num].clone() * &b_num_level),
             );
-
             log_mem("Computed m_preimage_num");
+            futures.push(Box::pin(store_and_drop_matrix(
+                m_preimage_num,
+                &dir_path,
+                &format!("m_preimage_{level}_{num}"),
+            )));
 
-            m_preimages[level].push(m_preimage_num);
+            // m_preimages[level].push(m_preimage_num);
 
             let n_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -230,8 +262,13 @@ where
                 &(u_star.clone() * &b_star_level.clone()),
             );
             log_mem("Computed n_preimage_num");
+            futures.push(Box::pin(store_and_drop_matrix(
+                n_preimage_num,
+                &dir_path,
+                &format!("n_preimage_{level}_{num}"),
+            )));
 
-            n_preimages[level].push(n_preimage_num);
+            // n_preimages[level].push(n_preimage_num);
 
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -269,8 +306,12 @@ where
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_num_trapdoor_level, &b_num_level, &k_target);
             log_mem("Computed k_preimage_num");
-
-            k_preimages[level].push(k_preimage_num);
+            futures.push(Box::pin(store_and_drop_matrix(
+                k_preimage_num,
+                &dir_path,
+                &format!("k_preimage_{level}_{num}"),
+            )));
+            // k_preimages[level].push(k_preimage_num);
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
@@ -313,77 +354,132 @@ where
         &final_preimage_target,
     );
     log_mem("Sampled final_preimage");
+    futures.push(Box::pin(store_and_drop_matrix(final_preimage, &dir_path, "final_preimage")));
 
-    #[cfg(feature = "store")]
-    {
-        let timestamp_id = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_nanos() as u64;
+    // #[cfg(feature = "store")]
+    // {
+    //     let timestamp_id = SystemTime::now()
+    //         .duration_since(SystemTime::UNIX_EPOCH)
+    //         .expect("Time went backwards")
+    //         .as_nanos() as u64;
 
-        let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
+    //     let dir_path = PathBuf::from(format!("obf_{timestamp_id}"));
 
-        if !dir_path.exists() {
-            std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
-        }
+    //     if !dir_path.exists() {
+    //         std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
+    //     }
 
-        let start = SystemTime::now();
+    //     let start = SystemTime::now();
 
-        b.write_to_files(&dir_path, "b");
-        log_mem("Written b to files");
+    //     b.write_to_files(&dir_path, "b");
+    //     log_mem("Written b to files");
 
-        for (i, encoding) in encodings_init.iter().enumerate() {
-            encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
-            log_mem("Written i-th encoding to files");
-        }
+    //     for (i, encoding) in encodings_init.iter().enumerate() {
+    //         encoding.write_to_files(&dir_path, &format!("encoding_init_{i}"));
+    //         log_mem("Written i-th encoding to files");
+    //     }
 
-        p_init.write_to_files(&dir_path, "p_init");
-        log_mem("Written p_init to files");
+    //     p_init.write_to_files(&dir_path, "p_init");
+    //     log_mem("Written p_init to files");
 
-        for level in 0..depth {
-            for num in 0..level_size {
-                m_preimages[level][num]
-                    .write_to_files(&dir_path, &format!("m_preimage_{level}_{num}"));
-                log_mem("Written m_preimage_level_num to files");
-                n_preimages[level][num]
-                    .write_to_files(&dir_path, &format!("n_preimage_{level}_{num}"));
-                log_mem("Written n_preimage_level_num to files");
-                k_preimages[level][num]
-                    .write_to_files(&dir_path, &format!("k_preimage_{level}_{num}"));
-                log_mem("Written k_preimage_level_num to files");
-            }
-        }
+    //     for level in 0..depth {
+    //         for num in 0..level_size {
+    //             m_preimages[level][num]
+    //                 .write_to_files(&dir_path, &format!("m_preimage_{level}_{num}"));
+    //             log_mem("Written m_preimage_level_num to files");
+    //             n_preimages[level][num]
+    //                 .write_to_files(&dir_path, &format!("n_preimage_{level}_{num}"));
+    //             log_mem("Written n_preimage_level_num to files");
+    //             k_preimages[level][num]
+    //                 .write_to_files(&dir_path, &format!("k_preimage_{level}_{num}"));
+    //             log_mem("Written k_preimage_level_num to files");
+    //         }
+    //     }
 
-        final_preimage.write_to_files(&dir_path, "final_preimage");
-        log_mem("Written final_preimage to files");
+    //     final_preimage.write_to_files(&dir_path, "final_preimage");
+    //     log_mem("Written final_preimage to files");
 
-        let end = SystemTime::now();
+    //     let end = SystemTime::now();
 
-        let dir_size = calculate_directory_size(&dir_path);
-        info!("Obfuscation size: {dir_size} bytes");
-        info!("Time taken to write files: {:?}", end.duration_since(start).unwrap());
+    //     let dir_size = calculate_directory_size(&dir_path);
+    //     log_mem("Obfuscation size: {dir_size} bytes");
+    //     log_mem(format!("Time taken to write files: {:?}", end.duration_since(start).unwrap()));
 
-        let _ = std::fs::remove_dir_all(&dir_path);
-    }
+    //     let _ = std::fs::remove_dir_all(&dir_path);
+    // }
+    let dir_path_clone = dir_path.clone();
+    let store_hash_key = async move {
+        let path = dir_path_clone.join("hash_key");
+        tokio::fs::write(&path, &hash_key).await.expect("Failed to write hash_key file");
+    };
+    futures.push(Box::pin(store_hash_key));
+    join_all(futures).await;
+    let obf_size = calculate_directory_size(&dir_path);
+    log_mem(format!("Obfuscation size: {obf_size} bytes"));
+    // Obfuscation {
+    //     hash_key,
+    //     b,
+    //     encodings_init,
+    //     p_init,
+    //     m_preimages,
+    //     n_preimages,
+    //     k_preimages,
+    //     final_preimage,
+    //     #[cfg(feature = "test")]
+    //     s_init: s_init.clone(),
+    //     #[cfg(feature = "test")]
+    //     minus_t_bar,
+    //     #[cfg(feature = "test")]
+    //     bs,
+    //     #[cfg(feature = "test")]
+    //     hardcoded_key,
+    //     #[cfg(feature = "test")]
+    //     final_preimage_target,
+    // }
+}
 
-    Obfuscation {
-        hash_key,
-        b,
-        encodings_init,
-        p_init,
-        m_preimages,
-        n_preimages,
-        k_preimages,
-        final_preimage,
-        #[cfg(feature = "test")]
-        s_init: s_init.clone(),
-        #[cfg(feature = "test")]
-        minus_t_bar,
-        #[cfg(feature = "test")]
-        bs,
-        #[cfg(feature = "test")]
-        hardcoded_key,
-        #[cfg(feature = "test")]
-        final_preimage_target,
-    }
+fn store_and_drop_matrix<M: PolyMatrix>(
+    matrix: M,
+    dir_path: &PathBuf,
+    id: &str,
+) -> impl std::future::Future<Output = ()> + Send {
+    let dir_path = dir_path.clone();
+    let id_str = id.to_string();
+    let future = async move {
+        matrix.write_to_files(&dir_path, &id_str).await;
+        drop(matrix);
+    };
+    log_mem(format!("Stored {id}"));
+    future
+}
+
+fn store_and_drop_bgg_encoding<M: PolyMatrix>(
+    encoding: BggEncoding<M>,
+    dir_path: &PathBuf,
+    id: &str,
+) -> impl std::future::Future<Output = ()> + Send {
+    let dir_path = dir_path.clone();
+    let id_str = id.to_string();
+    let future = async move {
+        encoding.write_to_files(&dir_path, &id_str).await;
+        drop(encoding);
+    };
+    log_mem(format!("Stored {id}"));
+    future
+}
+
+#[cfg(feature = "test")]
+fn store_and_drop_poly<M: Poly>(
+    poly: M,
+    dir_path: &PathBuf,
+    id: &str,
+) -> impl std::future::Future<Output = ()> + Send {
+    let dir_path = dir_path.clone();
+    let id_str = id.to_string();
+    let future = async move {
+        poly.write_to_file(&dir_path, &id_str).await;
+        drop(poly);
+    };
+    log_mem(format!("Stored {id}"));
+    future
 }

@@ -112,5 +112,9 @@ pub trait PolyMatrix:
         id: &str,
     ) -> Self;
     /// Writes a matrix with id to files under the given directory.
-    fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str);
+    fn write_to_files<P: AsRef<Path> + Send + Sync>(
+        &self,
+        dir_path: P,
+        id: &str,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }

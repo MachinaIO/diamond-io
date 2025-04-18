@@ -22,8 +22,12 @@ impl<M: PolyMatrix> BggPublicKey<M> {
     }
 
     /// Writes the public key with id to files under the given directory.
-    pub fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(&self, dir_path: P, id: &str) {
-        self.matrix.write_to_files(dir_path, id)
+    pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
+        &self,
+        dir_path: P,
+        id: &str,
+    ) {
+        self.matrix.write_to_files(dir_path, id).await;
     }
 
     /// Reads a public of given rows and cols with id from files under the given directory.
@@ -123,6 +127,7 @@ mod tests {
     use keccak_asm::Keccak256;
     use rand::Rng;
     use std::{fs, path::Path, sync::Arc};
+    use tokio;
 
     #[test]
     fn test_pubkey_add() {
@@ -504,8 +509,8 @@ mod tests {
         assert_eq!(result[0].reveal_plaintext, expected.reveal_plaintext);
     }
 
-    #[test]
-    fn test_pubkey_write_read() {
+    #[tokio::test]
+    async fn test_pubkey_write_read() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
 
@@ -542,7 +547,7 @@ mod tests {
         for (idx, pubkey) in pubkeys.iter().enumerate() {
             // Write the public key to files
             let id = format!("test_pubkey_{}", idx);
-            pubkey.write_to_files(test_dir, &id);
+            pubkey.write_to_files(test_dir, &id).await;
 
             // Get the size of the original matrix
             let (nrow, ncol) = pubkey.matrix.size();

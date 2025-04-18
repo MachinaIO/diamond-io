@@ -24,16 +24,20 @@ impl<M: PolyMatrix> BggEncoding<M> {
     }
 
     /// Writes the encoding with id to files under the given directory.
-    pub fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(&self, dir_path: P, id: &str) {
+    pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
+        &self,
+        dir_path: P,
+        id: &str,
+    ) {
         // Write the vector
-        self.vector.write_to_files(&dir_path, &format!("{}_vector", id));
+        self.vector.write_to_files(&dir_path, &format!("{}_vector", id)).await;
 
         // Write the pubkey
-        self.pubkey.write_to_files(&dir_path, &format!("{}_pubkey", id));
+        self.pubkey.write_to_files(&dir_path, &format!("{}_pubkey", id)).await;
 
         // Write the plaintext component if it exists
         if let Some(plaintext) = &self.plaintext {
-            plaintext.write_to_file(&dir_path, &format!("{}_plaintext", id));
+            plaintext.write_to_file(&dir_path, &format!("{}_plaintext", id)).await;
         }
     }
 
@@ -185,6 +189,7 @@ mod tests {
     use keccak_asm::Keccak256;
     use rand::Rng;
     use std::{fs, path::Path, sync::Arc};
+    use tokio;
 
     #[test]
     fn test_encoding_add() {
@@ -654,8 +659,8 @@ mod tests {
         assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
     }
 
-    #[test]
-    fn test_encoding_write_read() {
+    #[tokio::test]
+    async fn test_encoding_write_read() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
 
@@ -708,7 +713,7 @@ mod tests {
         for (idx, encoding) in encodings.iter().enumerate() {
             // Write the encoding to files
             let id = format!("test_encoding_{}", idx);
-            encoding.write_to_files(test_dir, &id);
+            encoding.write_to_files(test_dir, &id).await;
 
             // Read the encoding from files and verify it matches the original
             if idx == 0 || (idx > 0 && reveal_plaintexts[idx - 1]) {

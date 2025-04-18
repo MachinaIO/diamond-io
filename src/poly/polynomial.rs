@@ -1,10 +1,10 @@
+use itertools::Itertools;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     path::Path,
 };
-
-use itertools::Itertools;
+use tokio;
 
 use super::element::PolyElem;
 
@@ -114,12 +114,19 @@ pub trait Poly:
     }
 
     /// Writes a polynomial with id to files under the given directory.
-    fn write_to_file<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
-        let mut path = dir_path.as_ref().to_path_buf();
+    fn write_to_file<P: AsRef<Path> + Send + Sync>(
+        &self,
+        dir_path: P,
+        id: &str,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        let mut path: std::path::PathBuf = dir_path.as_ref().to_path_buf();
         path.push(format!("{}.poly", id));
 
         let bytes = self.to_compact_bytes();
-        std::fs::write(&path, &bytes)
-            .unwrap_or_else(|_| panic!("Failed to write polynomial file {:?}", path));
+        async move {
+            tokio::fs::write(&path, &bytes)
+                .await
+                .unwrap_or_else(|_| panic!("Failed to write polynomial file {:?}", path));
+        }
     }
 }

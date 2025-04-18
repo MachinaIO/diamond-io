@@ -26,6 +26,6 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub bs: Vec<Vec<M>>,
     #[cfg(feature = "test")]
     pub hardcoded_key: <M as PolyMatrix>::P,
-    #[cfg(feature = "test")]
-    pub final_preimage_target: M,
+    // #[cfg(feature = "test")]
+    // pub final_preimage_target: M,
 }

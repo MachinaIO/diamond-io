@@ -9,7 +9,8 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{ops::Range, path::Path};
+use std::{ops::Range, path::Path, sync::Arc};
+use tokio::fs::write;
 
 use super::base::BaseMatrix;
 
@@ -218,72 +219,112 @@ impl PolyMatrix for DCRTPolyMatrix {
         let block_size = block_size();
         let mut matrix = Self::new_empty(params, nrow, ncol);
 
-        let (row_offsets, col_offsets) = block_offsets(0..nrow, 0..ncol);
+        let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            let mut path = dir_path.as_ref().to_path_buf();
+            path.push(format!(
+                "{}_{}_{}.{}_{}.{}.matrix",
+                id, block_size, row_range.start, row_range.end, col_range.start, col_range.end
+            ));
+            let bytes = std::fs::read(&path)
+                .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
+            let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
 
-        for (row_start, row_end) in row_offsets.iter().tuple_windows() {
-            for (col_start, col_end) in col_offsets.iter().tuple_windows() {
-                let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-                    let mut path = dir_path.as_ref().to_path_buf();
-                    path.push(format!(
-                        "{}_{}_{}.{}_{}.{}.matrix",
-                        id, block_size, row_start, row_end, col_start, col_end
-                    ));
-                    let bytes = std::fs::read(&path)
-                        .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
-                    let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
-
-                    parallel_iter!(0..row_range.len())
-                        .map(|i| {
-                            parallel_iter!(0..col_range.len())
-                                .map(|j| {
-                                    let entry_bytes = &entries_bytes[i][j];
-                                    DCRTPoly::from_compact_bytes(params, entry_bytes)
-                                })
-                                .collect::<Vec<_>>()
+            parallel_iter!(0..row_range.len())
+                .map(|i| {
+                    parallel_iter!(0..col_range.len())
+                        .map(|j| {
+                            let entry_bytes = &entries_bytes[i][j];
+                            DCRTPoly::from_compact_bytes(params, entry_bytes)
                         })
                         .collect::<Vec<_>>()
-                };
+                })
+                .collect::<Vec<_>>()
+        };
+        matrix.replace_entries(0..nrow, 0..ncol, f);
 
-                matrix.replace_entries(*row_start..*row_end, *col_start..*col_end, f);
-            }
-        }
+        // let (row_offsets, col_offsets) = block_offsets(0..nrow, 0..ncol);
+
+        // for (row_start, row_end) in row_offsets.iter().tuple_windows() {
+        //     for (col_start, col_end) in col_offsets.iter().tuple_windows() {
+        //         let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>>
+        // {             let mut path = dir_path.as_ref().to_path_buf();
+        //             path.push(format!(
+        //                 "{}_{}_{}.{}_{}.{}.matrix",
+        //                 id, block_size, row_start, row_end, col_start, col_end
+        //             ));
+        //             let bytes = std::fs::read(&path)
+        //                 .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
+        //             let entries_bytes: Vec<Vec<Vec<u8>>> =
+        // serde_json::from_slice(&bytes).unwrap();
+
+        //             parallel_iter!(0..row_range.len())
+        //                 .map(|i| {
+        //                     parallel_iter!(0..col_range.len())
+        //                         .map(|j| {
+        //                             let entry_bytes = &entries_bytes[i][j];
+        //                             DCRTPoly::from_compact_bytes(params, entry_bytes)
+        //                         })
+        //                         .collect::<Vec<_>>()
+        //                 })
+        //                 .collect::<Vec<_>>()
+        //         };
+
+        //         matrix.replace_entries(*row_start..*row_end, *col_start..*col_end, f);
+        //     }
+        // }
         matrix
     }
 
-    fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
+    async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
         let block_size = block_size();
+        #[cfg(feature = "disk")]
         let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-        parallel_iter!(row_offsets.iter().tuple_windows().collect_vec()).for_each(
-            |(cur_block_row_idx, next_block_row_idx)| {
-                parallel_iter!(col_offsets.iter().tuple_windows().collect_vec()).for_each(
-                    |(cur_block_col_idx, next_block_col_idx)| {
-                        let entries = self.block_entries(
-                            *cur_block_row_idx..*next_block_row_idx,
-                            *cur_block_col_idx..*next_block_col_idx,
-                        );
-                        let mut path = dir_path.as_ref().to_path_buf();
-                        path.push(format!(
-                            "{}_{}_{}.{}_{}.{}.matrix",
-                            id,
-                            block_size,
-                            cur_block_row_idx,
-                            next_block_row_idx,
-                            cur_block_col_idx,
-                            next_block_col_idx
-                        ));
-                        let entries_bytes: Vec<Vec<Vec<u8>>> = entries
-                            .iter()
-                            .map(|row| row.iter().map(|poly| poly.to_compact_bytes()).collect_vec())
-                            .collect_vec();
-                        serde_json::to_writer(
-                            std::fs::File::create(&path).unwrap(),
-                            &entries_bytes,
-                        )
-                        .unwrap_or_else(|_| panic!("Failed to write matrix file {:?}", path));
-                    },
-                );
-            },
-        );
+        #[cfg(not(feature = "disk"))]
+        let (row_offsets, col_offsets) = (vec![0, self.nrow], vec![0, self.ncol]);
+        let dir_path = dir_path.as_ref().to_path_buf();
+
+        let self_arc = Arc::new(self);
+        let row_windows = row_offsets.into_iter().tuple_windows().collect_vec();
+        let futures = row_windows
+            .into_iter()
+            .flat_map(|(cur_block_row_idx, next_block_row_idx)| {
+                let col_windows = col_offsets.clone().into_iter().tuple_windows().collect_vec();
+                col_windows
+                    .into_iter()
+                    .map(|(cur_block_col_idx, next_block_col_idx)| {
+                        // let id_clone = id.clone();
+                        let row_range = cur_block_row_idx..next_block_row_idx;
+                        let col_range = cur_block_col_idx..next_block_col_idx;
+                        let self_arc = Arc::clone(&self_arc);
+                        let dir_path = dir_path.clone();
+                        async move {
+                            let entries = self_arc
+                                .as_ref()
+                                .block_entries((&row_range).clone(), (&col_range).clone());
+                            let mut path = dir_path;
+                            path.push(format!(
+                                "{}_{}_{}.{}_{}.{}.matrix",
+                                id,
+                                block_size,
+                                row_range.start,
+                                row_range.end,
+                                col_range.start,
+                                col_range.end
+                            ));
+                            let entries_bytes: Vec<Vec<Vec<u8>>> = entries
+                                .iter()
+                                .map(|row| {
+                                    row.iter().map(|poly| poly.to_compact_bytes()).collect_vec()
+                                })
+                                .collect_vec();
+                            let serialized_data = serde_json::to_vec(&entries_bytes)?;
+                            write(path, &serialized_data).await
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        futures::future::try_join_all(futures).await.expect("Failed to write all matrix blocks");
     }
 }
 
@@ -724,8 +765,8 @@ mod tests {
         matrix.concat_diag(&others[..])
     }
 
-    #[test]
-    fn test_matrix_write_read() {
+    #[tokio::test]
+    async fn test_matrix_write_read() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
@@ -750,7 +791,7 @@ mod tests {
             }
 
             // Write the matrix to files
-            matrix.write_to_files(test_dir, &matrix_id);
+            matrix.write_to_files(test_dir, &matrix_id).await;
 
             // Read the matrix back
             let read_matrix =
