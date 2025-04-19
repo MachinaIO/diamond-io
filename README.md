@@ -29,7 +29,9 @@ uv run memory_profile.py cargo test -r --test test_io_dummy_param --no-default-f
 
 ## Simulate Parameters
 Our simulator only targets circuits used for our benchmarks.
-1. Change the following values hardcoded in `simulator/main.py` after the line `if __name__ == "__main__":`:
+
+1. Make sure to install [`dio`](/dio/) binary before
+2. Change the following values hardcoded in `simulator/main.py` after the line `if __name__ == "__main__":`:
     - `secpar`: the minimum security parameter you want to guarantee.
     - `log2_n`: a log2 value of the ring dimension.
     - `max_d`: the maximum value of the number of the secret polynomials denoted by `d`.
@@ -41,8 +43,8 @@ Our simulator only targets circuits used for our benchmarks.
     - `input_width`: the number of bits inserted at each diamond. The larger value of `input_width` increase the number of preimages but decrease the required modulus size.
     - `add_num`: the number of addition gates for the evaluator's input bits.
     - `mul_num`: the number of multiplication gates for the evaluator's input bits.
-2. Install sagemath if you have not installed it. Ref: https://doc.sagemath.org/html/en/installation/conda.html
-3. Run `sage main.py` under the `simulator` directory.
+3. Install sagemath if you have not installed it. Ref: https://doc.sagemath.org/html/en/installation/conda.html
+4. Run `sage main.py` under the `simulator` directory.
 
 If the script is completed without any error, the found parameters are added to the last line in `simulator/params.log`. 
 Among the parameters, `crt_depth` denotes the minimum number of moduli satisfying correctness and security, and `d`, `encoding_sigma`, `hardcoded_key_sigma`, `p_sigma`, and `switched_modulus` can be used for `ObfuscationParams`.
