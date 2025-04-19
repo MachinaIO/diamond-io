@@ -8,12 +8,12 @@ use diamond_io::{
         Obfuscation, obf::obfuscate, params::ObfuscationParams, utils::build_final_digits_circuit,
     },
     poly::{
-        Poly, PolyElem, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
         sampler::{DistType, PolyUniformSampler},
+        Poly, PolyElem, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing},
 };
@@ -167,6 +167,12 @@ async fn main() {
                     .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
                     .collect();
                 let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
+                let eval = verify_circuit.eval(
+                    &params,
+                    &DCRTPoly::const_one(&params),
+                    &[hardcoded_key, input_poly],
+                );
+                assert_eq!(eval.len(), 1);
                 /*
                     Since we are computing b' - a' * t in the decryption part of the final circuit,
                     where a' = acc * a and b' = acc * b are the outputs of the public circuit,
@@ -175,17 +181,10 @@ async fn main() {
                     If e = 0, it follows that b' - a' * t = acc * [q/2] x.
                 */
                 let half_q = FinRingElem::half_q(&params.modulus());
-                let multiplied_hardcoded_key =
-                    hardcoded_key * DCRTPoly::from_const(&params, &half_q);
-                let eval = verify_circuit.eval(
-                    &params,
-                    &DCRTPoly::const_one(&params),
-                    &[multiplied_hardcoded_key, input_poly],
-                );
-                assert_eq!(eval.len(), 1);
                 for e in eval {
-                    let decompose_poly = e.extract_bits_with_threshold(&params);
-                    assert_eq!(output, decompose_poly);
+                    let expected_output = (DCRTPoly::from_const(&params, &half_q) * e)
+                        .extract_bits_with_threshold(&params);
+                    assert_eq!(output, expected_output);
                 }
             }
         }
