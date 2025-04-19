@@ -7,7 +7,7 @@ d = 1
 input_size = 16
 level_width = 8
 encoding_sigma = 12.91885
-hardcoded_key_sigma = 108910396484176000000000000000000000
+hardcoded_key_sigma = 1.0891e35
 p_sigma = 12.91885
 input = [
     true,

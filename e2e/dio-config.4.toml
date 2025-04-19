@@ -1,0 +1,53 @@
+ring_dimension = 8192
+crt_depth = 12
+crt_bits = 51
+base_bits = 10
+switched_modulus = "7029552803973744348141466418259345300641277664917614085697379731090906651226409086525563977076596742313690970899240148642509935174806475397273577722264011407360"
+d = 1
+input_size = 40
+level_width = 8
+encoding_sigma = 9.1709e37
+hardcoded_key_sigma = 5.2843e111
+p_sigma = 12.08149
+input = [
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+]
