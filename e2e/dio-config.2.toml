@@ -6,9 +6,9 @@ switched_modulus = "413159980493905374344947067520481899271098881340442459358677
 d = 1
 input_size = 24
 level_width = 8
-encoding_sigma = 14.83183
+encoding_sigma = 1.4832e1
 hardcoded_key_sigma = 6.0878e65
-p_sigma = 14.83183
+p_sigma = 1.4832e1
 input = [
     true,
     false,

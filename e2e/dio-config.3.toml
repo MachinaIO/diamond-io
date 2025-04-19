@@ -8,7 +8,7 @@ input_size = 32
 level_width = 8
 encoding_sigma = 1.4554e7
 hardcoded_key_sigma = 1.2285e81
-p_sigma = 15.89206
+p_sigma = 1.5892e1
 input = [
     true,
     false,
