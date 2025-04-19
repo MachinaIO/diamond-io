@@ -21,7 +21,8 @@ use futures::future::join_all;
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
-use std::{future::Future, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
+use tokio::runtime::Handle;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -29,7 +30,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     rng: &mut R,
     dir_path: P,
 ) where
-    M: PolyMatrix,
+    M: PolyMatrix + 'static,
     SU: PolyUniformSampler<M = M>,
     SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M>,
@@ -41,7 +42,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     #[cfg(feature = "bgm")]
     player.play_music("bgm/obf_bgm1.mp3");
 
-    let mut futures: Vec<std::pin::Pin<Box<dyn Future<Output = ()> + Send>>> = Vec::new();
+    let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
     let dir_path = dir_path.as_ref().to_path_buf();
     if !dir_path.exists() {
         std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
@@ -78,7 +79,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     log_mem("Sampled hardcoded_key_matrix");
     #[cfg(feature = "debug")]
-    futures.push(Box::pin(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key")));
+    handles.push(store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key"));
 
     let a = public_data.a_rlwe_bar;
 
@@ -112,7 +113,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
 
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
-    futures.push(Box::pin(store_and_drop_matrix(b, &dir_path, "b")));
+    handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
     let minus_t_bar = -t_bar_matrix.entry(0, 0);
 
@@ -122,16 +123,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     plaintexts.push(minus_t_bar.clone());
 
     #[cfg(feature = "debug")]
-    futures.push(Box::pin(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar")));
+    handles.push(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar"));
 
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
     for (i, encoding) in encodings_init.into_iter().enumerate() {
-        futures.push(Box::pin(store_and_drop_bgg_encoding(
+        handles.push(store_and_drop_bgg_encoding(
             encoding,
             &dir_path,
             &format!("encoding_init_{i}"),
-        )));
+        ));
     }
 
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
@@ -143,14 +144,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         s_b + p_init_error
     };
     log_mem("Computed p_init");
-    futures.push(Box::pin(store_and_drop_matrix(p_init, &dir_path, "p_init")));
+    handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
 
     #[cfg(feature = "debug")]
-    futures.push(Box::pin(store_and_drop_matrix(
-        bgg_encode_sampler.secret_vec,
-        &dir_path,
-        "s_init",
-    )));
+    handles.push(store_and_drop_matrix(bgg_encode_sampler.secret_vec, &dir_path, "s_init"));
 
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
     let level_width = obf_params.level_width; // number of bits to be inserted at each level
@@ -179,7 +176,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // 1];
 
     #[cfg(feature = "debug")]
-    futures.push(Box::pin(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0")));
+    handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
     let mut pub_key_cur = pub_key_init;
 
@@ -192,11 +189,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         log_mem("Sampled pub key level");
 
         #[cfg(feature = "debug")]
-        futures.push(Box::pin(store_and_drop_matrix(
+        handles.push(store_and_drop_matrix(
             b_star_level.clone(),
             &dir_path,
             &format!("b_star_{}", level + 1),
-        )));
+        ));
 
         // Precomputation for k_preimage that are not num dependent
         let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
@@ -218,11 +215,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             log_mem("Sampled b trapdoor for level and num");
 
             #[cfg(feature = "debug")]
-            futures.push(Box::pin(store_and_drop_matrix(
+            handles.push(store_and_drop_matrix(
                 b_num_level.clone(),
                 &dir_path,
                 &format!("b_{}_{num}", level + 1),
-            )));
+            ));
 
             let m_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -231,11 +228,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &(u_nums[num].clone() * &b_num_level),
             );
             log_mem("Computed m_preimage_num");
-            futures.push(Box::pin(store_and_drop_matrix(
+            handles.push(store_and_drop_matrix(
                 m_preimage_num,
                 &dir_path,
                 &format!("m_preimage_{level}_{num}"),
-            )));
+            ));
 
             // m_preimages[level].push(m_preimage_num);
 
@@ -246,11 +243,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &(u_star.clone() * &b_star_level.clone()),
             );
             log_mem("Computed n_preimage_num");
-            futures.push(Box::pin(store_and_drop_matrix(
+            handles.push(store_and_drop_matrix(
                 n_preimage_num,
                 &dir_path,
                 &format!("n_preimage_{level}_{num}"),
-            )));
+            ));
 
             // n_preimages[level].push(n_preimage_num);
 
@@ -290,11 +287,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_num_trapdoor_level, &b_num_level, &k_target);
             log_mem("Computed k_preimage_num");
-            futures.push(Box::pin(store_and_drop_matrix(
+            handles.push(store_and_drop_matrix(
                 k_preimage_num,
                 &dir_path,
                 &format!("k_preimage_{level}_{num}"),
-            )));
+            ));
             // k_preimages[level].push(k_preimage_num);
         }
 
@@ -338,58 +335,66 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target,
     );
     log_mem("Sampled final_preimage");
-    futures.push(Box::pin(store_and_drop_matrix(final_preimage, &dir_path, "final_preimage")));
+    handles.push(store_and_drop_matrix(final_preimage, &dir_path, "final_preimage"));
     let dir_path_clone = dir_path.clone();
-    let store_hash_key = async move {
+    let store_hash_key = tokio::task::spawn_blocking(move || {
         let path = dir_path_clone.join("hash_key");
-        tokio::fs::write(&path, &hash_key).await.expect("Failed to write hash_key file");
-    };
-    futures.push(Box::pin(store_hash_key));
-    join_all(futures).await;
+        std::fs::write(&path, &hash_key).expect("Failed to write hash_key file");
+        log_mem("Stored hash_key");
+    });
+    handles.push(store_hash_key);
+    join_all(handles).await;
 }
 
-fn store_and_drop_matrix<M: PolyMatrix>(
+fn store_and_drop_matrix<M: PolyMatrix + 'static>(
     matrix: M,
     dir_path: &Path,
     id: &str,
-) -> impl std::future::Future<Output = ()> + Send {
+) -> tokio::task::JoinHandle<()> {
     let dir_path = dir_path.to_path_buf();
     let id_str = id.to_string();
-    let future = async move {
-        matrix.write_to_files(&dir_path, &id_str).await;
+
+    tokio::task::spawn_blocking(move || {
+        log_mem(format!("Storing {id_str}"));
+        Handle::current().block_on(async {
+            matrix.write_to_files(&dir_path, &id_str).await;
+        });
         drop(matrix);
-    };
-    log_mem(format!("Stored {id}"));
-    future
+        log_mem(format!("Stored {id_str}"));
+    })
 }
 
-fn store_and_drop_bgg_encoding<M: PolyMatrix>(
+fn store_and_drop_bgg_encoding<M: PolyMatrix + 'static>(
     encoding: BggEncoding<M>,
     dir_path: &Path,
     id: &str,
-) -> impl std::future::Future<Output = ()> + Send {
+) -> tokio::task::JoinHandle<()> {
     let dir_path = dir_path.to_path_buf();
     let id_str = id.to_string();
-    let future = async move {
-        encoding.write_to_files(&dir_path, &id_str).await;
+    tokio::task::spawn_blocking(move || {
+        log_mem(format!("Storing {id_str}"));
+        Handle::current().block_on(async {
+            encoding.write_to_files(&dir_path, &id_str).await;
+        });
         drop(encoding);
-    };
-    log_mem(format!("Stored {id}"));
-    future
+        log_mem(format!("Stored {id_str}"));
+    })
 }
 
 #[cfg(feature = "debug")]
-fn store_and_drop_poly<M: Poly>(
-    poly: M,
+fn store_and_drop_poly<P: Poly + 'static>(
+    poly: P,
     dir_path: &Path,
     id: &str,
-) -> impl std::future::Future<Output = ()> + Send {
+) -> tokio::task::JoinHandle<()> {
     let dir_path = dir_path.to_path_buf();
     let id_str = id.to_string();
-    let future = async move {
-        poly.write_to_file(&dir_path, &id_str).await;
+    tokio::task::spawn_blocking(move || {
+        log_mem(format!("Storing {id_str}"));
+        Handle::current().block_on(async {
+            poly.write_to_file(&dir_path, &id_str).await;
+        });
         drop(poly);
         log_mem(format!("Stored {id_str}"));
-    };
-    future
+    })
 }
