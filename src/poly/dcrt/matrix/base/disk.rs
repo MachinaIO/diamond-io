@@ -14,8 +14,6 @@ use std::{
 };
 use tempfile::NamedTempFile;
 
-// static BLOCK_SIZE: OnceCell<usize> = OnceCell::new();
-
 #[cfg_attr(not(feature = "disk"), derive(Clone))]
 pub struct BaseMatrix<T: MatrixElem> {
     pub params: T::Params,
@@ -73,10 +71,6 @@ impl<T: MatrixElem> BaseMatrix<T> {
     where
         F: Fn(Range<usize>, Range<usize>) -> Vec<Vec<T>> + Send + Sync,
     {
-        // debug_mem(format!(
-        //     "replace_entries: row_offsets: {:?}, col_offsets: {:?}",
-        //     row_offsets, col_offsets
-        // ));
         if self.nrow == 0 || self.ncol == 0 {
             return;
         }
@@ -150,7 +144,6 @@ impl<T: MatrixElem> BaseMatrix<T> {
                         );
                         // This is secure because the modified entries are not overlapped among
                         // threads
-
                         unsafe {
                             self.replace_block_entries(
                                 *cur_block_row_idx * row_scale..*next_block_row_idx * row_scale,

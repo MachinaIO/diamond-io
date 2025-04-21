@@ -79,7 +79,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     log_mem("Sampled hardcoded_key_matrix");
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key"));
+    handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
 
     let a = public_data.a_rlwe_bar;
 
@@ -339,7 +339,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let dir_path_clone = dir_path.clone();
     let store_hash_key = tokio::task::spawn_blocking(move || {
         let path = dir_path_clone.join("hash_key");
-        std::fs::write(&path, &hash_key).expect("Failed to write hash_key file");
+        std::fs::write(&path, hash_key).expect("Failed to write hash_key file");
         log_mem("Stored hash_key");
     });
     handles.push(store_hash_key);
