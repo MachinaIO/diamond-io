@@ -66,11 +66,11 @@ def log_params_to_file(
         f"base_bits={base_bits}, "
         f"q={q}, "
         f"log2(q)={log_q}, "
+        f"switched_modulus={p}, "
+        f"log2(switched_modulus)={log_p}, "
         f"encoding_sigma={stddev_e_encoding}, "
         f"hardcoded_key_sigma={stddev_e_hardcode}, "
         f"p_sigma={stddev_e_p}, "
-        f"switched_modulus={p}, "
-        f"log2(switched_modulus)={log_p}, "
         f"estimated_secpar={estimated_secpar}, "
         f"size={size} [GB]\n"
     )
@@ -133,6 +133,8 @@ def find_params(
                     str(mul_num),
                 ]
             )
+            os.remove(config_file)
+
             n = 2**log2_n
             try:
                 (
@@ -154,6 +156,7 @@ def find_params(
                     input_width,
                     norms_path,
                 )
+                os.remove(norms_path)
                 found_params.append(
                     (
                         d,
@@ -169,6 +172,7 @@ def find_params(
                 )
             except ValueError as e:
                 print(f"ValueError: {e}")
+                os.remove(norms_path)
                 continue
         if len(found_params) > 0:
             return min(found_params, key=lambda x: x[8])
@@ -611,8 +615,8 @@ if __name__ == "__main__":
     secpar = 80
     log2_n = 13
     max_d = 3
-    min_base_bits = 8
-    max_base_bits = 9
+    min_base_bits = 10
+    max_base_bits = 20
     crt_bits = 51
     max_crt_depth = 20
     input_size = 1
