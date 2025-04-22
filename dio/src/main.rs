@@ -4,12 +4,12 @@ use config::Config;
 use diamond_io::{
     io::{obf::obfuscate, params::ObfuscationParams},
     poly::{
+        Poly, PolyElem, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
         sampler::{DistType, PolyUniformSampler},
-        Poly, PolyElem, PolyParams,
     },
     utils::init_tracing,
 };

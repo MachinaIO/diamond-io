@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use num_bigint::BigUint;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 fn biguint_to_string<S>(value: &BigUint, serializer: S) -> Result<S::Ok, S::Error>
 where
