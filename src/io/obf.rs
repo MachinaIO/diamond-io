@@ -171,10 +171,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     log_mem("Computed u_0, u_1, u_star");
 
-    // #[cfg(feature = "debug")]
-    // let mut bs: Vec<Vec<M>> = vec![vec![M::zero(params.as_ref(), 0, 0); level_size + 1]; depth +
-    // 1];
-
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
@@ -221,11 +217,26 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &format!("b_{}_{num}", level + 1),
             ));
 
+            // let m_preimage_num = sampler_trapdoor.preimage(
+            //     &params,
+            //     &b_star_trapdoor_cur,
+            //     &b_star_cur,
+            //     &(u_nums[num].clone() * &b_num_level),
+            // );
+            // log_mem("Computed m_preimage_num");
+            // handles.push(store_and_drop_matrix(
+            //     m_preimage_num,
+            //     &dir_path,
+            //     &format!("m_preimage_{level}_{num}"),
+            // ));
+
+            // // m_preimages[level].push(m_preimage_num);
+
             let m_preimage_num = sampler_trapdoor.preimage(
                 &params,
-                &b_star_trapdoor_cur,
-                &b_star_cur,
-                &(u_nums[num].clone() * &b_num_level),
+                &b_num_trapdoor_level,
+                &b_num_level,
+                &(u_star.clone() * &b_star_level.clone()),
             );
             log_mem("Computed m_preimage_num");
             handles.push(store_and_drop_matrix(
@@ -233,23 +244,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &dir_path,
                 &format!("m_preimage_{level}_{num}"),
             ));
-
-            // m_preimages[level].push(m_preimage_num);
-
-            let n_preimage_num = sampler_trapdoor.preimage(
-                &params,
-                &b_num_trapdoor_level,
-                &b_num_level,
-                &(u_star.clone() * &b_star_level.clone()),
-            );
-            log_mem("Computed n_preimage_num");
-            handles.push(store_and_drop_matrix(
-                n_preimage_num,
-                &dir_path,
-                &format!("n_preimage_{level}_{num}"),
-            ));
-
-            // n_preimages[level].push(n_preimage_num);
 
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);

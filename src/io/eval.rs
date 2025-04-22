@@ -70,21 +70,6 @@ where
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        let n_preimages = parallel_iter!(0..depth)
-            .map(|level| {
-                parallel_iter!(0..level_size)
-                    .map(|num| {
-                        M::read_from_files(
-                            params.as_ref(),
-                            m_b,
-                            m_b,
-                            &dir_path,
-                            &format!("n_preimage_{level}_{num}"),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
         let k_columns = (1 + packed_input_size) * d1 * log_base_q;
         let k_preimages = parallel_iter!(0..depth)
             .map(|level| {
@@ -169,7 +154,6 @@ where
             encodings_init,
             p_init,
             m_preimages,
-            n_preimages,
             k_preimages,
             hash_key,
             final_preimage,
@@ -262,13 +246,10 @@ where
         debug_assert_eq!(nums.len(), depth);
         for (level, num) in nums.iter().enumerate() {
             let m = &self.m_preimages[level][*num as usize];
-            let q = ps[level].clone() * m;
-            log_mem(format!("q at {} computed", level));
-            let n = &self.n_preimages[level][*num as usize];
-            let p = q.clone() * n;
+            let p = ps[level].clone() * m;
             log_mem(format!("p at {} computed", level));
             let k = &self.k_preimages[level][*num as usize];
-            let v = q.clone() * k;
+            let v = ps[level].clone() * k;
             log_mem(format!("v at {} computed", level));
             let new_encode_vec = {
                 let rg = &public_data.rgs[*num as usize];
@@ -327,10 +308,8 @@ where
                     cur_s = cur_s * r;
                 }
                 let new_s = cur_s.clone() * &public_data.rs[*num as usize];
-                let b_next_bit = self.bs[level + 1][*num as usize].clone();
-                let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
-                assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][level_size];
+                let b_next_bit = self.bs[level][*num as usize].clone();
+                let expected_p = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
