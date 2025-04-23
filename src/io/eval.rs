@@ -90,10 +90,10 @@ where
     assert!(inputs.len() % level_width == 0);
     let depth = obf_params.input_size / level_width;
 
-    #[cfg(feature = "debug")]
-    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-    #[cfg(not(feature = "debug"))]
-    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+    // drop the first element from `reveal_plaintexts`` (this is set to true for `one` encofing
+    // within the sample logic)
+    let reveal_plaintexts = reveal_plaintexts[1..].to_vec();
+
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub_key_init");
 

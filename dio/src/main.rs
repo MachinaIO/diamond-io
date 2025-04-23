@@ -5,15 +5,16 @@ use config::{RunBenchConfig, SimBenchNormConfig};
 use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
     io::{
-        Obfuscation, obf::obfuscate, params::ObfuscationParams, utils::build_final_digits_circuit,
+        eval::evaluate, obf::obfuscate, params::ObfuscationParams,
+        utils::build_final_digits_circuit,
     },
     poly::{
-        Poly, PolyElem, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
         sampler::{DistType, PolyUniformSampler},
+        Poly, PolyElem, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing},
 };
@@ -28,7 +29,6 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio;
 use tracing::info;
 
 pub mod circuit;
@@ -136,26 +136,15 @@ async fn main() {
             let input = dio_config.input;
             assert_eq!(input.len(), dio_config.input_size);
 
-            #[cfg(feature = "disk")]
-            let tmp_start_size = calculate_tmp_size();
             let start_time = std::time::Instant::now();
-            let obfuscation = Obfuscation::read_dir(&obf_params, &obf_dir);
-            let load_time = start_time.elapsed();
-            info!("Time to load obfuscation: {:?}", load_time);
-            #[cfg(feature = "disk")]
-            let tmp_end_size = calculate_tmp_size();
-            #[cfg(feature = "disk")]
-            log_mem(format!(
-                "Obfuscation size after loading: {} bytes",
-                tmp_end_size - tmp_start_size
-            ));
-            let start_time = std::time::Instant::now();
-            let output = obfuscation
-                .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(
-                    obf_params, &input,
-                );
+            let output = evaluate::<
+                DCRTPolyMatrix,
+                DCRTPolyHashSampler<Keccak256>,
+                DCRTPolyTrapdoorSampler,
+                _,
+            >(obf_params, &input, &obf_dir);
             let eval_time = start_time.elapsed();
-            let total_time = obfuscation_time + load_time + eval_time;
+            let total_time = obfuscation_time + eval_time;
             info!("Time for evaluation: {:?}", eval_time);
             info!("Total time: {:?}", total_time);
             if verify {
