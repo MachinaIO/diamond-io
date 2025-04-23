@@ -25,7 +25,7 @@ where
         dir_path: P,
     ) -> Self {
         let dir_path = dir_path.as_ref().to_path_buf();
-        let b = M::read_from_files(&obf_params.params, 1, 1, &dir_path, "b");
+        // let b = M::read_from_files(&obf_params.params, 1, 1, &dir_path, "b");
 
         let dim = obf_params.params.ring_dimension() as usize;
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
@@ -165,7 +165,7 @@ where
             .collect::<Vec<_>>();
 
         Self {
-            b,
+            // b,
             encodings_init,
             // p_init,
             // m_preimages,
@@ -414,8 +414,11 @@ where
             player.play_music("bgm/eval_bgm2.mp3");
         }
 
+        let b = M::read_from_files(&obf_params.params, 1, 1, &dir_path, "b");
+        log_mem("b loaded");
+
         let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(&params);
-        let b_decomposed = &self.b.entry(0, 0).decompose_base(&params);
+        let b_decomposed = &b.entry(0, 0).decompose_base(&params);
         log_mem("a,b decomposed");
         let final_circuit = build_final_digits_circuit::<M::P, BggEncoding<M>>(
             &a_decomposed,
