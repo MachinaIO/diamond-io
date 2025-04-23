@@ -102,21 +102,21 @@ where
         //     })
         //     .collect::<Vec<_>>();
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
-        let final_preimage = M::read_from_files(
-            &obf_params.params,
-            m_b,
-            packed_output_size,
-            &dir_path,
-            "final_preimage",
-        );
-        let hash_key = {
-            let mut path = dir_path.clone();
-            path.push("hash_key");
-            let bytes = std::fs::read(&path).expect("Failed to read hash key file");
-            let mut hash_key = [0u8; 32];
-            hash_key.copy_from_slice(&bytes);
-            hash_key
-        };
+        // let final_preimage = M::read_from_files(
+        //     &obf_params.params,
+        //     m_b,
+        //     packed_output_size,
+        //     &dir_path,
+        //     "final_preimage",
+        // );
+        // let hash_key = {
+        //     let mut path = dir_path.clone();
+        //     path.push("hash_key");
+        //     let bytes = std::fs::read(&path).expect("Failed to read hash key file");
+        //     let mut hash_key = [0u8; 32];
+        //     hash_key.copy_from_slice(&bytes);
+        //     hash_key
+        // };
         #[cfg(feature = "debug")]
         let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
 
@@ -171,8 +171,8 @@ where
             // m_preimages,
             // n_preimages,
             // k_preimages,
-            hash_key,
-            final_preimage,
+            // hash_key,
+            // final_preimage,
             #[cfg(feature = "debug")]
             s_init,
             #[cfg(feature = "debug")]
@@ -211,8 +211,18 @@ where
         let dir_path = dir_path.as_ref().to_path_buf();
         assert_eq!(inputs.len(), obf_params.input_size);
 
-        let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(self.hash_key, d);
-        let public_data = PublicSampledData::<SH>::sample(&obf_params, self.hash_key);
+        let hash_key = {
+            let mut path = dir_path.clone();
+            path.push("hash_key");
+            let bytes = std::fs::read(&path).expect("Failed to read hash key file");
+            let mut hash_key = [0u8; 32];
+            hash_key.copy_from_slice(&bytes);
+            hash_key
+        };
+        log_mem("hash_key loaded");
+
+        let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+        let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
         log_mem("Sampled public data");
 
         let packed_input_size = public_data.packed_input_size;
@@ -427,7 +437,14 @@ where
         let output_encodings_vec =
             output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
         log_mem("final_circuit evaluated and recomposed");
-        let final_preimage = &self.final_preimage;
+        let final_preimage = M::read_from_files(
+            &obf_params.params,
+            m_b,
+            packed_output_size,
+            &dir_path,
+            "final_preimage",
+        );
+        log_mem("final_preimage loaded");
         let final_v = ps.last().unwrap().clone() * final_preimage;
         log_mem("final_v computed");
         let z = output_encodings_vec - final_v;
