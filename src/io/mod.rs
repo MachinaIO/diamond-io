@@ -14,7 +14,7 @@ pub struct Obfuscation<M: PolyMatrix> {
     pub hash_key: [u8; 32],
     pub b: M,
     pub encodings_init: Vec<BggEncoding<M>>,
-    pub p_init: M,
+    // pub p_init: M,
     // pub m_preimages: Vec<Vec<M>>,
     // pub n_preimages: Vec<Vec<M>>,
     // pub k_preimages: Vec<Vec<M>>,

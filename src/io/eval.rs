@@ -51,56 +51,56 @@ where
             .collect::<Vec<_>>();
 
         let m_b = (2 * d1) * (2 + log_base_q);
-        let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
+        // let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
 
         let level_size = (1u64 << obf_params.level_width) as usize;
         let depth = obf_params.input_size / obf_params.level_width;
-        let m_preimages = parallel_iter!(0..depth)
-            .map(|level| {
-                parallel_iter!(0..level_size)
-                    .map(|num| {
-                        M::read_from_files(
-                            params.as_ref(),
-                            m_b,
-                            m_b,
-                            &dir_path,
-                            &format!("m_preimage_{level}_{num}"),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        let n_preimages = parallel_iter!(0..depth)
-            .map(|level| {
-                parallel_iter!(0..level_size)
-                    .map(|num| {
-                        M::read_from_files(
-                            params.as_ref(),
-                            m_b,
-                            m_b,
-                            &dir_path,
-                            &format!("n_preimage_{level}_{num}"),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        let k_columns = (1 + packed_input_size) * d1 * log_base_q;
-        let k_preimages = parallel_iter!(0..depth)
-            .map(|level| {
-                parallel_iter!(0..level_size)
-                    .map(|num| {
-                        M::read_from_files(
-                            params.as_ref(),
-                            m_b,
-                            k_columns,
-                            &dir_path,
-                            &format!("k_preimage_{level}_{num}"),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        // let m_preimages = parallel_iter!(0..depth)
+        //     .map(|level| {
+        //         parallel_iter!(0..level_size)
+        //             .map(|num| {
+        //                 M::read_from_files(
+        //                     params.as_ref(),
+        //                     m_b,
+        //                     m_b,
+        //                     &dir_path,
+        //                     &format!("m_preimage_{level}_{num}"),
+        //                 )
+        //             })
+        //             .collect::<Vec<_>>()
+        //     })
+        //     .collect::<Vec<_>>();
+        // let n_preimages = parallel_iter!(0..depth)
+        //     .map(|level| {
+        //         parallel_iter!(0..level_size)
+        //             .map(|num| {
+        //                 M::read_from_files(
+        //                     params.as_ref(),
+        //                     m_b,
+        //                     m_b,
+        //                     &dir_path,
+        //                     &format!("n_preimage_{level}_{num}"),
+        //                 )
+        //             })
+        //             .collect::<Vec<_>>()
+        //     })
+        //     .collect::<Vec<_>>();
+        // let k_columns = (1 + packed_input_size) * d1 * log_base_q;
+        // let k_preimages = parallel_iter!(0..depth)
+        //     .map(|level| {
+        //         parallel_iter!(0..level_size)
+        //             .map(|num| {
+        //                 M::read_from_files(
+        //                     params.as_ref(),
+        //                     m_b,
+        //                     k_columns,
+        //                     &dir_path,
+        //                     &format!("k_preimage_{level}_{num}"),
+        //                 )
+        //             })
+        //             .collect::<Vec<_>>()
+        //     })
+        //     .collect::<Vec<_>>();
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let final_preimage = M::read_from_files(
             &obf_params.params,
@@ -167,7 +167,7 @@ where
         Self {
             b,
             encodings_init,
-            p_init,
+            // p_init,
             // m_preimages,
             // n_preimages,
             // k_preimages,
@@ -218,7 +218,9 @@ where
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
-        ps.push(self.p_init.clone());
+        let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
+        log_mem("p_init loaded");
+        ps.push(p_init.clone());
         encodings.push(self.encodings_init.clone());
 
         let level_width = obf_params.level_width;
@@ -246,7 +248,7 @@ where
                 let s_connect = self.s_init.concat_columns(&[&self.s_init]);
                 s_connect * &self.bs[0][level_size]
             };
-            assert_eq!(self.p_init, expected_p_init);
+            assert_eq!(p_init, expected_p_init);
             let inserted_poly_gadget = {
                 let zero = <M::P as Poly>::const_zero(&params);
                 let one = <M::P as Poly>::const_one(&params);
