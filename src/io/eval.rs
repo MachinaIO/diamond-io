@@ -117,8 +117,8 @@ where
         //     hash_key.copy_from_slice(&bytes);
         //     hash_key
         // };
-        #[cfg(feature = "debug")]
-        let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
+        // #[cfg(feature = "debug")]
+        // let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
 
         #[cfg(feature = "debug")]
         let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
@@ -173,14 +173,14 @@ where
             // k_preimages,
             // hash_key,
             // final_preimage,
-            #[cfg(feature = "debug")]
-            s_init,
-            #[cfg(feature = "debug")]
-            minus_t_bar,
+            // #[cfg(feature = "debug")]
+            // s_init,
+            // #[cfg(feature = "debug")]
+            // minus_t_bar,
             #[cfg(feature = "debug")]
             bs,
-            #[cfg(feature = "debug")]
-            hardcoded_key,
+            // #[cfg(feature = "debug")]
+            // hardcoded_key,
         }
     }
 
@@ -230,6 +230,7 @@ where
         let (mut ps, mut encodings) = (vec![], vec![]);
         let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
         log_mem("p_init loaded");
+
         ps.push(p_init.clone());
         encodings.push(self.encodings_init.clone());
 
@@ -250,12 +251,22 @@ where
         let mut pub_key_cur = pub_key_init;
 
         #[cfg(feature = "debug")]
+        let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
+
+        #[cfg(feature = "debug")]
+        let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
+            &obf_params.params,
+            &dir_path,
+            "minus_t_bar",
+        );
+
+        #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
         {
             let expected_p_init = {
-                let s_connect = self.s_init.concat_columns(&[&self.s_init]);
+                let s_connect = s_init.concat_columns(&[&s_init]);
                 s_connect * &self.bs[0][level_size]
             };
             assert_eq!(p_init, expected_p_init);
@@ -267,11 +278,11 @@ where
                 for _ in 0..(packed_input_size - 1) {
                     polys.push(zero.clone());
                 }
-                polys.push(self.minus_t_bar.clone());
+                polys.push(minus_t_bar.clone());
                 let gadget_d1 = M::gadget_matrix(&params, d1);
                 M::from_poly_vec_row(&params, polys).tensor(&gadget_d1)
             };
-            let expected_encoding_init = self.s_init.clone() *
+            let expected_encoding_init = s_init.clone() *
                 &(pub_key_cur[0].concat_matrix(&pub_key_cur[1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
@@ -365,7 +376,7 @@ where
                 obf_params.hardcoded_key_sigma == 0.0 &&
                 obf_params.p_sigma == 0.0
             {
-                let mut cur_s = self.s_init.clone();
+                let mut cur_s = s_init.clone();
                 for prev_num in nums[0..level].iter() {
                     let r = public_data.rs[*prev_num as usize].clone();
                     cur_s = cur_s * r;
@@ -399,7 +410,7 @@ where
                             .map(|coeffs| M::P::from_coeffs(&params, coeffs))
                             .collect_vec();
                         polys.extend(input_polys);
-                        polys.push(self.minus_t_bar.clone());
+                        polys.push(minus_t_bar.clone());
                         M::from_poly_vec_row(&params, polys).tensor(&gadget_d1)
                     };
                     let pubkey = pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
@@ -458,7 +469,13 @@ where
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
         {
-            let mut last_s = self.s_init.clone();
+            let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
+                &obf_params.params,
+                &dir_path,
+                "hardcoded_key",
+            );
+
+            let mut last_s = s_init.clone();
             for num in nums.iter() {
                 let r = public_data.rs[*num as usize].clone();
                 last_s = last_s * r;
@@ -478,7 +495,7 @@ where
                         .clone()
                         .unwrap()
                         .extract_bits_with_threshold(&params),
-                    self.hardcoded_key.to_bool_vec()
+                    hardcoded_key.to_bool_vec()
                 );
             }
         }

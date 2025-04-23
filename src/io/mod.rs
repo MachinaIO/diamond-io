@@ -19,12 +19,12 @@ pub struct Obfuscation<M: PolyMatrix> {
     // pub n_preimages: Vec<Vec<M>>,
     // pub k_preimages: Vec<Vec<M>>,
     // pub final_preimage: M,
-    #[cfg(feature = "debug")]
-    pub s_init: M,
-    #[cfg(feature = "debug")]
-    pub minus_t_bar: <M as PolyMatrix>::P,
+    // #[cfg(feature = "debug")]
+    // pub s_init: M,
+    // #[cfg(feature = "debug")]
+    // pub minus_t_bar: <M as PolyMatrix>::P,
     #[cfg(feature = "debug")]
     pub bs: Vec<Vec<M>>,
-    #[cfg(feature = "debug")]
-    pub hardcoded_key: <M as PolyMatrix>::P,
+    // #[cfg(feature = "debug")]
+    // pub hardcoded_key: <M as PolyMatrix>::P,
 }
