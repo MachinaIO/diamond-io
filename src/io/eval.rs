@@ -50,11 +50,11 @@ where
             })
             .collect::<Vec<_>>();
 
-        let m_b = (2 * d1) * (2 + log_base_q);
-        // let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
+        // let m_b = (2 * d1) * (2 + log_base_q);
+        // // let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
 
-        let level_size = (1u64 << obf_params.level_width) as usize;
-        let depth = obf_params.input_size / obf_params.level_width;
+        // let level_size = (1u64 << obf_params.level_width) as usize;
+        // let depth = obf_params.input_size / obf_params.level_width;
         // let m_preimages = parallel_iter!(0..depth)
         //     .map(|level| {
         //         parallel_iter!(0..level_size)
@@ -101,7 +101,7 @@ where
         //             .collect::<Vec<_>>()
         //     })
         //     .collect::<Vec<_>>();
-        let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
+        // let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         // let final_preimage = M::read_from_files(
         //     &obf_params.params,
         //     m_b,
@@ -120,49 +120,49 @@ where
         // #[cfg(feature = "debug")]
         // let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
 
-        #[cfg(feature = "debug")]
-        let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
-            &obf_params.params,
-            &dir_path,
-            "minus_t_bar",
-        );
+        // #[cfg(feature = "debug")]
+        // let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
+        //     &obf_params.params,
+        //     &dir_path,
+        //     "minus_t_bar",
+        // );
 
-        #[cfg(feature = "debug")]
-        let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
-            &obf_params.params,
-            &dir_path,
-            "hardcoded_key",
-        );
+        // #[cfg(feature = "debug")]
+        // let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
+        //     &obf_params.params,
+        //     &dir_path,
+        //     "hardcoded_key",
+        // );
 
-        #[cfg(feature = "debug")]
-        let bs = parallel_iter!(0..depth + 1)
-            .map(|level| {
-                let mut b_nums = if level == 0 {
-                    vec![M::zero(params.as_ref(), 2 * d1, m_b); level_size]
-                } else {
-                    parallel_iter!(0..level_size)
-                        .map(|num| {
-                            M::read_from_files(
-                                params.as_ref(),
-                                2 * d1,
-                                m_b,
-                                &dir_path,
-                                &format!("b_{level}_{num}"),
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                };
-                let b_star = M::read_from_files(
-                    params.as_ref(),
-                    2 * d1,
-                    m_b,
-                    &dir_path,
-                    &format!("b_star_{level}"),
-                );
-                b_nums.push(b_star);
-                b_nums
-            })
-            .collect::<Vec<_>>();
+        // #[cfg(feature = "debug")]
+        // let bs = parallel_iter!(0..depth + 1)
+        //     .map(|level| {
+        //         let mut b_nums = if level == 0 {
+        //             vec![M::zero(params.as_ref(), 2 * d1, m_b); level_size]
+        //         } else {
+        //             parallel_iter!(0..level_size)
+        //                 .map(|num| {
+        //                     M::read_from_files(
+        //                         params.as_ref(),
+        //                         2 * d1,
+        //                         m_b,
+        //                         &dir_path,
+        //                         &format!("b_{level}_{num}"),
+        //                     )
+        //                 })
+        //                 .collect::<Vec<_>>()
+        //         };
+        //         let b_star = M::read_from_files(
+        //             params.as_ref(),
+        //             2 * d1,
+        //             m_b,
+        //             &dir_path,
+        //             &format!("b_star_{level}"),
+        //         );
+        //         b_nums.push(b_star);
+        //         b_nums
+        //     })
+        //     .collect::<Vec<_>>();
 
         Self {
             // b,
@@ -177,8 +177,8 @@ where
             // s_init,
             // #[cfg(feature = "debug")]
             // minus_t_bar,
-            #[cfg(feature = "debug")]
-            bs,
+            // #[cfg(feature = "debug")]
+            // bs,
             // #[cfg(feature = "debug")]
             // hardcoded_key,
         }
@@ -261,13 +261,43 @@ where
         );
 
         #[cfg(feature = "debug")]
+        let bs = parallel_iter!(0..depth + 1)
+            .map(|level| {
+                let mut b_nums = if level == 0 {
+                    vec![M::zero(params.as_ref(), 2 * d1, m_b); level_size]
+                } else {
+                    parallel_iter!(0..level_size)
+                        .map(|num| {
+                            M::read_from_files(
+                                params.as_ref(),
+                                2 * d1,
+                                m_b,
+                                &dir_path,
+                                &format!("b_{level}_{num}"),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let b_star = M::read_from_files(
+                    params.as_ref(),
+                    2 * d1,
+                    m_b,
+                    &dir_path,
+                    &format!("b_star_{level}"),
+                );
+                b_nums.push(b_star);
+                b_nums
+            })
+            .collect::<Vec<_>>();
+
+        #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
         {
             let expected_p_init = {
                 let s_connect = s_init.concat_columns(&[&s_init]);
-                s_connect * &self.bs[0][level_size]
+                s_connect * &bs[0][level_size]
             };
             assert_eq!(p_init, expected_p_init);
             let inserted_poly_gadget = {
@@ -293,6 +323,7 @@ where
             })
             .collect();
         debug_assert_eq!(nums.len(), depth);
+
         for (level, num) in nums.iter().enumerate() {
             let m = M::read_from_files(
                 params.as_ref(),
@@ -382,10 +413,10 @@ where
                     cur_s = cur_s * r;
                 }
                 let new_s = cur_s.clone() * &public_data.rs[*num as usize];
-                let b_next_bit = self.bs[level + 1][*num as usize].clone();
+                let b_next_bit = bs[level + 1][*num as usize].clone();
                 let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
                 assert_eq!(q, expected_q);
-                let expected_p = new_s.concat_columns(&[&new_s]) * &self.bs[level + 1][level_size];
+                let expected_p = new_s.concat_columns(&[&new_s]) * &bs[level + 1][level_size];
                 assert_eq!(p, expected_p);
                 let expcted_new_encode = {
                     let dim = params.ring_dimension() as usize;
