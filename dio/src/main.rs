@@ -9,12 +9,12 @@ use diamond_io::{
         utils::build_final_digits_circuit,
     },
     poly::{
+        Poly, PolyElem, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
         sampler::{DistType, PolyUniformSampler},
-        Poly, PolyElem, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing},
 };
