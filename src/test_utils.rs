@@ -115,7 +115,9 @@ pub async fn test_io_common(
 
     let start_time = std::time::Instant::now();
     let output = obfuscation
-        .eval::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler>(obf_params, &input);
+        .evaluate::<DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler, _>(
+            obf_params, &input, &dir_path,
+        );
     let eval_time = start_time.elapsed();
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + load_time + eval_time);

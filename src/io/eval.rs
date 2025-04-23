@@ -168,9 +168,9 @@ where
             b,
             encodings_init,
             p_init,
-            m_preimages,
-            n_preimages,
-            k_preimages,
+            // m_preimages,
+            // n_preimages,
+            // k_preimages,
             hash_key,
             final_preimage,
             #[cfg(feature = "debug")]
@@ -184,10 +184,16 @@ where
         }
     }
 
-    pub fn eval<SH, ST>(&self, obf_params: ObfuscationParams<M>, inputs: &[bool]) -> Vec<bool>
+    pub fn evaluate<SH, ST, P>(
+        &self,
+        obf_params: ObfuscationParams<M>,
+        inputs: &[bool],
+        dir_path: P,
+    ) -> Vec<bool>
     where
         SH: PolyHashSampler<[u8; 32], M = M>,
         ST: PolyTrapdoorSampler<M = M>,
+        P: AsRef<Path>,
     {
         #[cfg(feature = "bgm")]
         let player = Player::new();
@@ -198,11 +204,17 @@ where
         }
         let d = obf_params.d;
         let d1 = d + 1;
+        let params = Arc::new(obf_params.params.clone());
+        let log_base_q = params.modulus_digits();
+        let dim = params.ring_dimension() as usize;
+        let m_b = (2 * d1) * (2 + log_base_q);
+        let dir_path = dir_path.as_ref().to_path_buf();
         assert_eq!(inputs.len(), obf_params.input_size);
+
         let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(self.hash_key, d);
         let public_data = PublicSampledData::<SH>::sample(&obf_params, self.hash_key);
-        let params = obf_params.params;
         log_mem("Sampled public data");
+
         let packed_input_size = public_data.packed_input_size;
         let packed_output_size = public_data.packed_output_size;
         let (mut ps, mut encodings) = (vec![], vec![]);
@@ -251,8 +263,6 @@ where
                 &(pub_key_cur[0].concat_matrix(&pub_key_cur[1..]) - inserted_poly_gadget);
             assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
         }
-        let log_base_q = params.modulus_digits();
-        let dim = params.ring_dimension() as usize;
         let nums: Vec<u64> = inputs
             .chunks(level_width)
             .map(|chunk| {
@@ -261,13 +271,35 @@ where
             .collect();
         debug_assert_eq!(nums.len(), depth);
         for (level, num) in nums.iter().enumerate() {
-            let m = &self.m_preimages[level][*num as usize];
+            let m = M::read_from_files(
+                params.as_ref(),
+                m_b,
+                m_b,
+                &dir_path,
+                &format!("m_preimage_{level}_{num}"),
+            );
+            log_mem(format!("m at {} loaded", level));
             let q = ps[level].clone() * m;
             log_mem(format!("q at {} computed", level));
-            let n = &self.n_preimages[level][*num as usize];
+            let n = M::read_from_files(
+                params.as_ref(),
+                m_b,
+                m_b,
+                &dir_path,
+                &format!("n_preimage_{level}_{num}"),
+            );
+            log_mem(format!("n at {} loaded", level));
             let p = q.clone() * n;
             log_mem(format!("p at {} computed", level));
-            let k = &self.k_preimages[level][*num as usize];
+            let k_columns = (1 + packed_input_size) * d1 * log_base_q;
+            let k = M::read_from_files(
+                params.as_ref(),
+                m_b,
+                k_columns,
+                &dir_path,
+                &format!("k_preimage_{level}_{num}"),
+            );
+            log_mem(format!("k at {} loaded", level));
             let v = q.clone() * k;
             log_mem(format!("v at {} computed", level));
             let new_encode_vec = {
