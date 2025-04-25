@@ -72,13 +72,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
      Sample the initial public key (level 0) with our reveal flags.
 
-     Sample the initial BGG+ encodings. In paper notation this is the vector
-     c_{t,ε} given by:
-
-         c_{t,ε}^T := ŝ_ε^T (A_{t,0} − t^T ⊗ G_{n+1})
-
-     where ŝ_ε is the initial state, A_{t,0} is the public matrix at level 0,
-     t is the secret-key vector, and G is the gadget matrix.
+     Sample the initial BGG+ encodings.
+     **NOTE:** the paper treats
+       - c_att  = encoding of evaluator's inputs
+       - c_t    = encoding of the FHE secret-key
+    as two distinct vectors.
+    Here, however, `encodings_init` bundles them into one Vec<bool> of length L:
+       - indices 0..L-2 → c_att
+       - index   L-1   → c_t
     =============================================================================
     */
 
@@ -94,7 +95,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut reveal_plaintexts = vec![true; packed_input_size];
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
 
-    // Sample BGG+ encoding secret key s, c_{t,ε}^T, BGG+ encoding with s and t
+    // Sample BGG+ encoding secret key s, BGG+ encoding with s and t
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
