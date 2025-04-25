@@ -53,7 +53,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled public data");
 
     let params = Arc::new(obf_params.params);
-    let public_circuit = &obf_params.public_circuit;
+    let public_circuit = obf_params.public_circuit;
     let packed_input_size = public_data.packed_input_size;
     let log_base_q = params.modulus_digits();
     assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
@@ -65,20 +65,23 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let packed_output_size = public_data.packed_output_size;
 
     /*
+    =============================================================================
      We reveal all input slots so the evaluator can multiply encodings,
-     but we keep the secret‐key slot(last slot) hidden unless we're in debug mode.
+     but we keep the secret-key slot (last slot) hidden unless we're in debug mode.
      In the paper, the last slot corresponds to the FHE secret-key vector t.
 
      Sample the initial public key (level 0) with our reveal flags.
 
-     Sample the initial BGG+ encodings. In paper notation this is the vector c_{t,ε} given by:
+     Sample the initial BGG+ encodings. In paper notation this is the vector
+     c_{t,ε} given by:
 
          c_{t,ε}^T := ŝ_ε^T (A_{t,0} − t^T ⊗ G_{n+1})
 
-     where ŝ_ε is the initial secret key for encoding,
-     A_{t,0} is the public matrix at level 0,
-     t is the secret‐key vector, and G is the gadget matrix.
+     where ŝ_ε is the initial state, A_{t,0} is the public matrix at level 0,
+     t is the secret-key vector, and G is the gadget matrix.
+    =============================================================================
     */
+
     // Sample FHE secret key t
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
@@ -91,22 +94,20 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut reveal_plaintexts = vec![true; packed_input_size];
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
 
-    // Sample BGG+ encoding secret key s
+    // Sample BGG+ encoding secret key s, c_{t,ε}^T, BGG+ encoding with s and t
+    let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
+    log_mem("Sampled pub key init");
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+    log_mem("Sampled s_bars");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
         sampler_uniform,
         obf_params.encoding_sigma,
     );
-    let s_init = &bgg_encode_sampler.secret_vec;
-    log_mem("Sampled s_init");
-
-    // Sample c_{t,ε}^T, BGG+ encoding with s and t
-    let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
-    log_mem("Sampled pub key init");
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
     log_mem("Sampled initial encodings");
+    let s_init = bgg_encode_sampler.secret_vec;
     for (i, encoding) in encodings_init.into_iter().enumerate() {
         handles.push(store_and_drop_bgg_encoding(
             encoding,
@@ -116,56 +117,57 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     }
 
     /*
-     ┌───────────────────────────────────────────────────────────────────────────┐
-     │  Pre‐loop initialization:                                                │
-     │                                                                           │
-     │  1) Sample input‐dependent random basis B_* (trapdoor & public matrix).   │
-     │  2) Compute initial secret key p_init = (s_init, s_init)·B_* + error.     │
-     │  3) Create I_{d+1}, derive level_width, level_size, and depth.            │
-     │  4) For each i in 0..level_size, build                                    │
-     │        U_i = [ [ I_{d+1}, 0 ],                                            │
-     │                [ 0,       R_i ] ]                                        │
-     │  5) Build wildcard matrix                                                   │
-     │        U_* = [ [ 0,       0     ],                                         │
-     │                [ I_{d+1}, I_{d+1} ] ]                                     │
-     │                                                                           │
-     │  These values (B_0^*, p_init, I_{d+1}, U_i, U_*) are all set up            │
-     │  before entering the main preimage generation loop.                                   │
-     └───────────────────────────────────────────────────────────────────────────┘
+    =============================================================================
+      Pre‐loop initialization:
+
+      1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
+      2) Compute initial secret key p_init = (s_init, s_init)·B_* + error.
+      3) Create I_{d+1}, derive level_width, level_size, and depth.
+      4) For each i in 0..level_size, build
+           U_i = [ [ I_{d+1}, 0 ],
+                   [ 0,       R_i ] ]
+      5) Build wildcard matrix
+           U_* = [ [ 0,       0     ],
+                   [ I_{d+1}, I_{d+1} ] ]
+
+      These values (B_*, p_init, I_{d+1}, U_i, U_*) are all set up
+      before entering the main preimage generation loop.
+    =============================================================================
     */
 
-    // Input dependent random matrix B_0_star
+    // Sample input dependent random matrix B_*
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    // initial secret key p_init := (s_init, s_init) B_0_star
-    let p_init = {
-        let s_connect = s_init.concat_columns(&[s_init]);
-        let s_b = s_connect * &b_star_cur;
-        // error sample
-        let m_b = (2 * (d + 1)) * (2 + log_base_q);
-        let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
-            &params,
-            1,
-            m_b,
-            DistType::GaussDist { sigma: obf_params.p_sigma },
-        );
-        s_b + p_init_error
-    };
+    // Compute Initial secret key p_init := (s_init, s_init)·B_*
+    let s_connect = s_init.concat_columns(&[&s_init]);
+    let s_b = s_connect * &b_star_cur;
+    let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
+        &params,
+        1,
+        (2 * (d + 1)) * (2 + log_base_q),
+        DistType::GaussDist { sigma: obf_params.p_sigma },
+    );
+    let p_init = s_b + p_init_error;
     log_mem("Computed p_init");
     handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_matrix(bgg_encode_sampler.secret_vec, &dir_path, "s_init"));
+    handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
+
     let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
-    let level_width = obf_params.level_width; // number of bits to be inserted at each level
+    // number of bits to be inserted at each level
+    let level_width = obf_params.level_width;
     assert_eq!(obf_params.input_size % level_width, 0);
-    assert!(level_width <= dim); // otherwise we need >1 polynomial to insert the bits for each level
+    // otherwise we need >1 polynomial to insert the bits for each level
+    assert!(level_width <= dim);
+    // otherwise we get to a point in which the inserted bits have to be split between two
+    // polynomials
     if obf_params.input_size > dim {
-        assert_eq!(dim % level_width, 0); // otherwise we get to a point in which the inserted bits
-                                          // have to be split between two polynomials
+        assert_eq!(dim % level_width, 0);
     }
     let level_size = (1u64 << obf_params.level_width) as usize;
-    let depth = obf_params.input_size / level_width; // number of levels necessary to encode the input
+    // number of levels necessary to encode the input
+    let depth = obf_params.input_size / level_width;
     let mut u_nums = Vec::with_capacity(level_size);
     for i in 0..level_size {
         let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
@@ -183,25 +185,22 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut pub_key_cur = pub_key_init;
 
     /*
-     ┌───────────────────────────────────────────────────────────────┐
-     │  Trapdoor preimage generation for this (level, num) pair:    │
-     │                                                               │
-     │  M_{i,b} ←$ B⁻¹_{i-1,*,γ_B} · ( U_b    · B[i][b] )             │
-     │  N_{i,b} ←$ B⁻¹_{i,b,γ_B}   · ( U_*    · B[i][*] )             │
-     │  K_{i,b} ←$ B⁻¹_{i,b,γ_B}   · (                                 │
-     │      -A_{att,i-1}·T_{att,i,b},                                  │
-     │       A_{att,i} - (0_{L_fhe+i,b,0_{L-i}} ⊗ G_{n+1}),             │
-     │       A_{t,i}                                                   │
-     │    )                                                          │
-     └───────────────────────────────────────────────────────────────┘
+    =============================================================================
+      Trapdoor preimage generation for input insertion step:
+
+      M_{i,b} ←$ B⁻¹_{i-1,*,γ_B} · ( U_b · B[i][b] )
+      N_{i,b} ←$ B⁻¹_{i,b,γ_B}   · ( U_* · B[i][*] )
+      K_{i,b} ←$ B⁻¹_{i,b,γ_B}   · (
+          -A_{att,i-1}·T_{att,i,b},
+           A_{att,i} - (0_{L_fhe+i,b,0_{L-i}} ⊗ G_{n+1}),
+           A_{t,i}
+        )
+    =============================================================================
     */
+
     for level in 0..depth {
         let (b_star_trapdoor_level, b_star_level) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
         log_mem("Sampled b_star trapdoor for level");
-
-        let pub_key_level =
-            sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
-        log_mem("Sampled pub key level");
 
         #[cfg(feature = "debug")]
         handles.push(store_and_drop_matrix(
@@ -218,6 +217,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         debug_assert_eq!(inserted_coeff_indices.len(), level_width);
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
+        let pub_key_level =
+            sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
+        log_mem("Sampled pub key level");
 
         for num in 0..level_size {
             let mut handles_per_level: Vec<tokio::task::JoinHandle<()>> = Vec::new();
@@ -236,7 +238,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &dir_path,
                 &format!("b_{}_{num}", level + 1),
             ));
-            // M_{i,b} ←$ B_inv[i-1][*] ⋅ ( U_b ⋅ B[i][b] )
             let m_preimage_num = sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
@@ -249,7 +250,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &dir_path,
                 &format!("m_preimage_{level}_{num}"),
             ));
-            // N_{i,b} ←$ B_inv[i][b]   ⋅ ( U_* ⋅ B[i][*] )
             let n_preimage_num = sampler_trapdoor.preimage(
                 &params,
                 &b_num_trapdoor_level,
@@ -291,6 +291,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
             log_mem("Computed inserted_poly_gadget");
+
             let bottom =
                 pub_key_level[0].concat_matrix(&pub_key_level[1..]) - &inserted_poly_gadget;
             log_mem("Computed bottom");
@@ -313,27 +314,26 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     }
 
     /*
-      ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-      │  Preimage‐generation for final circuit evaluation step
-      │
-      │  1) Build the “final digits” circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
-      │  2) Evaluate f[x_L] on (C = {a_decomposed, b_decomposed}, public key bits…).
-      │  3) Form the target matrix Y = (eval_outputs_matrix + a_prf) ∥ 0.
-      │  4) Sample a trapdoor preimage of Y under B*_star_basis → final_preimage.
-      └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    =============================================================================
+     Preimage‐generation for final BGG+ encoding evaluation step (after all bit insertion)
+
+     1) Build the “final digits” circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
+     2) Evaluate f[x_L] on (C = {a_decomposed, b_decomposed}, public key bits…).
+     3) Form the target matrix Y = (eval_outputs_matrix + a_prf) ∥ 0.
+     4) Sample a trapdoor preimage of Y under B*_star_basis → final_preimage.
+    =============================================================================
     */
+
     #[cfg(feature = "bgm")]
     {
         player.play_music("bgm/obf_bgm5.mp3");
     }
 
-    // sample hardcoded key to be RLWE encrypted
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
-    log_mem("Sampled hardcoded_key_matrix");
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
 
-    //  c_att's (a,b), t is RLWE secret key
+    //  Generate RLWE ciphertext. c_att's (a,b), t is RLWE secret key
     let sampler_uniform = SU::new();
     let a = public_data.a_rlwe_bar;
     let b = rlwe_encrypt(
@@ -346,7 +346,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     );
     log_mem("Generated RLWE ciphertext {a, b}");
 
-    // decompose attribute, cipertext for empty inputs
+    // Decompose RLWE ciphertext. This is required to lower down error growth for BGG+ encoding
+    // evaluation.
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
@@ -356,7 +357,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed,
             &b_decomposed,
-            public_circuit.clone(),
+            public_circuit,
         );
         log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
@@ -384,13 +385,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     );
     log_mem("Sampled final_preimage");
     handles.push(store_and_drop_matrix(final_preimage, &dir_path, "final_preimage"));
-    let dir_path_clone = dir_path.clone();
+
     let store_hash_key = tokio::task::spawn_blocking(move || {
-        let path = dir_path_clone.join("hash_key");
+        let path = dir_path.join("hash_key");
         std::fs::write(&path, hash_key).expect("Failed to write hash_key file");
         log_mem("Stored hash_key");
     });
     handles.push(store_hash_key);
+
     join_all(handles).await;
 }
 
