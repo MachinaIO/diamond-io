@@ -63,17 +63,35 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let sampler_trapdoor = ST::new(&params, obf_params.trapdoor_sigma);
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let packed_output_size = public_data.packed_output_size;
+
+    /*
+     We reveal all input slots so the evaluator can multiply encodings,
+     but we keep the secret‐key slot(last slot) hidden unless we're in debug mode.
+     In the paper, the last slot corresponds to the FHE secret-key vector t.
+
+     Sample the initial public key (level 0) with our reveal flags.
+
+     Sample the initial BGG+ encodings. In paper notation this is the vector c_{t,ε} given by:
+
+         c_{t,ε}^T := ŝ_ε^T (A_{t,0} − t^T ⊗ G_{n+1})
+
+     where ŝ_ε is the initial secret key for encoding,
+     A_{t,0} is the public matrix at level 0,
+     t is the secret‐key vector, and G is the gadget matrix.
+    */
+    // Sample FHE secret key t
     let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
     log_mem("Sampled t_bar_matrix");
     let minus_t_bar = -t_bar_matrix.entry(0, 0);
-    let mut plaintexts = (0..obf_params.input_size.div_ceil(dim))
-        .map(|_| M::P::const_zero(params.as_ref()))
-        .collect_vec();
+    let mut plaintexts =
+        (0..(packed_input_size - 1)).map(|_| M::P::const_zero(&params)).collect_vec();
     plaintexts.push(minus_t_bar.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(minus_t_bar, &dir_path, "minus_t_bar"));
+    let mut reveal_plaintexts = vec![true; packed_input_size];
+    reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
 
-    // sample initial BGG+ encoding's secret key s
+    // Sample BGG+ encoding secret key s
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
@@ -84,11 +102,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let s_init = &bgg_encode_sampler.secret_vec;
     log_mem("Sampled s_init");
 
-    // plaintexts, encoding, public key
-    #[cfg(feature = "debug")]
-    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![true; 1]].concat();
-    #[cfg(not(feature = "debug"))]
-    let reveal_plaintexts = [vec![true; packed_input_size - 1], vec![false; 1]].concat();
+    // Sample c_{t,ε}^T, BGG+ encoding with s and t
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
     let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
