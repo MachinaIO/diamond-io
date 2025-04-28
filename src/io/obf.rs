@@ -360,7 +360,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &b_decomposed,
             public_circuit,
         );
-        log_mem(format!("Computed final_circuit: {:?}", final_circuit.count_gates_by_type_vec()));
+        log_mem("Computed final_circuit");
         let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);

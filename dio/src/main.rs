@@ -277,7 +277,7 @@ async fn main() {
                 &b_decomposed,
                 obf_params.public_circuit,
             );
-            info!("Final_cicuit: {:?}", final_circuit.count_gates_by_type_vec());
+            info!("Final Circuit: {:?}", final_circuit.count_gates_by_type_vec());
         }
     }
 }

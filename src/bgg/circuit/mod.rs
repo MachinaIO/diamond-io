@@ -47,20 +47,23 @@ impl PolyCircuit {
     }
 
     pub fn count_gates_by_type_vec(&self) -> HashMap<PolyGateType, usize> {
-        let mut counts: HashMap<PolyGateType, usize> = HashMap::new();
+        let mut counts = HashMap::new();
         self.count_helper(&mut counts);
         counts
     }
 
     fn count_helper(&self, counts: &mut HashMap<PolyGateType, usize>) {
         for gate in self.gates.values() {
-            *counts.entry(gate.gate_type.clone()).or_insert(0) += 1;
+            let key = match &gate.gate_type {
+                PolyGateType::Const { digits: _ } => PolyGateType::Const { digits: vec![] },
+                other => other.clone(),
+            };
+            *counts.entry(key).or_insert(0) += 1;
         }
         for sub in self.sub_circuits.values() {
             sub.count_helper(counts);
         }
     }
-
     pub fn input(&mut self, num_input: usize) -> Vec<usize> {
         #[cfg(debug_assertions)]
         assert_eq!(self.num_input, 0);
