@@ -4,16 +4,20 @@ use config::{RunBenchConfig, SimBenchNormConfig};
 #[cfg(feature = "disk")]
 use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
+    bgg::BggPublicKey,
     io::{
-        eval::evaluate, obf::obfuscate, params::ObfuscationParams,
-        utils::build_final_digits_circuit,
+        eval::evaluate,
+        obf::obfuscate,
+        params::ObfuscationParams,
+        utils::{PublicSampledData, build_final_digits_circuit},
     },
     poly::{
-        Poly, PolyElem, PolyParams,
+        Poly, PolyElem, PolyMatrix, PolyParams,
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler, FinRingElem,
         },
+        enc::rlwe_encrypt,
         sampler::{DistType, PolyUniformSampler},
     },
     utils::{calculate_directory_size, init_tracing},
@@ -24,6 +28,7 @@ use num_traits::identities::One;
 use diamond_io::utils::log_mem;
 use keccak_asm::Keccak256;
 use num_bigint::BigUint;
+use rand::Rng;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
@@ -73,6 +78,16 @@ enum Commands {
         #[arg(long)]
         mul_num: usize,
     },
+    BuildCircuit {
+        #[arg(short, long)]
+        config: PathBuf,
+
+        #[arg(long)]
+        add_num: usize,
+
+        #[arg(long)]
+        mul_num: usize,
+    },
 }
 
 #[tokio::main]
@@ -102,7 +117,6 @@ async fn main() {
             let switched_modulus = Arc::new(dio_config.switched_modulus);
             let public_circuit =
                 BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
-            info!("Public circuit: {:?}", public_circuit.count_gates_by_type_vec());
 
             let obf_params = ObfuscationParams {
                 params: params.clone(),
@@ -212,6 +226,58 @@ async fn main() {
             );
             let norm_json = serde_json::to_string(&norms).unwrap();
             fs::write(out_path, norm_json.as_bytes()).unwrap()
+        }
+        Commands::BuildCircuit { config, add_num, mul_num } => {
+            let contents = fs::read_to_string(&config).unwrap();
+            let dio_config: RunBenchConfig = toml::from_str(&contents).unwrap();
+            let params = DCRTPolyParams::new(
+                dio_config.ring_dimension,
+                dio_config.crt_depth,
+                dio_config.crt_bits,
+                dio_config.base_bits,
+            );
+            let log_base_q = params.modulus_digits();
+            let switched_modulus = Arc::new(dio_config.switched_modulus);
+            let public_circuit =
+                BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
+            let obf_params = ObfuscationParams {
+                params: params.clone(),
+                switched_modulus,
+                input_size: dio_config.input_size,
+                level_width: dio_config.level_width,
+                public_circuit,
+                d: dio_config.d,
+                encoding_sigma: dio_config.encoding_sigma,
+                hardcoded_key_sigma: dio_config.hardcoded_key_sigma,
+                p_sigma: dio_config.p_sigma,
+                trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
+            };
+            let sampler_uniform = DCRTPolyUniformSampler::new();
+            let mut rng = rand::rng();
+            let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+            let hash_key = rng.random::<[u8; 32]>();
+            let public_data =
+                PublicSampledData::<DCRTPolyHashSampler<Keccak256>>::sample(&obf_params, hash_key);
+            let hardcoded_key_matrix =
+                DCRTPolyMatrix::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
+            let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+            let a = public_data.a_rlwe_bar;
+            let b = rlwe_encrypt(
+                &params,
+                &sampler_uniform,
+                &t_bar_matrix,
+                &a,
+                &hardcoded_key_matrix,
+                obf_params.hardcoded_key_sigma,
+            );
+            let a_decomposed = a.entry(0, 0).decompose_base(&params);
+            let b_decomposed = b.entry(0, 0).decompose_base(&params);
+            let final_circuit = build_final_digits_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
+                &a_decomposed,
+                &b_decomposed,
+                obf_params.public_circuit,
+            );
+            info!("Final_cicuit: {:?}", final_circuit.count_gates_by_type_vec());
         }
     }
 }
