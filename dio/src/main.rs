@@ -102,6 +102,7 @@ async fn main() {
             let switched_modulus = Arc::new(dio_config.switched_modulus);
             let public_circuit =
                 BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
+            info!("Public circuit: {:?}", public_circuit.count_gates_by_type_vec());
 
             let obf_params = ObfuscationParams {
                 params: params.clone(),

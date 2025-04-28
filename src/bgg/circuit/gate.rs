@@ -11,7 +11,7 @@ impl PolyGate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum PolyGateType {
     Input,
     Const { digits: Vec<u32> },
