@@ -117,11 +117,7 @@ impl PolyCircuit {
     }
 
     pub fn xor_gate(&mut self, left: usize, right: usize) -> usize {
-        let two = self.add_gate(0, 0);
-        let mul = self.mul_gate(left, right);
-        let two_mul = self.mul_gate(two, mul);
-        let add = self.add_gate(left, right);
-        self.sub_gate(add, two_mul) // A + B - 2*A*B
+        self.add_gate(left, right) // A + B
     }
 
     /// Computes the XNOR gate as `NOT(XOR(left, right))`.
@@ -764,10 +760,7 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, &DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = (poly1.clone() + poly2.clone()) -
-            (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                poly1 *
-                poly2);
+        let expected = poly1 + poly2;
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
