@@ -1,23 +1,17 @@
 # diamond-io
 
-Implementation of [Diamond iO](https://eprint.iacr.org/2025/236)
+Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforward construction of indistinguishability obfuscation (iO).
 
-## Note
-
-We currently support two different matrix implementations:
-1. **In-memory** (default): Uses memory for all matrix storage.
-2. **Disk-backed** (enable with `--features disk`): Uses the `mmap()` syscall to store matrices on disk.
-
-## Test iO (without `test` feature)
-
-This disables helper logic and fields used only for testing, which are not required for iO security.
+## Test iO (End-To-End)
 
 - **Dummy parameters**  
+Fastest way to check if the end-to-end process works with insecure parameters:
 ```bash
 cargo test -r --test test_io_dummy_param --no-default-features -- --nocapture
 ```
 
-- **Real parameters** (tests are ignored by default)  
+- **Real parameters** 
+Warning: You need sufficient RAM.
 ```bash
 cargo test -r --test test_io_real_param --no-default-features -- --ignored --nocapture
 ```
@@ -27,7 +21,15 @@ cargo test -r --test test_io_real_param --no-default-features -- --ignored --noc
 uv run memory_profile.py cargo test -r --test test_io_dummy_param --no-default-features
 ```
 
+## Note
+
+We currently support two different matrix implementations:
+1. **In-memory** (default): Uses memory for all matrix storage.
+2. **Disk-backed** (enable with `--features disk`): Uses the `mmap()` syscall to store matrices on disk.
+
+
 ## Simulate Parameters
+
 Our simulator only targets circuits used for our benchmarks.
 
 1. Make sure to install [`dio`](/dio/) binary before
