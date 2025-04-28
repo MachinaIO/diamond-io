@@ -66,18 +66,25 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     /*
     =============================================================================
-     We reveal all input slots so the evaluator can multiply encodings,
-     but we keep the secret-key slot (last slot) hidden unless we're in debug mode.
-     In the paper, the last slot corresponds to the FHE secret-key vector t.
+    We reveal all input slots so the evaluator can multiply encodings,
+    but we keep the secret-key slot (last slot) hidden unless we're in debug mode.
+    In the paper, the last slot corresponds to the FHE secret-key vector t.
 
-     Sample the initial public key (level 0) with our reveal flags.
+    Sample the initial public key (level 0) with our reveal flags.
 
-     Sample the initial BGG+ encodings.
-     **NOTE:** the paper treats
-       - c_att  = encoding of evaluator's inputs
-       - c_t    = encoding of the FHE secret-key
+    Sample the initial BGG+ encodings.
+    **NOTE:** the paper treats
+        - c_att = encoding of (1, bits(X), x1, ..., xL), where X represents the evaluator's inputs.
+        - c_t = encoding of the FHE secret-key
     as two distinct vectors.
-    Here, however, `encodings_init` bundles them into one Vec<bool> of length L:
+
+    The length of encodings_init is (1 + packed_input_size + 1):
+       - 1 for the encoding of 1
+       - packed_input_size for the packed evaluator inputs,
+       - 1 for the encoding of t (secret key).
+
+    encodings_init is bundled into a single Vec<bool> of length L,
+    where:
        - indices 0..L-2 → c_att
        - index   L-1   → c_t
     =============================================================================
@@ -95,7 +102,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut reveal_plaintexts = vec![true; packed_input_size];
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
 
-    // Sample BGG+ encoding secret key s, BGG+ encoding with s and t
+    // Sample BGG+ encodings
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
@@ -119,20 +126,20 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     /*
     =============================================================================
-      Pre‐loop initialization:
+    Pre‐loop initialization:
 
-      1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-      2) Compute initial secret key p_init = (s_init, s_init)·B_* + error.
-      3) Create I_{d+1}, derive level_width, level_size, and depth.
-      4) For each i in 0..level_size, build
-           U_i = [ [ I_{d+1}, 0 ],
-                   [ 0,       R_i ] ]
-      5) Build wildcard matrix
-           U_* = [ [ 0,       0     ],
-                   [ I_{d+1}, I_{d+1} ] ]
+    1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
+    2) Compute initial secret key p_init = (s_init, s_init)·B_* + error.
+    3) Create I_{d+1}, derive level_width, level_size, and depth.
+    4) For each i in 0..level_size, build
+            U_i = [ [ I_{d+1}, 0 ],
+                    [ 0,       R_i ] ]
+    5) Build wildcard matrix
+            U_* = [ [ 0,       0     ],
+                    [ I_{d+1}, I_{d+1} ] ]
 
-      These values (B_*, p_init, I_{d+1}, U_i, U_*) are all set up
-      before entering the main preimage generation loop.
+    These values (B_*, p_init, I_{d+1}, U_i, U_*) are all set up
+    before entering the main preimage generation loop.
     =============================================================================
     */
 
@@ -186,17 +193,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut pub_key_cur = pub_key_init;
 
     /*
-    =============================================================================
-      Trapdoor preimage generation for input insertion step:
-
-      M_{i,b} ←$ B⁻¹_{i-1,*,γ_B} · ( U_b · B[i][b] )
-      N_{i,b} ←$ B⁻¹_{i,b,γ_B}   · ( U_* · B[i][*] )
-      K_{i,b} ←$ B⁻¹_{i,b,γ_B}   · (
-          -A_{att,i-1}·T_{att,i,b},
-           A_{att,i} - (0_{L_fhe+i,b,0_{L-i}} ⊗ G_{n+1}),
-           A_{t,i}
-        )
-    =============================================================================
+    Trapdoor preimage generation for the input insertion step.
+    For each depth, sample M, N, and K preimages at the corresponding level size.
     */
 
     for level in 0..depth {
