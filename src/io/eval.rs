@@ -238,17 +238,16 @@ where
                 encode.plaintext.clone()
             };
             log_mem(format!("plaintext at {}, {} computed", level, j));
-            // C_att, xL: new encoding of next level
             let new_encode: BggEncoding<M> =
                 BggEncoding::new(new_vec, pub_key_level[j].clone(), plaintext);
             log_mem(format!("new_encode at {}, {} computed", level, j));
             new_encodings.push(new_encode);
         }
-        // s_xL: input dependent secret key
+        // p_xL: p vector of the current level
         ps.push(p.clone());
-        // A_xL: input independent public key
+        // A_xL: input independent public key of the current level
         pub_key_cur = pub_key_level;
-        // c_att_xL: BGG+ encoding of level
+        // C_xL: BGG+ encoding of the current level
         encodings.push(new_encodings);
         #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&

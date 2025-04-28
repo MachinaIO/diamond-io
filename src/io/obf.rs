@@ -334,7 +334,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
 
-    //  Generate RLWE ciphertext. c_att's (a,b), t is RLWE secret key
+    // Generate RLWE ciphertext for the hardcoded key
     let sampler_uniform = SU::new();
     let a = public_data.a_rlwe_bar;
     let b = rlwe_encrypt(
