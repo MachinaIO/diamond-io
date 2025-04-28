@@ -392,7 +392,7 @@ mod tests {
         poly::{
             dcrt::{
                 params::DCRTPolyParams, poly::DCRTPoly, sampler::uniform::DCRTPolyUniformSampler,
-                DCRTPolyMatrix, FinRingElem,
+                DCRTPolyMatrix,
             },
             enc::rlwe_encrypt,
             sampler::{DistType, PolyUniformSampler},
@@ -776,11 +776,7 @@ mod tests {
         let poly2 = create_bit_random_poly(&params);
         let result =
             circuit.eval(&params, &DCRTPoly::const_one(&params), &[poly1.clone(), poly2.clone()]);
-        let expected = DCRTPoly::const_one(&params) -
-            ((poly1.clone() + poly2.clone()) -
-                (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
-                    poly1 *
-                    poly2));
+        let expected = DCRTPoly::const_one(&params) - (poly1 + poly2);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
     }
