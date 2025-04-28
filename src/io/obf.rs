@@ -74,7 +74,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     Sample the initial BGG+ encodings.
     **NOTE:** the paper treats
-        - c_att = encoding of (1, bits(X), x1, ..., xL), where X represents the evaluator's inputs.
+        - c_att = encoding of (1, bits(X)), where X represents the evaluator's inputs.
         - c_t = encoding of the FHE secret-key
     as two distinct vectors.
 
