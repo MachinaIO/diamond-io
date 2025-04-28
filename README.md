@@ -48,3 +48,8 @@ Our simulator only targets circuits used for our benchmarks.
 
 If the script is completed without any error, the found parameters are added to the last line in `simulator/params.log`. 
 Among the parameters, `crt_depth` denotes the minimum number of moduli satisfying correctness and security, and `d`, `encoding_sigma`, `hardcoded_key_sigma`, `p_sigma`, and `switched_modulus` can be used for `ObfuscationParams`.
+
+
+## Acknowledgments
+
+*We would like to sincerely thank the developers of [OpenFHE](https://github.com/openfheorg/openfhe-development) and [openfhe-rs](https://github.com/fairmath/openfhe-rs), open-source lattice and FHE libraries, whose optimized implementations of trapdoor sampling, RLWE primitives, and Rust bindings played a crucial role in helping us implement Diamond iO. We are also grateful to Prof. Yuriy Polyakov for his valuable advice on preimage sampling and his insightful feedback on optimizing our implementation. Any remaining errors are entirely our own responsibility.*
