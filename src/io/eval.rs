@@ -59,7 +59,6 @@ where
 
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-    let mut encodings = vec![];
     let mut p_cur = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
     log_mem("p_init loaded");
 
@@ -68,7 +67,7 @@ where
     #[cfg(not(feature = "debug"))]
     let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
     let params = Arc::new(obf_params.params.clone());
-    let encodings_init = parallel_iter!(0..packed_input_size + 1)
+    let mut encodings_cur = parallel_iter!(0..packed_input_size + 1)
         .map(|idx| {
             BggEncoding::<M>::read_from_files(
                 params.as_ref(),
@@ -80,8 +79,6 @@ where
             )
         })
         .collect::<Vec<_>>();
-
-    encodings.push(encodings_init.clone());
 
     let level_width = obf_params.level_width;
     #[cfg(feature = "debug")]
@@ -162,7 +159,7 @@ where
         };
         let expected_encoding_init = s_init.clone() *
             &(pub_key_cur[0].concat_matrix(&pub_key_cur[1..]) - inserted_poly_gadget);
-        assert_eq!(encodings[0][0].concat_vector(&encodings[0][1..]), expected_encoding_init);
+        assert_eq!(encodings_cur[0].concat_vector(&encodings_cur[1..]), expected_encoding_init);
     }
     let nums: Vec<u64> = inputs
         .chunks(level_width)
@@ -206,7 +203,7 @@ where
         log_mem(format!("v at {} computed", level));
         let new_encode_vec = {
             let rg = &public_data.rgs[*num as usize];
-            let encode_vec = encodings[level][0].concat_vector(&encodings[level][1..]);
+            let encode_vec = encodings_cur[0].concat_vector(&encodings_cur[1..]);
             let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
             encode_vec.mul_tensor_identity_decompose(rg, packed_input_size + 1) + v
         };
@@ -216,7 +213,7 @@ where
         let pub_key_level =
             sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
         log_mem(format!("pub_key_level at {} computed", level));
-        for (j, encode) in encodings[level].iter().enumerate() {
+        for (j, encode) in encodings_cur.iter().enumerate() {
             let m = d1 * log_base_q;
             let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
             log_mem(format!("new_vec at {}, {} computed", level, j));
@@ -247,7 +244,7 @@ where
         // A_xL: input independent public key of the current level
         pub_key_cur = pub_key_level;
         // C_xL: BGG+ encoding of the current level
-        encodings.push(new_encodings);
+        encodings_cur = new_encodings;
         #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&
             obf_params.hardcoded_key_sigma == 0.0 &&
@@ -314,7 +311,7 @@ where
         obf_params.public_circuit,
     );
     log_mem("final_circuit built");
-    let last_input_encodings = encodings.last().unwrap();
+    let last_input_encodings = encodings_cur;
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         &last_input_encodings[0],
