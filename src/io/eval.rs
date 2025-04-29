@@ -59,8 +59,8 @@ where
 
     let packed_input_size = public_data.packed_input_size;
     let packed_output_size = public_data.packed_output_size;
-    let (mut ps, mut encodings) = (vec![], vec![]);
-    let p_init = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
+    let mut encodings = vec![];
+    let mut p_cur = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
     log_mem("p_init loaded");
 
     #[cfg(feature = "debug")]
@@ -81,7 +81,6 @@ where
         })
         .collect::<Vec<_>>();
 
-    ps.push(p_init.clone());
     encodings.push(encodings_init.clone());
 
     let level_width = obf_params.level_width;
@@ -148,7 +147,7 @@ where
             let s_connect = s_init.concat_columns(&[&s_init]);
             s_connect * &bs[0][level_size]
         };
-        assert_eq!(p_init, expected_p_init);
+        assert_eq!(p_cur, expected_p_init);
         let inserted_poly_gadget = {
             let zero = <M::P as Poly>::const_zero(&params);
             let one = <M::P as Poly>::const_one(&params);
@@ -182,7 +181,7 @@ where
             &format!("m_preimage_{level}_{num}"),
         );
         log_mem(format!("m at {} loaded", level));
-        let q = ps[level].clone() * m;
+        let q = p_cur.clone() * m;
         log_mem(format!("q at {} computed", level));
         let n = M::read_from_files(
             params.as_ref(),
@@ -244,7 +243,7 @@ where
             new_encodings.push(new_encode);
         }
         // p_xL: p vector of the current level
-        ps.push(p.clone());
+        p_cur = p.clone();
         // A_xL: input independent public key of the current level
         pub_key_cur = pub_key_level;
         // C_xL: BGG+ encoding of the current level
@@ -336,7 +335,7 @@ where
         "final_preimage",
     );
     log_mem("final_preimage loaded");
-    let final_v = ps.last().unwrap().clone() * final_preimage;
+    let final_v = p_cur * final_preimage;
     log_mem("final_v computed");
     let z = output_encodings_vec - final_v;
     log_mem("z computed");
