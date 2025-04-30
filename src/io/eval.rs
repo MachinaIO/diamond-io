@@ -199,7 +199,7 @@ where
             &format!("k_preimage_{level}_{num}"),
         );
         log_mem(format!("k at {} loaded", level));
-        let p = p_cur.clone() * k;
+        let p = p_cur * k;
         log_mem(format!("p at {} computed", level));
         // let v = q.clone() * k;
         // log_mem(format!("v at {} computed", level));
@@ -252,6 +252,12 @@ where
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
         {
+            let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
+                &obf_params.params,
+                &dir_path,
+                "hardcoded_key",
+            );
+            let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
             let mut cur_s = s_init.clone();
             for prev_num in nums[0..level].iter() {
                 let r = public_data.rs[*prev_num as usize].clone();
@@ -259,10 +265,10 @@ where
             }
             let new_s = cur_s.clone() * &public_data.rs[*num as usize];
             let b_next_bit = bs[level + 1][*num as usize].clone();
-            // let expected_q = cur_s.concat_columns(&[&new_s]) * &b_next_bit;
-            // assert_eq!(q, expected_q);
-            let expected_p = new_s.concat_columns(&[&new_s]) * &bs[level + 1][level_size];
+            let expected_p = cur_s.concat_columns(&[&hardcoded_key_matrix]) * &b_next_bit;
             assert_eq!(p, expected_p);
+            // let expected_p = hardcoded_key.concat_columns(&[&cur_s]) * &bs[level +
+            // 1][level_size]; assert_eq!(p, expected_p);
             // let expcted_new_encode = {
             //     let dim = params.ring_dimension() as usize;
             //     let one = <M::P as Poly>::const_one(&params);
