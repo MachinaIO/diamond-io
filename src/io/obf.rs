@@ -193,8 +193,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
-    let mut pub_key_cur = pub_key_init;
-
     /*
     Trapdoor preimage generation for the input insertion step.
     For each depth, sample M, N, and K preimages at the corresponding level size.
@@ -212,16 +210,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         ));
 
         // Precomputation for k_preimage that are not num dependent
-        let lhs = -pub_key_cur[0].concat_matrix(&pub_key_cur[1..]);
+        let lhs = -pub_key_init[0].concat_matrix(&pub_key_init[1..]);
         let inserted_poly_index = 1 + (level * level_width) / dim;
         let inserted_coeff_indices =
             (0..level_width).map(|i| (i + (level * level_width)) % dim).collect_vec();
         debug_assert_eq!(inserted_coeff_indices.len(), level_width);
         let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
         let mut coeffs = vec![zero_coeff; dim];
-        let pub_key_level =
-            sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
-        log_mem("Sampled pub key level");
+        // let pub_key_level =
+        //     sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
+        // log_mem("Sampled pub key level");
 
         for num in 0..level_size {
             let mut handles_per_level: Vec<tokio::task::JoinHandle<()>> = Vec::new();
@@ -293,8 +291,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             };
             log_mem("Computed inserted_poly_gadget");
 
-            let bottom =
-                pub_key_level[0].concat_matrix(&pub_key_level[1..]) - &inserted_poly_gadget;
+            let bottom = pub_key_init[0].concat_matrix(&pub_key_init[1..]) - &inserted_poly_gadget;
             log_mem("Computed bottom");
             let k_target = top.concat_rows(&[&bottom]);
             log_mem("Computed k_target");
@@ -311,7 +308,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
         b_star_cur = b_star_level;
-        pub_key_cur = pub_key_level;
+        // pub_key_cur = pub_key_level;
     }
 
     /*
@@ -357,7 +354,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_cur[0], &pub_key_cur[1..]);
+        let eval_outputs =
+            final_circuit.eval(params.as_ref(), &pub_key_init[0], &pub_key_init[1..]);
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
