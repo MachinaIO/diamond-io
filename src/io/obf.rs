@@ -129,7 +129,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Pre‐loop initialization:
 
     1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-    2) Compute initial secret key p_init = (s_init, s_init)·B_* + error.
+    2) Compute initial secret key p_init = ((x_init , 1_L) * s_init)·B_* + error.
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size, build
             U_i = [ [ I_{d+1}, 0 ],
@@ -147,8 +147,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    // Compute Initial secret key p_init := (s_init, s_init)·B_*
-    let s_connect = s_init.concat_columns(&[&s_init]);
+    // Compute Initial secret key p_init := (((x_init , 1_L) * s_init)·B_* + error.
+    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
+    #[cfg(feature = "debug")]
+    handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
+    let s_connect = hardcoded_key_matrix.concat_columns(&[&s_init]);
     let s_b = s_connect * &b_star_cur;
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
@@ -326,10 +329,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     {
         player.play_music("bgm/obf_bgm5.mp3");
     }
-
-    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
-    #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
 
     // Generate RLWE ciphertext for the hardcoded key
     let sampler_uniform = SU::new();
