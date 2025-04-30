@@ -93,7 +93,7 @@ where
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub_key_init");
 
-    let mut pub_key_cur = pub_key_init;
+    // let mut pub_key_cur = pub_key_init;
 
     #[cfg(feature = "debug")]
     let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
@@ -212,9 +212,9 @@ where
         // log_mem(format!("new_encode_vec at {} computed", level));
         // let mut new_encodings = vec![];
         let inserted_poly_index = 1 + (level * level_width) / dim;
-        let pub_key_level =
-            sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
-        log_mem(format!("pub_key_level at {} computed", level));
+        // let pub_key_level =
+        //     sample_public_key_by_id(&bgg_pubkey_sampler, &params, level + 1, &reveal_plaintexts);
+        // log_mem(format!("pub_key_level at {} computed", level));
         // for (j, encode) in encodings_cur.iter().enumerate() {
         //     let m = d1 * log_base_q;
         //     let new_vec = new_encode_vec.slice_columns(j * m, (j + 1) * m);
@@ -243,8 +243,8 @@ where
         // }
         // p_xL: p vector of the current level
         p_cur = p.clone();
-        // A_xL: input independent public key of the current level
-        pub_key_cur = pub_key_level;
+        // // A_xL: input independent public key of the current level
+        // pub_key_cur = pub_key_level;
         // // C_xL: BGG+ encoding of the current level
         // encodings_cur = new_encodings;
         #[cfg(feature = "debug")]
