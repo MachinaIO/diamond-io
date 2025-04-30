@@ -113,16 +113,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         sampler_uniform,
         obf_params.encoding_sigma,
     );
-    let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
-    log_mem("Sampled initial encodings");
+    // let encodings_init = bgg_encode_sampler.sample(&params, &pub_key_init, &plaintexts);
+    // log_mem("Sampled initial encodings");
     let s_init = bgg_encode_sampler.secret_vec;
-    for (i, encoding) in encodings_init.into_iter().enumerate() {
-        handles.push(store_and_drop_bgg_encoding(
-            encoding,
-            &dir_path,
-            &format!("encoding_init_{i}"),
-        ));
-    }
+    // for (i, encoding) in encodings_init.into_iter().enumerate() {
+    //     handles.push(store_and_drop_bgg_encoding(
+    //         encoding,
+    //         &dir_path,
+    //         &format!("encoding_init_{i}"),
+    //     ));
+    // }
 
     /*
     =============================================================================
