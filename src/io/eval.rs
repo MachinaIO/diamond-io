@@ -164,7 +164,7 @@ where
             let input_polys =
                 coeffs.chunks(dim).map(|coeffs| M::P::from_coeffs(&params, coeffs)).collect_vec();
             polys.extend(input_polys);
-            polys.push(minus_t_bar.clone());
+            polys.push(minus_t_bar);
             let encoded_bits = M::from_poly_vec_row(&params, polys);
             let s_connect = encoded_bits.tensor(&s_init);
             let expected_p = s_connect * &b_stars[level + 1];
@@ -189,7 +189,19 @@ where
         obf_params.public_circuit,
     );
     log_mem("final_circuit built");
-    // todo: build last_input_encodings
+    // todo: build last_input_encodings with p_cur and K_F
+    // K_F
+    let final_preimage = M::read_from_files(
+        &obf_params.params,
+        m_b,
+        packed_output_size,
+        &dir_path,
+        "final_preimage",
+    );
+    log_mem("final_preimage loaded");
+    // q: from here (c_att, v) := p_xL * K_F ?
+    let final_v = p_cur * final_preimage;
+    log_mem("final_v computed");
     let last_input_encodings = encodings_cur;
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
@@ -203,16 +215,7 @@ where
         .collect::<Vec<_>>();
     let output_encodings_vec = output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
     log_mem("final_circuit evaluated and recomposed");
-    let final_preimage = M::read_from_files(
-        &obf_params.params,
-        m_b,
-        packed_output_size,
-        &dir_path,
-        "final_preimage",
-    );
-    log_mem("final_preimage loaded");
-    let final_v = p_cur * final_preimage;
-    log_mem("final_v computed");
+
     let z = output_encodings_vec - final_v;
     log_mem("z computed");
     debug_assert_eq!(z.size(), (1, packed_output_size));

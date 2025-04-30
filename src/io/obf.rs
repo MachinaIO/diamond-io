@@ -98,6 +98,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         (0..(packed_input_size - 1)).map(|_| M::P::const_zero(&params)).collect_vec();
     plaintexts.push(minus_t_bar.clone());
     #[cfg(feature = "debug")]
+    // A_FHE
     handles.push(store_and_drop_poly(minus_t_bar, &dir_path, "minus_t_bar"));
     let mut reveal_plaintexts = vec![true; packed_input_size];
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
@@ -329,6 +330,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target,
     );
     log_mem("Sampled final_preimage");
+    // K_F
     handles.push(store_and_drop_matrix(final_preimage, &dir_path, "final_preimage"));
 
     let store_hash_key = tokio::task::spawn_blocking(move || {
