@@ -141,8 +141,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("b star trapdoor init sampled");
 
     // Compute Initial secret key p_init := (((x_init , 0_L) ⊗ s_init)·B_*
-    let x_init_0_l = M::from_poly_vec_row(&params, plaintexts);
-    let s_connect = x_init_0_l.tensor(&s_init);
+    let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
+    let s_connect = encoded_bits.tensor(&s_init);
     let s_b = s_connect * &b_star_cur;
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
@@ -322,7 +322,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         )])
     };
     log_mem("Computed final_preimage_target");
-
+    // todo: final preimage B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
     let final_preimage = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,

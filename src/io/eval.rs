@@ -106,15 +106,10 @@ where
         obf_params.hardcoded_key_sigma == 0.0 &&
         obf_params.p_sigma == 0.0
     {
-        let zero = <M::P as Poly>::const_zero(&params);
-        let one = <M::P as Poly>::const_one(&params);
-        let mut polys = vec![];
-        polys.push(one);
-        for _ in 0..(packed_input_size - 1) {
-            polys.push(zero.clone());
-        }
-        polys.push(minus_t_bar.clone());
-        let encoded_bits = M::from_poly_vec_row(&params, polys);
+        let mut plaintexts =
+            (0..(packed_input_size - 1)).map(|_| M::P::const_zero(&params)).collect_vec();
+        plaintexts.push(minus_t_bar.clone());
+        let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
         let s_connect = encoded_bits.tensor(&s_init);
         let expected_p_init = s_connect * &b_stars[0];
         assert_eq!(p_cur, expected_p_init);
@@ -164,7 +159,7 @@ where
             let input_polys =
                 coeffs.chunks(dim).map(|coeffs| M::P::from_coeffs(&params, coeffs)).collect_vec();
             polys.extend(input_polys);
-            polys.push(minus_t_bar);
+            polys.push(minus_t_bar.clone());
             let encoded_bits = M::from_poly_vec_row(&params, polys);
             let s_connect = encoded_bits.tensor(&s_init);
             let expected_p = s_connect * &b_stars[level + 1];
@@ -201,8 +196,9 @@ where
     log_mem("final_preimage loaded");
     // q: from here (c_att, v) := p_xL * K_F ?
     let final_v = p_cur * final_preimage;
+    log_mem(format!("{} | {}", final_v.row_size(), final_v.col_size()));
     log_mem("final_v computed");
-    let last_input_encodings = encodings_cur;
+    let last_input_encodings = vec![];
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         &last_input_encodings[0],
@@ -217,7 +213,7 @@ where
     log_mem("final_circuit evaluated and recomposed");
 
     let z = output_encodings_vec - final_v;
-    log_mem("z computed");
+    log_mem("z computded");
     debug_assert_eq!(z.size(), (1, packed_output_size));
     #[cfg(feature = "debug")]
     if obf_params.encoding_sigma == 0.0 &&
