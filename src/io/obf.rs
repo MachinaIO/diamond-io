@@ -129,7 +129,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Pre‐loop initialization:
 
     1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-    2) Compute initial secret key p_init = ((x_init , 1_L) * s_init)·B_* + error.
+    2) Compute initial secret key p_init = ((x_init , 1_L) (tensor) s_init)·B_* + error.
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size, build
             U_i = [ [ I_{d+1}, 0 ],
@@ -151,7 +151,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
-    let s_connect = hardcoded_key_matrix.concat_columns(&[&s_init]);
+    let s_connect = hardcoded_key_matrix.tensor(&s_init);
     let s_b = s_connect * &b_star_cur;
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
@@ -263,7 +263,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             //     &dir_path,
             //     &format!("n_preimage_{level}_{num}"),
             // ));
-
+            // input dependant secret matrix
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             log_mem("Computed top");
