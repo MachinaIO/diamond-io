@@ -214,16 +214,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
-
-            let (_, b_num_level) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-            log_mem("Sampled b trapdoor for level and num");
-
-            #[cfg(feature = "debug")]
-            handles_per_level.push(store_and_drop_matrix(
-                b_num_level.clone(),
-                &dir_path,
-                &format!("b_{}_{num}", level + 1),
-            ));
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
             log_mem("Computed top");
@@ -253,7 +243,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
             };
             log_mem("Computed inserted_poly_gadget");
-
             let bottom = pub_key_init[0].concat_matrix(&pub_key_init[1..]) - &inserted_poly_gadget;
             log_mem("Computed bottom");
             let k_target = top.concat_rows(&[&bottom]);

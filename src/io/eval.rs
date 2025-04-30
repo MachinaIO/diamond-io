@@ -112,14 +112,18 @@ where
             "hardcoded_key",
         );
         let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
-        let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
-        let mut coeffs = vec![zero_coeff; dim];
-        let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
-        let inserted_poly_matrix = M::from_poly_vec_row(&params, vec![inserted_poly]);
+        let zero = <M::P as Poly>::const_zero(&params);
+        let one = <M::P as Poly>::const_one(&params);
+        let mut polys = vec![];
+        polys.push(one);
+        for _ in 0..(packed_input_size - 1) {
+            polys.push(zero.clone());
+        }
+        polys.push(minus_t_bar.clone());
+        let inserted_poly_matrix = M::from_poly_vec_row(&params, polys);
         let encoded_bits = hardcoded_key_matrix.concat_columns(&[&inserted_poly_matrix]);
         let s_connect = encoded_bits.tensor(&s_init);
-        let s_b = s_connect * &b_stars[0];
-        let expected_p_init = s_b;
+        let expected_p_init = s_connect * &b_stars[0];
         assert_eq!(p_cur, expected_p_init);
     }
     let nums: Vec<u64> = inputs
@@ -149,15 +153,35 @@ where
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
         {
+            let dim = params.ring_dimension() as usize;
+            let one = <M::P as Poly>::const_one(&params);
+            let mut polys = vec![];
+            polys.push(one);
+            let mut coeffs = vec![];
+            for bit in inputs[0..(level_width * (level + 1))].iter() {
+                if *bit {
+                    coeffs.push(<M::P as Poly>::Elem::one(&params.modulus()));
+                } else {
+                    coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));
+                }
+            }
+            for _ in 0..(obf_params.input_size - level_width * (level + 1)) {
+                coeffs.push(<M::P as Poly>::Elem::zero(&params.modulus()));
+            }
+            let input_polys =
+                coeffs.chunks(dim).map(|coeffs| M::P::from_coeffs(&params, coeffs)).collect_vec();
+            polys.extend(input_polys);
+            polys.push(minus_t_bar.clone());
+            let inserted_poly_matrix = M::from_poly_vec_row(&params, polys);
             let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
                 &obf_params.params,
                 &dir_path,
                 "hardcoded_key",
             );
             let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
-            let s_connect = hardcoded_key_matrix.tensor(&s_init);
-            let b_next_bit = b_stars[level + 1].clone();
-            let expected_p = s_connect * &b_next_bit;
+            let encoded_bits = hardcoded_key_matrix.concat_columns(&[&inserted_poly_matrix]);
+            let s_connect = encoded_bits.tensor(&s_init);
+            let expected_p = s_connect * &b_stars[level + 1];
             assert_eq!(p, expected_p);
         }
     }
