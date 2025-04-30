@@ -139,16 +139,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    // Compute Initial secret key p_init := (((x_init , 1_L) ⊗ s_init)·B_*
-    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
-    #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
-    let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
-    let mut coeffs = vec![zero_coeff; dim];
-    let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
-    let inserted_poly_matrix = M::from_poly_vec_row(&params, vec![inserted_poly]);
-    let encoded_bits = hardcoded_key_matrix.concat_columns(&[&inserted_poly_matrix]);
-    let s_connect = encoded_bits.tensor(&s_init);
+    // Compute Initial secret key p_init := (((x_init , 0_L) ⊗ s_init)·B_*
+    let x_init_0_l = M::from_poly_vec_row(&params, plaintexts);
+    let s_connect = x_init_0_l.tensor(&s_init);
     let s_b = s_connect * &b_star_cur;
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
@@ -177,6 +170,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // number of levels necessary to encode the input
     let depth = obf_params.input_size / level_width;
     let mut u_nums = Vec::with_capacity(level_size);
+    let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
+    let mut coeffs = vec![zero_coeff; dim];
     for i in 0..level_size {
         let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
         u_nums.push(u_i);
@@ -277,6 +272,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     {
         player.play_music("bgm/obf_bgm5.mp3");
     }
+
+    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
+    #[cfg(feature = "debug")]
+    handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
 
     // Generate RLWE ciphertext for the hardcoded key
     let sampler_uniform = SU::new();
