@@ -120,7 +120,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Pre‐loop initialization:
 
     1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-    2) Compute initial secret key p_init = ((x_init , 1_L) (tensor) s_init)·B_* + error.
+    2) Compute initial secret key p_init = ((x_init , 1_L) ⊗ s_init)·B_* + error.
     where x_init (1, bits(FHE encryption), t), t is fhe secret key, 1_L is dummy mask for input space
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size, build
@@ -139,7 +139,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    // Compute Initial secret key p_init := (((x_init , 1_L) * s_init)·B_*
+    // Compute Initial secret key p_init := (((x_init , 1_L) ⊗ s_init)·B_*
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
@@ -187,7 +187,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     /*
     Trapdoor preimage generation for the input insertion step.
-    For each depth, sample K preimages at the corresponding level size.
+    For each depth, sample K preimage at the corresponding level size.
     */
 
     for level in 0..depth {
@@ -230,6 +230,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             // bit decompose num over level_width bits
             let num_bits: Vec<bool> = (0..level_width).map(|i| (num >> i) & 1 == 1).collect();
             debug_assert_eq!(num_bits.len(), level_width);
+            // update input by updating coefficient
             for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
                 let bit = num_bits[i];
                 if bit {
@@ -270,7 +271,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
         b_star_cur = b_star_level;
-        // pub_key_cur = pub_key_level;
     }
 
     /*

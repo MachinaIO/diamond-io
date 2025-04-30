@@ -6,6 +6,7 @@ use crate::{
     io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     parallel_iter,
     poly::{
+        element::PolyElem,
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
         Poly, PolyMatrix, PolyParams,
     },
@@ -34,11 +35,11 @@ where
         player.play_music("bgm/eval_bgm1.mp3");
     }
     let d = obf_params.d;
-    let d1 = d + 1;
+    let d_plus_1 = d + 1;
     let params = Arc::new(obf_params.params.clone());
     let log_base_q = params.modulus_digits();
     let dim = params.ring_dimension() as usize;
-    let m_b = (2 * d1) * (2 + log_base_q);
+    let m_b = (2 * d_plus_1) * (2 + log_base_q);
     let dir_path = dir_path.as_ref().to_path_buf();
     assert_eq!(inputs.len(), obf_params.input_size);
 
@@ -78,7 +79,7 @@ where
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub_key_init");
     #[cfg(feature = "debug")]
-    let s_init = M::read_from_files(&obf_params.params, 1, d1, &dir_path, "s_init");
+    let s_init = M::read_from_files(&obf_params.params, 1, d_plus_1, &dir_path, "s_init");
     #[cfg(feature = "debug")]
     let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
         &obf_params.params,
@@ -87,18 +88,16 @@ where
     );
 
     #[cfg(feature = "debug")]
-    let bs = parallel_iter!(0..depth + 1)
+    let b_stars = parallel_iter!(0..depth + 1)
         .map(|level| {
-            let mut b_nums = vec![];
             let b_star = M::read_from_files(
                 params.as_ref(),
-                2 * d1,
+                2 * d_plus_1,
                 m_b,
                 &dir_path,
                 &format!("b_star_{level}"),
             );
-            b_nums.push(b_star);
-            b_nums
+            b_star
         })
         .collect::<Vec<_>>();
 
@@ -113,23 +112,15 @@ where
             "hardcoded_key",
         );
         let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
-        let expected_p_init = {
-            let s_connect = s_init.concat_columns(&[&s_init]);
-            s_connect * &bs[0][level_size]
-        };
+        let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
+        let mut coeffs = vec![zero_coeff; dim];
+        let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
+        let inserted_poly_matrix = M::from_poly_vec_row(&params, vec![inserted_poly]);
+        let encoded_bits = hardcoded_key_matrix.concat_columns(&[&inserted_poly_matrix]);
+        let s_connect = encoded_bits.tensor(&s_init);
+        let s_b = s_connect * &b_stars[0];
+        let expected_p_init = s_b;
         assert_eq!(p_cur, expected_p_init);
-        let inserted_poly_gadget = {
-            let zero = <M::P as Poly>::const_zero(&params);
-            let one = <M::P as Poly>::const_one(&params);
-            let mut polys = vec![];
-            polys.push(one);
-            for _ in 0..(packed_input_size - 1) {
-                polys.push(zero.clone());
-            }
-            polys.push(minus_t_bar.clone());
-            let gadget_d1 = M::gadget_matrix(&params, d1);
-            M::from_poly_vec_row(&params, polys).tensor(&gadget_d1)
-        };
     }
     let nums: Vec<u64> = inputs
         .chunks(level_width)
@@ -140,7 +131,7 @@ where
     debug_assert_eq!(nums.len(), depth);
 
     for (level, num) in nums.iter().enumerate() {
-        let k_columns = (1 + packed_input_size) * d1 * log_base_q;
+        let k_columns = (1 + packed_input_size) * d_plus_1 * log_base_q;
         let k = M::read_from_files(
             params.as_ref(),
             m_b,
@@ -165,7 +156,7 @@ where
             );
             let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
             let s_connect = hardcoded_key_matrix.tensor(&s_init);
-            let b_next_bit = bs[level + 1][*num as usize].clone();
+            let b_next_bit = b_stars[level + 1].clone();
             let expected_p = s_connect * &b_next_bit;
             assert_eq!(p, expected_p);
         }
@@ -234,7 +225,7 @@ where
         {
             let expected = last_s *
                 (output_encoding_ints[0].pubkey.matrix.clone() -
-                    M::unit_column_vector(&params, d1, d1 - 1) *
+                    M::unit_column_vector(&params, d_plus_1, d_plus_1 - 1) *
                         output_encoding_ints[0].plaintext.clone().unwrap());
             assert_eq!(output_encoding_ints[0].vector, expected);
         }
