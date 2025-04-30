@@ -170,15 +170,15 @@ where
     debug_assert_eq!(nums.len(), depth);
 
     for (level, num) in nums.iter().enumerate() {
-        let m = M::read_from_files(
-            params.as_ref(),
-            m_b,
-            m_b,
-            &dir_path,
-            &format!("m_preimage_{level}_{num}"),
-        );
-        log_mem(format!("m at {} loaded", level));
-        let p = p_cur.clone() * m;
+        // let m = M::read_from_files(
+        //     params.as_ref(),
+        //     m_b,
+        //     m_b,
+        //     &dir_path,
+        //     &format!("m_preimage_{level}_{num}"),
+        // );
+        // log_mem(format!("m at {} loaded", level));
+
         // log_mem(format!("q at {} computed", level));
         // let n = M::read_from_files(
         //     params.as_ref(),
@@ -189,16 +189,18 @@ where
         // );
         // log_mem(format!("n at {} loaded", level));
         // let p = q.clone() * n;
+
+        let k_columns = (1 + packed_input_size) * d1 * log_base_q;
+        let k = M::read_from_files(
+            params.as_ref(),
+            m_b,
+            k_columns,
+            &dir_path,
+            &format!("k_preimage_{level}_{num}"),
+        );
+        log_mem(format!("k at {} loaded", level));
+        let p = p_cur.clone() * k;
         log_mem(format!("p at {} computed", level));
-        // let k_columns = (1 + packed_input_size) * d1 * log_base_q;
-        // let k = M::read_from_files(
-        //     params.as_ref(),
-        //     m_b,
-        //     k_columns,
-        //     &dir_path,
-        //     &format!("k_preimage_{level}_{num}"),
-        // );
-        // log_mem(format!("k at {} loaded", level));
         // let v = q.clone() * k;
         // log_mem(format!("v at {} computed", level));
         // let new_encode_vec = {
@@ -311,6 +313,7 @@ where
         obf_params.public_circuit,
     );
     log_mem("final_circuit built");
+    // todo: build last_input_encodings
     let last_input_encodings = encodings_cur;
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,

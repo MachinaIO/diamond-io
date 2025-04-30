@@ -227,8 +227,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
 
-            let (b_num_trapdoor_level, b_num_level) =
-                sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
+            let (_, b_num_level) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
             log_mem("Sampled b trapdoor for level and num");
 
             #[cfg(feature = "debug")]
@@ -237,30 +236,30 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 &dir_path,
                 &format!("b_{}_{num}", level + 1),
             ));
-            let m_preimage_num = sampler_trapdoor.preimage(
-                &params,
-                &b_star_trapdoor_cur,
-                &b_star_cur,
-                &(u_nums[num].clone() * &b_num_level),
-            );
-            log_mem("Computed m_preimage_num");
-            handles_per_level.push(store_and_drop_matrix(
-                m_preimage_num,
-                &dir_path,
-                &format!("m_preimage_{level}_{num}"),
-            ));
-            let n_preimage_num = sampler_trapdoor.preimage(
-                &params,
-                &b_num_trapdoor_level,
-                &b_num_level,
-                &(u_star.clone() * &b_star_level.clone()),
-            );
-            log_mem("Computed n_preimage_num");
-            handles_per_level.push(store_and_drop_matrix(
-                n_preimage_num,
-                &dir_path,
-                &format!("n_preimage_{level}_{num}"),
-            ));
+            // let m_preimage_num = sampler_trapdoor.preimage(
+            //     &params,
+            //     &b_star_trapdoor_cur,
+            //     &b_star_level,
+            //     &(u_nums[num].clone() * &b_num_level),
+            // );
+            // log_mem("Computed m_preimage_num");
+            // handles_per_level.push(store_and_drop_matrix(
+            //     m_preimage_num,
+            //     &dir_path,
+            //     &format!("m_preimage_{level}_{num}"),
+            // ));
+            // let n_preimage_num = sampler_trapdoor.preimage(
+            //     &params,
+            //     &b_num_trapdoor_level,
+            //     &b_num_level,
+            //     &(u_star.clone() * &b_star_level.clone()),
+            // );
+            // log_mem("Computed n_preimage_num");
+            // handles_per_level.push(store_and_drop_matrix(
+            //     n_preimage_num,
+            //     &dir_path,
+            //     &format!("n_preimage_{level}_{num}"),
+            // ));
 
             let rg = &public_data.rgs[num];
             let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
@@ -297,7 +296,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             let k_target = top.concat_rows(&[&bottom]);
             log_mem("Computed k_target");
             let k_preimage_num =
-                sampler_trapdoor.preimage(&params, &b_num_trapdoor_level, &b_num_level, &k_target);
+                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_level, &k_target);
             log_mem("Computed k_preimage_num");
             handles_per_level.push(store_and_drop_matrix(
                 k_preimage_num,
