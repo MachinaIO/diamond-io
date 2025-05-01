@@ -57,7 +57,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let packed_input_size = public_data.packed_input_size;
     let log_base_q = params.modulus_digits();
     assert_eq!(public_circuit.num_input(), (2 * log_base_q) + (packed_input_size - 1));
-    let dim = params.ring_dimension() as usize;
+    let n = params.ring_dimension() as usize;
     let d = obf_params.d;
     let sampler_uniform = SU::new();
     let sampler_trapdoor = ST::new(&params, obf_params.trapdoor_sigma);
@@ -158,25 +158,26 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
-
-    let identity_d_plus_1 = M::identity(params.as_ref(), d + 1, None);
+    // todo: i just divide 2 but not sure why this worked
+    let identity_d_plus_1 = M::identity(params.as_ref(), (d + 1) / 2, None);
     // number of bits to be inserted at each level
     let level_width = obf_params.level_width;
     assert_eq!(obf_params.input_size % level_width, 0);
     // otherwise we need >1 polynomial to insert the bits for each level
-    assert!(level_width <= dim);
+    assert!(level_width <= n);
     // otherwise we get to a point in which the inserted bits have to be split between two
     // polynomials
-    if obf_params.input_size > dim {
-        assert_eq!(dim % level_width, 0);
+    if obf_params.input_size > n {
+        assert_eq!(n % level_width, 0);
     }
     let level_size = (1u64 << obf_params.level_width) as usize;
     // number of levels necessary to encode the input
     let depth = obf_params.input_size / level_width;
-    let mut u_nums = Vec::with_capacity(level_size);
-    for i in 0..level_size {
-        let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
-        u_nums.push(vec![u_i.clone(), u_i]);
+    let mut u_nums = Vec::with_capacity(depth);
+    for _ in 0..depth {
+        // todo: have u_0 and u_1 or replace bit. As we masked with 0_L, prob modify u_1
+        // correspondingly
+        u_nums.push(vec![identity_d_plus_1.clone(), identity_d_plus_1.clone()]);
     }
     log_mem("Computed u_0, u_1");
     #[cfg(feature = "debug")]
@@ -200,7 +201,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
         // Precomputation for k_preimage that are not num dependent
         let inserted_coeff_indices =
-            (0..level_width).map(|i| (i + (level * level_width)) % dim).collect_vec();
+            (0..level_width).map(|i| (i + (level * level_width)) % n).collect_vec();
         debug_assert_eq!(inserted_coeff_indices.len(), level_width);
 
         for num in 0..level_size {
@@ -209,12 +210,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
-            // actually this is the s_j_b , where j is level and b is bit
+            // actually this is the s_j_b on paper, where j is level and b is bit
             let rg = &public_data.rgs[num];
+            log_mem(format!("Computed s_full {} {}", rg.row_size(), rg.col_size()));
             let u = &u_nums[level][num];
-            log_mem("Computed s_full");
+            log_mem(format!("get u {} {}", u.row_size(), u.col_size()));
             let k_target = u.tensor(rg);
-            log_mem("Computed k_target");
+            log_mem(format!("Computed k_target {} {}", k_target.row_size(), k_target.col_size()));
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_level, &k_target);
             log_mem("Computed k_preimage_num");
