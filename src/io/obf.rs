@@ -4,7 +4,7 @@ use super::bgm::Player;
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggEncoding, BggPublicKey, DigitsToInt,
+        BggPublicKey, DigitsToInt,
     },
     io::{
         params::ObfuscationParams,
@@ -13,7 +13,7 @@ use crate::{
     poly::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
-        Poly, PolyElem, PolyMatrix, PolyParams,
+        Poly, PolyMatrix, PolyParams,
     },
     utils::log_mem,
 };
@@ -90,24 +90,27 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     =============================================================================
     */
 
+    // Sample BGG+ encoding secret key.
+    // We sample multiple s_bar because we are using module LWE to reduce FFT burden by reducing n.
+    let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+    log_mem("Sampled s_bars");
     // Sample FHE secret key t
-    let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
-    log_mem("Sampled t_bar_matrix");
-    let minus_t_bar = -t_bar_matrix.entry(0, 0);
+    let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
+    log_mem("Sampled t_bar");
+    // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
+    // We use t := -1 * t_bar
+    let t = -t_bar.entry(0, 0);
     let mut plaintexts =
         (0..(packed_input_size - 1)).map(|_| M::P::const_zero(&params)).collect_vec();
-    plaintexts.push(minus_t_bar.clone());
+    plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
-    // A_FHE
-    handles.push(store_and_drop_poly(minus_t_bar, &dir_path, "minus_t_bar"));
+    handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
     let mut reveal_plaintexts = vec![true; packed_input_size];
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
 
-    // Sample public key and secret key
+    // Sample public key and initial secret key
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem("Sampled pub key init");
-    let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-    log_mem("Sampled s_bars");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
@@ -121,8 +124,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Pre‐loop initialization:
 
     1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-    2) Compute initial secret key p_init = ((x_init , 1_L) ⊗ s_init)·B_* + error.
-    where x_init (1, bits(FHE encryption), t), t is fhe secret key, 1_L is dummy mask for input space
+    2) Compute initial secret key p_init = ((x_init , 0_L) ⊗ s_init)·B_* + error.
+    where x_init (1, bits(FHE encryption), t), t is fhe secret key, 0_L is dummy mask for input space
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size, build
             U_i = [ [ I_{d+1}, 0 ],
@@ -171,11 +174,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // number of levels necessary to encode the input
     let depth = obf_params.input_size / level_width;
     let mut u_nums = Vec::with_capacity(level_size);
-    let zero_coeff = <M::P as Poly>::Elem::zero(&params.modulus());
-    let mut coeffs = vec![zero_coeff; dim];
     for i in 0..level_size {
         let u_i = identity_d_plus_1.concat_diag(&[&public_data.rs[i]]);
-        u_nums.push(u_i);
+        u_nums.push(vec![u_i.clone(), u_i]);
     }
     log_mem("Computed u_0, u_1");
     #[cfg(feature = "debug")]
@@ -198,8 +199,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         ));
 
         // Precomputation for k_preimage that are not num dependent
-        let lhs = -pub_key_init[0].concat_matrix(&pub_key_init[1..]);
-        let inserted_poly_index = 1 + (level * level_width) / dim;
         let inserted_coeff_indices =
             (0..level_width).map(|i| (i + (level * level_width)) % dim).collect_vec();
         debug_assert_eq!(inserted_coeff_indices.len(), level_width);
@@ -210,38 +209,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
+            // actually this is the s_j_b , where j is level and b is bit
             let rg = &public_data.rgs[num];
-            let top = lhs.mul_tensor_identity_decompose(rg, 1 + packed_input_size);
-            log_mem("Computed top");
-            // bit decompose num over level_width bits
-            let num_bits: Vec<bool> = (0..level_width).map(|i| (num >> i) & 1 == 1).collect();
-            debug_assert_eq!(num_bits.len(), level_width);
-            // update input by updating coefficient
-            for (i, coeff_idx) in inserted_coeff_indices.iter().enumerate() {
-                let bit = num_bits[i];
-                if bit {
-                    coeffs[*coeff_idx] = <M::P as Poly>::Elem::one(&params.modulus());
-                }
-            }
-            let inserted_poly = M::P::from_coeffs(params.as_ref(), &coeffs);
-            log_mem("Computed inserted_poly");
-            let inserted_poly_gadget = {
-                let gadget_d_plus_1 = M::gadget_matrix(&params, d + 1);
-                let zero = <M::P as Poly>::const_zero(params.as_ref());
-                let mut polys = vec![];
-                for _ in 0..(inserted_poly_index) {
-                    polys.push(zero.clone());
-                }
-                polys.push(inserted_poly);
-                for _ in (inserted_poly_index + 1)..(packed_input_size + 1) {
-                    polys.push(zero.clone());
-                }
-                M::from_poly_vec_row(params.as_ref(), polys).tensor(&gadget_d_plus_1)
-            };
-            log_mem("Computed inserted_poly_gadget");
-            let bottom = pub_key_init[0].concat_matrix(&pub_key_init[1..]) - &inserted_poly_gadget;
-            log_mem("Computed bottom");
-            let k_target = top.concat_rows(&[&bottom]);
+            let u = &u_nums[level][num];
+            log_mem("Computed s_full");
+            let k_target = u.tensor(rg);
             log_mem("Computed k_target");
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_level, &k_target);
@@ -284,7 +256,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let b = rlwe_encrypt(
         params.as_ref(),
         &sampler_uniform,
-        &t_bar_matrix,
+        &t_bar,
         &a,
         &hardcoded_key_matrix,
         obf_params.hardcoded_key_sigma,
@@ -361,22 +333,22 @@ fn store_and_drop_matrix<M: PolyMatrix + 'static>(
     })
 }
 
-fn store_and_drop_bgg_encoding<M: PolyMatrix + 'static>(
-    encoding: BggEncoding<M>,
-    dir_path: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir_path = dir_path.to_path_buf();
-    let id_str = id.to_string();
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id_str}"));
-        Handle::current().block_on(async {
-            encoding.write_to_files(&dir_path, &id_str).await;
-        });
-        drop(encoding);
-        log_mem(format!("Stored {id_str}"));
-    })
-}
+// fn store_and_drop_bgg_encoding<M: PolyMatrix + 'static>(
+//     encoding: BggEncoding<M>,
+//     dir_path: &Path,
+//     id: &str,
+// ) -> tokio::task::JoinHandle<()> {
+//     let dir_path = dir_path.to_path_buf();
+//     let id_str = id.to_string();
+//     tokio::task::spawn_blocking(move || {
+//         log_mem(format!("Storing {id_str}"));
+//         Handle::current().block_on(async {
+//             encoding.write_to_files(&dir_path, &id_str).await;
+//         });
+//         drop(encoding);
+//         log_mem(format!("Stored {id_str}"));
+//     })
+// }
 
 #[cfg(feature = "debug")]
 fn store_and_drop_poly<P: Poly + 'static>(

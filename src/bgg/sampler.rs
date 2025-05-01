@@ -101,8 +101,8 @@ where
         error_sampler: S,
         gauss_sigma: f64,
     ) -> Self {
+        // s_init := (sampled secret, -1)
         let minus_one_poly = <S::M as PolyMatrix>::P::const_minus_one(params);
-        // 1*(d+1) row vector
         let mut secrets = secrets.to_vec();
         secrets.push(minus_one_poly);
         let secret_vec = S::M::from_poly_vec_row(params, secrets);

@@ -6,7 +6,6 @@ use crate::{
     io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     parallel_iter,
     poly::{
-        element::PolyElem,
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
         Poly, PolyMatrix, PolyParams,
     },
