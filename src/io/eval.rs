@@ -87,7 +87,7 @@ where
     );
 
     #[cfg(feature = "debug")]
-    let b_stars = parallel_iter!(0..depth + 1)
+    let b_stars = parallel_iter!(0..depth)
         .map(|level| {
             let b_star = M::read_from_files(
                 params.as_ref(),
@@ -122,6 +122,8 @@ where
     debug_assert_eq!(nums.len(), depth);
 
     for (level, num) in nums.iter().enumerate() {
+        let level = level + 1;
+        // todo: should we modify this?
         let k_columns = (1 + packed_input_size) * d_plus_1 * log_base_q;
         let k = M::read_from_files(
             params.as_ref(),

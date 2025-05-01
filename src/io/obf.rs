@@ -188,15 +188,15 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     For each depth, sample K preimage at the corresponding level size.
     */
 
-    for level in 0..depth {
+    for level in 1..depth {
         let (b_star_trapdoor_level, b_star_level) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-        log_mem("Sampled b_star trapdoor for level");
+        log_mem(format!("Sampled b_star trapdoor for level {}", level));
 
         #[cfg(feature = "debug")]
         handles.push(store_and_drop_matrix(
             b_star_level.clone(),
             &dir_path,
-            &format!("b_star_{}", level + 1),
+            &format!("b_star_{}", level),
         ));
 
         // Precomputation for k_preimage that are not num dependent
