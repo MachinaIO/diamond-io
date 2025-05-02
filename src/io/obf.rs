@@ -253,7 +253,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         player.play_music("bgm/obf_bgm5.mp3");
     }
 
-    // Sample A_att and initial secret key
+    // Sample A_att
     let pub_key_att = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     let (first_key, other_keys) =
         pub_key_att.split_first().expect("pub_key_att must contain at least one key");
@@ -283,9 +283,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
     handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
-    // P_att
-    //  B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
-    let final_preimage_target_att = pub_key_att_matrix -
+    // P_att := B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
+    let final_preimage_target_att = pub_key_att_matrix.clone() -
         identity_1_plus_packed_input_size.tensor(&identity_1_plus_packed_input_size);
     let final_preimage_att = sampler_trapdoor.preimage(
         &params,
@@ -295,7 +294,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     );
     log_mem("Sampled final_preimage_att");
     handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
-
+    handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
     // P_F
     let final_preimage_target_f = {
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
@@ -321,6 +320,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     log_mem("Computed final_preimage_target_f");
 
+    // K_F
     let final_preimage_f = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
@@ -328,7 +328,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_f,
     );
     log_mem("Sampled final_preimage_f");
-    // K_F
     handles.push(store_and_drop_matrix(final_preimage_f, &dir_path, "final_preimage_f"));
 
     let store_hash_key = tokio::task::spawn_blocking(move || {

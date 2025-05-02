@@ -67,16 +67,8 @@ where
     let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
     let params = Arc::new(obf_params.params.clone());
     let level_width = obf_params.level_width;
-    #[cfg(feature = "debug")]
-    let level_size = (1u64 << obf_params.level_width) as usize;
     assert!(inputs.len() % level_width == 0);
     let depth = obf_params.input_size / level_width;
-
-    // drop the first element from `reveal_plaintexts`` (this is set to true for `one` encofing
-    // within the sample logic)
-    let reveal_plaintexts = reveal_plaintexts[1..].to_vec();
-    let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
-    log_mem("Sampled pub_key_init");
     #[cfg(feature = "debug")]
     let s_init = M::read_from_files(&obf_params.params, 1, d_plus_1, &dir_path, "s_init");
     #[cfg(feature = "debug")]
@@ -186,21 +178,30 @@ where
         obf_params.public_circuit,
     );
     log_mem("final_circuit built");
-    // todo: build last_input_encodings with p_cur and K_F
-    // K_F
-    let final_preimage = M::read_from_files(
+    let final_preimage_f = M::read_from_files(
         &obf_params.params,
         m_b,
         packed_output_size,
         &dir_path,
-        "final_preimage",
+        "final_preimage_f",
     );
     log_mem("final_preimage loaded");
-    // q: from here (c_att, v) := p_xL * K_F ?
-    let final_v = p_cur * final_preimage;
-    log_mem(format!("{} | {}", final_v.row_size(), final_v.col_size()));
+    let final_v = p_cur.clone() * final_preimage_f;
     log_mem("final_v computed");
-    let last_input_encodings = vec![];
+
+    // todo
+    let pub_key_att =
+        M::read_from_files(&obf_params.params, m_b, packed_output_size, &dir_path, "pub_key_att");
+    let final_preimage_att = M::read_from_files(
+        &obf_params.params,
+        m_b,
+        packed_output_size,
+        &dir_path,
+        "final_preimage_att",
+    );
+    let c_att = p_cur * final_preimage_att;
+    let pub_key_att = crate::bgg::BggPublicKey { matrix: pub_key_att, reveal_plaintext: false };
+    let last_input_encodings = vec![BggEncoding::new(c_att, pub_key_att, None)];
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         &last_input_encodings[0],
