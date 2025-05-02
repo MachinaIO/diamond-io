@@ -40,6 +40,35 @@ where
     ///   the public keys should be revealed
     /// # Returns
     /// A vector of public key matrices
+    pub fn sample_matrix(
+        &self,
+        params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
+        tag: &[u8],
+        reveal_plaintexts: &[bool],
+    ) -> <S as PolyHashSampler<K>>::M {
+        let sampler = S::new();
+        let log_base_q = params.modulus_digits();
+        let secret_vec_size = self.d + 1;
+        let columns = secret_vec_size * log_base_q;
+        let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
+        let all_matrix = sampler.sample_hash(
+            params,
+            self.hash_key,
+            tag,
+            secret_vec_size,
+            columns * packed_input_size,
+            DistType::FinRingDist,
+        );
+        all_matrix
+    }
+
+    /// Sample a public key matrix
+    /// # Arguments
+    /// * `tag`: The tag to sample the public key matrix
+    /// * `reveal_plaintexts`: A vector of booleans indicating whether the plaintexts associated to
+    ///   the public keys should be revealed
+    /// # Returns
+    /// A vector of public key matrices
     pub fn sample(
         &self,
         params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
@@ -107,6 +136,38 @@ where
         secrets.push(minus_one_poly);
         let secret_vec = S::M::from_poly_vec_row(params, secrets);
         Self { secret_vec, error_sampler, gauss_sigma }
+    }
+
+    pub fn sample_matrix(
+        &self,
+        params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
+        public_keys: &[BggPublicKey<S::M>],
+        plaintexts: &[<S::M as PolyMatrix>::P],
+    ) -> S::M {
+        let secret_vec = &self.secret_vec;
+        let log_base_q = params.modulus_digits();
+        let packed_input_size = 1 + plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
+        let plaintexts: Vec<<S::M as PolyMatrix>::P> =
+            [&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
+                .concat();
+        let secret_vec_size = self.secret_vec.col_size();
+        let columns = secret_vec_size * log_base_q * packed_input_size;
+        let error: S::M = self.error_sampler.sample_uniform(
+            params,
+            1,
+            columns,
+            DistType::GaussDist { sigma: self.gauss_sigma },
+        );
+        let all_public_key_matrix: S::M = public_keys[0]
+            .matrix
+            .concat_columns(&public_keys[1..].par_iter().map(|pk| &pk.matrix).collect::<Vec<_>>());
+        let first_term = secret_vec.clone() * all_public_key_matrix;
+
+        let gadget = S::M::gadget_matrix(params, secret_vec_size);
+        let encoded_polys_vec = S::M::from_poly_vec_row(params, plaintexts.to_vec());
+        let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
+        let all_vector = first_term - second_term + error;
+        all_vector
     }
 
     pub fn sample(

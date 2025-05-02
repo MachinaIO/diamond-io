@@ -30,6 +30,22 @@ where
     )
 }
 
+pub fn sample_public_key_matrix_by_id<K: AsRef<[u8]>, S>(
+    sampler: &BGGPublicKeySampler<K, S>,
+    params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
+    id: usize,
+    reveal_plaintexts: &[bool],
+) -> <S as PolyHashSampler<K>>::M
+where
+    S: PolyHashSampler<K>,
+{
+    sampler.sample_matrix(
+        params,
+        &[TAG_BGG_PUBKEY_INPUT_PREFIX, &(id as u64).to_le_bytes()].concat(),
+        reveal_plaintexts,
+    )
+}
+
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
     pub rs: Vec<S::M>,

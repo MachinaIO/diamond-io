@@ -8,8 +8,9 @@ use crate::{
     },
     io::{
         params::ObfuscationParams,
-        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+        utils::{build_final_digits_circuit, sample_public_key_matrix_by_id, PublicSampledData},
     },
+    parallel_iter,
     poly::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
@@ -98,8 +99,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     reveal_plaintexts[packed_input_size + 1] = cfg!(feature = "debug");
 
     // Sample public key and initial secret key
-    let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
-    log_mem("Sampled pub key init");
+
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
@@ -254,6 +254,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         player.play_music("bgm/obf_bgm5.mp3");
     }
 
+    // Sample A_att and initial secret key
+    let pub_key_att =
+        sample_public_key_matrix_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
+    log_mem("Sampled pub key init");
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
@@ -278,15 +282,45 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
     handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
-    let final_preimage_target = {
+    // P_att
+    //  B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
+    let final_preimage_target_att = pub_key_att.clone() -
+        identity_1_plus_packed_input_size.tensor(&identity_1_plus_packed_input_size);
+    let final_preimage_att = sampler_trapdoor.preimage(
+        &params,
+        &b_star_trapdoor_cur,
+        &b_star_cur,
+        &final_preimage_target_att,
+    );
+    log_mem("Sampled final_preimage_att");
+    handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
+
+    let log_base_q = params.modulus_digits();
+    let secret_vec_size = bgg_pubkey_sampler.d + 1;
+    let columns = secret_vec_size * log_base_q;
+    let pub_key_att_encodings: Vec<_> = parallel_iter!(0..packed_input_size)
+        .map(|idx| {
+            let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
+            BggPublicKey::new(
+                pub_key_att.slice_columns(columns * idx, columns * (idx + 1)),
+                reveal_plaintext,
+            )
+        })
+        .collect();
+
+    // P_F
+    let final_preimage_target_f = {
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed,
             &b_decomposed,
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs =
-            final_circuit.eval(params.as_ref(), &pub_key_init[0], &pub_key_init[1..]);
+        let eval_outputs = final_circuit.eval(
+            params.as_ref(),
+            &pub_key_att_encodings[0],
+            &pub_key_att_encodings[1..],
+        );
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
@@ -301,17 +335,17 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             packed_output_size,
         )])
     };
-    log_mem("Computed final_preimage_target");
-    // todo: final preimage B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
-    let final_preimage = sampler_trapdoor.preimage(
+    log_mem("Computed final_preimage_target_f");
+
+    let final_preimage_f = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
         &b_star_cur,
-        &final_preimage_target,
+        &final_preimage_target_f,
     );
-    log_mem("Sampled final_preimage");
+    log_mem("Sampled final_preimage_f");
     // K_F
-    handles.push(store_and_drop_matrix(final_preimage, &dir_path, "final_preimage"));
+    handles.push(store_and_drop_matrix(final_preimage_f, &dir_path, "final_preimage_f"));
 
     let store_hash_key = tokio::task::spawn_blocking(move || {
         let path = dir_path.join("hash_key");
