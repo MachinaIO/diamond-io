@@ -62,8 +62,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let sampler_trapdoor = ST::new(&params, obf_params.trapdoor_sigma);
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let packed_output_size = public_data.packed_output_size;
+    // todo: do we need to sample unit vector
     let u_1_l =
-        sampler_uniform.sample_uniform(&params, 1, packed_input_size + 1, DistType::BitDist);
+        sampler_uniform.sample_uniform(&params, packed_input_size + 1, 1, DistType::BitDist);
 
     /*
     =============================================================================
@@ -95,9 +96,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
-    let mut reveal_plaintexts = vec![true; packed_input_size + 2];
+    // todo: i first used packed_input_size + 2 for reveal_plaintexts, where actually
+    // packed_input_size is the one worked. why?
+    let mut reveal_plaintexts = vec![true; packed_input_size];
     // Do we want to reveal last slot which is t of FHE secret key?
-    reveal_plaintexts[packed_input_size + 1] = cfg!(feature = "debug");
+    reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
@@ -217,18 +220,18 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
             let k_target = u.tensor(rs);
             log_mem(format!("Computed U ⊗ S ({},{})", k_target.row_size(), k_target.col_size()));
-            // let k_preimage_num = sampler_trapdoor.preimage(
-            //     &params,
-            //     &b_star_trapdoor_cur,
-            //     &b_star_cur,
-            //     &(k_target * b_star_level.clone()),
-            // );
-            // log_mem("Computed k_preimage_num");
-            // handles_per_level.push(store_and_drop_matrix(
-            //     k_preimage_num,
-            //     &dir_path,
-            //     &format!("k_preimage_{level}_{num}"),
-            // ));
+            let k_preimage_num = sampler_trapdoor.preimage(
+                &params,
+                &b_star_trapdoor_cur,
+                &b_star_cur,
+                &(k_target * b_star_level.clone()),
+            );
+            log_mem("Computed k_preimage_num");
+            handles_per_level.push(store_and_drop_matrix(
+                k_preimage_num,
+                &dir_path,
+                &format!("k_preimage_{level}_{num}"),
+            ));
             join_all(handles_per_level).await;
         }
 
@@ -287,7 +290,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_n+1
-    let gadget = M::gadget_matrix(&params, n + 1);
+    let gadget = M::gadget_matrix(&params, d + 1);
     let final_preimage_target_att =
         u_1_l.tensor(&pub_key_att_matrix) - identity_1_plus_packed_input_size.tensor(&gadget);
     let final_preimage_att = sampler_trapdoor.preimage(
@@ -317,11 +320,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        u_1_l.tensor(&(eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
-            params.as_ref(),
-            d + 1,
-            packed_output_size,
-        )]))
+        u_1_l.tensor(&(eval_outputs_matrix + public_data.a_prf))
     };
     log_mem("Computed final_preimage_target_f");
 
