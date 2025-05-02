@@ -23,6 +23,7 @@ use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
 use tokio::runtime::Handle;
+use tracing::info;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -72,21 +73,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     Sample the initial public key (level 0) with our reveal flags.
 
-    Sample the initial BGG+ encodings.
-    **NOTE:** the paper treats
-        - c_att = encoding of (1, bits(X)), where X represents the evaluator's inputs.
-        - c_t = encoding of the FHE secret-key
-    as two distinct vectors.
-
-    The length of encodings_init is (1 + packed_input_size + 1):
+    The length of encodings_init is (1 + packed_input_size):
        - 1 for the encoding of 1
-       - packed_input_size for the packed evaluator inputs,
-       - 1 for the encoding of t (secret key).
-
-    encodings_init is bundled into a single Vec<bool> of length L,
-    where:
-       - indices 0..L-2 → c_att
-       - index   L-1   → c_t
+       - packed_input_size for the packed evaluator inputs and the encoding of t(secret key).
     =============================================================================
     */
 
@@ -101,7 +90,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
     let mut plaintexts =
-        (0..(packed_input_size - 1)).map(|_| M::P::const_zero(&params)).collect_vec();
+        (0..(packed_input_size - 1)).map(|_| M::P::const_all_ones(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
@@ -124,17 +113,15 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Pre‐loop initialization:
 
     1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-    2) Compute initial secret key p_init = ((x_init , 0_L) ⊗ s_init)·B_* + error.
-    where x_init (1, bits(FHE encryption), t), t is fhe secret key, 0_L is dummy mask for input space
+    2) Compute initial secret key p_init = ((1, 1_L, t) ⊗ s_init)·B_* + error.
+    where 1_L is dummy mask for input space and t is fhe secret key,
     3) Create I_{d+1}, derive level_width, level_size, and depth.
-    4) For each i in 0..level_size, build
-            U_i = [ [ I_{d+1}, 0 ],
-                    [ 0,       R_i ] ]
-    5) Build wildcard matrix
-            U_* = [ [ 0,       0     ],
-                    [ I_{d+1}, I_{d+1} ] ]
+    4) For each i in 0..level_size,
+        For each j in 0..depth,
+            U_{j,1} = I_{2 + packed_input_size}
+            U_(j,i) = ...
 
-    These values (B_*, p_init, I_{d+1}, U_i, U_*) are all set up
+    These values (B_*, p_init, I_{d+1}, U_{j, i}) are all set up
     before entering the main preimage generation loop.
     =============================================================================
     */
@@ -143,7 +130,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
     log_mem("b star trapdoor init sampled");
 
-    // Compute Initial secret key p_init := (((x_init , 0_L) ⊗ s_init)·B_*
+    // Compute p_init
     let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
     let s_connect = encoded_bits.tensor(&s_init);
     let s_b = s_connect * &b_star_cur;
@@ -158,8 +145,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
-    // todo: i just divide 2 but not sure why this worked
-    let identity_d_plus_1 = M::identity(params.as_ref(), (d + 1) / 2, None);
+    let identity_1_plus_packed_input_size =
+        M::identity(params.as_ref(), 1 + packed_input_size, None);
+    info!(
+        "computed identity_1_plus_packed_input_size {} {}",
+        identity_1_plus_packed_input_size.row_size(),
+        identity_1_plus_packed_input_size.col_size()
+    );
     // number of bits to be inserted at each level
     let level_width = obf_params.level_width;
     assert_eq!(obf_params.input_size % level_width, 0);
@@ -175,9 +167,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let depth = obf_params.input_size / level_width;
     let mut u_nums = Vec::with_capacity(depth);
     for _ in 0..depth {
-        // todo: have u_0 and u_1 or replace bit. As we masked with 0_L, prob modify u_1
-        // correspondingly
-        u_nums.push(vec![identity_d_plus_1.clone(), identity_d_plus_1.clone()]);
+        // TODO: now we are just pushing U_{j,1}, ideally we should push U_{j,i} for i in
+        // 0..level_size
+        u_nums.push(vec![identity_1_plus_packed_input_size.clone(); level_size]);
     }
     log_mem("Computed u_0, u_1");
     #[cfg(feature = "debug")]
@@ -217,8 +209,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             log_mem(format!("get u {} {}", u.row_size(), u.col_size()));
             let k_target = u.tensor(rg);
             log_mem(format!("Computed k_target {} {}", k_target.row_size(), k_target.col_size()));
-            let k_preimage_num =
-                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_level, &k_target);
+            let k_preimage_num = sampler_trapdoor.preimage(
+                &params,
+                &b_star_trapdoor_cur,
+                &b_star_cur.clone(),
+                &(k_target * b_star_level.clone()),
+            );
             log_mem("Computed k_preimage_num");
             handles_per_level.push(store_and_drop_matrix(
                 k_preimage_num,
