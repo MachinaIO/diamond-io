@@ -8,9 +8,8 @@ use crate::{
     },
     io::{
         params::ObfuscationParams,
-        utils::{build_final_digits_circuit, sample_public_key_matrix_by_id, PublicSampledData},
+        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     },
-    parallel_iter,
     poly::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
@@ -255,8 +254,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     }
 
     // Sample A_att and initial secret key
-    let pub_key_att =
-        sample_public_key_matrix_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
+    let pub_key_att = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
+    let (first_key, other_keys) =
+        pub_key_att.split_first().expect("pub_key_att must contain at least one key");
+    let pub_key_att_matrix: M = first_key.concat_matrix(other_keys);
     log_mem("Sampled pub key init");
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     #[cfg(feature = "debug")]
@@ -284,7 +285,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     // P_att
     //  B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
-    let final_preimage_target_att = pub_key_att.clone() -
+    let final_preimage_target_att = pub_key_att_matrix -
         identity_1_plus_packed_input_size.tensor(&identity_1_plus_packed_input_size);
     let final_preimage_att = sampler_trapdoor.preimage(
         &params,
@@ -295,19 +296,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled final_preimage_att");
     handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
 
-    let log_base_q = params.modulus_digits();
-    let secret_vec_size = bgg_pubkey_sampler.d + 1;
-    let columns = secret_vec_size * log_base_q;
-    let pub_key_att_encodings: Vec<_> = parallel_iter!(0..packed_input_size)
-        .map(|idx| {
-            let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
-            BggPublicKey::new(
-                pub_key_att.slice_columns(columns * idx, columns * (idx + 1)),
-                reveal_plaintext,
-            )
-        })
-        .collect();
-
     // P_F
     let final_preimage_target_f = {
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
@@ -316,11 +304,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs = final_circuit.eval(
-            params.as_ref(),
-            &pub_key_att_encodings[0],
-            &pub_key_att_encodings[1..],
-        );
+        let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..]);
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
