@@ -23,7 +23,6 @@ use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
 use tokio::runtime::Handle;
-use tracing::info;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -155,11 +154,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
     let identity_1_plus_packed_input_size =
         M::identity(params.as_ref(), 1 + packed_input_size, None);
-    info!(
-        "computed identity_1_plus_packed_input_size {} {}",
+    log_mem(format!(
+        "Computed identity_1_plus_packed_input_size {} {}",
         identity_1_plus_packed_input_size.row_size(),
         identity_1_plus_packed_input_size.col_size()
-    );
+    ));
     // number of bits to be inserted at each level
     let level_width = obf_params.level_width;
     assert_eq!(obf_params.input_size % level_width, 0);
