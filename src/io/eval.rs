@@ -187,6 +187,7 @@ where
     );
     log_mem("final_preimage loaded");
     // v := p * K_F
+
     let final_v = p_cur.clone() * final_preimage_f;
     log_mem("final_v computed");
 
@@ -200,16 +201,16 @@ where
         "final_preimage_att",
     );
     // c_att := p * K_att
-    let c_att = p_cur * final_preimage_att;
+    let p_vec = p_cur.get_row(0);
     let pub_key_att = crate::bgg::BggPublicKey { matrix: pub_key_att, reveal_plaintext: false };
-    // todo c_F := c_att * H_F_x
-    // todo Compute H_F_x to update the encoded values according to the circuit F
-    let last_input_encodings = [BggEncoding::new(c_att, pub_key_att, None)];
-    let output_encodings = final_circuit.eval::<BggEncoding<M>>(
-        &params,
-        &last_input_encodings[0],
-        &last_input_encodings[1..],
-    );
+    let c_att: Vec<BggEncoding<M>> = p_vec
+        .into_iter()
+        .map(|p| {
+            let m = M::from_poly_vec(&params, vec![vec![p]]) * final_preimage_att.clone();
+            BggEncoding::new(m, pub_key_att.clone(), None)
+        })
+        .collect();
+    let output_encodings = final_circuit.eval::<BggEncoding<M>>(&params, &c_att[0], &c_att[1..]);
     log_mem("final_circuit evaluated");
     let output_encoding_ints = output_encodings
         .par_chunks(log_base_q)
