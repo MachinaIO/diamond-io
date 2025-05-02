@@ -62,6 +62,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let sampler_trapdoor = ST::new(&params, obf_params.trapdoor_sigma);
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let packed_output_size = public_data.packed_output_size;
+    let u_1_l =
+        sampler_uniform.sample_uniform(&params, 1, packed_input_size + 1, DistType::BitDist);
 
     /*
     =============================================================================
@@ -215,18 +217,18 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
             let k_target = u.tensor(rs);
             log_mem(format!("Computed U ⊗ S ({},{})", k_target.row_size(), k_target.col_size()));
-            let k_preimage_num = sampler_trapdoor.preimage(
-                &params,
-                &b_star_trapdoor_cur,
-                &b_star_cur,
-                &(k_target * b_star_level.clone()),
-            );
-            log_mem("Computed k_preimage_num");
-            handles_per_level.push(store_and_drop_matrix(
-                k_preimage_num,
-                &dir_path,
-                &format!("k_preimage_{level}_{num}"),
-            ));
+            // let k_preimage_num = sampler_trapdoor.preimage(
+            //     &params,
+            //     &b_star_trapdoor_cur,
+            //     &b_star_cur,
+            //     &(k_target * b_star_level.clone()),
+            // );
+            // log_mem("Computed k_preimage_num");
+            // handles_per_level.push(store_and_drop_matrix(
+            //     k_preimage_num,
+            //     &dir_path,
+            //     &format!("k_preimage_{level}_{num}"),
+            // ));
             join_all(handles_per_level).await;
         }
 
@@ -287,7 +289,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_n+1
     let gadget = M::gadget_matrix(&params, n + 1);
     let final_preimage_target_att =
-        pub_key_att_matrix.clone() - identity_1_plus_packed_input_size.tensor(&gadget);
+        u_1_l.tensor(&pub_key_att_matrix) - identity_1_plus_packed_input_size.tensor(&gadget);
     let final_preimage_att = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
@@ -315,11 +317,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
-        (eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
+        u_1_l.tensor(&(eval_outputs_matrix + public_data.a_prf).concat_rows(&[&M::zero(
             params.as_ref(),
             d + 1,
             packed_output_size,
-        )])
+        )]))
     };
     log_mem("Computed final_preimage_target_f");
 
