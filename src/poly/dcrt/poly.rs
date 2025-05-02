@@ -168,12 +168,18 @@ impl Poly for DCRTPoly {
     }
 
     fn const_max(params: &Self::Params) -> Self {
-        let coeffs = vec![FinRingElem::max_q(&params.modulus()); params.ring_dimension() as usize];
+        let coeffs = vec![
+            FinRingElem::new(BigUint::from(1u32), params.modulus());
+            params.ring_dimension() as usize
+        ];
         Self::from_coeffs(params, &coeffs)
     }
 
     fn const_all_ones(params: &Self::Params) -> Self {
-        let coeffs = vec![FinRingElem::new(BigUint::from(1u32), params.modulus()); params.ring_dimension() as usize];
+        let coeffs = vec![
+            FinRingElem::new(BigUint::from(1u32), params.modulus());
+            params.ring_dimension() as usize
+        ];
         Self::from_coeffs(params, &coeffs)
     }
 

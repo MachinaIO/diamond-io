@@ -2,8 +2,8 @@
 use super::bgm::Player;
 use super::params::ObfuscationParams;
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
-    io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+    bgg::{BggEncoding, DigitsToInt},
+    io::utils::{build_final_digits_circuit, PublicSampledData},
     parallel_iter,
     poly::{
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
@@ -37,7 +37,7 @@ where
     let d_plus_1 = d + 1;
     let params = Arc::new(obf_params.params.clone());
     let log_base_q = params.modulus_digits();
-    let dim = params.ring_dimension() as usize;
+    // let dim = params.ring_dimension() as usize;
     let m_b = (2 * d_plus_1) * (2 + log_base_q);
     let dir_path = dir_path.as_ref().to_path_buf();
     assert_eq!(inputs.len(), obf_params.input_size);
@@ -52,7 +52,7 @@ where
     };
     log_mem("hash_key loaded");
 
-    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+    // let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
 
@@ -61,10 +61,10 @@ where
     let mut p_cur = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
     log_mem("p_init loaded");
 
-    #[cfg(feature = "debug")]
-    let reveal_plaintexts = [vec![true; packed_input_size], vec![true; 1]].concat();
-    #[cfg(not(feature = "debug"))]
-    let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
+    // #[cfg(feature = "debug")]
+    // let reveal_plaintexts = [vec![true; packed_input_size], vec![true; 1]].concat();
+    // #[cfg(not(feature = "debug"))]
+    // let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
     let params = Arc::new(obf_params.params.clone());
     let level_width = obf_params.level_width;
     assert!(inputs.len() % level_width == 0);
@@ -127,7 +127,7 @@ where
         log_mem(format!("k at {} loaded", level));
         let p = p_cur * k;
         log_mem(format!("p at {} computed", level));
-        let inserted_poly_index = 1 + (level * level_width) / dim;
+        // let inserted_poly_index = 1 + (level * level_width) / dim;
         p_cur = p.clone();
         //todo:right now this error
         //     #[cfg(feature = "debug")]

@@ -96,9 +96,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut reveal_plaintexts = vec![true; packed_input_size + 2];
     // Do we want to reveal last slot which is t of FHE secret key?
     reveal_plaintexts[packed_input_size + 1] = cfg!(feature = "debug");
-
-    // Sample public key and initial secret key
-
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
         &s_bars,
@@ -283,7 +280,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
     handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
-    // P_att := B^(-1) ( u ⊗ A - I ⊗ G, u ⊗ A_F )
+    // P_att := B^(-1) (u ⊗ A - I ⊗ G)
     let final_preimage_target_att = pub_key_att_matrix.clone() -
         identity_1_plus_packed_input_size.tensor(&identity_1_plus_packed_input_size);
     let final_preimage_att = sampler_trapdoor.preimage(
@@ -295,7 +292,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled final_preimage_att");
     handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
     handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
-    // P_F
+    // P_F := B^(-1) (u ⊗ A_F)
     let final_preimage_target_f = {
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed,
