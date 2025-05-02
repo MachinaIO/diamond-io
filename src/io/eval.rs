@@ -186,10 +186,10 @@ where
         "final_preimage_f",
     );
     log_mem("final_preimage loaded");
+    // v := p * K_F
     let final_v = p_cur.clone() * final_preimage_f;
     log_mem("final_v computed");
 
-    // todo
     let pub_key_att =
         M::read_from_files(&obf_params.params, m_b, packed_output_size, &dir_path, "pub_key_att");
     let final_preimage_att = M::read_from_files(
@@ -199,9 +199,12 @@ where
         &dir_path,
         "final_preimage_att",
     );
+    // c_att := p * K_att
     let c_att = p_cur * final_preimage_att;
     let pub_key_att = crate::bgg::BggPublicKey { matrix: pub_key_att, reveal_plaintext: false };
-    let last_input_encodings = vec![BggEncoding::new(c_att, pub_key_att, None)];
+    // todo c_F := c_att * H_F_x
+    // todo Compute H_F_x to update the encoded values according to the circuit F
+    let last_input_encodings = [BggEncoding::new(c_att, pub_key_att, None)];
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(
         &params,
         &last_input_encodings[0],
@@ -214,7 +217,6 @@ where
         .collect::<Vec<_>>();
     let output_encodings_vec = output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
     log_mem("final_circuit evaluated and recomposed");
-
     let z = output_encodings_vec - final_v;
     log_mem("z computded");
     debug_assert_eq!(z.size(), (1, packed_output_size));
