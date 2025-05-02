@@ -201,15 +201,17 @@ where
         "final_preimage_att",
     );
     // c_att := p * K_att
-    let p_vec = p_cur.get_row(0);
+    let c_att = p_cur * final_preimage_att;
+    log_mem(format!("Computed c_att ({}, {})", c_att.row_size(), c_att.col_size()));
     let pub_key_att = crate::bgg::BggPublicKey { matrix: pub_key_att, reveal_plaintext: false };
-    let c_att: Vec<BggEncoding<M>> = p_vec
-        .into_iter()
-        .map(|p| {
-            let m = M::from_poly_vec(&params, vec![vec![p]]) * final_preimage_att.clone();
-            BggEncoding::new(m, pub_key_att.clone(), None)
-        })
-        .collect();
+    // let c_att: Vec<M> = c_att.
+    //     .into_iter()
+    //     .map(|p| {
+    //         let m = M::from_poly_vec(&params, vec![vec![p]]) * final_preimage_att.clone();
+
+    //     })
+    //     .collect();
+    let c_att = [BggEncoding::new(c_att, pub_key_att.clone(), None)];
     let output_encodings = final_circuit.eval::<BggEncoding<M>>(&params, &c_att[0], &c_att[1..]);
     log_mem("final_circuit evaluated");
     let output_encoding_ints = output_encodings

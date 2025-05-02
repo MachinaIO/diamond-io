@@ -255,7 +255,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (first_key, other_keys) =
         pub_key_att.split_first().expect("pub_key_att must contain at least one key");
     let pub_key_att_matrix: M = first_key.concat_matrix(other_keys);
-    log_mem("Sampled pub key init");
+    log_mem(format!(
+        "Sampled pub_key_att_matrix ({},{})",
+        pub_key_att_matrix.row_size(),
+        pub_key_att_matrix.col_size()
+    ));
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
@@ -280,9 +284,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
     handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
-    // P_att := B^(-1) (u ⊗ A - I ⊗ G)
-    let final_preimage_target_att = pub_key_att_matrix.clone() -
-        identity_1_plus_packed_input_size.tensor(&identity_1_plus_packed_input_size);
+    // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_n+1
+    let gadget = M::gadget_matrix(&params, n + 1);
+    let final_preimage_target_att =
+        pub_key_att_matrix.clone() - identity_1_plus_packed_input_size.tensor(&gadget);
     let final_preimage_att = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,
@@ -292,7 +297,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled final_preimage_att");
     handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
     handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
-    // P_F := B^(-1) (u ⊗ A_F)
+
+    // P_F := u_1_L' ⊗ (A_F + A_p)
     let final_preimage_target_f = {
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed,
