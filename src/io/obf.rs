@@ -90,7 +90,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
     let mut plaintexts =
-        (0..(packed_input_size - 1)).map(|_| M::P::const_all_ones(&params)).collect_vec();
+        (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
@@ -107,6 +107,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         obf_params.encoding_sigma,
     );
     let s_init = bgg_encode_sampler.secret_vec;
+    log_mem(format!("s_init ({},{})", s_init.row_size(), s_init.col_size()));
 
     /*
     =============================================================================
@@ -137,13 +138,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     // Compute p_init
     let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
+    log_mem(format!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size()));
     let s_connect = encoded_bits.tensor(&s_init);
     log_mem(format!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size()));
     let s_b = s_connect * &b_star_cur;
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
         1,
-        (2 * (d + 1)) * (2 + log_base_q),
+        ((1 + packed_input_size) * (d + 1)) * (2 + log_base_q),
         DistType::GaussDist { sigma: obf_params.p_sigma },
     );
     let p_init = s_b + p_init_error;
@@ -203,11 +205,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &format!("b_star_{}", level),
         ));
 
-        // Precomputation for k_preimage that are not num dependent
-        let inserted_coeff_indices =
-            (0..level_width).map(|i| (i + (level * level_width)) % n).collect_vec();
-        debug_assert_eq!(inserted_coeff_indices.len(), level_width);
-
         for num in 0..level_size {
             let mut handles_per_level: Vec<tokio::task::JoinHandle<()>> = Vec::new();
             #[cfg(feature = "bgm")]
@@ -215,11 +212,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
             // actually this is the s_j_b on paper, where j is level and b is bit
-            let rg = &public_data.rs[num];
-            log_mem(format!("Computed s_full ({},{})", rg.row_size(), rg.col_size()));
+            let rs = &public_data.rs[num];
+            log_mem(format!("Computed rs ({},{})", rs.row_size(), rs.col_size()));
             let u = &u_nums[level][num];
             log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
-            let k_target = u.tensor(rg);
+            let k_target = u.tensor(rs);
             log_mem(format!("Computed k_target ({},{})", k_target.row_size(), k_target.col_size()));
             let k_preimage_num = sampler_trapdoor.preimage(
                 &params,
