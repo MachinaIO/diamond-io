@@ -127,12 +127,18 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     */
 
     // Sample input dependent random matrix B_*
-    let (mut b_star_trapdoor_cur, mut b_star_cur) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-    log_mem("b star trapdoor init sampled");
+    let (mut b_star_trapdoor_cur, mut b_star_cur) =
+        sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
+    log_mem(format!(
+        "b star ({},{}) and trapdoor init sampled",
+        b_star_cur.row_size(),
+        b_star_cur.col_size()
+    ));
 
     // Compute p_init
     let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
     let s_connect = encoded_bits.tensor(&s_init);
+    log_mem(format!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size()));
     let s_b = s_connect * &b_star_cur;
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
@@ -181,8 +187,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     */
 
     for level in 1..depth {
-        let (b_star_trapdoor_level, b_star_level) = sampler_trapdoor.trapdoor(&params, 2 * (d + 1));
-        log_mem(format!("Sampled b_star trapdoor for level {}", level));
+        let (b_star_trapdoor_level, b_star_level) =
+            sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
+        log_mem(format!(
+            "Sampled b_star ({},{}) and trapdoor for level {}",
+            b_star_level.row_size(),
+            b_star_level.col_size(),
+            level
+        ));
 
         #[cfg(feature = "debug")]
         handles.push(store_and_drop_matrix(
@@ -203,16 +215,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
             // actually this is the s_j_b on paper, where j is level and b is bit
-            let rg = &public_data.rgs[num];
-            log_mem(format!("Computed s_full {} {}", rg.row_size(), rg.col_size()));
+            let rg = &public_data.rs[num];
+            log_mem(format!("Computed s_full ({},{})", rg.row_size(), rg.col_size()));
             let u = &u_nums[level][num];
-            log_mem(format!("get u {} {}", u.row_size(), u.col_size()));
+            log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
             let k_target = u.tensor(rg);
-            log_mem(format!("Computed k_target {} {}", k_target.row_size(), k_target.col_size()));
+            log_mem(format!("Computed k_target ({},{})", k_target.row_size(), k_target.col_size()));
             let k_preimage_num = sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
-                &b_star_cur.clone(),
+                &b_star_cur,
                 &(k_target * b_star_level.clone()),
             );
             log_mem("Computed k_preimage_num");
