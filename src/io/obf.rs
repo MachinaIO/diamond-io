@@ -51,7 +51,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let hash_key = rng.random::<[u8; 32]>();
     let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
-
     let params = Arc::new(obf_params.params);
     let public_circuit = obf_params.public_circuit;
     let packed_input_size = public_data.packed_input_size;
@@ -88,13 +87,15 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
+    // This plaintexts is (1, 1_L, t), total length is L + 2
     let mut plaintexts =
         (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
-    let mut reveal_plaintexts = vec![true; packed_input_size];
-    reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
+    let mut reveal_plaintexts = vec![true; packed_input_size + 2];
+    // Do we want to reveal last slot which is t of FHE secret key?
+    reveal_plaintexts[packed_input_size + 1] = cfg!(feature = "debug");
 
     // Sample public key and initial secret key
     let pub_key_init = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
@@ -127,6 +128,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     */
 
     // Sample input dependent random matrix B_*
+    // note that L'(n+1) is same as (1 + packed_input_size) * (d + 1)
     let (mut b_star_trapdoor_cur, mut b_star_cur) =
         sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
     log_mem(format!(
@@ -212,11 +214,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             }
             // actually this is the s_j_b on paper, where j is level and b is bit
             let rs = &public_data.rs[num];
-            log_mem(format!("Computed rs ({},{})", rs.row_size(), rs.col_size()));
+            log_mem(format!("Computed S ({},{})", rs.row_size(), rs.col_size()));
             let u = &u_nums[level][num];
             log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
             let k_target = u.tensor(rs);
-            log_mem(format!("Computed k_target ({},{})", k_target.row_size(), k_target.col_size()));
+            log_mem(format!("Computed U ⊗ S ({},{})", k_target.row_size(), k_target.col_size()));
             let k_preimage_num = sampler_trapdoor.preimage(
                 &params,
                 &b_star_trapdoor_cur,
