@@ -205,6 +205,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     For each depth, sample K preimage at the corresponding level size.
     */
 
+    let muled = {
+        let identity = M::identity(&params, (1 + packed_input_size) * (d + 1) * log_base_q, None);
+        let trapdoor_matrix =
+            b_star_trapdoor_cur.get_k().concat_rows(&[&b_star_trapdoor_cur.get_e(), &identity]);
+        b_star_cur.clone() * trapdoor_matrix
+    };
+
     for level in 1..(depth + 1) {
         let (b_star_trapdoor_level, b_star_level) =
             sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
@@ -240,8 +247,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 u_tensor_s.col_size()
             ));
             let k_target = u_tensor_s * b_star_level.clone();
-            log_mem(format!("Computed k_target ({},{})", k_target.row_size(), k_target.col_size()));
-            let insecure_k_preimage = b_star_trapdoor_cur.get_k() * k_target.decompose();
+            let k_target_decompose = k_target.decompose();
+            log_mem(format!(
+                "Computed k_target_decompose ({},{})",
+                k_target_decompose.row_size(),
+                k_target_decompose.col_size()
+            ));
+            let insecure_k_preimage = muled.clone() * k_target_decompose;
             // let k_preimage_num =
             //     sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
             log_mem(format!(
@@ -321,8 +333,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     //     &b_star_cur,
     //     &final_preimage_target_att,
     // );
-    let insecure_final_preimage_target_att =
-        b_star_trapdoor_cur.get_k() * final_preimage_target_att.decompose();
+
+    let insecure_final_preimage_target_att = muled.clone() * final_preimage_target_att.decompose();
     log_mem("Sampled final_preimage_att");
     handles.push(store_and_drop_matrix(
         insecure_final_preimage_target_att,
@@ -359,8 +371,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     //     &b_star_cur,
     //     &final_preimage_target_f,
     // );
-    let insecure_final_preimage_f =
-        b_star_trapdoor_cur.get_k() * final_preimage_target_f.decompose();
+    let insecure_final_preimage_f = muled.clone() * final_preimage_target_f.decompose();
     log_mem("Sampled final_preimage_f");
     handles.push(store_and_drop_matrix(insecure_final_preimage_f, &dir_path, "final_preimage_f"));
 
