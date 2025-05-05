@@ -91,7 +91,7 @@ jobs:
           wait $pid
 
       - name: Upload benchmark logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bench-logs
           path: logs/*.log
