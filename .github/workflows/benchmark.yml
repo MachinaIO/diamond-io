@@ -1,0 +1,97 @@
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      param_id:
+        description: 'Configuration ID (e.g. 36)'
+        required: true
+        default: '36'
+      data_id:
+        description: 'Data ID (e.g. 53)'
+        required: true
+        default: '53'
+      add_num:
+        description: 'Number of additions'
+        required: true
+        default: '0'
+      mul_num:
+        description: 'Number of multiplications'
+        required: true
+        default: '0'
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libgmp-dev libasound2-dev
+
+      - name: Checkout OpenFHE
+        uses: actions/checkout@v4
+        with:
+          repository: openfheorg/openfhe-development
+          path: openfhe
+
+      - name: Build & install OpenFHE
+        run: |
+          cd openfhe
+          mkdir -p build && cd build
+          cmake ..
+          make -j"$(nproc)"
+          sudo make install
+          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
+          sudo ldconfig
+
+      - name: Verify OpenFHE install
+        run: ls -lah /usr/local/lib | grep OpenFHE
+
+      # ───────────────────────────────────────────────────────────────────────────
+      - name: Install dio
+        run: cargo install --path dio
+
+      - name: Verify dio
+        run: which dio
+
+      - name: Run benchmarks (background + wait)
+        env:
+          LD_LIBRARY_PATH: /usr/local/lib
+          RUST_LOG: info
+        run: |
+          mkdir -p logs
+          nohup dio run-bench \
+            -c e2e/dio-config.${{ github.event.inputs.param_id }}.toml \
+            -o /tmp/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }} \
+            --add-num ${{ github.event.inputs.add_num }} \
+            --mul-num ${{ github.event.inputs.mul_num }} \
+            &> logs/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }}.log &
+          pid=$!
+          echo "Benchmark PID: $pid"
+          wait $pid
+
+      - name: Upload benchmark logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: bench-logs
+          path: logs/*.log
