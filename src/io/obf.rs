@@ -91,10 +91,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
-    // This plaintexts is (1, 1_L, t), total length is L + 2
+    // This plaintexts is (1, 0_L, t), total length is L + 2
     // first slot is allocated to the constant 1 polynomial plaintext
-    let mut plaintexts =
-        (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
+    let mut plaintexts = (0..(packed_input_size)).map(|_| M::P::const_zero(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
@@ -179,14 +178,23 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     for j in 0..depth {
         let mut masks_at_level = Vec::with_capacity(level_size);
-
-        for i in 0..level_size {
-            masks_at_level.push(build_u_mask::<M>(&params, packed_input_size, level_width, j, i));
+        masks_at_level.push(identity_1_plus_packed_input_size.clone());
+        if level_size > 0 {
+            for i in 1..level_size {
+                masks_at_level.push(build_u_mask_multi::<M>(
+                    &params,
+                    packed_input_size,
+                    level_width,
+                    j,
+                    i,
+                ));
+            }
         }
+
         u_nums.push(masks_at_level);
     }
 
-    log_mem("Computed u_0, u_1");
+    log_mem(format!("Computed u_0, .. u_{}", depth));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
@@ -195,7 +203,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     For each depth, sample K preimage at the corresponding level size.
     */
 
-    for level in 1..depth {
+    for level in 1..(depth + 1) {
         let (b_star_trapdoor_level, b_star_level) =
             sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
         log_mem(format!(
@@ -221,9 +229,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             // actually this is the s_j_b on paper, where j is level and b is bit
             let rs = &public_data.rs[num];
             log_mem(format!("Computed S ({},{})", rs.row_size(), rs.col_size()));
-            let u = &u_nums[level][num];
+            let u = &u_nums[level - 1][num];
             log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
             let k_target = u.tensor(rs);
+
             log_mem(format!("Computed U ⊗ S ({},{})", k_target.row_size(), k_target.col_size()));
             let k_preimage_num = sampler_trapdoor.preimage(
                 &params,
@@ -402,36 +411,33 @@ fn store_and_drop_poly<P: Poly + 'static>(
     })
 }
 
-fn build_u_mask<M: PolyMatrix>(
+fn build_u_mask_multi<M: PolyMatrix>(
     params: &<<M as PolyMatrix>::P as Poly>::Params,
-    packed_input_len: usize, // == L
-    level_width: usize,      // == w
-    level: usize,            // depth j
-    branch_idx: usize,       // branch i ∈ [0,2^w)
+    packed_input_size: usize, // L
+    level_width: usize,       // w
+    depth_j: usize,           // j
+    combo_b: usize,           // 0 ≤ b < 2^w
 ) -> M {
-    let dim = 1 + packed_input_len; // const-1 slot + L packed slots
-    let mut u = M::zero(params, dim, dim);
-    let one = M::P::const_one(params);
-
-    // keep the constant-1 slot
-    u.set_entry(0, 0, one.clone());
-
-    let already_fixed_bits = level * level_width;
-    let already_fixed_slots = (already_fixed_bits / level_width).min(packed_input_len); // <-- cap here
-    for s in 0..already_fixed_slots {
-        u.set_entry(1 + s, 1 + s, one.clone());
+    // L' = 1 + L   (compressed variant without Γ bits or n rows)
+    let l_dash = 1 + packed_input_size;
+    let mut u = M::identity(params, l_dash, None);
+    // combo_b == 0  → identity already correct
+    if combo_b == 0 {
+        return u;
     }
 
-    for k in 0..level_width {
-        if (branch_idx >> k) & 1 == 1 {
-            let bit_pos = already_fixed_bits + k;
-            let slot_pos = bit_pos / level_width; // packed slot #
+    let zero = M::P::const_zero(params);
 
-            if slot_pos < packed_input_len {
-                u.set_entry(1 + slot_pos, 1 + slot_pos, one.clone());
+    for local_bit in 0..level_width {
+        if (combo_b >> local_bit) & 1 == 1 {
+            let i_abs = depth_j * level_width + local_bit; // absolute input index
+            if i_abs >= packed_input_size {
+                // we are past the packed-input part; nothing to clear
+                continue;
             }
+            let row = 1 + i_abs; // row inside L'
+            u.set_entry(row, row, zero.clone());
         }
     }
-
     u
 }
