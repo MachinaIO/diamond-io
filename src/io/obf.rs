@@ -91,14 +91,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
     // This plaintexts is (1, 1_L, t), total length is L + 2
+    // first slot is allocated to the constant 1 polynomial plaintext
     let mut plaintexts =
         (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
-    // todo: i first used packed_input_size + 2 for reveal_plaintexts, where actually
-    // packed_input_size is the one worked. why?
-    let mut reveal_plaintexts = vec![true; packed_input_size];
+    let mut reveal_plaintexts = vec![true; plaintexts.len()];
     // Do we want to reveal last slot which is t of FHE secret key?
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
     let bgg_encode_sampler = BGGEncodingSampler::new(

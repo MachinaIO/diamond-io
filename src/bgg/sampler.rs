@@ -50,7 +50,7 @@ where
         let log_base_q = params.modulus_digits();
         let secret_vec_size = self.d + 1;
         let columns = secret_vec_size * log_base_q;
-        let packed_input_size = 1 + reveal_plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
+        let packed_input_size = reveal_plaintexts.len();
         let all_matrix = sampler.sample_hash(
             params,
             self.hash_key,
