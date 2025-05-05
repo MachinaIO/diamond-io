@@ -112,18 +112,16 @@ where
 
     for (level, num) in nums.iter().enumerate() {
         let level = level + 1;
-        // todo: should we modify this?
-        //  let k_columns = (1 + packed_input_size) * (d + 1) * log_base_q;
         let k = M::read_from_files(
             params.as_ref(),
-            (1 + packed_input_size) * (d + 1),
+            m_b,
             m_b,
             &dir_path,
             &format!("k_preimage_{level}_{num}"),
         );
-        log_mem(format!("k_{}_{} loaded", level, num));
+        log_mem(format!("k_{}_{} loaded ({},{})", level, num, k.row_size(), k.col_size()));
         let p = p_cur * k;
-        log_mem(format!("p at {} computed", level));
+        log_mem(format!("p at {} computed ({},{})", level, p.row_size(), p.col_size()));
         // let inserted_poly_index = 1 + (level * level_width) / dim;
         p_cur = p.clone();
         //todo:right now this error
