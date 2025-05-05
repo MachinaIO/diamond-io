@@ -91,10 +91,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
-    // This plaintexts is (1, 1_L, t), total length is L + 2
+    // This plaintexts is (1, 0_L, t), total length is L + 2
     // first slot is allocated to the constant 1 polynomial plaintext
-    let mut plaintexts =
-        (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
+    let mut plaintexts = (0..packed_input_size).map(|_| M::P::const_zero(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
@@ -176,12 +175,26 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // number of levels necessary to encode the input
     let depth = obf_params.input_size / level_width;
     let mut u_nums = Vec::with_capacity(depth);
-    for _ in 0..depth {
-        // TODO: now we are just pushing U_{j,1}, ideally we should push U_{j,i} for i in
-        // 0..level_size
-        u_nums.push(vec![identity_1_plus_packed_input_size.clone(); level_size]);
+
+    for j in 0..depth {
+        let mut masks_at_level = Vec::with_capacity(level_size);
+        masks_at_level.push(identity_1_plus_packed_input_size.clone());
+        if level_size > 0 {
+            for i in 1..level_size {
+                masks_at_level.push(build_u_mask_multi::<M>(
+                    &params,
+                    packed_input_size,
+                    level_width,
+                    j,
+                    i,
+                ));
+            }
+        }
+
+        u_nums.push(masks_at_level);
     }
-    log_mem("Computed u_0, u_1");
+
+    log_mem(format!("Computed u_0, .. u_{}", depth));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
@@ -190,7 +203,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     For each depth, sample K preimage at the corresponding level size.
     */
 
-    for level in 1..depth {
+    for level in 1..(depth + 1) {
         let (b_star_trapdoor_level, b_star_level) =
             sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
         log_mem(format!(
@@ -216,17 +229,28 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             // actually this is the s_j_b on paper, where j is level and b is bit
             let rs = &public_data.rs[num];
             log_mem(format!("Computed S ({},{})", rs.row_size(), rs.col_size()));
-            let u = &u_nums[level][num];
+            let u = &u_nums[level - 1][num];
             log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
-            let k_target = u.tensor(rs);
-            log_mem(format!("Computed U ⊗ S ({},{})", k_target.row_size(), k_target.col_size()));
-            let k_preimage_num = sampler_trapdoor.preimage(
-                &params,
-                &b_star_trapdoor_cur,
-                &b_star_cur,
-                &(k_target * b_star_level.clone()),
-            );
-            log_mem("Computed k_preimage_num");
+            let u_tensor_s = u.tensor(rs);
+            log_mem(format!(
+                "Computed U ⊗ S ({},{})",
+                u_tensor_s.row_size(),
+                u_tensor_s.col_size()
+            ));
+            let k_target = u_tensor_s * b_star_level.clone();
+            let k_target_decompose = k_target.decompose();
+            log_mem(format!(
+                "Computed k_target_decompose ({},{})",
+                k_target_decompose.row_size(),
+                k_target_decompose.col_size()
+            ));
+            let k_preimage_num =
+                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
+            log_mem(format!(
+                "Computed k_preimage_num ({},{})",
+                k_preimage_num.row_size(),
+                k_preimage_num.col_size()
+            ));
             handles_per_level.push(store_and_drop_matrix(
                 k_preimage_num,
                 &dir_path,
@@ -395,4 +419,35 @@ fn store_and_drop_poly<P: Poly + 'static>(
         drop(poly);
         log_mem(format!("Stored {id_str}"));
     })
+}
+
+fn build_u_mask_multi<M: PolyMatrix>(
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    packed_input_size: usize, // L
+    level_width: usize,       // w
+    depth_j: usize,           // j
+    combo_b: usize,           // 0 ≤ b < 2^w
+) -> M {
+    // L' = 1 + L   (compressed variant without Γ bits or n rows)
+    let l_dash = 1 + packed_input_size;
+    let mut u = M::identity(params, l_dash, None);
+    // combo_b == 0  → identity already correct
+    if combo_b == 0 {
+        return u;
+    }
+
+    let zero = M::P::const_zero(params);
+
+    for local_bit in 0..level_width {
+        if (combo_b >> local_bit) & 1 == 1 {
+            let i_abs = depth_j * level_width + local_bit; // absolute input index
+            if i_abs >= packed_input_size {
+                // we are past the packed-input part; nothing to clear
+                continue;
+            }
+            let row = 1 + i_abs; // row inside L'
+            u.set_entry(row, row, zero.clone());
+        }
+    }
+    u
 }

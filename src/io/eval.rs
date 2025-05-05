@@ -56,7 +56,7 @@ where
     let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
     let mut p_cur = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
-    log_mem("p_init loaded");
+    log_mem(format!("p_init ({},{}) loaded", p_cur.row_size(), p_cur.col_size()));
 
     // #[cfg(feature = "debug")]
     // let reveal_plaintexts = [vec![true; packed_input_size], vec![true; 1]].concat();
@@ -95,7 +95,7 @@ where
         obf_params.p_sigma == 0.0
     {
         let mut plaintexts =
-            (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
+            (0..packed_input_size).map(|_| M::P::const_zero(&params)).collect_vec();
         plaintexts.push(minus_t_bar.clone());
         let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
         let s_connect = encoded_bits.tensor(&s_init);
@@ -112,18 +112,16 @@ where
 
     for (level, num) in nums.iter().enumerate() {
         let level = level + 1;
-        // todo: should we modify this?
-        let k_columns = (1 + packed_input_size) * d + 1 * log_base_q;
         let k = M::read_from_files(
             params.as_ref(),
             m_b,
-            k_columns,
+            m_b,
             &dir_path,
             &format!("k_preimage_{level}_{num}"),
         );
-        log_mem(format!("k at {} loaded", level));
+        log_mem(format!("k_{}_{} loaded ({},{})", level, num, k.row_size(), k.col_size()));
         let p = p_cur * k;
-        log_mem(format!("p at {} computed", level));
+        log_mem(format!("p at {} computed ({},{})", level, p.row_size(), p.col_size()));
         // let inserted_poly_index = 1 + (level * level_width) / dim;
         p_cur = p.clone();
         //todo:right now this error
