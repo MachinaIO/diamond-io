@@ -122,7 +122,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys with reveal_plaintext set to true
-        let reveal_plaintexts = vec![true; params.modulus_digits()];
+        let reveal_plaintexts = vec![true; params.modulus_digits() + 1];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Extract digit public keys
@@ -165,7 +165,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = vec![true; params.modulus_digits()]; // +1 for the one encoding
+        let reveal_plaintexts = vec![true; params.modulus_digits() + 1]; // +1 for the one encoding
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts (digit polynomials)
@@ -203,7 +203,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = vec![true; params.modulus_digits()]; // +1 for the one encoding
+        let reveal_plaintexts = vec![true; params.modulus_digits() + 1]; // +1 for the one encoding
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts (digit polynomials)
