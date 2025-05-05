@@ -34,11 +34,8 @@ where
         player.play_music("bgm/eval_bgm1.mp3");
     }
     let d = obf_params.d;
-    let d_plus_1 = d + 1;
     let params = Arc::new(obf_params.params.clone());
     let log_base_q = params.modulus_digits();
-    // let dim = params.ring_dimension() as usize;
-    let m_b = (2 * d_plus_1) * (2 + log_base_q);
     let dir_path = dir_path.as_ref().to_path_buf();
     assert_eq!(inputs.len(), obf_params.input_size);
 
@@ -55,8 +52,8 @@ where
     // let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
-
     let packed_input_size = public_data.packed_input_size;
+    let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
     let mut p_cur = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
     log_mem("p_init loaded");
@@ -70,7 +67,7 @@ where
     assert!(inputs.len() % level_width == 0);
     let depth = obf_params.input_size / level_width;
     #[cfg(feature = "debug")]
-    let s_init = M::read_from_files(&obf_params.params, 1, d_plus_1, &dir_path, "s_init");
+    let s_init = M::read_from_files(&obf_params.params, 1, d + 1, &dir_path, "s_init");
     #[cfg(feature = "debug")]
     let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
         &obf_params.params,
@@ -83,7 +80,7 @@ where
         .map(|level| {
             let b_star = M::read_from_files(
                 params.as_ref(),
-                2 * d_plus_1,
+                (1 + packed_input_size) * (d + 1),
                 m_b,
                 &dir_path,
                 &format!("b_star_{level}"),
@@ -98,7 +95,7 @@ where
         obf_params.p_sigma == 0.0
     {
         let mut plaintexts =
-            (0..(packed_input_size - 1)).map(|_| M::P::const_zero(&params)).collect_vec();
+            (0..(packed_input_size)).map(|_| M::P::const_all_ones(&params)).collect_vec();
         plaintexts.push(minus_t_bar.clone());
         let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
         let s_connect = encoded_bits.tensor(&s_init);
@@ -116,7 +113,7 @@ where
     for (level, num) in nums.iter().enumerate() {
         let level = level + 1;
         // todo: should we modify this?
-        let k_columns = (1 + packed_input_size) * d_plus_1 * log_base_q;
+        let k_columns = (1 + packed_input_size) * d + 1 * log_base_q;
         let k = M::read_from_files(
             params.as_ref(),
             m_b,
@@ -242,7 +239,7 @@ where
         {
             let expected = last_s *
                 (output_encoding_ints[0].pubkey.matrix.clone() -
-                    M::unit_column_vector(&params, d_plus_1, d_plus_1 - 1) *
+                    M::unit_column_vector(&params, d + 1, d) *
                         output_encoding_ints[0].plaintext.clone().unwrap());
             assert_eq!(output_encoding_ints[0].vector, expected);
         }

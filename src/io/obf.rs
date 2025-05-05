@@ -61,6 +61,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let sampler_uniform = SU::new();
     let sampler_trapdoor = ST::new(&params, obf_params.trapdoor_sigma);
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+    let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
     // todo: do we need to sample unit vector
     let u_1_l =
@@ -146,7 +147,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
         &params,
         1,
-        ((1 + packed_input_size) * (d + 1)) * (2 + log_base_q),
+        m_b,
         DistType::GaussDist { sigma: obf_params.p_sigma },
     );
     let p_init = s_b + p_init_error;
