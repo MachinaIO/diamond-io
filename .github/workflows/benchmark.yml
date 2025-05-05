@@ -48,13 +48,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake libgmp-dev libasound2-dev
 
+      - name: Check for OpenFHE
+        id: openfhe-check
+        run: |
+          if ldconfig -p | grep -q 'libOpenFHE'; then
+            echo "installed=true" >> $GITHUB_OUTPUT
+          else
+            echo "installed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout OpenFHE
+        if: steps.openfhe-check.outputs.installed == 'false'
         uses: actions/checkout@v4
         with:
           repository: openfheorg/openfhe-development
           path: openfhe
 
       - name: Build & install OpenFHE
+        if: steps.openfhe-check.outputs.installed == 'false'
         run: |
           cd openfhe
           mkdir -p build && cd build
