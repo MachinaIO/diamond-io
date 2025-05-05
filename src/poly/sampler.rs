@@ -59,7 +59,7 @@ pub trait PolyUniformSampler {
 
 pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
-    type Trapdoor;
+    type Trapdoor: PolyTrapdoor<Self::M>;
 
     fn new(params: &<<Self::M as PolyMatrix>::P as Poly>::Params, sigma: f64) -> Self;
 
@@ -76,4 +76,9 @@ pub trait PolyTrapdoorSampler {
         public_matrix: &Self::M,
         target: &Self::M,
     ) -> Self::M;
+}
+
+pub trait PolyTrapdoor<M> {
+    fn get_k(&self) -> M;
+    fn get_e(&self) -> M;
 }

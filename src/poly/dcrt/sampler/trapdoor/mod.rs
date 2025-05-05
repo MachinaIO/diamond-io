@@ -7,7 +7,7 @@ use crate::{
             sampler::DCRTPolyUniformSampler,
             DCRTPolyMatrix, DCRTPolyParams,
         },
-        sampler::{DistType, PolyUniformSampler},
+        sampler::{DistType, PolyTrapdoor, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
     utils::{block_size, debug_mem},
@@ -27,6 +27,16 @@ pub(crate) const KARNEY_THRESHOLD: f64 = 300.0;
 pub struct DCRTTrapdoor {
     pub r: DCRTPolyMatrix,
     pub e: DCRTPolyMatrix,
+}
+
+impl PolyTrapdoor<DCRTPolyMatrix> for DCRTTrapdoor {
+    fn get_k(&self) -> DCRTPolyMatrix {
+        self.r.clone()
+    }
+
+    fn get_e(&self) -> DCRTPolyMatrix {
+        self.e.clone()
+    }
 }
 
 impl DCRTTrapdoor {
