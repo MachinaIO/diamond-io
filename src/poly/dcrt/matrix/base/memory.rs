@@ -277,6 +277,14 @@ impl<T: MatrixElem> BaseMatrix<T> {
 
         Self { params: self.params.clone(), inner: result, nrow: nrow_total, ncol: ncol_total }
     }
+
+    #[inline]
+    pub fn set_entry(&mut self, i: usize, j: usize, elem: T) {
+        debug_assert!(i < self.nrow, "row index {i} ≥ nrow = {}", self.nrow);
+        debug_assert!(j < self.ncol, "col index {j} ≥ ncol = {}", self.ncol);
+
+        self.inner[i][j] = elem;
+    }
 }
 
 impl<T: MatrixElem> Debug for BaseMatrix<T> {

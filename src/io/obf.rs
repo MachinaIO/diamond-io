@@ -176,11 +176,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // number of levels necessary to encode the input
     let depth = obf_params.input_size / level_width;
     let mut u_nums = Vec::with_capacity(depth);
-    for _ in 0..depth {
-        // TODO: now we are just pushing U_{j,1}, ideally we should push U_{j,i} for i in
-        // 0..level_size
-        u_nums.push(vec![identity_1_plus_packed_input_size.clone(); level_size]);
+
+    for j in 0..depth {
+        let mut masks_at_level = Vec::with_capacity(level_size);
+
+        for i in 0..level_size {
+            masks_at_level.push(build_u_mask::<M>(&params, packed_input_size, level_width, j, i));
+        }
+        u_nums.push(masks_at_level);
     }
+
     log_mem("Computed u_0, u_1");
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
@@ -395,4 +400,38 @@ fn store_and_drop_poly<P: Poly + 'static>(
         drop(poly);
         log_mem(format!("Stored {id_str}"));
     })
+}
+
+fn build_u_mask<M: PolyMatrix>(
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    packed_input_len: usize, // == L
+    level_width: usize,      // == w
+    level: usize,            // depth j
+    branch_idx: usize,       // branch i ∈ [0,2^w)
+) -> M {
+    let dim = 1 + packed_input_len; // const-1 slot + L packed slots
+    let mut u = M::zero(params, dim, dim);
+    let one = M::P::const_one(params);
+
+    // keep the constant-1 slot
+    u.set_entry(0, 0, one.clone());
+
+    let already_fixed_bits = level * level_width;
+    let already_fixed_slots = (already_fixed_bits / level_width).min(packed_input_len); // <-- cap here
+    for s in 0..already_fixed_slots {
+        u.set_entry(1 + s, 1 + s, one.clone());
+    }
+
+    for k in 0..level_width {
+        if (branch_idx >> k) & 1 == 1 {
+            let bit_pos = already_fixed_bits + k;
+            let slot_pos = bit_pos / level_width; // packed slot #
+
+            if slot_pos < packed_input_len {
+                u.set_entry(1 + slot_pos, 1 + slot_pos, one.clone());
+            }
+        }
+    }
+
+    u
 }

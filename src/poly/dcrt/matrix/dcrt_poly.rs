@@ -292,6 +292,10 @@ impl PolyMatrix for DCRTPolyMatrix {
             .collect::<Vec<_>>();
         futures::future::try_join_all(futures).await.expect("Failed to write all matrix blocks");
     }
+
+    fn set_entry(&mut self, i: usize, j: usize, elem: Self::P) {
+        self.set_entry(i, j, elem);
+    }
 }
 
 impl DCRTPolyMatrix {
