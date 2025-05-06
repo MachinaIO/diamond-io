@@ -234,6 +234,48 @@ where
     log_mem(format!("Computed c_att ({}, {})", c_att.row_size(), c_att.col_size()));
     let pub_key_att = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem(format!("Sampled pub_key_att {} ", pub_key_att.len()));
+
+    #[cfg(feature = "debug")]
+    if obf_params.encoding_sigma == 0.0 &&
+        obf_params.hardcoded_key_sigma == 0.0 &&
+        obf_params.p_sigma == 0.0
+    {
+        let mut cur_s = s_init.clone();
+        for num in nums.iter() {
+            let r = &public_data.rs[*num as usize];
+            cur_s = cur_s * r;
+        }
+        let bits_done = level_width * nums.len();
+        let dim = params.ring_dimension() as usize;
+        let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
+        let mut coeffs = inputs[..bits_done]
+            .iter()
+            .map(|&b| {
+                if b {
+                    <M::P as Poly>::Elem::one(&params.modulus())
+                } else {
+                    <M::P as Poly>::Elem::zero(&params.modulus())
+                }
+            })
+            .collect::<Vec<_>>();
+        coeffs.extend(
+            std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
+                .take(obf_params.input_size - bits_done),
+        );
+        polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
+        polys.push(minus_t_bar.clone());
+        let gadget = M::gadget_matrix(&params, d + 1);
+        // concatenate plaintexts as a row vector
+        let plaintexts = M::from_poly_vec_row(&params, polys);
+
+        // matrix
+        let pubkey = pub_key_att[0].concat_matrix(&pub_key_att[1..]);
+        let inner = pubkey - plaintexts.tensor(&gadget);
+        let expected_c_att = cur_s * inner;
+        assert_eq!(c_att, expected_c_att);
+        log_mem("c_att debug check passed");
+    }
+
     let m = (d + 1) * log_base_q;
     let bits_done = level_width * nums.len();
     let dim = params.ring_dimension() as usize;
