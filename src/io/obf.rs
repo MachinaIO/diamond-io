@@ -435,7 +435,7 @@ fn build_u_mask_multi<M: PolyMatrix>(
             let mut cs = zero.coeffs();
             debug_assert!(idx < cs.len(), "index out of bounds");
             cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
-            zero = M::P::from_coeffs(&params, &cs);
+            zero = M::P::from_coeffs(params, &cs);
         }
     }
 
