@@ -78,7 +78,7 @@ where
     );
 
     #[cfg(feature = "debug")]
-    let b_stars = parallel_iter!(0..depth)
+    let b_stars = parallel_iter!(0..(depth + 1))
         .map(|level| {
             let b_star = M::read_from_files(
                 params.as_ref(),
@@ -162,9 +162,9 @@ where
             );
             polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
             polys.push(minus_t_bar.clone());
-
             let encoded_bits = M::from_poly_vec_row(&params, polys);
-            let expected_p = encoded_bits.tensor(&s_cur) * &b_stars[level];
+            let s_connect = encoded_bits.tensor(&s_cur);
+            let expected_p = s_connect * &b_stars[level];
             assert_eq!(p, expected_p, "debug check failed at level {}", level);
         }
     }
