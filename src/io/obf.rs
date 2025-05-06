@@ -23,6 +23,7 @@ use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
 use tokio::runtime::Handle;
+use tracing::info;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -426,7 +427,11 @@ fn build_u_mask_multi<M: PolyMatrix>(
     for r in 0..level_width {
         if (combo_b >> r) & 1 == 1 {
             let idx = depth_j * level_width + r;
-            assert!(idx < packed_input_size, "index out of range");
+            info!("idx: {}", idx);
+            assert!(
+                idx < packed_input_size * params.ring_dimension() as usize,
+                "index out of range"
+            );
             let mut cs = zero.coeffs();
             debug_assert!(idx < cs.len(), "index out of bounds");
             cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
