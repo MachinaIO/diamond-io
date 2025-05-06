@@ -133,7 +133,6 @@ where
         log_mem(format!("k_{}_{} loaded ({},{})", level, num, k.row_size(), k.col_size()));
         let p = p_cur * k;
         log_mem(format!("p at {} computed ({},{})", level, p.row_size(), p.col_size()));
-        // let inserted_poly_index = 1 + (level * level_width) / dim;
         p_cur = p.clone();
 
         #[cfg(feature = "debug")]

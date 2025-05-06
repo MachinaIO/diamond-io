@@ -1,6 +1,5 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
-
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -11,6 +10,7 @@ use crate::{
         utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     },
     poly::{
+        element::PolyElem,
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -266,7 +266,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     =============================================================================
      Preimage‐generation for final BGG+ encoding evaluation step (after all bit insertion)
 
-     1) Build the “final digits” circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
+     1) Build the "final digits" circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
      2) Evaluate f[x_L] on (C = {a_decomposed, b_decomposed}, public key bits…).
      3) Form the target matrix Y = (eval_outputs_matrix + a_prf) ∥ 0.
      4) Sample a trapdoor preimage of Y under B*_star_basis → final_preimage.
@@ -410,26 +410,31 @@ fn build_u_mask_multi<M: PolyMatrix>(
     depth_j: usize,           // j
     combo_b: usize,           // 0 ≤ b < 2^w
 ) -> M {
-    // L' = 1 + L   (compressed variant without Γ bits or n rows)
+    // L' = 1 (const-one slot) + L packed-input slots
     let l_dash = 1 + packed_input_size;
-    let mut u = M::identity(params, l_dash, None);
-    // combo_b == 0  → identity already correct
+
+    // U_{j,0}  ≡  identity
     if combo_b == 0 {
-        return u;
+        return M::identity(params, l_dash, None);
     }
 
-    let zero = M::P::const_zero(params);
+    // Start from the identity and zero out the diagonal entry
+    // for every bit that is 1 in combo_b.
+    let mut u = M::identity(params, l_dash, None);
+    let mut zero = M::P::const_zero(params);
 
-    for local_bit in 0..level_width {
-        if (combo_b >> local_bit) & 1 == 1 {
-            let i_abs = depth_j * level_width + local_bit; // absolute input index
-            if i_abs >= packed_input_size {
-                // we are past the packed-input part; nothing to clear
-                continue;
-            }
-            let row = 1 + i_abs; // row inside L'
-            u.set_entry(row, row, zero.clone());
+    for r in 0..level_width {
+        if (combo_b >> r) & 1 == 1 {
+            let idx = depth_j * level_width + r;
+            assert!(idx < packed_input_size, "index out of range");
+            let mut cs = zero.coeffs();
+            debug_assert!(idx < cs.len(), "index out of bounds");
+            cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
+            zero = M::P::from_coeffs(&params, &cs);
         }
     }
+
+    u.set_entry(0, 1, zero);
+
     u
 }
