@@ -63,9 +63,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
-    // todo: do we need to sample unit vector
-    let u_1_l =
-        sampler_uniform.sample_uniform(&params, packed_input_size + 1, 1, DistType::BitDist);
+    let u_1_l = M::unit_column_vector(&params, packed_input_size + 1, 0);
 
     /*
     =============================================================================
