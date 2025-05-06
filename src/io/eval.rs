@@ -238,7 +238,7 @@ where
     let output_encodings_vec = output_encoding_ints[0].concat_vector(&output_encoding_ints[1..]);
     log_mem("final_circuit evaluated and recomposed");
     let z = output_encodings_vec - final_v;
-    log_mem("z computded");
+    log_mem("z computed");
     debug_assert_eq!(z.size(), (1, packed_output_size));
     #[cfg(feature = "debug")]
     if obf_params.encoding_sigma == 0.0 &&
@@ -250,7 +250,6 @@ where
             &dir_path,
             "hardcoded_key",
         );
-
         {
             let expected = s_cur *
                 (output_encoding_ints[0].pubkey.matrix.clone() -

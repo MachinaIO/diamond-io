@@ -411,7 +411,7 @@ fn build_u_mask_multi<M: PolyMatrix>(
     depth_j: usize,           // j
     combo_b: usize,           // 0 ≤ b < 2^w
 ) -> M {
-    // L' = 1 (const-one slot) + L packed-input slots
+    // L' = 1 (t) + L packed-input slots (evaluator's input + const-one slot)
     let l_dash = 1 + packed_input_size;
 
     // U_{j,0}  ≡  identity
