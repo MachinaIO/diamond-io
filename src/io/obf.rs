@@ -74,8 +74,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Sample the initial public key (level 0) with our reveal flags.
 
     The length of encodings_init is (1 + packed_input_size):
-       - 1 for the encoding of 1
-       - packed_input_size for the packed evaluator inputs and the encoding of t(secret key).
+       - 1 the encoding of t(secret key)
+       - packed_input_size for the packed evaluator inputs and for the encoding of 1.
     =============================================================================
     */
 
@@ -118,7 +118,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size,
         For each j in 0..depth,
-            U_{j,1} = I_{2 + packed_input_size}
+            U_{j,1} = I_{1 + packed_input_size}
             U_(j,i) = ...
 
     These values (B_*, p_init, I_{d+1}, U_{j, i}) are all set up
