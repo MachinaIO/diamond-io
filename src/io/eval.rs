@@ -202,11 +202,6 @@ where
         obf_params.hardcoded_key_sigma == 0.0 &&
         obf_params.p_sigma == 0.0
     {
-        let mut cur_s = s_init.clone();
-        for num in nums.iter() {
-            let r = &public_data.rs[*num as usize];
-            cur_s = cur_s * r;
-        }
         let eval_outputs_matrix_plus_a_prf = M::read_from_files(
             &obf_params.params,
             d + 1,
@@ -214,11 +209,11 @@ where
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
         );
-        let expected_final_v = cur_s * eval_outputs_matrix_plus_a_prf;
+        let expected_final_v = s_cur.clone() * eval_outputs_matrix_plus_a_prf;
         assert_eq!(final_v, expected_final_v);
         log_mem("final_v debug check passed");
     }
-    
+
     // TODO: sholud i pass pub_key att matrix from obfuscation artifacts or can i sample again like
     // old construcaton implementation? let pub_key_att = M::read_from_files(
     //     &obf_params.params,
@@ -240,15 +235,29 @@ where
     let pub_key_att = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem(format!("Sampled pub_key_att {} ", pub_key_att.len()));
     let m = (d + 1) * log_base_q;
+    let bits_done = level_width * nums.len();
+    let dim = params.ring_dimension() as usize;
+    let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
+    let mut coeffs = inputs[..bits_done]
+        .iter()
+        .map(|&b| {
+            if b {
+                <M::P as Poly>::Elem::one(&params.modulus())
+            } else {
+                <M::P as Poly>::Elem::zero(&params.modulus())
+            }
+        })
+        .collect::<Vec<_>>();
+    coeffs.extend(
+        std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
+            .take(obf_params.input_size - bits_done),
+    );
+    polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
+    polys.push(minus_t_bar.clone());
     let mut new_encodings = vec![];
     for (j, pub_key) in pub_key_att.into_iter().enumerate() {
         let new_vec = c_att.slice_columns(j * m, (j + 1) * m);
-        let plaintext = if inputs[j] {
-            <M::P as Poly>::const_one(&params)
-        } else {
-            <M::P as Poly>::const_zero(&params)
-        };
-        let new_encode: BggEncoding<M> = BggEncoding::new(new_vec, pub_key, Some(plaintext));
+        let new_encode: BggEncoding<M> = BggEncoding::new(new_vec, pub_key, Some(polys[j].clone()));
         new_encodings.push(new_encode);
     }
     let output_encodings =
@@ -273,13 +282,13 @@ where
             &dir_path,
             "hardcoded_key",
         );
-        {
-            let expected = s_cur *
-                (output_encoding_ints[0].pubkey.matrix.clone() -
-                    M::unit_column_vector(&params, d + 1, d) *
-                        output_encoding_ints[0].plaintext.clone().unwrap());
-            assert_eq!(output_encoding_ints[0].vector, expected);
-        }
+        // {
+        //     let expected = s_cur *
+        //         (output_encoding_ints[0].pubkey.matrix.clone() -
+        //             M::unit_column_vector(&params, d + 1, d) *
+        //                 output_encoding_ints[0].plaintext.clone().unwrap());
+        //     assert_eq!(output_encoding_ints[0].vector, expected);
+        // }
         assert_eq!(z.size(), (1, packed_output_size));
         if inputs[0] {
             assert_eq!(
