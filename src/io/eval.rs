@@ -282,13 +282,13 @@ where
             &dir_path,
             "hardcoded_key",
         );
-        // {
-        //     let expected = s_cur *
-        //         (output_encoding_ints[0].pubkey.matrix.clone() -
-        //             M::unit_column_vector(&params, d + 1, d) *
-        //                 output_encoding_ints[0].plaintext.clone().unwrap());
-        //     assert_eq!(output_encoding_ints[0].vector, expected);
-        // }
+        {
+            let expected = s_cur *
+                (output_encoding_ints[0].pubkey.matrix.clone() -
+                    M::unit_column_vector(&params, d + 1, d) *
+                        output_encoding_ints[0].plaintext.clone().unwrap());
+            assert_eq!(output_encoding_ints[0].vector, expected);
+        }
         assert_eq!(z.size(), (1, packed_output_size));
         if inputs[0] {
             assert_eq!(
