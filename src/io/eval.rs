@@ -251,13 +251,8 @@ where
             "hardcoded_key",
         );
 
-        let mut last_s = s_init.clone();
-        for num in nums.iter() {
-            let r = public_data.rs[*num as usize].clone();
-            last_s = last_s * r;
-        }
         {
-            let expected = last_s *
+            let expected = s_cur *
                 (output_encoding_ints[0].pubkey.matrix.clone() -
                     M::unit_column_vector(&params, d + 1, d) *
                         output_encoding_ints[0].plaintext.clone().unwrap());
