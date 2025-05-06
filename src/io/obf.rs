@@ -344,6 +344,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
+        #[cfg(feature = "debug")]
+        handles.push(store_and_drop_matrix(
+            eval_outputs_matrix.clone() + public_data.a_prf.clone(),
+            &dir_path,
+            "eval_outputs_matrix_plus_a_prf",
+        ));
         u_1_l.tensor(&(eval_outputs_matrix + public_data.a_prf))
     };
     log_mem("Computed final_preimage_target_f");

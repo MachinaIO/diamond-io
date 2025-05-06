@@ -196,6 +196,29 @@ where
     // v := p * K_F
     let final_v = p_cur.clone() * final_preimage_f;
     log_mem("final_v computed");
+
+    #[cfg(feature = "debug")]
+    if obf_params.encoding_sigma == 0.0 &&
+        obf_params.hardcoded_key_sigma == 0.0 &&
+        obf_params.p_sigma == 0.0
+    {
+        let mut cur_s = s_init.clone();
+        for num in nums.iter() {
+            let r = &public_data.rs[*num as usize];
+            cur_s = cur_s * r;
+        }
+        let eval_outputs_matrix_plus_a_prf = M::read_from_files(
+            &obf_params.params,
+            d + 1,
+            packed_output_size,
+            &dir_path,
+            "eval_outputs_matrix_plus_a_prf",
+        );
+        let expected_final_v = cur_s * eval_outputs_matrix_plus_a_prf;
+        assert_eq!(final_v, expected_final_v);
+        log_mem("final_v debug check passed");
+    }
+    
     // TODO: sholud i pass pub_key att matrix from obfuscation artifacts or can i sample again like
     // old construcaton implementation? let pub_key_att = M::read_from_files(
     //     &obf_params.params,
