@@ -107,12 +107,16 @@ where
         let expected_p_init = s_connect * &b_stars[0];
         assert_eq!(p_cur, expected_p_init);
     }
+    // Pack the input bits into little-endian limbs:
+    // for every `level_width`-sized chunk, interpret the Booleans as a binary
+    // number (bit 0 = LSB) and collect the resulting integers.
     let nums: Vec<u64> = inputs
         .chunks(level_width)
         .map(|chunk| {
             chunk.iter().enumerate().fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
         })
         .collect();
+    info!("nums {:?}", nums);
     debug_assert_eq!(nums.len(), depth);
     #[cfg(feature = "debug")]
     let mut s_cur = s_init.clone();
