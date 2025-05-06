@@ -79,7 +79,6 @@ pub trait Poly:
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
     fn const_power_of_base(params: &Self::Params, k: usize) -> Self;
-    fn const_all_ones(params: &Self::Params) -> Self;
     fn const_rotate_poly(params: &Self::Params, shift: usize) -> Self {
         let zero = Self::const_zero(params);
         let mut coeffs = zero.coeffs();

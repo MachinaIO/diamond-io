@@ -175,14 +175,6 @@ impl Poly for DCRTPoly {
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn const_all_ones(params: &Self::Params) -> Self {
-        let coeffs = vec![
-            FinRingElem::new(BigUint::from(1u32), params.modulus());
-            params.ring_dimension() as usize
-        ];
-        Self::from_coeffs(params, &coeffs)
-    }
-
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}
     /// where b_{j, h} is the h-th digit of the j-th coefficient of the polynomial.
     /// Return a vector of polynomials, where the h-th polynomial is defined as
