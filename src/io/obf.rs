@@ -91,8 +91,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
-    // This plaintexts is (1, 0_L, t), total length is L + 2
-    // first slot is allocated to the constant 1 polynomial plaintext
+    // This plaintexts is (1, 0_L, t), total length is L + 2, this value only contains (0_L, t) as
+    // constant 1 is handled by bggsampler.
     let mut plaintexts = (0..packed_input_size).map(|_| M::P::const_zero(&params)).collect_vec();
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
@@ -107,7 +107,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         obf_params.encoding_sigma,
     );
     let s_init = bgg_encode_sampler.secret_vec;
-    log_mem(format!("s_init ({},{})", s_init.row_size(), s_init.col_size()));
+    log_mem(format!("s_init ({},{}) 1x(n+1)", s_init.row_size(), s_init.col_size()));
 
     /*
     =============================================================================
@@ -132,7 +132,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (mut b_star_trapdoor_cur, mut b_star_cur) =
         sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
     log_mem(format!(
-        "b star ({},{}) and trapdoor init sampled",
+        "b star epsilon ({},{}) (n+1)xm_B and trapdoor epsilon sampled",
         b_star_cur.row_size(),
         b_star_cur.col_size()
     ));
@@ -150,7 +150,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         DistType::GaussDist { sigma: obf_params.p_sigma },
     );
     let p_init = s_b + p_init_error;
-    log_mem("Computed p_init");
+    log_mem(format!("Computed p_epsilon ({},{})", p_init.row_size(), p_init.col_size()));
     handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
@@ -228,9 +228,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             }
             // actually this is the s_j_b on paper, where j is level and b is bit
             let rs = &public_data.rs[num];
-            log_mem(format!("Computed S ({},{})", rs.row_size(), rs.col_size()));
+            log_mem(format!("Computed S ({},{}) (n+1)x(n+1)", rs.row_size(), rs.col_size()));
             let u = &u_nums[level - 1][num];
-            log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
+            log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
             let u_tensor_s = u.tensor(rs);
             log_mem(format!(
                 "Computed U ⊗ S ({},{})",
