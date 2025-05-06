@@ -57,7 +57,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 
         let log_base_q = params.modulus_digits();
         let dim = params.ring_dimension() as usize;
-        // input bits, poly of the RLWE key
+        // input bits, poly of the RLWE key, it contains constant 1
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let a_rlwe_bar =

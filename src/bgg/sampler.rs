@@ -109,6 +109,8 @@ where
         Self { secret_vec, error_sampler, gauss_sigma }
     }
 
+    /// This extend the given plaintexts +1 and insert constant 1 polynomial plaintext
+    /// Actually in new simplified construction, this sample is not used unless debug
     pub fn sample(
         &self,
         params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,

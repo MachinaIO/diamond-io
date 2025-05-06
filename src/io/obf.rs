@@ -1,6 +1,5 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
-
 use crate::{
     bgg::{
         sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -11,6 +10,7 @@ use crate::{
         utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     },
     poly::{
+        element::PolyElem,
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -23,6 +23,7 @@ use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
 use tokio::runtime::Handle;
+use tracing::info;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -63,9 +64,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
-    // todo: do we need to sample unit vector
-    let u_1_l =
-        sampler_uniform.sample_uniform(&params, packed_input_size + 1, 1, DistType::BitDist);
+    let u_1_l = M::unit_column_vector(&params, packed_input_size + 1, 0);
 
     /*
     =============================================================================
@@ -76,8 +75,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Sample the initial public key (level 0) with our reveal flags.
 
     The length of encodings_init is (1 + packed_input_size):
-       - 1 for the encoding of 1
-       - packed_input_size for the packed evaluator inputs and the encoding of t(secret key).
+       - 1 the encoding of t(secret key)
+       - packed_input_size for the packed evaluator inputs and for the encoding of 1.
     =============================================================================
     */
 
@@ -91,9 +90,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
-    // This plaintexts is (1, 0_L, t), total length is L + 2
-    // first slot is allocated to the constant 1 polynomial plaintext
-    let mut plaintexts = (0..packed_input_size).map(|_| M::P::const_zero(&params)).collect_vec();
+    // This plaintexts is (1, 0_L, t), total length is L + 2, packed_input_size - 1 is L
+    let one = M::P::const_one(&params);
+    let mut plaintexts = vec![one];
+    plaintexts.extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
@@ -107,7 +107,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         obf_params.encoding_sigma,
     );
     let s_init = bgg_encode_sampler.secret_vec;
-    log_mem(format!("s_init ({},{})", s_init.row_size(), s_init.col_size()));
+    log_mem(format!("s_init ({},{}) 1x(n+1)", s_init.row_size(), s_init.col_size()));
 
     /*
     =============================================================================
@@ -119,7 +119,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size,
         For each j in 0..depth,
-            U_{j,1} = I_{2 + packed_input_size}
+            U_{j,1} = I_{1 + packed_input_size}
             U_(j,i) = ...
 
     These values (B_*, p_init, I_{d+1}, U_{j, i}) are all set up
@@ -132,7 +132,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let (mut b_star_trapdoor_cur, mut b_star_cur) =
         sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
     log_mem(format!(
-        "b star ({},{}) and trapdoor init sampled",
+        "b star epsilon ({},{}) (n+1)xm_B and trapdoor epsilon sampled",
         b_star_cur.row_size(),
         b_star_cur.col_size()
     ));
@@ -150,7 +150,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         DistType::GaussDist { sigma: obf_params.p_sigma },
     );
     let p_init = s_b + p_init_error;
-    log_mem("Computed p_init");
+    log_mem(format!("Computed p_epsilon ({},{})", p_init.row_size(), p_init.col_size()));
     handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
@@ -228,9 +228,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             }
             // actually this is the s_j_b on paper, where j is level and b is bit
             let rs = &public_data.rs[num];
-            log_mem(format!("Computed S ({},{})", rs.row_size(), rs.col_size()));
+            log_mem(format!("Computed S ({},{}) (n+1)x(n+1)", rs.row_size(), rs.col_size()));
             let u = &u_nums[level - 1][num];
-            log_mem(format!("Get U ({},{})", u.row_size(), u.col_size()));
+            log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
             let u_tensor_s = u.tensor(rs);
             log_mem(format!(
                 "Computed U ⊗ S ({},{})",
@@ -267,7 +267,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     =============================================================================
      Preimage‐generation for final BGG+ encoding evaluation step (after all bit insertion)
 
-     1) Build the “final digits” circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
+     1) Build the "final digits" circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
      2) Evaluate f[x_L] on (C = {a_decomposed, b_decomposed}, public key bits…).
      3) Form the target matrix Y = (eval_outputs_matrix + a_prf) ∥ 0.
      4) Sample a trapdoor preimage of Y under B*_star_basis → final_preimage.
@@ -386,23 +386,6 @@ fn store_and_drop_matrix<M: PolyMatrix + 'static>(
     })
 }
 
-// fn store_and_drop_bgg_encoding<M: PolyMatrix + 'static>(
-//     encoding: BggEncoding<M>,
-//     dir_path: &Path,
-//     id: &str,
-// ) -> tokio::task::JoinHandle<()> {
-//     let dir_path = dir_path.to_path_buf();
-//     let id_str = id.to_string();
-//     tokio::task::spawn_blocking(move || {
-//         log_mem(format!("Storing {id_str}"));
-//         Handle::current().block_on(async {
-//             encoding.write_to_files(&dir_path, &id_str).await;
-//         });
-//         drop(encoding);
-//         log_mem(format!("Stored {id_str}"));
-//     })
-// }
-
 #[cfg(feature = "debug")]
 fn store_and_drop_poly<P: Poly + 'static>(
     poly: P,
@@ -428,26 +411,35 @@ fn build_u_mask_multi<M: PolyMatrix>(
     depth_j: usize,           // j
     combo_b: usize,           // 0 ≤ b < 2^w
 ) -> M {
-    // L' = 1 + L   (compressed variant without Γ bits or n rows)
+    // L' = 1 (const-one slot) + L packed-input slots
     let l_dash = 1 + packed_input_size;
-    let mut u = M::identity(params, l_dash, None);
-    // combo_b == 0  → identity already correct
+
+    // U_{j,0}  ≡  identity
     if combo_b == 0 {
-        return u;
+        return M::identity(params, l_dash, None);
     }
 
-    let zero = M::P::const_zero(params);
+    // Start from the identity and zero out the diagonal entry
+    // for every bit that is 1 in combo_b.
+    let mut u = M::identity(params, l_dash, None);
+    let mut zero = M::P::const_zero(params);
 
-    for local_bit in 0..level_width {
-        if (combo_b >> local_bit) & 1 == 1 {
-            let i_abs = depth_j * level_width + local_bit; // absolute input index
-            if i_abs >= packed_input_size {
-                // we are past the packed-input part; nothing to clear
-                continue;
-            }
-            let row = 1 + i_abs; // row inside L'
-            u.set_entry(row, row, zero.clone());
+    for r in 0..level_width {
+        if (combo_b >> r) & 1 == 1 {
+            let idx = depth_j * level_width + r;
+            info!("idx: {}", idx);
+            assert!(
+                idx < packed_input_size * params.ring_dimension() as usize,
+                "index out of range"
+            );
+            let mut cs = zero.coeffs();
+            debug_assert!(idx < cs.len(), "index out of bounds");
+            cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
+            zero = M::P::from_coeffs(&params, &cs);
         }
     }
+
+    u.set_entry(0, 1, zero);
+
     u
 }

@@ -10,6 +10,7 @@ pub struct ObfuscationParams<M: PolyMatrix> {
     pub input_size: usize,
     pub level_width: usize, // number of bits to be inserted at each level
     pub public_circuit: PolyCircuit,
+    /// number of secret key polynomials. This used due to module LWE assumption.
     pub d: usize,
     pub encoding_sigma: f64,
     pub hardcoded_key_sigma: f64,
