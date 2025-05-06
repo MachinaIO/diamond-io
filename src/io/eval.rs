@@ -116,7 +116,6 @@ where
             chunk.iter().enumerate().fold(0u64, |acc, (i, &bit)| acc + ((bit as u64) << i))
         })
         .collect();
-    info!("nums {:?}", nums);
     debug_assert_eq!(nums.len(), depth);
     #[cfg(feature = "debug")]
     let mut s_cur = s_init.clone();
@@ -317,29 +316,7 @@ where
         obf_params.hardcoded_key_sigma == 0.0 &&
         obf_params.p_sigma == 0.0
     {
-        let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
-            &obf_params.params,
-            &dir_path,
-            "hardcoded_key",
-        );
-        // {
-        //     let expected = s_cur *
-        //         (output_encoding_ints[0].pubkey.matrix.clone() -
-        //             M::unit_column_vector(&params, d + 1, d) *
-        //                 output_encoding_ints[0].plaintext.clone().unwrap());
-        //     assert_eq!(output_encoding_ints[0].vector, expected);
-        // }
         assert_eq!(z.size(), (1, packed_output_size));
-        // if inputs[0] {
-        //     assert_eq!(
-        //         output_encoding_ints[0]
-        //             .plaintext
-        //             .clone()
-        //             .unwrap()
-        //             .extract_bits_with_threshold(&params),
-        //         hardcoded_key.to_bool_vec()
-        //     );
-        // }
     }
     z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
 }

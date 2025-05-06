@@ -112,5 +112,5 @@ pub async fn test_io_common(
 
     let input_poly =
         DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
-    assert_eq!(output, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());
+    assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
 }
