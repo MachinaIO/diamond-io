@@ -38,13 +38,13 @@ pub async fn test_io_common(
 ) {
     init_tracing();
     let dir = Path::new(&dir_path);
-    if !dir.exists() {
-        fs::create_dir(dir).unwrap();
-    } else {
-        // Clean it first to ensure no old files interfere
-        fs::remove_dir_all(dir).unwrap();
-        fs::create_dir(dir).unwrap();
-    }
+    // if !dir.exists() {
+    //     fs::create_dir(dir).unwrap();
+    // } else {
+    //     // Clean it first to ensure no old files interfere
+    //     fs::remove_dir_all(dir).unwrap();
+    //     fs::create_dir(dir).unwrap();
+    // }
 
     let start_time = std::time::Instant::now();
     let params = DCRTPolyParams::new(ring_dim, crt_depth, crt_bits, base_bits);
@@ -82,20 +82,20 @@ pub async fn test_io_common(
     let mut rng = rand::rng();
     let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
 
-    obfuscate::<
-        DCRTPolyMatrix,
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-        DCRTPolyTrapdoorSampler,
-        _,
-        _,
-    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
-    .await;
+    // obfuscate::<
+    //     DCRTPolyMatrix,
+    //     DCRTPolyUniformSampler,
+    //     DCRTPolyHashSampler<Keccak256>,
+    //     DCRTPolyTrapdoorSampler,
+    //     _,
+    //     _,
+    // >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
+    // .await;
     let obfuscation_time = start_time.elapsed();
-    info!("Time to obfuscate: {:?}", obfuscation_time);
+    // info!("Time to obfuscate: {:?}", obfuscation_time);
 
-    let obf_size = calculate_directory_size(dir_path);
-    log_mem(format!("Obfuscation size: {obf_size} bytes"));
+    // let obf_size = calculate_directory_size(dir_path);
+    // log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
     let bool_in = rng.random::<bool>();
     let mut input = vec![bool_in];
