@@ -2,10 +2,7 @@
 use super::bgm::Player;
 use super::params::ObfuscationParams;
 use crate::{
-    bgg::{
-        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggEncoding, DigitsToInt,
-    },
+    bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
     io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     parallel_iter,
     poly::{
@@ -99,8 +96,10 @@ where
         obf_params.hardcoded_key_sigma == 0.0 &&
         obf_params.p_sigma == 0.0
     {
-        let mut plaintexts =
-            (0..packed_input_size).map(|_| M::P::const_zero(&params)).collect_vec();
+        let one = M::P::const_one(&params);
+        let mut plaintexts = vec![one];
+        plaintexts
+            .extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
         plaintexts.push(minus_t_bar.clone());
         info!("plaintexts length: {}", plaintexts.len());
         let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
@@ -133,37 +132,37 @@ where
         // let inserted_poly_index = 1 + (level * level_width) / dim;
         p_cur = p.clone();
 
-        // #[cfg(feature = "debug")]
-        // if obf_params.encoding_sigma == 0.0 &&
-        //     obf_params.hardcoded_key_sigma == 0.0 &&
-        //     obf_params.p_sigma == 0.0
-        // {
-        //     let r = &public_data.rs[*num as usize];
-        //     s_cur = s_cur * r;
-        //     let bits_done = level_width * level;
-        //     let dim = params.ring_dimension() as usize;
-        //     let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
-        //     let mut coeffs = inputs[..bits_done]
-        //         .iter()
-        //         .map(|&b| {
-        //             if b {
-        //                 <M::P as Poly>::Elem::one(&params.modulus())
-        //             } else {
-        //                 <M::P as Poly>::Elem::zero(&params.modulus())
-        //             }
-        //         })
-        //         .collect::<Vec<_>>();
-        //     coeffs.extend(
-        //         std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
-        //             .take(obf_params.input_size - bits_done),
-        //     );
-        //     polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
-        //     polys.push(minus_t_bar.clone());
+        #[cfg(feature = "debug")]
+        if obf_params.encoding_sigma == 0.0 &&
+            obf_params.hardcoded_key_sigma == 0.0 &&
+            obf_params.p_sigma == 0.0
+        {
+            let r = &public_data.rs[*num as usize];
+            s_cur = s_cur * r;
+            let bits_done = level_width * level;
+            let dim = params.ring_dimension() as usize;
+            let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
+            let mut coeffs = inputs[..bits_done]
+                .iter()
+                .map(|&b| {
+                    if b {
+                        <M::P as Poly>::Elem::one(&params.modulus())
+                    } else {
+                        <M::P as Poly>::Elem::zero(&params.modulus())
+                    }
+                })
+                .collect::<Vec<_>>();
+            coeffs.extend(
+                std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
+                    .take(obf_params.input_size - bits_done),
+            );
+            polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
+            polys.push(minus_t_bar.clone());
 
-        //     let encoded_bits = M::from_poly_vec_row(&params, polys);
-        //     let expected_p = encoded_bits.tensor(&s_cur) * &b_stars[level];
-        //     assert_eq!(p, expected_p, "debug check failed at level {}", level);
-        // }
+            let encoded_bits = M::from_poly_vec_row(&params, polys);
+            let expected_p = encoded_bits.tensor(&s_cur) * &b_stars[level];
+            assert_eq!(p, expected_p, "debug check failed at level {}", level);
+        }
     }
 
     #[cfg(feature = "bgm")]
@@ -194,7 +193,8 @@ where
     // v := p * K_F
     let final_v = p_cur.clone() * final_preimage_f;
     log_mem("final_v computed");
-    // let pub_key_att = M::read_from_files(
+    // TODO: sholud i pass pub_key att matrix from obfuscation artifacts or can i sample again like
+    // old construcaton implementation? let pub_key_att = M::read_from_files(
     //     &obf_params.params,
     //     1 + d,
     //     (1 + packed_input_size) * (d + 1) * log_base_q,

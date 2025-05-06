@@ -91,9 +91,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let t = -t_bar.entry(0, 0);
-    // This plaintexts is (1, 0_L, t), total length is L + 2, this value only contains (0_L, t) as
-    // constant 1 is handled by bggsampler.
-    let mut plaintexts = (0..packed_input_size).map(|_| M::P::const_zero(&params)).collect_vec();
+    // This plaintexts is (1, 0_L, t), total length is L + 2, packed_input_size - 1 is L
+    let one = M::P::const_one(&params);
+    let mut plaintexts = vec![one];
+    plaintexts.extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
     plaintexts.push(t.clone());
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(t, &dir_path, "minus_t_bar"));
@@ -385,23 +386,6 @@ fn store_and_drop_matrix<M: PolyMatrix + 'static>(
         log_mem(format!("Stored {id_str}"));
     })
 }
-
-// fn store_and_drop_bgg_encoding<M: PolyMatrix + 'static>(
-//     encoding: BggEncoding<M>,
-//     dir_path: &Path,
-//     id: &str,
-// ) -> tokio::task::JoinHandle<()> {
-//     let dir_path = dir_path.to_path_buf();
-//     let id_str = id.to_string();
-//     tokio::task::spawn_blocking(move || {
-//         log_mem(format!("Storing {id_str}"));
-//         Handle::current().block_on(async {
-//             encoding.write_to_files(&dir_path, &id_str).await;
-//         });
-//         drop(encoding);
-//         log_mem(format!("Stored {id_str}"));
-//     })
-// }
 
 #[cfg(feature = "debug")]
 fn store_and_drop_poly<P: Poly + 'static>(
