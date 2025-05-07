@@ -1,5 +1,3 @@
-#[cfg(feature = "disk")]
-use crate::utils::calculate_tmp_size;
 use crate::{
     bgg::circuit::PolyCircuit,
     io::{eval::evaluate, obf::obfuscate, params::ObfuscationParams},

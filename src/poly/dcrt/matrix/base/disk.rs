@@ -18,9 +18,7 @@ use tempfile::NamedTempFile;
 pub struct BaseMatrix<T: MatrixElem> {
     pub params: T::Params,
     #[cfg(feature = "disk")]
-    file: File,
-    #[cfg(not(feature = "disk"))]
-    inner: Vec<Vec<T>>,
+    pub file: File,
     pub nrow: usize,
     pub ncol: usize,
 }
@@ -666,8 +664,13 @@ fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
     }
 }
 
+/// Maps a file into memory with write access.
+///
+/// # Safety
+///
+/// This function is unsafe because it performs raw memory mapping operations
 #[cfg(feature = "disk")]
-unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
+pub unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
     unsafe {
         MmapOptions::new()
             .offset(offset as u64)

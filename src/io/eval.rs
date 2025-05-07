@@ -154,10 +154,10 @@ where
                     }
                 })
                 .collect::<Vec<_>>();
-            coeffs.extend(
-                std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
-                    .take(obf_params.input_size - bits_done),
-            );
+            coeffs.extend(std::iter::repeat_n(
+                <M::P as Poly>::Elem::zero(&params.modulus()),
+                obf_params.input_size - bits_done,
+            ));
             polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
             polys.push(minus_t_bar.clone());
             let encoded_bits = M::from_poly_vec_row(&params, polys);
@@ -252,10 +252,10 @@ where
                 }
             })
             .collect::<Vec<_>>();
-        coeffs.extend(
-            std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
-                .take(obf_params.input_size - bits_done),
-        );
+        coeffs.extend(std::iter::repeat_n(
+            <M::P as Poly>::Elem::zero(&params.modulus()),
+            obf_params.input_size - bits_done,
+        ));
         polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
         polys.push(minus_t_bar.clone());
         let gadget = M::gadget_matrix(&params, d + 1);
@@ -284,10 +284,10 @@ where
             }
         })
         .collect::<Vec<_>>();
-    coeffs.extend(
-        std::iter::repeat(<M::P as Poly>::Elem::zero(&params.modulus()))
-            .take(obf_params.input_size - bits_done),
-    );
+    coeffs.extend(std::iter::repeat_n(
+        <M::P as Poly>::Elem::zero(&params.modulus()),
+        obf_params.input_size - bits_done,
+    ));
     polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
     let mut new_encodings = vec![];
     for (j, pub_key) in pub_key_att.clone().into_iter().enumerate() {

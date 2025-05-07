@@ -13,7 +13,7 @@ use std::{
 #[derive(Clone)]
 pub struct BaseMatrix<T: MatrixElem> {
     pub params: T::Params,
-    inner: Vec<Vec<T>>,
+    pub inner: Vec<Vec<T>>,
     pub nrow: usize,
     pub ncol: usize,
 }

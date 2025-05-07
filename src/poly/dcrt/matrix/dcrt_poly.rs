@@ -15,7 +15,7 @@ use tokio::fs::write;
 use super::base::BaseMatrix;
 
 #[cfg(feature = "disk")]
-use super::base::disk::block_offsets;
+use super::base::disk::{block_offsets, map_file_mut};
 
 impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -294,7 +294,20 @@ impl PolyMatrix for DCRTPolyMatrix {
     }
 
     fn set_entry(&mut self, i: usize, j: usize, elem: Self::P) {
-        self.set_entry(i, j, elem);
+        #[cfg(not(feature = "disk"))]
+        {
+            self.inner[i][j] = elem;
+        }
+        #[cfg(feature = "disk")]
+        {
+            let entry_size = self.params.entry_size();
+            let offset = (i * self.ncol + j) * entry_size;
+            let bytes = elem.as_elem_to_bytes();
+            unsafe {
+                let mut mmap = map_file_mut(&self.file, offset, entry_size);
+                mmap.copy_from_slice(&bytes);
+            }
+        }
     }
 }
 
