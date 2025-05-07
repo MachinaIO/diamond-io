@@ -1,0 +1,116 @@
+name: CI self-hosted runner
+on:
+  push:
+    branches:
+      - feat/self-hosted
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo +nightly fmt --all --check
+
+  launch-ec2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::490752553772:role/GH-Actions-Drill
+          role-duration-seconds: 900
+          aws-region: eu-central-1
+
+      - name: Launch EC2 Instance
+        id: launch-ec2
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          IMAGE_ID: ami-03250b0e01c28d196
+          INSTANCE_TYPE: t3.2xlarge
+        run: |
+          ./run.sh ${{ github.run_id }}
+
+  run-on-self-hosted:
+    needs: launch-ec2
+    runs-on: ["${{github.run_id}}", self-hosted]
+    strategy:
+        fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libgmp-dev libasound2-dev
+
+      - name: Checkout OpenFHE
+        uses: actions/checkout@v4
+        with:
+          repository: openfheorg/openfhe-development
+          path: openfhe
+
+      - name: Build OpenFHE
+        run: |
+          cd openfhe
+          mkdir -p build && cd build
+          cmake ..
+          make -j"$(nproc)"
+          sudo make install
+
+      - name: Update dynamic linker cache
+        run: |
+          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/openfhe.conf
+          sudo ldconfig
+
+      - name: Verify OpenFHE installation
+        run: ls -lah /usr/local/lib | grep OpenFHE
+
+      - name: Run clippy memory
+        run: cargo +nightly clippy --workspace --all-targets
+        env:
+          RUSTFLAGS: -A unused
+
+      - name: Run clippy disk
+        run: cargo +nightly clippy --workspace --all-targets --no-default-features --features disk
+        env:
+          RUSTFLAGS: -A unused
+
+      - name: Run test
+        run: cargo test
+  
+  ci-success:
+    name: ci success
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - run-on-self-hosted
+      - fmt
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
