@@ -1,6 +1,9 @@
 name: Bench
 
 on:
+  push:
+    branches:
+      - feat/self-hosted
   workflow_dispatch:
     inputs:
       param_id:
