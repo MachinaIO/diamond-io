@@ -239,9 +239,8 @@ where
     }
 
     let m = (d + 1) * log_base_q;
-    let mut polys =
+    let polys =
         build_poly_vec::<M>(&params, inputs, level_width, nums.len(), obf_params.input_size, None);
-    polys.pop();
     let mut new_encodings = vec![];
     let plaintexts_len = pub_key_att.len();
     for (j, pub_key) in pub_key_att.into_iter().enumerate() {
