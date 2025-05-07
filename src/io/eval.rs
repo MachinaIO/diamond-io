@@ -118,7 +118,7 @@ where
         .collect();
     debug_assert_eq!(nums.len(), depth);
     #[cfg(feature = "debug")]
-    let mut s_cur = s_init.clone();
+    let mut s_cur = s_init;
 
     for (level, num) in nums.iter().enumerate() {
         let level = level + 1;
@@ -132,7 +132,6 @@ where
         log_mem(format!("k_{}_{} loaded ({},{})", level, num, k.row_size(), k.col_size()));
         let p = p_cur * k;
         log_mem(format!("p at {} computed ({},{})", level, p.row_size(), p.col_size()));
-        p_cur = p.clone();
 
         #[cfg(feature = "debug")]
         if obf_params.encoding_sigma == 0.0 &&
@@ -165,6 +164,8 @@ where
             let expected_p = s_connect * &b_stars[level];
             assert_eq!(p, expected_p, "debug check failed at level {}", level);
         }
+
+        p_cur = p;
     }
 
     #[cfg(feature = "bgm")]
@@ -265,7 +266,7 @@ where
         // matrix
         let pubkey = pub_key_att[0].concat_matrix(&pub_key_att[1..]);
         let inner = pubkey - plaintexts.tensor(&gadget);
-        let expected_c_att = s_cur.clone() * inner;
+        let expected_c_att = s_cur * inner;
         assert_eq!(c_att, expected_c_att);
         log_mem("c_att debug check passed");
     }
@@ -290,9 +291,10 @@ where
     ));
     polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
     let mut new_encodings = vec![];
-    for (j, pub_key) in pub_key_att.clone().into_iter().enumerate() {
+    let plaintexts_len = pub_key_att.len();
+    for (j, pub_key) in pub_key_att.into_iter().enumerate() {
         let new_vec = c_att.slice_columns(j * m, (j + 1) * m);
-        let new_encode: BggEncoding<M> = if j == pub_key_att.len() - 1 {
+        let new_encode: BggEncoding<M> = if j == plaintexts_len - 1 {
             BggEncoding::new(new_vec, pub_key, None)
         } else {
             BggEncoding::new(new_vec, pub_key, Some(polys[j].clone()))
