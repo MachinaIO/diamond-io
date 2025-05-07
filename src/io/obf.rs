@@ -343,7 +343,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
         ));
-        u_1_l.tensor(&(eval_outputs_matrix + public_data.a_prf))
+        let summat = eval_outputs_matrix + public_data.a_prf;
+        let extra_blocks = packed_input_size;
+        let zero_rows = extra_blocks * summat.row_size();
+        let zero_cols = summat.col_size();
+        let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
+        let f_pre = summat.concat_rows(&[&zeros]);
+        f_pre
     };
     log_mem("Computed final_preimage_target_f");
 
