@@ -53,7 +53,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_PAT: ${{ secrets.GH_PAT }}
           IMAGE_ID: ami-03250b0e01c28d196
-          INSTANCE_TYPE: i4i.16xlarge
+          #INSTANCE_TYPE: i4i.16xlarge
+          INSTANCE_TYPE: c7i.4xlarge
         run: |
           ./run.sh ${{ github.run_id }}
 
