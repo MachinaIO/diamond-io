@@ -63,7 +63,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
-    let u_1_l = M::unit_column_vector(&params, packed_input_size + 1, 0);
 
     /*
     =============================================================================
@@ -89,13 +88,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
     // We use t := -1 * t_bar
     let minus_t_bar = -t_bar.entry(0, 0);
+    #[cfg(feature = "debug")]
+    handles.push(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar"));
     // This plaintexts is (1, 0_L, t), total length is L + 2, packed_input_size - 1 is L
     let one = M::P::const_one(&params);
     let mut plaintexts = vec![one];
     plaintexts.extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
-    plaintexts.push(minus_t_bar.clone());
-    #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(minus_t_bar, &dir_path, "minus_t_bar"));
+    plaintexts.push(minus_t_bar);
+
     let mut reveal_plaintexts = vec![true; plaintexts.len()];
     // Do we want to reveal last slot which is t of FHE secret key?
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
@@ -200,6 +200,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     /*
     Trapdoor preimage generation for the input insertion step.
     For each depth, sample K preimage at the corresponding level size.
+    Level starts from 1 because we already have p_init at level 0.
     */
 
     for level in 1..(depth + 1) {
@@ -236,7 +237,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 u_tensor_s.row_size(),
                 u_tensor_s.col_size()
             ));
-            let k_target = u_tensor_s * b_star_level.clone();
+            let k_target = u_tensor_s * &b_star_level;
             let k_target_decompose = k_target.decompose();
             log_mem(format!(
                 "Computed k_target_decompose ({},{})",
@@ -288,9 +289,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         pub_key_att_matrix.row_size(),
         pub_key_att_matrix.col_size()
     ));
-    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
+    let u_1_l = M::unit_column_vector(&params, packed_input_size + 1, 0);
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(hardcoded_key, &dir_path, "hardcoded_key"));
+    handles.push(store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key"));
+    let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
 
     // Generate RLWE ciphertext for the hardcoded key
     let sampler_uniform = SU::new();
@@ -342,7 +344,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             .map(|digits| BggPublicKey::digits_to_int(digits, &params))
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
-        debug_assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
+        #[cfg(feature = "debug")]
+        assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         #[cfg(feature = "debug")]
         handles.push(store_and_drop_matrix(
             eval_outputs_matrix.clone() + public_data.a_prf.clone(),
@@ -353,7 +356,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     log_mem("Computed final_preimage_target_f");
 
-    // K_F
     let final_preimage_f = sampler_trapdoor.preimage(
         &params,
         &b_star_trapdoor_cur,

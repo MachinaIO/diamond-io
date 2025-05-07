@@ -4,7 +4,6 @@ use super::params::ObfuscationParams;
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
     io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
-    parallel_iter,
     poly::{
         element::PolyElem,
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
@@ -12,10 +11,12 @@ use crate::{
     },
     utils::log_mem,
 };
+
+#[cfg(feature = "debug")]
+use crate::parallel_iter;
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
-use tracing::info;
 
 pub fn evaluate<M, SH, ST, P>(
     obf_params: ObfuscationParams<M>,
@@ -101,7 +102,6 @@ where
         plaintexts
             .extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
         plaintexts.push(minus_t_bar.clone());
-        info!("plaintexts length: {}", plaintexts.len());
         let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
         let s_connect = encoded_bits.tensor(&s_init);
         let expected_p_init = s_connect * &b_stars[0];
