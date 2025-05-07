@@ -16,7 +16,7 @@ INSTANCE_ID=$(aws ec2 run-instances \
   --key-name devops \
   --security-group-ids sg-0e511f05c162bb458 \
   --subnet-id subnet-0e1c657227636974b \
-  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=drill-${RUNNER_TAG}},{Key=ProjectName,Value=devops}]" "ResourceType=volume,Tags=[{Key=ProjectName,Value=devops}]" \
+  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=drill-${RUNNER_TAG}},{Key=ProjectName,Value=machina-io}]" "ResourceType=volume,Tags=[{Key=ProjectName,Value=machina-io}]" \
   --user-data "file://.startup.sh" \
   --query "Instances[0].InstanceId" \
   --output text) || EXIT_CODE=1
