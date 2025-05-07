@@ -138,7 +138,7 @@ where
             obf_params.hardcoded_key_sigma == 0.0 &&
             obf_params.p_sigma == 0.0
         {
-            let r = &public_data.rs[*num as usize];
+            let r = &public_data.r[*num as usize];
             s_cur = s_cur * r;
             let bits_done = level_width * level;
             let dim = params.ring_dimension() as usize;
