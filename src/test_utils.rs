@@ -29,9 +29,8 @@ pub async fn test_io_common(
     d: usize,
     input_size: usize,
     level_width: usize,
-    encoding_sigma: f64,
-    hardcoded_key_sigma: f64,
     p_sigma: f64,
+    hardcoded_key_sigma: f64,
     dir_path: &str,
 ) {
     init_tracing();
@@ -70,9 +69,8 @@ pub async fn test_io_common(
         level_width,
         public_circuit: public_circuit.clone(),
         d,
-        encoding_sigma,
-        hardcoded_key_sigma,
         p_sigma,
+        hardcoded_key_sigma,
         trapdoor_sigma: SIGMA,
     };
 

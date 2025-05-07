@@ -93,10 +93,7 @@ where
         .collect::<Vec<_>>();
 
     #[cfg(feature = "debug")]
-    if obf_params.encoding_sigma == 0.0 &&
-        obf_params.hardcoded_key_sigma == 0.0 &&
-        obf_params.p_sigma == 0.0
-    {
+    if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
         let one = M::P::const_one(&params);
         let mut plaintexts = vec![one];
         plaintexts
@@ -134,10 +131,7 @@ where
         log_mem(format!("p at {} computed ({},{})", level, p.row_size(), p.col_size()));
 
         #[cfg(feature = "debug")]
-        if obf_params.encoding_sigma == 0.0 &&
-            obf_params.hardcoded_key_sigma == 0.0 &&
-            obf_params.p_sigma == 0.0
-        {
+        if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
             let r = &public_data.rs[*num as usize];
             s_cur = s_cur * r;
             let bits_done = level_width * level;
@@ -198,10 +192,7 @@ where
     log_mem("final_v computed");
 
     #[cfg(feature = "debug")]
-    if obf_params.encoding_sigma == 0.0 &&
-        obf_params.hardcoded_key_sigma == 0.0 &&
-        obf_params.p_sigma == 0.0
-    {
+    if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
         let eval_outputs_matrix_plus_a_prf = M::read_from_files(
             &obf_params.params,
             d + 1,
@@ -236,10 +227,7 @@ where
     log_mem(format!("Sampled pub_key_att {} ", pub_key_att.len()));
 
     #[cfg(feature = "debug")]
-    if obf_params.encoding_sigma == 0.0 &&
-        obf_params.hardcoded_key_sigma == 0.0 &&
-        obf_params.p_sigma == 0.0
-    {
+    if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
         let bits_done = level_width * nums.len();
         let dim = params.ring_dimension() as usize;
         let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
@@ -314,10 +302,7 @@ where
     log_mem("z computed");
     debug_assert_eq!(z.size(), (1, packed_output_size));
     #[cfg(feature = "debug")]
-    if obf_params.encoding_sigma == 0.0 &&
-        obf_params.hardcoded_key_sigma == 0.0 &&
-        obf_params.p_sigma == 0.0
-    {
+    if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
         assert_eq!(z.size(), (1, packed_output_size));
     }
     z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()

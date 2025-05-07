@@ -99,13 +99,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let mut reveal_plaintexts = vec![true; plaintexts.len()];
     // We reveal FHE secret key, only in the debug mode
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
-    let bgg_encode_sampler = BGGEncodingSampler::new(
-        params.as_ref(),
-        &s_bars,
-        sampler_uniform,
-        obf_params.encoding_sigma,
-    );
-    let s_init = bgg_encode_sampler.secret_vec;
+    let s_init = {
+        let minus_one_poly = <SU::M as PolyMatrix>::P::const_minus_one(&params);
+        let mut secrets = s_bars.to_vec();
+        secrets.push(minus_one_poly);
+        SU::M::from_poly_vec_row(&params, secrets)
+    };
     log_mem(format!("s_init ({},{}) 1x(n+1)", s_init.row_size(), s_init.col_size()));
 
     /*
@@ -142,7 +141,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let s_connect = encoded_bits.tensor(&s_init);
     log_mem(format!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size()));
     let s_b = s_connect * &b_star_cur;
-    let p_init_error = bgg_encode_sampler.error_sampler.sample_uniform(
+    let p_init_error = sampler_uniform.sample_uniform(
         &params,
         1,
         m_b,
