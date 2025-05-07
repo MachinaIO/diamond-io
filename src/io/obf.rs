@@ -226,24 +226,18 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
-            // actually this is the s_j_b on paper, where j is level and b is bit
-            let rs = &public_data.rs[num];
-            log_mem(format!("Computed S ({},{}) (n+1)x(n+1)", rs.row_size(), rs.col_size()));
+            // actually this is the S_j_b on paper, where j is level and b is bit
+            let r = &public_data.r[num];
+            log_mem(format!("Computed R ({},{}) (n+1)x(n+1)", r.row_size(), r.col_size()));
             let u = &u_nums[level - 1][num];
             log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
-            let u_tensor_s = u.tensor(rs);
+            let u_tensor_r = u.tensor(r);
             log_mem(format!(
-                "Computed U ⊗ S ({},{})",
-                u_tensor_s.row_size(),
-                u_tensor_s.col_size()
+                "Computed U ⊗ R ({},{})",
+                u_tensor_r.row_size(),
+                u_tensor_r.col_size()
             ));
-            let k_target = u_tensor_s * &b_star_level;
-            let k_target_decompose = k_target.decompose();
-            log_mem(format!(
-                "Computed k_target_decompose ({},{})",
-                k_target_decompose.row_size(),
-                k_target_decompose.col_size()
-            ));
+            let k_target = u_tensor_r * &b_star_level;
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
             log_mem(format!(

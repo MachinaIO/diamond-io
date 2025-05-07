@@ -32,7 +32,7 @@ where
 
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
-    pub rs: Vec<S::M>,
+    pub r: Vec<S::M>,
     pub a_rlwe_bar: S::M,
     pub a_prf: S::M,
     pub packed_input_size: usize,
@@ -46,13 +46,13 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let params = &obf_params.params;
         let d = obf_params.d;
         let level_size = (1u64 << obf_params.level_width) as usize;
-        let mut rs = Vec::with_capacity(level_size);
+        let mut r = Vec::with_capacity(level_size);
         let one = S::M::identity(params, 1, None);
         for i in 0..level_size {
             let tag = format!("R_{}", i).into_bytes();
             let r_i_bar = hash_sampler.sample_hash(params, hash_key, &tag, d, d, DistType::BitDist);
             let r_i = r_i_bar.concat_diag(&[&one]);
-            rs.push(r_i);
+            r.push(r_i);
         }
 
         let log_base_q = params.modulus_digits();
@@ -72,7 +72,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        Self { rs, a_rlwe_bar, a_prf, packed_input_size, packed_output_size, _s: PhantomData }
+        Self { r, a_rlwe_bar, a_prf, packed_input_size, packed_output_size, _s: PhantomData }
     }
 }
 
