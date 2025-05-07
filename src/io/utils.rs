@@ -4,7 +4,7 @@ use crate::{
         sampler::*,
         BggPublicKey,
     },
-    poly::{sampler::*, Poly, PolyMatrix, PolyParams},
+    poly::{element::PolyElem, sampler::*, Poly, PolyMatrix, PolyParams},
 };
 use std::marker::PhantomData;
 
@@ -32,7 +32,7 @@ where
 
 #[derive(Debug, Clone)]
 pub struct PublicSampledData<S: PolyHashSampler<[u8; 32]>> {
-    pub rs: Vec<S::M>,
+    pub r: Vec<S::M>,
     pub a_rlwe_bar: S::M,
     pub a_prf: S::M,
     pub packed_input_size: usize,
@@ -46,18 +46,18 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
         let params = &obf_params.params;
         let d = obf_params.d;
         let level_size = (1u64 << obf_params.level_width) as usize;
-        let mut rs = Vec::with_capacity(level_size);
+        let mut r = Vec::with_capacity(level_size);
         let one = S::M::identity(params, 1, None);
         for i in 0..level_size {
             let tag = format!("R_{}", i).into_bytes();
             let r_i_bar = hash_sampler.sample_hash(params, hash_key, &tag, d, d, DistType::BitDist);
             let r_i = r_i_bar.concat_diag(&[&one]);
-            rs.push(r_i);
+            r.push(r_i);
         }
 
         let log_base_q = params.modulus_digits();
         let dim = params.ring_dimension() as usize;
-        // input bits, poly of the RLWE key, it contains constant 1
+        // input bits, poly of the FHE key, it contains 1 for the FHE key (t)
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let a_rlwe_bar =
@@ -72,7 +72,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
             DistType::FinRingDist,
         );
         let a_prf = a_prf_raw.modulus_switch(&obf_params.switched_modulus);
-        Self { rs, a_rlwe_bar, a_prf, packed_input_size, packed_output_size, _s: PhantomData }
+        Self { r, a_rlwe_bar, a_prf, packed_input_size, packed_output_size, _s: PhantomData }
     }
 }
 
@@ -130,6 +130,80 @@ pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
         circuit.output(outputs);
     }
     circuit
+}
+
+pub fn build_u_mask_multi<M: PolyMatrix>(
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    packed_input_size: usize, // L
+    level_width: usize,       // w
+    depth_j: usize,           // j
+    combo_b: usize,           // 0 ≤ b < 2^w
+) -> M {
+    // L' = 1 (t) + L packed-input slots (evaluator's input + const-one slot)
+    let l_dash = 1 + packed_input_size;
+
+    // U_{j,0}  ≡  identity
+    if combo_b == 0 {
+        return M::identity(params, l_dash, None);
+    }
+
+    // Start from the identity and zero out the diagonal entry
+    // for every bit that is 1 in combo_b.
+    let mut u = M::identity(params, l_dash, None);
+    let mut zero = M::P::const_zero(params);
+
+    for r in 0..level_width {
+        if (combo_b >> r) & 1 == 1 {
+            let idx = depth_j * level_width + r;
+            assert!(
+                idx < packed_input_size * params.ring_dimension() as usize,
+                "index out of range"
+            );
+            let mut cs = zero.coeffs();
+            debug_assert!(idx < cs.len(), "index out of bounds");
+            cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
+            zero = M::P::from_coeffs(params, &cs);
+        }
+    }
+
+    u.set_entry(0, 1, zero);
+
+    u
+}
+
+pub fn build_poly_vec<M: PolyMatrix>(
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    inputs: &[bool],
+    level_width: usize,
+    level: usize,
+    input_size: usize,
+    minus_t_bar: Option<M::P>,
+) -> Vec<M::P> {
+    let bits_done = level_width * level;
+    let dim = params.ring_dimension() as usize;
+    let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(params)];
+
+    let mut coeffs = inputs[..bits_done]
+        .iter()
+        .map(|&b| {
+            if b {
+                <M::P as Poly>::Elem::one(&params.modulus())
+            } else {
+                <M::P as Poly>::Elem::zero(&params.modulus())
+            }
+        })
+        .collect::<Vec<_>>();
+
+    coeffs.extend(std::iter::repeat_n(
+        <M::P as Poly>::Elem::zero(&params.modulus()),
+        input_size - bits_done,
+    ));
+
+    polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(params, c)));
+    if let Some(minus_t_bar) = minus_t_bar {
+        polys.push(minus_t_bar);
+    }
+    polys
 }
 
 #[cfg(test)]

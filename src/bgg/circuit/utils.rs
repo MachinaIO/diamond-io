@@ -6,7 +6,7 @@ use super::PolyCircuit;
 /// 1. A public circuit that it is assumed to return one or more ciphertexts where each ciphertext
 ///    is base decomposed -> BaseDecompose(ct_0), BaseDecompose(ct_1), ... where BaseDecompose(ct_k)
 ///    = [a_base_0, b_base_0, a_base_1, b_base_1, ...]
-/// 2. An FHE decryption circuit that takes each ciphertext and the RLWE secret key -t_bar as inputs
+/// 2. An FHE decryption circuit that takes each ciphertext and the FHE secret key -t_bar as inputs
 ///    and returns the base decomposed plaintext for each cipheretxt
 pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
     public_circuit: PolyCircuit,

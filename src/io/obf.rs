@@ -1,16 +1,15 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 use crate::{
-    bgg::{
-        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggPublicKey, DigitsToInt,
-    },
+    bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::{
         params::ObfuscationParams,
-        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+        utils::{
+            build_final_digits_circuit, build_u_mask_multi, sample_public_key_by_id,
+            PublicSampledData,
+        },
     },
     poly::{
-        element::PolyElem,
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -73,20 +72,17 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Sample the initial public key (level 0) with our reveal flags.
 
     The length of encodings_init is (1 + packed_input_size):
-       - 1 the encoding of t(secret key)
-       - packed_input_size for the packed evaluator inputs and for the encoding of 1.
+       - 1 the encoding of constant 1
+       - packed_input_size for the packed evaluator inputs and for FHE secret key t
     =============================================================================
     */
 
-    // Sample BGG+ encoding secret key.
-    // We sample multiple s_bar because we are using module LWE to reduce FFT burden by reducing n.
+    // Sample BGG+ encoding secret key
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
     // Sample FHE secret key t
     let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     log_mem("Sampled t_bar");
-    // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
-    // We use t := -1 * t_bar
     let minus_t_bar = -t_bar.entry(0, 0);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar"));
@@ -126,7 +122,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     */
 
     // Sample input dependent random matrix B_*
-    // note that L'(n+1) is same as (1 + packed_input_size) * (d + 1)
     let (mut b_star_trapdoor_cur, mut b_star_cur) =
         sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
     log_mem(format!(
@@ -225,24 +220,17 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
-            // actually this is the s_j_b on paper, where j is level and b is bit
-            let rs = &public_data.rs[num];
-            log_mem(format!("Computed S ({},{}) (n+1)x(n+1)", rs.row_size(), rs.col_size()));
+            let r = &public_data.r[num];
+            log_mem(format!("Computed R ({},{}) (n+1)x(n+1)", r.row_size(), r.col_size()));
             let u = &u_nums[level - 1][num];
             log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
-            let u_tensor_s = u.tensor(rs);
+            let u_tensor_r = u.tensor(r);
             log_mem(format!(
-                "Computed U ⊗ S ({},{})",
-                u_tensor_s.row_size(),
-                u_tensor_s.col_size()
+                "Computed U ⊗ R ({},{})",
+                u_tensor_r.row_size(),
+                u_tensor_r.col_size()
             ));
-            let k_target = u_tensor_s * &b_star_level;
-            let k_target_decompose = k_target.decompose();
-            log_mem(format!(
-                "Computed k_target_decompose ({},{})",
-                k_target_decompose.row_size(),
-                k_target_decompose.col_size()
-            ));
+            let k_target = u_tensor_r * &b_star_level;
             let k_preimage_num =
                 sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
             log_mem(format!(
@@ -351,7 +339,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
         ));
-        u_1_l.tensor(&(eval_outputs_matrix + public_data.a_prf))
+        let summat = eval_outputs_matrix + public_data.a_prf;
+        let extra_blocks = packed_input_size;
+        let zero_rows = extra_blocks * summat.row_size();
+        let zero_cols = summat.col_size();
+        let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
+        let f_pre = summat.concat_rows(&[&zeros]);
+        f_pre
     };
     log_mem("Computed final_preimage_target_f");
 
@@ -408,43 +402,4 @@ fn store_and_drop_poly<P: Poly + 'static>(
         drop(poly);
         log_mem(format!("Stored {id_str}"));
     })
-}
-
-fn build_u_mask_multi<M: PolyMatrix>(
-    params: &<<M as PolyMatrix>::P as Poly>::Params,
-    packed_input_size: usize, // L
-    level_width: usize,       // w
-    depth_j: usize,           // j
-    combo_b: usize,           // 0 ≤ b < 2^w
-) -> M {
-    // L' = 1 (t) + L packed-input slots (evaluator's input + const-one slot)
-    let l_dash = 1 + packed_input_size;
-
-    // U_{j,0}  ≡  identity
-    if combo_b == 0 {
-        return M::identity(params, l_dash, None);
-    }
-
-    // Start from the identity and zero out the diagonal entry
-    // for every bit that is 1 in combo_b.
-    let mut u = M::identity(params, l_dash, None);
-    let mut zero = M::P::const_zero(params);
-
-    for r in 0..level_width {
-        if (combo_b >> r) & 1 == 1 {
-            let idx = depth_j * level_width + r;
-            assert!(
-                idx < packed_input_size * params.ring_dimension() as usize,
-                "index out of range"
-            );
-            let mut cs = zero.coeffs();
-            debug_assert!(idx < cs.len(), "index out of bounds");
-            cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
-            zero = M::P::from_coeffs(params, &cs);
-        }
-    }
-
-    u.set_entry(0, 1, zero);
-
-    u
 }
