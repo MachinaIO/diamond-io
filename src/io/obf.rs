@@ -97,7 +97,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     plaintexts.push(minus_t_bar);
 
     let mut reveal_plaintexts = vec![true; plaintexts.len()];
-    // Do we want to reveal last slot which is t of FHE secret key?
+    // We reveal FHE secret key, only in the debug mode
     reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
     let bgg_encode_sampler = BGGEncodingSampler::new(
         params.as_ref(),
@@ -113,13 +113,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Pre‐loop initialization:
 
     1) Sample input‐dependent random basis B_* (trapdoor & public matrix).
-    2) Compute initial secret key p_init = ((1, 1_L, t) ⊗ s_init)·B_* + error.
-    where 1_L is dummy mask for input space and t is fhe secret key,
+    2) Compute initial secret key p_init = ((1, 0_L, t) ⊗ s_init)·B_* + error.
+    where 0_L is dummy mask for input space and t is fhe secret key,
     3) Create I_{d+1}, derive level_width, level_size, and depth.
     4) For each i in 0..level_size,
         For each j in 0..depth,
-            U_{j,1} = I_{1 + packed_input_size}
-            U_(j,i) = ...
+            U_{j,0} = I_{1 + packed_input_size}
+            U_(j,i) = Matrix to update input bit to 1
 
     These values (B_*, p_init, I_{d+1}, U_{j, i}) are all set up
     before entering the main preimage generation loop.
