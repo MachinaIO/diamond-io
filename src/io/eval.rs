@@ -235,7 +235,7 @@ where
     for (j, pub_key) in pub_key_att.into_iter().enumerate() {
         let new_vec = c_att.slice_columns(j * m, (j + 1) * m);
         #[cfg(feature = "debug")]
-        if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
+        {
             let new_encode: BggEncoding<M> =
                 BggEncoding::new(new_vec, pub_key, Some(polys[j].clone()));
             new_encodings.push(new_encode);
