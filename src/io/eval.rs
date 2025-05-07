@@ -1,19 +1,17 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
-use super::params::ObfuscationParams;
+use super::{params::ObfuscationParams, utils::build_poly_vec};
+#[cfg(feature = "debug")]
+use crate::parallel_iter;
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
     io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     poly::{
-        element::PolyElem,
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
         Poly, PolyMatrix, PolyParams,
     },
     utils::log_mem,
 };
-
-#[cfg(feature = "debug")]
-use crate::parallel_iter;
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
@@ -140,26 +138,15 @@ where
         {
             let r = &public_data.r[*num as usize];
             s_cur = s_cur * r;
-            let bits_done = level_width * level;
-            let dim = params.ring_dimension() as usize;
-            let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
-            let mut coeffs = inputs[..bits_done]
-                .iter()
-                .map(|&b| {
-                    if b {
-                        <M::P as Poly>::Elem::one(&params.modulus())
-                    } else {
-                        <M::P as Poly>::Elem::zero(&params.modulus())
-                    }
-                })
-                .collect::<Vec<_>>();
-            coeffs.extend(std::iter::repeat_n(
-                <M::P as Poly>::Elem::zero(&params.modulus()),
-                obf_params.input_size - bits_done,
-            ));
-            polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
-            polys.push(minus_t_bar.clone());
-            let encoded_bits = M::from_poly_vec_row(&params, polys);
+            let plaintexts = build_poly_vec::<M>(
+                &params,
+                inputs,
+                level_width,
+                level,
+                obf_params.input_size,
+                Some(minus_t_bar.clone()),
+            );
+            let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
             let s_connect = encoded_bits.tensor(&s_cur);
             let expected_p = s_connect * &b_stars[level];
             assert_eq!(p, expected_p, "debug check failed at level {}", level);
@@ -231,25 +218,14 @@ where
         obf_params.hardcoded_key_sigma == 0.0 &&
         obf_params.p_sigma == 0.0
     {
-        let bits_done = level_width * nums.len();
-        let dim = params.ring_dimension() as usize;
-        let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
-        let mut coeffs = inputs[..bits_done]
-            .iter()
-            .map(|&b| {
-                if b {
-                    <M::P as Poly>::Elem::one(&params.modulus())
-                } else {
-                    <M::P as Poly>::Elem::zero(&params.modulus())
-                }
-            })
-            .collect::<Vec<_>>();
-        coeffs.extend(std::iter::repeat_n(
-            <M::P as Poly>::Elem::zero(&params.modulus()),
-            obf_params.input_size - bits_done,
-        ));
-        polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
-        polys.push(minus_t_bar.clone());
+        let polys = build_poly_vec::<M>(
+            &params,
+            inputs,
+            level_width,
+            nums.len(),
+            obf_params.input_size,
+            Some(minus_t_bar.clone()),
+        );
         let gadget = M::gadget_matrix(&params, d + 1);
         // concatenate plaintexts as a row vector
         let plaintexts = M::from_poly_vec_row(&params, polys);
@@ -263,24 +239,9 @@ where
     }
 
     let m = (d + 1) * log_base_q;
-    let bits_done = level_width * nums.len();
-    let dim = params.ring_dimension() as usize;
-    let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(&params)];
-    let mut coeffs = inputs[..bits_done]
-        .iter()
-        .map(|&b| {
-            if b {
-                <M::P as Poly>::Elem::one(&params.modulus())
-            } else {
-                <M::P as Poly>::Elem::zero(&params.modulus())
-            }
-        })
-        .collect::<Vec<_>>();
-    coeffs.extend(std::iter::repeat_n(
-        <M::P as Poly>::Elem::zero(&params.modulus()),
-        obf_params.input_size - bits_done,
-    ));
-    polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(&params, c)));
+    let mut polys =
+        build_poly_vec::<M>(&params, inputs, level_width, nums.len(), obf_params.input_size, None);
+    polys.pop();
     let mut new_encodings = vec![];
     let plaintexts_len = pub_key_att.len();
     for (j, pub_key) in pub_key_att.into_iter().enumerate() {

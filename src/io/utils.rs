@@ -57,7 +57,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 
         let log_base_q = params.modulus_digits();
         let dim = params.ring_dimension() as usize;
-        // input bits, poly of the RLWE key, it contains 1 for the RLWE key (t)
+        // input bits, poly of the FHE key, it contains 1 for the FHE key (t)
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let a_rlwe_bar =
@@ -169,6 +169,41 @@ pub fn build_u_mask_multi<M: PolyMatrix>(
     u.set_entry(0, 1, zero);
 
     u
+}
+
+pub fn build_poly_vec<M: PolyMatrix>(
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    inputs: &[bool],
+    level_width: usize,
+    level: usize,
+    input_size: usize,
+    minus_t_bar: Option<M::P>,
+) -> Vec<M::P> {
+    let bits_done = level_width * level;
+    let dim = params.ring_dimension() as usize;
+    let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(params)];
+
+    let mut coeffs = inputs[..bits_done]
+        .iter()
+        .map(|&b| {
+            if b {
+                <M::P as Poly>::Elem::one(&params.modulus())
+            } else {
+                <M::P as Poly>::Elem::zero(&params.modulus())
+            }
+        })
+        .collect::<Vec<_>>();
+
+    coeffs.extend(std::iter::repeat_n(
+        <M::P as Poly>::Elem::zero(&params.modulus()),
+        input_size - bits_done,
+    ));
+
+    polys.extend(coeffs.chunks(dim).map(|c| M::P::from_coeffs(params, c)));
+    if let Some(minus_t_bar) = minus_t_bar {
+        polys.push(minus_t_bar);
+    }
+    polys
 }
 
 #[cfg(test)]

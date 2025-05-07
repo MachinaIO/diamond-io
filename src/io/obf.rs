@@ -75,20 +75,17 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Sample the initial public key (level 0) with our reveal flags.
 
     The length of encodings_init is (1 + packed_input_size):
-       - 1 the encoding of t(secret key)
-       - packed_input_size for the packed evaluator inputs and for the encoding of 1.
+       - 1 the encoding of constant 1
+       - packed_input_size for the packed evaluator inputs and for FHE secret key t
     =============================================================================
     */
 
-    // Sample BGG+ encoding secret key.
-    // We sample multiple s_bar because we are using module LWE to reduce FFT burden by reducing n.
+    // Sample BGG+ encoding secret key
     let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
     log_mem("Sampled s_bars");
     // Sample FHE secret key t
     let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     log_mem("Sampled t_bar");
-    // This is actually shorten version from paper where it defined t := (t_bar, -1), but instead
-    // We use t := -1 * t_bar
     let minus_t_bar = -t_bar.entry(0, 0);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar"));
