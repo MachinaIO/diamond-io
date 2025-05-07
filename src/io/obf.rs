@@ -280,7 +280,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         pub_key_att_matrix.row_size(),
         pub_key_att_matrix.col_size()
     ));
-    let u_1_l = M::unit_column_vector(&params, packed_input_size + 1, 0);
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key"));
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
@@ -306,11 +305,22 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_n+1
-    let gadget = M::gadget_matrix(&params, d + 1);
-    let final_preimage_target_att =
-        u_1_l.tensor(&pub_key_att_matrix) - identity_1_plus_packed_input_size.tensor(&gadget);
+    // computing u_1_L' ⊗ A_att
+    let params = &params;
+    let zeros = M::zero(
+        params.as_ref(),
+        packed_input_size * pub_key_att_matrix.row_size(),
+        pub_key_att_matrix.col_size(),
+    );
+    let k_lhs = pub_key_att_matrix.concat_rows(&[&zeros]);
+
+    // computing I_L' ⊗ G_n+1
+    let gadget = M::gadget_matrix(params, d + 1);
+    let other_blocks: Vec<&M> = std::iter::repeat_n(&gadget, packed_input_size).collect();
+    let k_rhs = gadget.concat_diag(&other_blocks);
+    let final_preimage_target_att = k_lhs - k_rhs;
     let final_preimage_att = sampler_trapdoor.preimage(
-        &params,
+        params,
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target_att,
@@ -332,7 +342,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
-            .map(|digits| BggPublicKey::digits_to_int(digits, &params))
+            .map(|digits| BggPublicKey::digits_to_int(digits, params))
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         #[cfg(feature = "debug")]
@@ -348,13 +358,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         let zero_rows = extra_blocks * summat.row_size();
         let zero_cols = summat.col_size();
         let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
-        let f_pre = summat.concat_rows(&[&zeros]);
-        f_pre
+        summat.concat_rows(&[&zeros])
     };
     log_mem("Computed final_preimage_target_f");
 
     let final_preimage_f = sampler_trapdoor.preimage(
-        &params,
+        params,
         &b_star_trapdoor_cur,
         &b_star_cur,
         &final_preimage_target_f,
