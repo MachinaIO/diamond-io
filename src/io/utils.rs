@@ -4,7 +4,7 @@ use crate::{
         sampler::*,
         BggPublicKey,
     },
-    poly::{sampler::*, Poly, PolyMatrix, PolyParams},
+    poly::{element::PolyElem, sampler::*, Poly, PolyMatrix, PolyParams},
 };
 use std::marker::PhantomData;
 
@@ -57,7 +57,7 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 
         let log_base_q = params.modulus_digits();
         let dim = params.ring_dimension() as usize;
-        // input bits, poly of the RLWE key, it contains constant 1
+        // input bits, poly of the RLWE key, it contains 1 for the RLWE key (t)
         let packed_input_size = obf_params.input_size.div_ceil(dim) + 1;
         let packed_output_size = obf_params.public_circuit.num_output() / (2 * log_base_q);
         let a_rlwe_bar =
@@ -130,6 +130,45 @@ pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
         circuit.output(outputs);
     }
     circuit
+}
+
+pub fn build_u_mask_multi<M: PolyMatrix>(
+    params: &<<M as PolyMatrix>::P as Poly>::Params,
+    packed_input_size: usize, // L
+    level_width: usize,       // w
+    depth_j: usize,           // j
+    combo_b: usize,           // 0 ≤ b < 2^w
+) -> M {
+    // L' = 1 (t) + L packed-input slots (evaluator's input + const-one slot)
+    let l_dash = 1 + packed_input_size;
+
+    // U_{j,0}  ≡  identity
+    if combo_b == 0 {
+        return M::identity(params, l_dash, None);
+    }
+
+    // Start from the identity and zero out the diagonal entry
+    // for every bit that is 1 in combo_b.
+    let mut u = M::identity(params, l_dash, None);
+    let mut zero = M::P::const_zero(params);
+
+    for r in 0..level_width {
+        if (combo_b >> r) & 1 == 1 {
+            let idx = depth_j * level_width + r;
+            assert!(
+                idx < packed_input_size * params.ring_dimension() as usize,
+                "index out of range"
+            );
+            let mut cs = zero.coeffs();
+            debug_assert!(idx < cs.len(), "index out of bounds");
+            cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
+            zero = M::P::from_coeffs(params, &cs);
+        }
+    }
+
+    u.set_entry(0, 1, zero);
+
+    u
 }
 
 #[cfg(test)]

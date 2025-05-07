@@ -7,10 +7,12 @@ use crate::{
     },
     io::{
         params::ObfuscationParams,
-        utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
+        utils::{
+            build_final_digits_circuit, build_u_mask_multi, sample_public_key_by_id,
+            PublicSampledData,
+        },
     },
     poly::{
-        element::PolyElem,
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -127,7 +129,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     */
 
     // Sample input dependent random matrix B_*
-    // note that L'(n+1) is same as (1 + packed_input_size) * (d + 1)
     let (mut b_star_trapdoor_cur, mut b_star_cur) =
         sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
     log_mem(format!(
@@ -226,7 +227,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
-            // actually this is the S_j_b on paper, where j is level and b is bit
             let r = &public_data.r[num];
             log_mem(format!("Computed R ({},{}) (n+1)x(n+1)", r.row_size(), r.col_size()));
             let u = &u_nums[level - 1][num];
@@ -403,43 +403,4 @@ fn store_and_drop_poly<P: Poly + 'static>(
         drop(poly);
         log_mem(format!("Stored {id_str}"));
     })
-}
-
-fn build_u_mask_multi<M: PolyMatrix>(
-    params: &<<M as PolyMatrix>::P as Poly>::Params,
-    packed_input_size: usize, // L
-    level_width: usize,       // w
-    depth_j: usize,           // j
-    combo_b: usize,           // 0 ≤ b < 2^w
-) -> M {
-    // L' = 1 (t) + L packed-input slots (evaluator's input + const-one slot)
-    let l_dash = 1 + packed_input_size;
-
-    // U_{j,0}  ≡  identity
-    if combo_b == 0 {
-        return M::identity(params, l_dash, None);
-    }
-
-    // Start from the identity and zero out the diagonal entry
-    // for every bit that is 1 in combo_b.
-    let mut u = M::identity(params, l_dash, None);
-    let mut zero = M::P::const_zero(params);
-
-    for r in 0..level_width {
-        if (combo_b >> r) & 1 == 1 {
-            let idx = depth_j * level_width + r;
-            assert!(
-                idx < packed_input_size * params.ring_dimension() as usize,
-                "index out of range"
-            );
-            let mut cs = zero.coeffs();
-            debug_assert!(idx < cs.len(), "index out of bounds");
-            cs[idx] = <M::P as Poly>::Elem::one(&params.modulus());
-            zero = M::P::from_coeffs(params, &cs);
-        }
-    }
-
-    u.set_entry(0, 1, zero);
-
-    u
 }

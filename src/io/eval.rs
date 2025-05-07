@@ -213,15 +213,6 @@ where
         assert_eq!(final_v, expected_final_v);
         log_mem("final_v debug check passed");
     }
-
-    // TODO: sholud i pass pub_key att matrix from obfuscation artifacts or can i sample again like
-    // old construcaton implementation? let pub_key_att = M::read_from_files(
-    //     &obf_params.params,
-    //     1 + d,
-    //     (1 + packed_input_size) * (d + 1) * log_base_q,
-    //     &dir_path,
-    //     "pub_key_att",
-    // );
     let final_preimage_att = M::read_from_files(
         &obf_params.params,
         m_b,
