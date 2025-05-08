@@ -62,7 +62,11 @@ where
     let packed_input_size = public_data.packed_input_size;
     let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
-    let mut p_cur = M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init");
+    let mut p_cur = timed_read(
+        "p_cur",
+        || M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init"),
+        &mut total_load,
+    );
     log_mem(format!("p_init ({},{}) loaded", p_cur.row_size(), p_cur.col_size()));
 
     #[cfg(feature = "debug")]
@@ -190,7 +194,11 @@ where
         player.play_music("bgm/eval_bgm2.mp3");
     }
 
-    let b = M::read_from_files(&obf_params.params, 1, 1, &dir_path, "b");
+    let b = timed_read(
+        "b",
+        || M::read_from_files(&obf_params.params, 1, 1, &dir_path, "b"),
+        &mut total_load,
+    );
     log_mem("b loaded");
 
     let a_decomposed = public_data.a_rlwe_bar.entry(0, 0).decompose_base(&params);
