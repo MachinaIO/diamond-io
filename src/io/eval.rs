@@ -170,8 +170,20 @@ where
 
         #[cfg(feature = "debug")]
         if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
-            let r = &public_data.r[*num as usize];
-            s_cur = s_cur * r;
+            let s_matrix = timed_read(
+                "s",
+                || {
+                    M::read_from_files(
+                        params.as_ref(),
+                        d + 1,
+                        d + 1,
+                        &dir_path,
+                        &format!("s_{level}_{num}"),
+                    )
+                },
+                &mut total_load,
+            );
+            s_cur = s_cur * s_matrix;
             let plaintexts = build_poly_vec::<M>(
                 &params,
                 inputs,
