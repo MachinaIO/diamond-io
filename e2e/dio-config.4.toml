@@ -1,0 +1,11 @@
+ring_dimension = 8192
+crt_depth = 8
+crt_bits = 51
+base_bits = 17
+switched_modulus = "180311938347043771731066479866668162537142271101557880652064148521524784927733690683300335564125571"
+d = 1
+input_size = 2
+level_width = 1
+hardcoded_key_sigma = 1.0891e35
+p_sigma = 1.2919e1
+input = [true, false]

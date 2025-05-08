@@ -4,6 +4,6 @@ mod test {
 
     #[tokio::test]
     async fn test_io_just_mul_enc_and_and_bit() {
-        test_io_common(4, 2, 17, 10, "1", 3, 4, 1, 0.0, 0.0, 0.0, "tests/io_dummy_param").await;
+        test_io_common(4, 2, 17, 10, "1", 3, 4, 1, 0.0, 0.0, "tests/io_dummy_param").await;
     }
 }

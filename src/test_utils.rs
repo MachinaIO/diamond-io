@@ -1,5 +1,3 @@
-#[cfg(feature = "disk")]
-use crate::utils::calculate_tmp_size;
 use crate::{
     bgg::circuit::PolyCircuit,
     io::{eval::evaluate, obf::obfuscate, params::ObfuscationParams},
@@ -31,9 +29,8 @@ pub async fn test_io_common(
     d: usize,
     input_size: usize,
     level_width: usize,
-    encoding_sigma: f64,
-    hardcoded_key_sigma: f64,
     p_sigma: f64,
+    hardcoded_key_sigma: f64,
     dir_path: &str,
 ) {
     init_tracing();
@@ -72,9 +69,8 @@ pub async fn test_io_common(
         level_width,
         public_circuit: public_circuit.clone(),
         d,
-        encoding_sigma,
-        hardcoded_key_sigma,
         p_sigma,
+        hardcoded_key_sigma,
         trapdoor_sigma: SIGMA,
     };
 
@@ -112,5 +108,5 @@ pub async fn test_io_common(
 
     let input_poly =
         DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
-    assert_eq!(output, (hardcoded_key.clone() * input_poly.clone()).to_bool_vec());
+    assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
 }

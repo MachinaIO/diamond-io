@@ -818,7 +818,7 @@ mod tests {
         let sigma = 3.0;
         let log_q = params.modulus_bits();
 
-        // encrypt a polynomial m using RLWE secret key encryption
+        // encrypt a polynomial m using FHE secret key encryption
         // Generate random message bits
         let m = sampler.sample_poly(&params, &DistType::BitDist);
 

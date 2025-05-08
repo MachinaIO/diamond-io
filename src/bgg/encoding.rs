@@ -209,7 +209,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -259,7 +259,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -309,7 +309,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -359,7 +359,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 3];
+        let reveal_plaintexts = [true; 4];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -424,7 +424,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 4];
+        let reveal_plaintexts = [true; 5];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -510,7 +510,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -588,7 +588,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 3];
+        let reveal_plaintexts = [true; 4];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
 
         // Create secret and plaintexts
@@ -683,6 +683,7 @@ mod tests {
         // Create random public keys with different reveal_plaintext flags
         let mut rng = rand::rng();
         let reveal_plaintexts = [
+            rng.random::<bool>(),
             rng.random::<bool>(),
             rng.random::<bool>(),
             rng.random::<bool>(),

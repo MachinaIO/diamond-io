@@ -144,7 +144,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
@@ -183,7 +183,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
@@ -222,7 +222,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
@@ -261,7 +261,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 3];
+        let reveal_plaintexts = [true; 4];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
@@ -310,7 +310,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 4];
+        let reveal_plaintexts = [true; 5];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
@@ -377,7 +377,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true; 3];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
@@ -444,7 +444,7 @@ mod tests {
         let tag_bytes = tag.to_le_bytes();
 
         // Create random public keys
-        let reveal_plaintexts = [true; 3];
+        let reveal_plaintexts = [true; 4];
         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();

@@ -29,7 +29,6 @@ pub struct RunBenchConfig {
     pub input_size: usize,
     pub level_width: usize,
     pub d: usize,
-    pub encoding_sigma: f64,
     pub hardcoded_key_sigma: f64,
     pub p_sigma: f64,
     #[serde(default = "default_trapdoor_sigma")]

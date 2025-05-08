@@ -13,7 +13,7 @@ use std::{
 #[derive(Clone)]
 pub struct BaseMatrix<T: MatrixElem> {
     pub params: T::Params,
-    inner: Vec<Vec<T>>,
+    pub inner: Vec<Vec<T>>,
     pub nrow: usize,
     pub ncol: usize,
 }
@@ -276,6 +276,14 @@ impl<T: MatrixElem> BaseMatrix<T> {
             .collect();
 
         Self { params: self.params.clone(), inner: result, nrow: nrow_total, ncol: ncol_total }
+    }
+
+    #[inline]
+    pub fn set_entry(&mut self, i: usize, j: usize, elem: T) {
+        debug_assert!(i < self.nrow, "row index {i} ≥ nrow = {}", self.nrow);
+        debug_assert!(j < self.ncol, "col index {j} ≥ ncol = {}", self.ncol);
+
+        self.inner[i][j] = elem;
     }
 }
 
