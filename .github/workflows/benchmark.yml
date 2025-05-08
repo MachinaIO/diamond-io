@@ -58,10 +58,10 @@ jobs:
           fi
 
       - name: Checkout OpenFHE
-        if: steps.openfhe-check.outputs.installed == 'false'
         uses: actions/checkout@v4
         with:
-          repository: openfheorg/openfhe-development
+          repository: MachinaIO/openfhe-development
+          ref: feat/improve_determinant
           path: openfhe
 
       - name: Build & install OpenFHE
