@@ -64,7 +64,7 @@ Our simulator only targets circuits used for our benchmarks.
 4. Run `sage main.py` under the `simulator` directory.
 
 If the script is completed without any error, the found parameters are added to the last line in `simulator/params.log`. 
-Among the parameters, `crt_depth` denotes the minimum number of moduli satisfying correctness and security, and `d`, `encoding_sigma`, `hardcoded_key_sigma`, `p_sigma`, and `switched_modulus` can be used for `ObfuscationParams`.
+Among the parameters, `crt_depth` denotes the minimum number of moduli satisfying correctness and security, and `d`, `hardcoded_key_sigma`, `p_sigma`, and `switched_modulus` can be used for `ObfuscationParams`.
 
 
 ## Acknowledgments
