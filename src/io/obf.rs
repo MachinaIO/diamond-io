@@ -244,7 +244,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             let u_tensor_s = u.tensor(&s_i_num);
             let k_target_error = sampler_uniform.sample_uniform(
                 &params,
-                1,
+                (1 + packed_input_size) * (d + 1),
                 m_b,
                 DistType::GaussDist { sigma: obf_params.p_sigma },
             );
