@@ -2,8 +2,7 @@ name: CI self-hosted runner
 on:
   push:
     branches:
-      #- main
-      - feat/self-hosted
+      - main
 
 env:
   CARGO_TERM_COLOR: always
