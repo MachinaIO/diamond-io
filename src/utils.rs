@@ -11,6 +11,7 @@ use memory_stats::memory_stats;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 use rayon::prelude::*;
+use std::time::{Duration, Instant};
 #[cfg(feature = "cpu")]
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 #[cfg(feature = "disk")]
@@ -130,6 +131,15 @@ pub fn debug_mem<T: Into<String>>(tag: T) {
         let cpu_usages: Vec<f32> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
         debug!("CPU usages: {:?} ", cpu_usages,);
     }
+}
+
+pub fn timed_read<T, F: FnOnce() -> T>(label: &str, f: F, total: &mut Duration) -> T {
+    let start = Instant::now();
+    let res = f();
+    let elapsed = start.elapsed();
+    *total += elapsed;
+    crate::utils::log_mem(format!("{} loaded in {:?}", label, elapsed));
+    res
 }
 
 pub fn init_tracing() {

@@ -10,11 +10,11 @@ use crate::{
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
         Poly, PolyMatrix, PolyParams,
     },
-    utils::log_mem,
+    utils::{log_mem, timed_read},
 };
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 pub fn evaluate<M, SH, ST, P>(
     obf_params: ObfuscationParams<M>,
@@ -40,10 +40,16 @@ where
     let dir_path = dir_path.as_ref().to_path_buf();
     assert_eq!(inputs.len(), obf_params.input_size);
 
+    let mut total_load = Duration::ZERO;
+
     let hash_key = {
         let mut path = dir_path.clone();
         path.push("hash_key");
-        let bytes = std::fs::read(&path).expect("Failed to read hash key file");
+        let bytes = timed_read(
+            "hash_key",
+            || std::fs::read(&path).expect("Failed to read hash key file"),
+            &mut total_load,
+        );
         let mut hash_key = [0u8; 32];
         hash_key.copy_from_slice(&bytes);
         hash_key
@@ -68,27 +74,51 @@ where
     assert!(inputs.len() % level_width == 0);
     let depth = obf_params.input_size / level_width;
     #[cfg(feature = "debug")]
-    let s_init = M::read_from_files(&obf_params.params, 1, d + 1, &dir_path, "s_init");
+    let s_init = timed_read(
+        "s_init",
+        || M::read_from_files(&obf_params.params, 1, d + 1, &dir_path, "s_init"),
+        &mut total_load,
+    );
     #[cfg(feature = "debug")]
-    let minus_t_bar = <<M as PolyMatrix>::P as Poly>::read_from_file(
-        &obf_params.params,
-        &dir_path,
+    let minus_t_bar = timed_read(
         "minus_t_bar",
+        || {
+            <<M as PolyMatrix>::P as Poly>::read_from_file(
+                &obf_params.params,
+                &dir_path,
+                "minus_t_bar",
+            )
+        },
+        &mut total_load,
     );
 
     #[cfg(feature = "debug")]
-    let b_stars = parallel_iter!(0..(depth + 1))
+    let (b_stars, durations) = parallel_iter!(0..(depth + 1))
         .map(|level| {
-            let b_star = M::read_from_files(
-                params.as_ref(),
-                (1 + packed_input_size) * (d + 1),
-                m_b,
-                &dir_path,
-                &format!("b_star_{level}"),
+            let mut local_duration = Duration::ZERO;
+            let b_star = timed_read(
+                "b_star",
+                || {
+                    M::read_from_files(
+                        params.as_ref(),
+                        (1 + packed_input_size) * (d + 1),
+                        m_b,
+                        &dir_path,
+                        &format!("b_star_{level}"),
+                    )
+                },
+                &mut local_duration,
             );
-            b_star
+            (b_star, local_duration)
         })
-        .collect::<Vec<_>>();
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+
+    #[cfg(feature = "debug")]
+    {
+        for duration in durations {
+            total_load += duration;
+        }
+    }
 
     #[cfg(feature = "debug")]
     if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
@@ -117,12 +147,18 @@ where
 
     for (level, num) in nums.iter().enumerate() {
         let level = level + 1;
-        let k = M::read_from_files(
-            params.as_ref(),
-            m_b,
-            m_b,
-            &dir_path,
-            &format!("k_preimage_{level}_{num}"),
+        let k = timed_read(
+            "k",
+            || {
+                M::read_from_files(
+                    params.as_ref(),
+                    m_b,
+                    m_b,
+                    &dir_path,
+                    &format!("k_preimage_{level}_{num}"),
+                )
+            },
+            &mut total_load,
         );
         log_mem(format!("k_{}_{} loaded ({},{})", level, num, k.row_size(), k.col_size()));
         let p = p_cur * k;
@@ -166,12 +202,18 @@ where
         obf_params.public_circuit,
     );
     log_mem("final_circuit built");
-    let final_preimage_f = M::read_from_files(
-        &obf_params.params,
-        m_b,
-        packed_output_size,
-        &dir_path,
+    let final_preimage_f = timed_read(
         "final_preimage_f",
+        || {
+            M::read_from_files(
+                &obf_params.params,
+                m_b,
+                packed_output_size,
+                &dir_path,
+                "final_preimage_f",
+            )
+        },
+        &mut total_load,
     );
     log_mem("final_preimage loaded");
     // v := p * K_F
@@ -180,23 +222,35 @@ where
 
     #[cfg(feature = "debug")]
     if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
-        let eval_outputs_matrix_plus_a_prf = M::read_from_files(
-            &obf_params.params,
-            d + 1,
-            packed_output_size,
-            &dir_path,
+        let eval_outputs_matrix_plus_a_prf = timed_read(
             "eval_outputs_matrix_plus_a_prf",
+            || {
+                M::read_from_files(
+                    &obf_params.params,
+                    d + 1,
+                    packed_output_size,
+                    &dir_path,
+                    "eval_outputs_matrix_plus_a_prf",
+                )
+            },
+            &mut total_load,
         );
         let expected_final_v = s_cur.clone() * eval_outputs_matrix_plus_a_prf;
         assert_eq!(final_v, expected_final_v);
         log_mem("final_v debug check passed");
     }
-    let final_preimage_att = M::read_from_files(
-        &obf_params.params,
-        m_b,
-        (1 + packed_input_size) * (d + 1) * log_base_q,
-        &dir_path,
+    let final_preimage_att = timed_read(
         "final_preimage_att",
+        || {
+            M::read_from_files(
+                &obf_params.params,
+                m_b,
+                (1 + packed_input_size) * (d + 1) * log_base_q,
+                &dir_path,
+                "final_preimage_att",
+            )
+        },
+        &mut total_load,
     );
     // c_att := p * K_att
     let c_att = p_cur * final_preimage_att;
@@ -265,10 +319,16 @@ where
     debug_assert_eq!(z.size(), (1, packed_output_size));
     #[cfg(feature = "debug")]
     if obf_params.hardcoded_key_sigma == 0.0 && obf_params.p_sigma == 0.0 {
-        let hardcoded_key = <<M as PolyMatrix>::P as Poly>::read_from_file(
-            &obf_params.params,
-            &dir_path,
+        let hardcoded_key = timed_read(
             "hardcoded_key",
+            || {
+                <<M as PolyMatrix>::P as Poly>::read_from_file(
+                    &obf_params.params,
+                    &dir_path,
+                    "hardcoded_key",
+                )
+            },
+            &mut total_load,
         );
         {
             let expected = s_cur *
@@ -289,5 +349,6 @@ where
         }
         assert_eq!(z.size(), (1, packed_output_size));
     }
+    log_mem(format!("total loading time {:?}", total_load));
     z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
 }
