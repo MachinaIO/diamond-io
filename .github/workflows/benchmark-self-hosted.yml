@@ -52,7 +52,6 @@ jobs:
           IMAGE_ID: ami-075686beab831bb7f
           INSTANCE_TYPE: i4i.16xlarge
           SG: sg-02014faf3d99151dd
-          #SUBNET: subnet-08729b0a66425b291
         run: |
           ./run.sh ${{ github.run_id }}
 
