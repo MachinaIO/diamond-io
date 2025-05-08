@@ -503,7 +503,9 @@ def bound_final_error(
     input_depth = math.ceil(input_size / input_width)
 
     for _ in range(input_depth):
-        bound_p = m_b_sqrt * n_sqrt * bound_p * norm_b
+        bound_p = (
+            m_b_sqrt * n_sqrt * bound_p * norm_b + bound_s * stddev_e_p * sqrt_secpar
+        )
         bound_s = bound_s * n_sqrt * d
 
     # Evaluate each polynomial in m_polys at the value of m using Decimal
@@ -591,8 +593,8 @@ def sqrt_ceil(x):
 
 
 if __name__ == "__main__":
-    secpar = 80
-    log2_n = 13
+    secpar = 30
+    log2_n = 12
     max_d = 3
     min_base_bits = 17
     max_base_bits = 17
