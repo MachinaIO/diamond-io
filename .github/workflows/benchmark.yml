@@ -58,6 +58,7 @@ jobs:
           fi
 
       - name: Checkout OpenFHE
+        if: steps.openfhe-check.outputs.installed == 'false'
         uses: actions/checkout@v4
         with:
           repository: MachinaIO/openfhe-development
