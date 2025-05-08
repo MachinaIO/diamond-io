@@ -197,7 +197,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     Level starts from 1 because we already have p_init at level 0.
     */
     let one_identity = M::identity(params.as_ref(), 1, None);
-    let hash_sampler = SH::new();
     for level in 1..(depth + 1) {
         let (b_star_trapdoor_level, b_star_level) =
             sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
@@ -222,9 +221,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
             }
 
-            let tag = format!("S_{}_{}", level, num).into_bytes();
-            let s_i_bar =
-                hash_sampler.sample_hash(&params, hash_key, &tag, d, d, DistType::BitDist);
+            let s_i_bar = sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
             let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
             #[cfg(feature = "debug")]
