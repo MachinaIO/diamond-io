@@ -2,7 +2,7 @@ name: CI self-hosted runner
 on:
   push:
     branches:
-      - feat/self-hosted
+      - main
 
 env:
   CARGO_TERM_COLOR: always
@@ -34,17 +34,19 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::490752553772:role/GH-Actions-Drill
+          role-to-assume: arn:aws:iam::490752553772:role/machina-io-assume_role-slc
           role-duration-seconds: 900
-          aws-region: eu-central-1
+          aws-region: us-west-2
 
       - name: Launch EC2 Instance
         id: launch-ec2
         env:
           GH_REPO: ${{ github.repository }}
           GH_PAT: ${{ secrets.GH_PAT }}
-          IMAGE_ID: ami-03250b0e01c28d196
+          IMAGE_ID: ami-075686beab831bb7f
           INSTANCE_TYPE: c7i.4xlarge
+          SG: sg-02014faf3d99151dd
+          #SUBNET: subnet-08729b0a66425b291
         run: |
           ./run.sh ${{ github.run_id }}
 
