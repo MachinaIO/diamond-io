@@ -503,10 +503,8 @@ def bound_final_error(
     input_depth = math.ceil(input_size / input_width)
 
     for _ in range(input_depth):
-        bound_p = (
-            m_b_sqrt * n_sqrt * bound_p * norm_b + bound_s * stddev_e_p * sqrt_secpar
-        )
-        bound_s = bound_s * n_sqrt * d
+        bound_p = m_b * n * bound_p * norm_b + bound_s * stddev_e_p * sqrt_secpar
+        bound_s = bound_s * n * d
 
     # Evaluate each polynomial in m_polys at the value of m using Decimal
     # evaluated_polys_d = []
@@ -522,9 +520,9 @@ def bound_final_error(
     #     max_evaluated_poly_d = max(evaluated_polys_d)
     # else:
     #     max_evaluated_poly_d = Decimal(1)  # Default if no polynomials
-    bound_att = m_b_sqrt * n_sqrt * bound_p * norm_b
+    bound_att = m_b * n * bound_p * norm_b
     bound_v = bound_att
-    bound_att_final = (packed_input_size * m_sqrt) * n_sqrt * bound_att * h_norm_sum
+    bound_att_final = (packed_input_size * m) * n * bound_att * h_norm_sum
     bound_rounding = bound_s
     print(f"bound_rounding: {bound_rounding}")
     print(f"log2(bound_rounding): {math.log2(bound_rounding)}")
@@ -593,17 +591,17 @@ def sqrt_ceil(x):
 
 
 if __name__ == "__main__":
-    secpar = 30
-    log2_n = 12
+    secpar = 100
+    log2_n = 13
     max_d = 3
     min_base_bits = 17
-    max_base_bits = 17
+    max_base_bits = 22
     crt_bits = 51
     max_crt_depth = 20
     input_size = 1
     input_width = 1
-    add_num = 0
-    mul_num = 0
+    add_num = 5
+    mul_num = 5
     if input_size % input_width != 0:
         raise ValueError("input_size should be divisible by input_width")
     (
