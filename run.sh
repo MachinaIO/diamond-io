@@ -29,7 +29,7 @@ for SUBNET in $SUBNET_IDS; do
       echo "INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_ENV"
       aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
       echo "EC2 instance $INSTANCE_ID is running in subnet $SUBNET"
-      exit $EXIT_CODE  # EXIT_CODE=0
+      exit 0  # EXIT_CODE=0
     elif echo "$INSTANCE_ID" | grep -q "InsufficientInstanceCapacity"; then
       echo "Warning: Insufficient capacity for $INSTANCE_TYPE in subnet $SUBNET"
       EXIT_CODE=1
