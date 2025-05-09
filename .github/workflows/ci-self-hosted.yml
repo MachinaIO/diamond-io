@@ -1,5 +1,4 @@
-name: CI
-
+name: CI self-hosted runner
 on:
   push:
     branches:
@@ -11,8 +10,11 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  id-token: write
+  contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,9 +27,34 @@ jobs:
         with:
           components: rustfmt
       - run: cargo +nightly fmt --all --check
-          
-  test:
+
+  launch-ec2:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::490752553772:role/machina-io-assume_role-slc
+          role-duration-seconds: 900
+          aws-region: us-west-2
+
+      - name: Launch EC2 Instance
+        id: launch-ec2
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          IMAGE_ID: ami-075686beab831bb7f
+          INSTANCE_TYPE: c7i.4xlarge
+          SG: sg-02014faf3d99151dd
+        run: |
+          ./run.sh ${{ github.run_id }}
+
+  run-on-self-hosted:
+    needs: launch-ec2
+    runs-on: ["${{github.run_id}}", self-hosted]
     strategy:
         fail-fast: false
     steps:
@@ -86,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - test
+      - run-on-self-hosted
       - fmt
     steps:
       - name: Decide whether the needed jobs succeeded or failed

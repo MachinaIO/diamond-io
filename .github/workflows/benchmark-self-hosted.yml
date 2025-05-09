@@ -23,13 +23,41 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  id-token: write
+  contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
 jobs:
-  bench:
+  launch-ec2:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::490752553772:role/machina-io-assume_role-slc
+          role-duration-seconds: 900
+          aws-region: us-west-2
+
+      - name: Launch EC2 Instance
+        id: launch-ec2
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          IMAGE_ID: ami-075686beab831bb7f
+          INSTANCE_TYPE: i4i.16xlarge
+          SG: sg-02014faf3d99151dd
+        run: |
+          ./run.sh ${{ github.run_id }}
+
+  bench:
+    needs: launch-ec2
+    runs-on: ["${{github.run_id}}", self-hosted]
     strategy:
       fail-fast: false
 
@@ -42,6 +70,13 @@ jobs:
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
+
+      - name: Raid configuration
+        run: |
+          sudo mdadm --create --verbose /dev/md0 --level=0 --name=MY_RAID --chunk=64 --raid-devices=2 /dev/nvme1n1 /dev/nvme2n1
+          sudo mkfs.ext4 -L MY_RAID /dev/md0
+          sudo mount /dev/md0 /tmp
+          sudo chown -R ubuntu /tmp/
 
       - name: Install build deps
         run: |
@@ -127,5 +162,3 @@ jobs:
       - name: Clean up logs
         if: always()
         run: rm -rf logs
-
-
