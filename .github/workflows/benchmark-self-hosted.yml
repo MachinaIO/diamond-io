@@ -58,6 +58,7 @@ jobs:
   bench:
     needs: launch-ec2
     runs-on: ["${{github.run_id}}", self-hosted]
+    timeout-minutes: 5760 #4days
     strategy:
       fail-fast: false
 
