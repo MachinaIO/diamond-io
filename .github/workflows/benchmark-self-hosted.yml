@@ -120,18 +120,20 @@ jobs:
       - name: Verify dio
         run: which dio
 
-      - name: Run benchmarks (background + wait)
+      - name: Run benchmarks (stream + log)
         env:
           LD_LIBRARY_PATH: /usr/local/lib
           RUST_LOG: info
         run: |
           mkdir -p logs
-          nohup dio run-bench \
-            -c e2e/dio-config.${{ github.event.inputs.param_id }}.toml \
-            -o /tmp/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }} \
-            --add-num ${{ github.event.inputs.add_num }} \
-            --mul-num ${{ github.event.inputs.mul_num }} \
-            &> logs/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }}.log &
+          (
+            dio run-bench \
+              -c e2e/dio-config.${{ github.event.inputs.param_id }}.toml \
+              -o /tmp/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }} \
+              --add-num ${{ github.event.inputs.add_num }} \
+              --mul-num ${{ github.event.inputs.mul_num }} \
+            2>&1 | tee logs/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }}.log
+          ) &
           pid=$!
           echo "Benchmark PID: $pid"
           wait $pid
