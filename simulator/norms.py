@@ -72,10 +72,10 @@ class CircuitNorms:
         """
         return self.h_norms
 
-    def compute_norms(self, m_sqrt: int, n_sqrt: int, base: int) -> List[int]:
+    def compute_norms(self, m: int, n: int, base: int) -> List[int]:
         bit_norms = [0 for _ in range(len(self.h_norms))]
         max_deg = max([len(norm) for norm in self.h_norms])
-        power_ms = [m_sqrt**i for i in range(max_deg)]
+        power_ms = [m**i for i in range(max_deg)]
         for coeffs in self.h_norms:
             for i, coeff in enumerate(coeffs):
                 bit_norms[i] += coeff * power_ms[i]
@@ -84,7 +84,7 @@ class CircuitNorms:
         for i in range(0, len(bit_norms), self.log_base_q):
             sum = 0
             for j in range(self.log_base_q):
-                sum += bit_norms[self.log_base_q * i + j] * (base - 1) * n_sqrt * m_sqrt
+                sum += bit_norms[self.log_base_q * i + j] * (base - 1) * n * m
             norms.append(sum)
         return norms
 
