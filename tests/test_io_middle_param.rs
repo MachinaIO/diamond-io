@@ -6,7 +6,7 @@ mod test {
     async fn test_io_just_mul_enc_and_bit_middle_params() {
         test_io_common(
             4096,
-            5,
+            6,
             51,
             17,
             "323778148704285877904461387615990672855113714166872436505644678160965660026126816597",
