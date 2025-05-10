@@ -465,7 +465,6 @@ def bound_final_error(
     # Convert all inputs to Decimal for high precision
     # secpar_d = Decimal(secpar)
     n = Decimal(n)
-    n_sqrt = sqrt_ceil(n)
     log_base_q = Decimal(log_base_q)
     d = Decimal(d)
     stddev_e_p = Decimal(stddev_e_p)
@@ -476,16 +475,14 @@ def bound_final_error(
     # + 1 is for the secret key t
     packed_input_size = Decimal(math.ceil(input_size / n)) + 1
     m = (Decimal(1) + packed_input_size) * (d + Decimal(1)) * log_base_q
-    m_sqrt = sqrt_ceil(m)
     # [TODO] Support outputs larger than `log_t_q`
-    h_norms = [Decimal(x) for x in circuit_norms.compute_norms(m_sqrt, n_sqrt, base)]
+    h_norms = [Decimal(x) for x in circuit_norms.compute_norms(m, n, base)]
     print(f"h_norms: {h_norms}")
     h_norm_sum = sum(h_norms)
     # Calculate intermediate values with Decimal
     m_b = (
         (Decimal(1) + packed_input_size) * (d + Decimal(1)) * (log_base_q + Decimal(2))
     )
-    m_b_sqrt = sqrt_ceil(m_b)
     sqrt_secpar = Decimal(sqrt_ceil(secpar))
     base = Decimal(base)
 
@@ -594,14 +591,14 @@ if __name__ == "__main__":
     secpar = 100
     log2_n = 13
     max_d = 3
-    min_base_bits = 17
-    max_base_bits = 22
+    min_base_bits = 16
+    max_base_bits = 20
     crt_bits = 51
     max_crt_depth = 20
-    input_size = 1
+    input_size = 4
     input_width = 1
-    add_num = 5
-    mul_num = 5
+    add_num = 3
+    mul_num = 3
     if input_size % input_width != 0:
         raise ValueError("input_size should be divisible by input_width")
     (
