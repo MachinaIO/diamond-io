@@ -1,13 +1,13 @@
 # diamond-io
 
-Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforward construction of indistinguishability obfuscation (iO).
+Implementation of Diamond iO, a straightforward construction of indistinguishability obfuscation (iO).
 
 ## Installation
 
 ### Prerequisites
-- A Unix-based OS (MacOS, Linux, etc.)
-- [Rust](https://www.rust-lang.org/tools/install) (Using `rustup` is recommended)
-- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`)
+- [Rust](https://www.rust-lang.org/tools/install) 1.87 nightly
+- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`), make sure to install our [fork](https://anonymous.4open.science/r/openfhe-development-B612/README.md)
+- openFHE-rs, clone our [fork](https://anonymous.4open.science/r/openfhe-rs-0BB7/README.md) and point `Cargo.toml` to the local path
 
 ### Building
 
@@ -16,6 +16,10 @@ After installing the prerequisites, you can build the project using:
 ```bash
 cargo build --release
 ```
+
+## Experiments
+
+You can run evaluation experiments with [e2e](./e2e/) parameters with [dio](./dio/) cli tooling.
 
 ## Test iO (End-To-End)
 
@@ -47,7 +51,7 @@ We currently support two different matrix implementations:
 
 Our simulator only targets circuits used for our benchmarks.
 
-1. Make sure to install [`dio`](/dio/) binary before
+1. Make sure to install [`dio`](./dio/) binary before
 2. Change the following values hardcoded in `simulator/main.py` after the line `if __name__ == "__main__":`:
     - `secpar`: the minimum security parameter you want to guarantee.
     - `log2_n`: a log2 value of the ring dimension.
@@ -68,5 +72,3 @@ Among the parameters, `crt_depth` denotes the minimum number of moduli satisfyin
 
 
 ## Acknowledgments
-
-*We would like to sincerely thank the developers of [OpenFHE](https://github.com/openfheorg/openfhe-development) and [openfhe-rs](https://github.com/fairmath/openfhe-rs), open-source lattice and FHE libraries, whose optimized implementations of trapdoor sampling, RLWE primitives, and Rust bindings played a crucial role in helping us implement Diamond iO. We are also grateful to Prof. Yuriy Polyakov for his valuable advice on preimage sampling and his insightful feedback on optimizing our implementation. We greatefully acknowledge [Community Privacy Residency (2025)](https://community-privacy.github.io/partners/), in which our earliest implementation was developed. Any remaining errors are entirely our own responsibility.*
