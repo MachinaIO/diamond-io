@@ -6,9 +6,10 @@ Implementation of Diamond iO, a straightforward construction of indistinguishabi
 
 ### Prerequisites
 - A Unix-based OS (MacOS, Linux, etc.)
-- [Rust](https://www.rust-lang.org/tools/install) (Using `rustup` is recommended)
-- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`) but should install with our [fork repository](https://anonymous.4open.science/r/openfhe-development-B612/README.md)
-- [openFHE-rs](https://anonymous.4open.science/r/openfhe-rs-0BB7/README.md) make sure to have `Cargo.toml` point local path.
+- [Rust](https://www.rust-lang.org/tools/install) 1.87 nightly
+- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`), make sure to install our [fork](https://anonymous.4open.science/r/openfhe-development-B612/README.md)
+- openFHE-rs, clone our [fork](https://anonymous.4open.science/r/openfhe-rs-0BB7/README.md) and point `Cargo.toml` to the local path
+
 ### Building
 
 After installing the prerequisites, you can build the project using:
