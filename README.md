@@ -20,7 +20,7 @@ cargo build --release
 
 ## Experiments
 
-You can run evaluation experiments with [e2e](./e2e/) parameters with [dio](/dio/) cli tooling.
+You can run evaluation experiments with [e2e](./e2e/) parameters with [dio](./dio/) cli tooling.
 
 ## Test iO (End-To-End)
 
@@ -52,7 +52,7 @@ We currently support two different matrix implementations:
 
 Our simulator only targets circuits used for our benchmarks.
 
-1. Make sure to install [`dio`](/dio/) binary before
+1. Make sure to install [`dio`](./dio/) binary before
 2. Change the following values hardcoded in `simulator/main.py` after the line `if __name__ == "__main__":`:
     - `secpar`: the minimum security parameter you want to guarantee.
     - `log2_n`: a log2 value of the ring dimension.
