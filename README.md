@@ -17,6 +17,10 @@ After installing the prerequisites, you can build the project using:
 cargo build --release
 ```
 
+## Experiments
+
+You can run evaluation experiments with [e2e](./e2e/) parameters with [dio](/dio/) cli tooling.
+
 ## Test iO (End-To-End)
 
 - **Dummy parameters**  
