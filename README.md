@@ -7,7 +7,7 @@ Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforw
 ### Prerequisites
 - A Unix-based OS (MacOS, Linux, etc.)
 - [Rust](https://www.rust-lang.org/tools/install) (Using `rustup` is recommended)
-- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`)
+- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`) but should install with our [fork repository](https://anonymous.4open.science/r/openfhe-development-B612/README.md)
 
 ### Building
 
@@ -69,4 +69,4 @@ Among the parameters, `crt_depth` denotes the minimum number of moduli satisfyin
 
 ## Acknowledgments
 
-*We would like to sincerely thank the developers of [OpenFHE](https://github.com/openfheorg/openfhe-development) and [openfhe-rs](https://github.com/fairmath/openfhe-rs), open-source lattice and FHE libraries, whose optimized implementations of trapdoor sampling, RLWE primitives, and Rust bindings played a crucial role in helping us implement Diamond iO. We are also grateful to Prof. Yuriy Polyakov for his valuable advice on preimage sampling and his insightful feedback on optimizing our implementation. We greatefully acknowledge [Community Privacy Residency (2025)](https://community-privacy.github.io/partners/), in which our earliest implementation was developed. Any remaining errors are entirely our own responsibility.*
+<!-- *We would like to sincerely thank the developers of [OpenFHE](https://github.com/openfheorg/openfhe-development) and [openfhe-rs](https://github.com/fairmath/openfhe-rs), open-source lattice and FHE libraries, whose optimized implementations of trapdoor sampling, RLWE primitives, and Rust bindings played a crucial role in helping us implement Diamond iO. We are also grateful to Prof. Yuriy Polyakov for his valuable advice on preimage sampling and his insightful feedback on optimizing our implementation. We greatefully acknowledge [Community Privacy Residency (2025)](https://community-privacy.github.io/partners/), in which our earliest implementation was developed. Any remaining errors are entirely our own responsibility.* -->
