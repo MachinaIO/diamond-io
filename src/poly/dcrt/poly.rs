@@ -406,10 +406,6 @@ mod tests {
     #[test]
     fn test_dcrtpoly_coeffs() {
         let mut rng = rand::rng();
-        /*
-        todo: if x=0, n=1: libc++abi: terminating due to uncaught exception of type lbcrypto::OpenFHEException: /Users/piapark/Documents/GitHub/openfhe-development/src/core/include/math/nbtheory.h:l.156:ReverseBits(): msbb value not handled:0
-        todo: if x=1, n=2: value mismatch from_coeffs & coeffs
-        */
         let x = rng.random_range(12..20);
         let size = rng.random_range(1..20);
         let n = 2_i32.pow(x) as u32;
