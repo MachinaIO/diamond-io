@@ -5,9 +5,12 @@ Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforw
 ## Installation
 
 ### Prerequisites
-- A Unix-based OS (MacOS, Linux, etc.)
-- [Rust](https://www.rust-lang.org/tools/install) (Using `rustup` is recommended)
-- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`)
+- [Rust](https://www.rust-lang.org/tools/install) 1.87 nightly
+- [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`), make sure to install our [fork](https://github.com/MachinaIO/openfhe-development/tree/feat/improve_determinant) in `/feat/improve_determinant` branch
+
+## Experiments
+
+You can run evaluation experiments with [e2e](./e2e/) parameters with [dio](./dio/) cli tooling.
 
 ### Building
 
