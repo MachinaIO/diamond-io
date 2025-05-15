@@ -8,7 +8,7 @@ Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforw
 - A Unix-based OS (MacOS, Linux, etc.)
 - [Rust](https://www.rust-lang.org/tools/install) (Using `rustup` is recommended)
 - [OpenFHE](https://openfhe-development.readthedocs.io/en/latest/sphinx_rsts/intro/installation/installation.html) (System install required in `/usr/local/lib`) but should install with our [fork repository](https://anonymous.4open.science/r/openfhe-development-B612/README.md)
-
+- [openFHE-rs](https://anonymous.4open.science/r/openfhe-rs-0BB7/README.md) make sure to have `Cargo.toml` point local path.
 ### Building
 
 After installing the prerequisites, you can build the project using:
