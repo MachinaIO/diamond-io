@@ -1,6 +1,6 @@
 # diamond-io
 
-Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforward construction of indistinguishability obfuscation (iO).
+Implementation of Diamond iO, a straightforward construction of indistinguishability obfuscation (iO).
 
 ## Installation
 
