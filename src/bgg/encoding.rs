@@ -168,11 +168,11 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         bgg::{
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-            BggEncoding,
         },
         poly::{
             dcrt::{
