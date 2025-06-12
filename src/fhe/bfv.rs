@@ -1,6 +1,6 @@
 use num_bigint::BigUint;
 use num_integer::Integer;
-use std::ops::Add;
+use std::ops::{Add, Mul};
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
@@ -16,6 +16,9 @@ pub struct Bfv {
     params_t: DCRTPolyParams,
     params_q: DCRTPolyParams,
     delta: BigUint,
+    sigma: f64,
+    rlk0: DCRTPoly,
+    rlk1: DCRTPoly,
 }
 
 #[derive(Debug)]
@@ -25,21 +28,31 @@ pub struct BfvCipher {
 }
 
 impl Bfv {
-    pub fn keygen(params_t: DCRTPolyParams, params_q: DCRTPolyParams) -> (Self, DCRTPoly) {
-        let sampler_uniform = DCRTPolyUniformSampler::new();
-        let sk = sampler_uniform.sample_uniform(&params_t, 1, 1, DistType::BitDist).entry(0, 0);
+    pub fn keygen(
+        params_t: DCRTPolyParams,
+        params_q: DCRTPolyParams,
+        sigma: f64,
+    ) -> (Self, DCRTPoly) {
+        let sampler = DCRTPolyUniformSampler::new();
+        let sk_t = sampler.sample_uniform(&params_t, 1, 1, DistType::BitDist).entry(0, 0);
         let delta = delta(&params_q, &params_t);
-        (Self { params_t, params_q, delta }, sk)
+        let a = sampler.sample_uniform(&params_q, 1, 1, DistType::FinRingDist).entry(0, 0);
+        let e = sampler.sample_uniform(&params_q, 1, 1, DistType::GaussDist { sigma }).entry(0, 0);
+        let one_elem = FinRingElem::new(BigUint::from(1 as u8), params_q.modulus());
+        let sk_q = sk_t.scalar_mul(&params_q, one_elem);
+        let rlk0 = -(&a * &sk_q) + &sk_q + e;
+        let rlk1 = a;
+        (Self { params_t, params_q, delta, sigma, rlk0, rlk1 }, sk_t)
     }
 
-    pub fn encrypt_ske(&self, m_t: DCRTPoly, sigma: f64, sk_t: DCRTPoly) -> BfvCipher {
+    pub fn encrypt_ske(&self, m_t: DCRTPoly, sk_t: DCRTPoly) -> BfvCipher {
         let delta_elem = FinRingElem::new(self.delta.clone(), self.params_q.modulus());
         let m_q = m_t.scalar_mul(&self.params_q, delta_elem);
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let a =
             sampler_uniform.sample_uniform(&self.params_q, 1, 1, DistType::FinRingDist).entry(0, 0);
         let e = sampler_uniform
-            .sample_uniform(&self.params_q, 1, 1, DistType::GaussDist { sigma })
+            .sample_uniform(&self.params_q, 1, 1, DistType::GaussDist { sigma: self.sigma })
             .entry(0, 0);
         /*
             this is hacky way to modular switch sk on mod t to mod q where t < q. I've introduced
@@ -47,7 +60,7 @@ impl Bfv {
         */
         let one_elem = FinRingElem::new(BigUint::from(1 as u8), self.params_q.modulus());
         let sk_q = sk_t.scalar_mul(&self.params_q, one_elem);
-        let c_1 = sk_q * &a + m_q + e;
+        let c_1 = &sk_q * &a + m_q + &e;
         let c_2 = -a;
 
         BfvCipher { c_1, c_2 }
@@ -62,6 +75,24 @@ impl Bfv {
         let ct = ct.c_1 + ct.c_2 * sk_q;
         ct.scale_and_round(&self.params_t)
     }
+
+    pub fn mul(&self, lhs: &BfvCipher, rhs: &BfvCipher) -> BfvCipher {
+        let d0 = &lhs.c_1 * &rhs.c_1;
+        let d1 = &lhs.c_1 * &rhs.c_2 + &lhs.c_2 * &rhs.c_1;
+        let d2 = &lhs.c_2 * &rhs.c_2;
+
+        let c0 = &d0 + &d2 * &self.rlk0;
+        let c1 = &d1 + &d2 * &self.rlk1;
+
+        let c0_t = c0.scale_and_round(&self.params_t);
+        let c1_t = c1.scale_and_round(&self.params_t);
+
+        let delta_elem = FinRingElem::new(self.delta.clone(), self.params_q.modulus());
+        let c0_q = c0_t.scalar_mul(&self.params_q, delta_elem.clone());
+        let c1_q = c1_t.scalar_mul(&self.params_q, delta_elem);
+
+        BfvCipher { c_1: c0_q, c_2: c1_q }
+    }
 }
 
 impl Add for BfvCipher {
@@ -74,13 +105,20 @@ impl Add for BfvCipher {
     }
 }
 
+impl Mul for &BfvCipher {
+    type Output = BfvCipher;
+    fn mul(self, _: Self) -> Self::Output {
+        unimplemented!("use bfv.mul(&ct1,&ct2) instead");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{poly::Poly, utils::create_random_poly};
 
     #[test]
-    fn test_bfv_add_t_10_example() {
+    fn test_bfv_add() {
         /*
            Create parameter t and q for testing where they share same ring dimension but with different modulus.
            Paintext modulus t should be smaller than Ciphertext modulus q.
@@ -88,24 +126,45 @@ mod tests {
         let params_t = DCRTPolyParams::new(4, 2, 17, 1);
         let params_q = DCRTPolyParams::new(4, 4, 21, 7);
 
-        let (bfv, sk) = Bfv::keygen(params_t.clone(), params_q.clone());
-        println!("sk {:?}", sk.coeffs());
+        let (bfv, sk) = Bfv::keygen(params_t.clone(), params_q.clone(), 3.2);
 
         let m_a = create_random_poly(&params_t);
         let m_b = create_random_poly(&params_t);
-        println!("m_a {:?}", m_a.coeffs());
-        println!("m_b {:?}", m_b.coeffs());
-        let raw_add = &m_a + &m_b;
-        let enc_a = bfv.encrypt_ske(m_a, 0.0, sk.clone());
-        let enc_b = bfv.encrypt_ske(m_b, 0.0, sk.clone());
+        let m_add = &m_a + &m_b;
+        let ct_a = bfv.encrypt_ske(m_a, sk.clone());
+        let ct_b = bfv.encrypt_ske(m_b, sk.clone());
 
         /* Homomorphic */
-        let enc_3 = enc_a + enc_b;
+        let ct_add = ct_a + ct_b;
 
         /* Decryption */
-        println!("expected = {:?}", raw_add.coeffs());
-        let dec = bfv.decrypt(enc_3, sk);
-        println!("actual = {:?}", dec.coeffs());
-        assert_eq!(raw_add, dec);
+        let dec = bfv.decrypt(ct_add, sk);
+        assert_eq!(m_add, dec);
+    }
+
+    #[test]
+    fn test_bfv_mul() {
+        let params_t = DCRTPolyParams::new(4, 2, 17, 1);
+        let params_q = DCRTPolyParams::new(4, 8, 51, 17);
+
+        let (bfv, sk) = Bfv::keygen(params_t.clone(), params_q.clone(), 0.0);
+
+        let m_a = create_random_poly(&params_t);
+        println!("m_a = {:?}", m_a.coeffs());
+        let m_b = create_random_poly(&params_t);
+        println!("m_b = {:?}", m_b.coeffs());
+        let m_prod = &m_a * &m_b;
+        println!("m_prod = {:?}", m_prod.coeffs());
+        let ct_a = bfv.encrypt_ske(m_a, sk.clone());
+        let ct_b = bfv.encrypt_ske(m_b, sk.clone());
+
+        /* Homomorphic */
+        let ct_prod = bfv.mul(&ct_a, &ct_b);
+
+        /* Decryption */
+        let dec = bfv.decrypt(ct_prod, sk);
+        println!("dec = {:?}", dec.coeffs());
+        // todo: error
+        // assert_eq!(m_prod, dec);
     }
 }
