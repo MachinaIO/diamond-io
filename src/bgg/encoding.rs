@@ -3,7 +3,7 @@ use crate::poly::{Poly, PolyMatrix};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BggEncoding<M: PolyMatrix> {
     pub vector: M,
     pub pubkey: BggPublicKey<M>,
