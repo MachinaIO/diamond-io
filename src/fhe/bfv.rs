@@ -1,16 +1,21 @@
 use num_bigint::BigUint;
 use num_integer::Integer;
-use std::{ops::Add, sync::Arc};
+use std::ops::Add;
 
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
     sampler::{DistType, PolyUniformSampler},
-    Poly, PolyParams,
+    PolyParams,
 };
+
+fn delta(params_q: &DCRTPolyParams, params_t: &DCRTPolyParams) -> BigUint {
+    params_q.modulus().div_floor(&params_t.modulus())
+}
 
 pub struct Bfv {
     params_t: DCRTPolyParams,
     params_q: DCRTPolyParams,
+    delta: BigUint,
 }
 
 #[derive(Debug)]
@@ -23,13 +28,13 @@ impl Bfv {
     pub fn keygen(params_t: DCRTPolyParams, params_q: DCRTPolyParams) -> (Self, DCRTPoly) {
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let sk = sampler_uniform.sample_uniform(&params_t, 1, 1, DistType::BitDist).entry(0, 0);
-        (Self { params_t, params_q }, sk)
+        let delta = delta(&params_q, &params_t);
+        (Self { params_t, params_q, delta }, sk)
     }
 
-    pub fn encrypt_ske(&self, message: DCRTPoly, sigma: f64, sk: DCRTPoly) -> BfvCipher {
-        let value = self.params_q.modulus().div_ceil(&self.params_t.modulus());
-        let delta_elem = FinRingElem::new(value, self.params_q.modulus());
-        let delta_m = message.scalar_mul(&self.params_q, delta_elem);
+    pub fn encrypt_ske(&self, m_t: DCRTPoly, sigma: f64, sk_t: DCRTPoly) -> BfvCipher {
+        let delta_elem = FinRingElem::new(self.delta.clone(), self.params_q.modulus());
+        let m_q = m_t.scalar_mul(&self.params_q, delta_elem);
         let sampler_uniform = DCRTPolyUniformSampler::new();
         let a =
             sampler_uniform.sample_uniform(&self.params_q, 1, 1, DistType::FinRingDist).entry(0, 0);
@@ -41,29 +46,21 @@ impl Bfv {
             using scaler mul because existing modular switch doesn't support t < q case.
         */
         let one_elem = FinRingElem::new(BigUint::from(1 as u8), self.params_q.modulus());
-        let sk_q = sk.scalar_mul(&self.params_q, one_elem);
-        let c_1 = sk_q * &a + delta_m + e;
+        let sk_q = sk_t.scalar_mul(&self.params_q, one_elem);
+        let c_1 = sk_q * &a + m_q + e;
         let c_2 = -a;
 
         BfvCipher { c_1, c_2 }
     }
-}
 
-impl BfvCipher {
-    pub fn decrypt(
-        self,
-        params_q: &DCRTPolyParams,
-        params_t: &DCRTPolyParams,
-        sk: DCRTPoly,
-        t: Arc<BigUint>,
-    ) -> DCRTPoly {
+    pub fn decrypt(&self, ct: BfvCipher, sk_t: DCRTPoly) -> DCRTPoly {
         /*
             again, modular switch on sk from t to q
         */
-        let one_elem = FinRingElem::new(BigUint::from(1 as u8), params_q.modulus());
-        let sk_q = sk.scalar_mul(&params_q, one_elem);
-        let ct = self.c_1 + self.c_2 * sk_q;
-        ct.msb_with_modulus(&params_t, &t)
+        let one_elem = FinRingElem::new(BigUint::from(1 as u8), self.params_q.modulus());
+        let sk_q = sk_t.scalar_mul(&self.params_q, one_elem);
+        let ct = ct.c_1 + ct.c_2 * sk_q;
+        ct.scale_and_round(&self.params_t)
     }
 }
 
@@ -77,15 +74,10 @@ impl Add for BfvCipher {
     }
 }
 
-pub fn u64_msb_bits(value: u64, len: usize, log_t: usize) -> u64 {
-    let shift = len.saturating_sub(log_t);
-    (value >> shift) & ((1 << log_t) - 1)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::create_random_poly;
+    use crate::{poly::Poly, utils::create_random_poly};
 
     #[test]
     fn test_bfv_add_t_10_example() {
@@ -112,9 +104,8 @@ mod tests {
 
         /* Decryption */
         println!("expected = {:?}", raw_add.coeffs());
-        let dec = enc_3.decrypt(&params_q, &params_t, sk, params_t.modulus());
+        let dec = bfv.decrypt(enc_3, sk);
         println!("actual = {:?}", dec.coeffs());
-        // todo for now this error
-        // assert_eq!(raw_add, dec);
+        assert_eq!(raw_add, dec);
     }
 }

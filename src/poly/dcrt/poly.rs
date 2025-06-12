@@ -37,30 +37,16 @@ impl DCRTPoly {
         &self.ptr_poly
     }
 
-    pub fn msb_log(&self, params: &DCRTPolyParams, log_t: usize) -> Self {
-        let len = params.modulus_bits() as usize;
-        assert!(log_t > 0 && log_t <= len, "log_t ({log_t}) must be in 1..=modulus_bits ({len})");
-        let shift = len.saturating_sub(log_t);
-        let mask = (BigUint::from(1 as u8) << log_t) - BigUint::from(1 as u8);
+    pub fn scale_and_round(&self, params_t: &DCRTPolyParams) -> DCRTPoly {
+        let t_mod = params_t.modulus();
 
-        let new_coeffs: Vec<FinRingElem> = self
+        let new_coeffs = self
             .coeffs()
             .into_par_iter()
-            .map(|coeff| {
-                // (value >> shift) & mask
-                let mut v = coeff.value().clone() >> shift;
-                v &= &mask;
-                FinRingElem::new(v, params.modulus())
-            })
-            .collect();
+            .map(|c| c.modulus_switch_round(t_mod.clone()))
+            .collect::<Vec<_>>();
 
-        DCRTPoly::from_coeffs(params, &new_coeffs)
-    }
-
-    pub fn msb_with_modulus(&self, params: &DCRTPolyParams, t: &BigUint) -> Self {
-        // assert!(t.is_power_of_two(), "t must be a power of two so that log₂(t) is an integer");
-        let log_t = t.bits() as usize - 1;
-        self.msb_log(params, log_t)
+        DCRTPoly::from_coeffs(params_t, &new_coeffs)
     }
 
     pub fn scalar_mul(&self, params: &DCRTPolyParams, scale: FinRingElem) -> Self {
