@@ -206,7 +206,7 @@ mod tests {
         let result = circuit.eval(&params_q, &encodings[0], &encodings[1..]);
         println!("result length {}", result.len());
         for r_i in result {
-            println!("{:?}", r_i.vector);
+            println!("{:?}", r_i.plaintext.unwrap().coeffs());
         }
 
         /* Expected */
@@ -226,7 +226,7 @@ mod tests {
             BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
         let expected_result = bgg_encoding_sampler.sample(&params_q, &pubkeys, &add_plaintext);
         for e_i in expected_result {
-            println!("{:?}", e_i.vector);
+            println!("{:?}", e_i.plaintext.unwrap().coeffs());
         }
         // assert_eq!(result, expected_result);
     }
