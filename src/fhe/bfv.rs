@@ -173,7 +173,7 @@ mod tests {
         let single_ct_plaintext_len = plaintexts_sum.len();
 
         let m_2 = create_random_poly(&params_t);
-        let ct_2 = bfv.encrypt_ske(m_2, sk.clone());
+        let ct_2 = bfv.encrypt_ske(m_2, sk);
         let plaintexts_2 = ct_2.decompose_base(&params_q);
         plaintexts_sum.extend(plaintexts_2);
         println!("plaintexts_sum {}", plaintexts_sum.len());
@@ -225,6 +225,7 @@ mod tests {
         let bgg_encoding_sampler =
             BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
         let expected_result = bgg_encoding_sampler.sample(&params_q, &pubkeys, &add_plaintext);
+        println!("expected_result length {}", expected_result.len());
         for e_i in expected_result {
             println!("{:?}", e_i.plaintext.unwrap().coeffs());
         }
