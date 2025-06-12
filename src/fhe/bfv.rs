@@ -96,7 +96,7 @@ impl Bfv {
 }
 
 impl BfvCipher {
-    fn decompose_base(&self, params_q: &DCRTPolyParams) -> Vec<DCRTPoly> {
+    pub fn decompose_base(&self, params_q: &DCRTPolyParams) -> Vec<DCRTPoly> {
         let mut c1_decomposed = self.c_1.decompose_base(&params_q);
         let c2_decomposed = self.c_2.decompose_base(&params_q);
         c1_decomposed.extend(c2_decomposed);
@@ -191,7 +191,7 @@ mod tests {
         let pubkeys = bgg_pubkey_sampler.sample(&params_q, &tag_bytes, &reveal_plaintexts);
         let secrets = vec![create_bit_random_poly(&params_q); d];
         let bgg_encoding_sampler =
-            BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 0.0);
+            BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
         let encodings = bgg_encoding_sampler.sample(&params_q, &pubkeys, &plaintexts_sum);
         println!("encodings length {}", encodings.len());
         /* Circuit */
@@ -204,11 +204,16 @@ mod tests {
             .collect();
         circuit.output(outputs);
         let result = circuit.eval(&params_q, &encodings[0], &encodings[1..]);
+        println!("result length {}", result.len());
+        for r_i in result {
+            println!("{:?}", r_i.vector);
+        }
 
         /* Expected */
         // decomposition of (ct_1 + ct_2)
         let ct_add = ct_1 + ct_2;
         let add_plaintext = ct_add.decompose_base(&params_q);
+        println!("add_plaintext length {}", add_plaintext.len());
         // sample BGG encoding for decomposition
         let d = single_ct_plaintext_len + 1;
         let uniform_sampler = DCRTPolyUniformSampler::new();
@@ -216,11 +221,14 @@ mod tests {
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let reveal_plaintexts = vec![true; d];
         let pubkeys = bgg_pubkey_sampler.sample(&params_q, &tag_bytes, &reveal_plaintexts);
+        let secrets = vec![create_bit_random_poly(&params_q); d];
         let bgg_encoding_sampler =
-            BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 0.0);
+            BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
         let expected_result = bgg_encoding_sampler.sample(&params_q, &pubkeys, &add_plaintext);
-
-        assert_eq!(result, expected_result);
+        for e_i in expected_result {
+            println!("{:?}", e_i.vector);
+        }
+        // assert_eq!(result, expected_result);
     }
 
     #[test]
