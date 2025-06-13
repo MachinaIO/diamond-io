@@ -56,6 +56,19 @@ impl FinRingElem {
             ((&self.value * new_modulus.as_ref()) / self.modulus.as_ref()) % new_modulus.as_ref();
         Self { value, modulus: self.modulus.clone() }
     }
+
+    pub fn modulus_switch_round(&self, new_modulus: Arc<BigUint>) -> Self {
+        let q = self.modulus.as_ref();
+        let t = new_modulus.as_ref();
+
+        // scaled = (value * t + ⌊q/2⌋) / q
+        let mut scaled = &self.value * t;
+        scaled += q >> 1;
+        scaled /= q;
+        scaled %= t;
+
+        Self { value: scaled, modulus: new_modulus }
+    }
 }
 
 impl PolyElem for FinRingElem {

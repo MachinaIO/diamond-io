@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod bgg;
+pub mod fhe;
 pub mod io;
 pub mod poly;
 pub mod test_utils;
