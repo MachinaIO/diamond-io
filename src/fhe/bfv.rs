@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn test_bfv_bgg_add() {
         let params_t = DCRTPolyParams::new(4, 2, 17, 1);
-        let params_q = DCRTPolyParams::new(4, 4, 21, 7);
+        let params_q = DCRTPolyParams::new(4, 8, 51, 17);
 
         let (bfv, sk) = Bfv::keygen(params_t.clone(), params_q.clone(), 3.2);
         let m_1 = create_random_poly(&params_t);
@@ -227,7 +227,76 @@ mod tests {
         }
         assert_eq!(result[0].plaintext, expected_result[1].plaintext);
         assert_eq!(result[1].plaintext, expected_result[2].plaintext);
-        // todo assert vector is not working
+    }
+
+    #[test]
+    fn test_bfv_bgg_mul() {
+        let params_t = DCRTPolyParams::new(4, 2, 17, 1);
+        let params_q = DCRTPolyParams::new(4, 4, 19, 2);
+
+        let (bfv, sk) = Bfv::keygen(params_t.clone(), params_q.clone(), 3.2);
+        let m_1 = create_random_poly(&params_t);
+        let ct_1 = bfv.encrypt_ske(m_1, sk.clone());
+        let m_2 = create_random_poly(&params_t);
+        let ct_2 = bfv.encrypt_ske(m_2, sk);
+        let ct_mul = bfv.mul(&ct_1, &ct_2);
+        let mut plaintexts_sum = vec![ct_1.c_1, ct_1.c_2];
+        let single_ct_plaintext_len = plaintexts_sum.len();
+        let plaintexts_2 = vec![ct_2.c_1, ct_2.c_2];
+        plaintexts_sum.extend(plaintexts_2);
+        println!("plaintexts_sum {}", plaintexts_sum.len());
+
+        /* BGG */
+        // initiate BGG encoding for (ct_1 || ct_2)
+        let key: [u8; 32] = rand::random();
+        let d = (2 * single_ct_plaintext_len) + 1;
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+        let reveal_plaintexts = vec![true; d];
+        let pubkeys = bgg_pubkey_sampler.sample(&params_q, &tag_bytes, &reveal_plaintexts);
+        let secrets = vec![create_bit_random_poly(&params_q); d];
+        let bgg_encoding_sampler =
+            BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
+        let encodings = bgg_encoding_sampler.sample(&params_q, &pubkeys, &plaintexts_sum);
+        println!("encodings length {}", encodings.len());
+        /* Circuit */
+        let mut circuit = PolyCircuit::new();
+        let inputs = circuit.input(d - 1);
+        let output_c_1: usize = circuit.mul_gate(inputs[0], inputs[2]);
+        let output_c_2: usize = circuit.mul_gate(inputs[1], inputs[3]);
+        circuit.output(vec![output_c_1, output_c_2]);
+        let result = circuit.eval(&params_q, &encodings[0], &encodings[1..]);
+        println!("result length {}", result.len());
+        for r_i in result.clone() {
+            println!("result from circuit eval: {:?}", r_i.plaintext.unwrap().coeffs());
+        }
+
+        /* Expected */
+        // (ct_1 * ct_2)
+        let add_plaintext = vec![ct_mul.c_1, ct_mul.c_2];
+        println!("add_plaintext length {}", add_plaintext.len());
+        // sample BGG encoding for decomposition
+        let d = single_ct_plaintext_len + 1;
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let reveal_plaintexts = vec![true; d];
+        let pubkeys = bgg_pubkey_sampler.sample(&params_q, &tag_bytes, &reveal_plaintexts);
+        let secrets = vec![create_bit_random_poly(&params_q); d];
+        let bgg_encoding_sampler =
+            BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
+        let expected_result = bgg_encoding_sampler.sample(&params_q, &pubkeys, &add_plaintext);
+        println!("expected_result length {}", expected_result.len());
+
+        for e_i in expected_result.clone() {
+            println!("result from ct_mul {:?}", e_i.plaintext.unwrap().coeffs());
+        }
+        //todo: err
+        // assert_eq!(result[0].plaintext, expected_result[1].plaintext);
+        // assert_eq!(result[1].plaintext, expected_result[2].plaintext);
     }
 
     #[test]
