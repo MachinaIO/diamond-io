@@ -21,7 +21,7 @@ pub struct Bfv {
     rlk1: DCRTPoly,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BfvCipher {
     c_1: DCRTPoly,
     c_2: DCRTPoly,
@@ -161,25 +161,24 @@ mod tests {
     }
 
     #[test]
-    fn test_bfv_decompose_bgg_add() {
+    fn test_bfv_bgg_add() {
         let params_t = DCRTPolyParams::new(4, 2, 17, 1);
         let params_q = DCRTPolyParams::new(4, 4, 21, 7);
 
         let (bfv, sk) = Bfv::keygen(params_t.clone(), params_q.clone(), 3.2);
-
         let m_1 = create_random_poly(&params_t);
         let ct_1 = bfv.encrypt_ske(m_1, sk.clone());
-        let mut plaintexts_sum = ct_1.decompose_base(&params_q);
-        let single_ct_plaintext_len = plaintexts_sum.len();
-
         let m_2 = create_random_poly(&params_t);
         let ct_2 = bfv.encrypt_ske(m_2, sk);
-        let plaintexts_2 = ct_2.decompose_base(&params_q);
+        let ct_add = ct_1.clone() + ct_2.clone();
+        let mut plaintexts_sum = vec![ct_1.c_1, ct_1.c_2];
+        let single_ct_plaintext_len = plaintexts_sum.len();
+        let plaintexts_2 = vec![ct_2.c_1, ct_2.c_2];
         plaintexts_sum.extend(plaintexts_2);
         println!("plaintexts_sum {}", plaintexts_sum.len());
 
         /* BGG */
-        // initiate BGG encoding for (decomposition of ct_1 || decomposition of ct_2)
+        // initiate BGG encoding for (ct_1 || ct_2)
         let key: [u8; 32] = rand::random();
         let d = (2 * single_ct_plaintext_len) + 1;
         let bgg_pubkey_sampler =
@@ -197,22 +196,18 @@ mod tests {
         /* Circuit */
         let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(d - 1);
-        let outputs: Vec<usize> = inputs[..single_ct_plaintext_len]
-            .iter()
-            .zip(&inputs[single_ct_plaintext_len..])
-            .map(|(&l, &r)| circuit.add_gate(l, r))
-            .collect();
-        circuit.output(outputs);
+        let output_c_1: usize = circuit.add_gate(inputs[0], inputs[2]);
+        let output_c_2: usize = circuit.add_gate(inputs[1], inputs[3]);
+        circuit.output(vec![output_c_1, output_c_2]);
         let result = circuit.eval(&params_q, &encodings[0], &encodings[1..]);
         println!("result length {}", result.len());
-        for r_i in result {
-            println!("{:?}", r_i.plaintext.unwrap().coeffs());
+        for r_i in result.clone() {
+            println!("result from circuit eval: {:?}", r_i.plaintext.unwrap().coeffs());
         }
 
         /* Expected */
-        // decomposition of (ct_1 + ct_2)
-        let ct_add = ct_1 + ct_2;
-        let add_plaintext = ct_add.decompose_base(&params_q);
+        // (ct_1 + ct_2)
+        let add_plaintext = vec![ct_add.c_1, ct_add.c_2];
         println!("add_plaintext length {}", add_plaintext.len());
         // sample BGG encoding for decomposition
         let d = single_ct_plaintext_len + 1;
@@ -226,10 +221,13 @@ mod tests {
             BGGEncodingSampler::new(&params_q, &secrets, uniform_sampler, 3.2);
         let expected_result = bgg_encoding_sampler.sample(&params_q, &pubkeys, &add_plaintext);
         println!("expected_result length {}", expected_result.len());
-        for e_i in expected_result {
-            println!("{:?}", e_i.plaintext.unwrap().coeffs());
+
+        for e_i in expected_result.clone() {
+            println!("result from ct_add {:?}", e_i.plaintext.unwrap().coeffs());
         }
-        // assert_eq!(result, expected_result);
+        assert_eq!(result[0].plaintext, expected_result[1].plaintext);
+        assert_eq!(result[1].plaintext, expected_result[2].plaintext);
+        // todo assert vector is not working
     }
 
     #[test]
