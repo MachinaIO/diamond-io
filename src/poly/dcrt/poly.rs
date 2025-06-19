@@ -37,6 +37,25 @@ impl DCRTPoly {
         &self.ptr_poly
     }
 
+    pub fn scale_and_round(&self, params_t: &DCRTPolyParams) -> DCRTPoly {
+        let t_mod = params_t.modulus();
+
+        let new_coeffs = self
+            .coeffs()
+            .into_par_iter()
+            .map(|c| c.modulus_switch_round(t_mod.clone()))
+            .collect::<Vec<_>>();
+
+        DCRTPoly::from_coeffs(params_t, &new_coeffs)
+    }
+
+    pub fn scalar_mul(&self, params: &DCRTPolyParams, scale: FinRingElem) -> Self {
+        let coeffs = self.coeffs();
+        let new_coeffs =
+            coeffs.into_par_iter().map(|coeff| scale.clone() * coeff).collect::<Vec<FinRingElem>>();
+        DCRTPoly::from_coeffs(params, &new_coeffs)
+    }
+
     pub fn modulus_switch(
         &self,
         params: &DCRTPolyParams,
@@ -45,7 +64,7 @@ impl DCRTPoly {
         debug_assert!(new_modulus < params.modulus());
         let coeffs = self.coeffs();
         let new_coeffs = coeffs
-            .par_iter()
+            .into_par_iter()
             .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
             .collect::<Vec<FinRingElem>>();
         DCRTPoly::from_coeffs(params, &new_coeffs)

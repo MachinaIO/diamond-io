@@ -3,7 +3,7 @@ use crate::poly::{Poly, PolyMatrix};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BggEncoding<M: PolyMatrix> {
     pub vector: M,
     pub pubkey: BggPublicKey<M>,
@@ -168,11 +168,11 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         bgg::{
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-            BggEncoding,
         },
         poly::{
             dcrt::{
