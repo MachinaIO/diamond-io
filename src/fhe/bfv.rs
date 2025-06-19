@@ -38,7 +38,7 @@ impl Bfv {
         let delta = delta(&params_q, &params_t);
         let a = sampler.sample_uniform(&params_q, 1, 1, DistType::FinRingDist).entry(0, 0);
         let e = sampler.sample_uniform(&params_q, 1, 1, DistType::GaussDist { sigma }).entry(0, 0);
-        let one_elem = FinRingElem::new(BigUint::from(1 as u8), params_q.modulus());
+        let one_elem = FinRingElem::new(BigUint::from(1_u8), params_q.modulus());
         let sk_q = sk_t.scalar_mul(&params_q, one_elem);
         let rlk0 = -(&a * &sk_q) + &sk_q + e;
         let rlk1 = a;
@@ -58,7 +58,7 @@ impl Bfv {
             this is hacky way to modular switch sk on mod t to mod q where t < q. I've introduced
             using scaler mul because existing modular switch doesn't support t < q case.
         */
-        let one_elem = FinRingElem::new(BigUint::from(1 as u8), self.params_q.modulus());
+        let one_elem = FinRingElem::new(BigUint::from(1_u8), self.params_q.modulus());
         let sk_q = sk_t.scalar_mul(&self.params_q, one_elem);
         let c_1 = &sk_q * &a + m_q + &e;
         let c_2 = -a;
@@ -70,7 +70,7 @@ impl Bfv {
         /*
             again, modular switch on sk from t to q
         */
-        let one_elem = FinRingElem::new(BigUint::from(1 as u8), self.params_q.modulus());
+        let one_elem = FinRingElem::new(BigUint::from(1_u8), self.params_q.modulus());
         let sk_q = sk_t.scalar_mul(&self.params_q, one_elem);
         let ct = ct.c_1 + ct.c_2 * sk_q;
         ct.scale_and_round(&self.params_t)
@@ -97,8 +97,8 @@ impl Bfv {
 
 impl BfvCipher {
     pub fn decompose_base(&self, params_q: &DCRTPolyParams) -> Vec<DCRTPoly> {
-        let mut c1_decomposed = self.c_1.decompose_base(&params_q);
-        let c2_decomposed = self.c_2.decompose_base(&params_q);
+        let mut c1_decomposed = self.c_1.decompose_base(params_q);
+        let c2_decomposed = self.c_2.decompose_base(params_q);
         c1_decomposed.extend(c2_decomposed);
         c1_decomposed
     }
