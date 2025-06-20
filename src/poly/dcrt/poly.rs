@@ -172,6 +172,10 @@ impl Poly for DCRTPoly {
         Self::from_coeffs(params, &coeffs)
     }
 
+    fn const_int(params: &Self::Params, int: usize) -> Self {
+        Self::poly_gen_from_const(params, BigUint::from(int).to_string())
+    }
+
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}
     /// where b_{j, h} is the h-th digit of the j-th coefficient of the polynomial.
     /// Return a vector of polynomials, where the h-th polynomial is defined as

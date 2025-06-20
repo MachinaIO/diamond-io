@@ -1,6 +1,7 @@
 pub mod b2p;
 pub mod p2b;
 pub mod partition;
+pub mod public_lut;
 pub mod utils;
 
 pub use b2p::{apply_b2p, setup_b2p};
