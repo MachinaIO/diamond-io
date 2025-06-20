@@ -1,7 +1,7 @@
 //! BGG+ to P conversion
 
 use crate::{
-    bgg::BggEncoding,
+    bgg::lut::partition::Pair,
     poly::{
         dcrt::{DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler},
         sampler::PolyTrapdoorSampler,
@@ -37,13 +37,13 @@ pub fn setup_b2p(
 }
 
 pub fn apply_b2p(
-    pair: (&BggEncoding<DCRTPolyMatrix>, &BggEncoding<DCRTPolyMatrix>),
+    pair: Pair<DCRTPolyMatrix>,
     ctx: &B2PContext,
     p_x_l: &DCRTPolyMatrix,
     idx: usize,
 ) -> DCRTPolyMatrix {
-    let c_one = &pair.0.vector;
-    let c_attr = &pair.1.vector;
+    let c_one = &pair.c_one.vector;
+    let c_attr = &pair.c_attr.vector;
     let c_row = c_one.concat_columns(&[&c_attr]);
     let c_p_i = &c_row * &ctx.ginv_stacked;
     let v_p_i = p_x_l * &ctx.k_p[idx];
@@ -157,10 +157,8 @@ mod tests {
 
         let p_cols = ctx.k_p[0].row_size();
         let p_x_l = uni.sample_uniform(&params, 1, p_cols, DistType::BitDist);
-
+        let c_row = pair.c_one.vector.concat_columns(&[&pair.c_attr.vector]);
         let got = apply_b2p(pair, &ctx, &p_x_l, 0);
-
-        let c_row = pair.0.vector.concat_columns(&[&pair.1.vector]);
         let expect = &(&c_row * &ctx.ginv_stacked) - &(p_x_l * &ctx.k_p[0]);
 
         assert_eq!(got, expect);

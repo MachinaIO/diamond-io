@@ -13,15 +13,13 @@ where
     pub c_attr: &'a BggEncoding<M>,
 }
 
-pub fn iter_pairs<M>(
-    encs: &[BggEncoding<M>],
-) -> impl IndexedParallelIterator<Item = (&BggEncoding<M>, &BggEncoding<M>)>
+pub fn iter_pairs<M>(encs: &[BggEncoding<M>]) -> impl IndexedParallelIterator<Item = Pair<'_, M>>
 where
     M: PolyMatrix,
 {
     assert!(encs.len() >= 2, "need at least one attribute");
     let (c_one, attrs) = encs.split_first().unwrap();
-    attrs.par_iter().map(move |attr| (c_one, attr))
+    attrs.par_iter().map(move |attr| Pair { c_one, c_attr: attr })
 }
 
 #[cfg(test)]
