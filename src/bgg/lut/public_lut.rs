@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use tracing::info;
 
 use crate::{
-    bgg::BggEncoding,
+    bgg::lut::utils::bgg_encodings_and_input,
     poly::{
         dcrt::{
             DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
             DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
-        Poly, PolyMatrix,
+        PolyMatrix,
     },
 };
 
@@ -20,6 +21,7 @@ pub struct PublicLut {
     a_lt: (DCRTPolyMatrix, DCRTPolyMatrix),
     // public matrix different for all k: (n+1)xm
     l_k_vec: Vec<DCRTPolyMatrix>,
+    b_l: DCRTPolyMatrix,
 }
 
 impl PublicLut {
@@ -33,44 +35,53 @@ impl PublicLut {
         input_size: usize,
     ) -> Self {
         let uni = DCRTPolyUniformSampler::new();
+        let trap_sampler = DCRTPolyTrapdoorSampler::new(params, trap_sigma);
+        // todo: check size
+        let (trapdoor, b_l) = trap_sampler.trapdoor(params, (1 + input_size) * (n + 1));
+        info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)x2m
         let a_lt = uni.sample_uniform(&params, n + 1, 2 * m, DistType::BitDist);
+        info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
         let l_k_vec: Vec<DCRTPolyMatrix> = (0..t)
             .into_par_iter()
             .map(|k| {
                 let uni = DCRTPolyUniformSampler::new();
-                let trap_sampler = DCRTPolyTrapdoorSampler::new(params, trap_sigma);
                 // public matrix different for all k: (n+1)xm
                 let r_k = uni.sample_uniform(params, n + 1, m, DistType::BitDist);
-                let (trapdoor, b_l) = trap_sampler.trapdoor(params, 20);
+                info!("r_k ({}, {})", r_k.row_size(), r_k.col_size());
                 let (x_k, y_k) = f.get(&k).expect("missing f(k)");
                 // computing rhs = A_{LT} - (R_k, (- x_k * R_k + y_k * G))
-                let rhs_rhs = &r_k.concat_columns(&[
-                    &(-(&r_k * x_k) + DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k)
-                ]);
+                // todo: check size
+                let rhs_rhs =
+                    &r_k.concat_columns(&[
+                        &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k - &r_k * x_k)
+                    ]);
+                info!("rhs_rhs ({}, {})", rhs_rhs.row_size(), rhs_rhs.col_size());
                 let rhs = &a_lt - rhs_rhs;
                 // computing u_1_L' ⊗ rhs
                 let zeros =
                     DCRTPolyMatrix::zero(params, input_size * rhs.row_size(), rhs.col_size());
                 let target = rhs.concat_rows(&[&zeros]);
-
+                info!("target ({}, {})", target.row_size(), target.col_size());
                 trap_sampler.preimage(params, &trapdoor, &b_l, &target)
             })
             .collect();
         let a_lt_0 = a_lt.slice(0, n + 1, 0, m);
         let a_lt_1 = a_lt.slice(0, n + 1, m, 2 * m);
-        Self { a_lt: (a_lt_0, a_lt_1), l_k_vec }
+        Self { a_lt: (a_lt_0, a_lt_1), l_k_vec, b_l }
     }
 
     pub fn evaluate(
         &self,
         params: &DCRTPolyParams,
         m: usize,
-        p_x_l: DCRTPolyMatrix,
-        c_x_k: DCRTPolyMatrix,
+        n: usize,
+        inputs: Vec<usize>,
+        p_sigma: f64,
         k: usize,
         x_k: DCRTPoly,
     ) -> DCRTPolyMatrix {
+        let (c_x_k, p_x_l) = bgg_encodings_and_input(&self.b_l, inputs, n, params, p_sigma);
         let lhs = c_x_k * self.a_lt.1.decompose();
         let i = DCRTPolyMatrix::identity(params, m, None);
         let zi = DCRTPolyMatrix::identity(params, m, Some(x_k));
@@ -82,12 +93,18 @@ impl PublicLut {
 
 #[cfg(test)]
 mod tests {
-    use crate::poly::{Poly, PolyParams};
+    use tracing::info;
+
+    use crate::{
+        poly::{Poly, PolyParams},
+        utils::init_tracing,
+    };
 
     use super::*;
 
     #[test]
     fn test_public_lut() {
+        init_tracing();
         //  input size 4, dimension 4
         let params = DCRTPolyParams::default();
         // for test purpose T, the number of rows in lookup table is 8,
@@ -100,16 +117,13 @@ mod tests {
         // f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
         // f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
         // f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
-
+        let t = f.len();
         let d = 3;
-        let m = (d + 1) * params.modulus_digits();
-        println!("m:{}", m);
-        let lut = PublicLut::new(&params, d, m, 2, 0.0, f, 4);
-
-        /*
-            construct P_{x_L} and c_{x_k} which actual iO flow, evaluator receive from obfuscator.
-        */
-
-        // let c_y_k = lut.evaluate(&params, m, p_x_l, input, 0, DCRTPoly::const_int(&params, 0));
+        let inputs = vec![1, 0, 1, 1];
+        let input_size = inputs.len();
+        let m = (1 + input_size) * params.modulus_digits();
+        info!("t:{}, d:{}, input_size:{}, m:{}", t, d, input_size, m);
+        let lut = PublicLut::new(&params, d, m, t, 0.0, f, input_size);
+        let _c_y_k = lut.evaluate(&params, m, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
     }
 }

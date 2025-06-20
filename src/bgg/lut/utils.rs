@@ -43,7 +43,7 @@ pub fn random_bgg_encodings_for_bits(
 }
 
 pub fn bgg_encodings_and_input(
-    b_l: DCRTPolyMatrix,
+    b_l: &DCRTPolyMatrix,
     inputs: Vec<usize>,
     d: usize,
     params: &DCRTPolyParams,
@@ -80,7 +80,7 @@ pub fn bgg_encodings_and_input(
     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
     let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(&params, plaintexts);
     let s_connect = encoded_bits.tensor(&s_x_l);
-    let s_b = s_connect * &b_l;
+    let s_b = s_connect * b_l;
 
     let p_x_l = s_b + p_x_l_error;
 
