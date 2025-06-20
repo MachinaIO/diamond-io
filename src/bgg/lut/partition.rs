@@ -1,4 +1,4 @@
-//! split a (L+1)-wide BGG⁺ row into L attribute pairs.
+//! BGG+ partitioning
 
 use crate::{bgg::BggEncoding, poly::PolyMatrix};
 use rayon::prelude::*;
