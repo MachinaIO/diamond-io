@@ -30,13 +30,13 @@ mod roundtrip_tests {
         let sigma = 0.0;
         let c = random_bgg_encodings_for_bits(4, 1, &params);
         assert_eq!(c.len(), 2);
+        let uni = DCRTPolyUniformSampler::new();
         for c_i in iter_pairs(&c).collect::<Vec<_>>().into_iter() {
             let combined_c_i = c_i.combined_matrix();
             let a_i = c_i.a_matrix();
 
             /* BGG+ to P */
             let b2p_ctx = setup_b2p(&params, l, d_prime, &[a_i], sigma);
-            let uni = DCRTPolyUniformSampler::new();
             let k_rows = b2p_ctx.k_p[0].row_size();
             let p_x_l = uni.sample_uniform(&params, 1, k_rows, DistType::BitDist);
             let p_i = apply_b2p(c_i, &b2p_ctx, &p_x_l, 0);

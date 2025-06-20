@@ -37,13 +37,13 @@ pub fn setup_b2p(
 }
 
 pub fn apply_b2p(
-    pair: Pair<DCRTPolyMatrix>,
+    c_i: Pair<DCRTPolyMatrix>,
     ctx: &B2PContext,
     p_x_l: &DCRTPolyMatrix,
     idx: usize,
 ) -> DCRTPolyMatrix {
-    let c_one = &pair.c_one.vector;
-    let c_attr = &pair.c_attr.vector;
+    let c_one = &c_i.c_one.vector;
+    let c_attr = &c_i.c_attr.vector;
     let c_row = c_one.concat_columns(&[&c_attr]);
     let c_p_i = &c_row * &ctx.ginv_stacked;
     let v_p_i = p_x_l * &ctx.k_p[idx];
