@@ -9,7 +9,6 @@ use crate::{
     },
 };
 
-/// Immutable data produced by the obfuscator
 pub struct B2PContext {
     /// Stacked $G^{-1}(B_{L+1,*})$
     pub ginv_stacked: DCRTPolyMatrix,
@@ -17,7 +16,7 @@ pub struct B2PContext {
     pub k_p: Vec<DCRTPolyMatrix>,
 }
 
-pub fn setup(
+pub fn setup_b2p(
     params: &DCRTPolyParams,
     l: usize,
     d_prime: usize,
@@ -37,7 +36,7 @@ pub fn setup(
     B2PContext { ginv_stacked, k_p }
 }
 
-pub fn apply(
+pub fn apply_b2p(
     pair: (&BggEncoding<DCRTPolyMatrix>, &BggEncoding<DCRTPolyMatrix>),
     ctx: &B2PContext,
     p_x_l: &DCRTPolyMatrix,
@@ -51,7 +50,7 @@ pub fn apply(
     &c_p_i - &v_p_i
 }
 
-pub(crate) fn stack_ginv_blocks<M>(b_mat: &M) -> M
+fn stack_ginv_blocks<M>(b_mat: &M) -> M
 where
     M: PolyMatrix,
 {
@@ -64,7 +63,7 @@ where
     b1.concat_rows(&[&b2])
 }
 
-pub(crate) fn compose_target(
+fn compose_target(
     params: &DCRTPolyParams,
     a_i: &DCRTPolyMatrix,
     ginv_stacked: &DCRTPolyMatrix,
@@ -129,16 +128,12 @@ mod tests {
         let cols_b = 6;
         let b_mat = uni.sample_uniform(&params, d_prime, cols_b, DistType::BitDist);
 
-        // build G^{-1} stack (rows = 2m)
         let ginv = stack_ginv_blocks(&b_mat);
         let two_m = ginv.row_size();
-
-        //craft A_i with (d+1) × 2m
         let d_plus_1 = d_prime / 2;
         let a_i = uni.sample_uniform(&params, d_plus_1, two_m, DistType::BitDist);
         let target = compose_target(&params, &a_i, &ginv);
 
-        // 2(d+1) × m
         assert_eq!(target.row_size(), d_prime);
         assert_eq!(target.col_size(), cols_b);
     }
@@ -155,7 +150,7 @@ mod tests {
         let uni = DCRTPolyUniformSampler::new();
         let a_i = uni.sample_uniform(&params, d_plus_1, m, DistType::BitDist);
 
-        let ctx = setup(&params, 1, d_prime, &[a_i.clone()], trap_sigma);
+        let ctx = setup_b2p(&params, 1, d_prime, &[a_i.clone()], trap_sigma);
 
         let encs = random_bgg_encodings_for_bits(4, 1, &params);
         let pair = iter_pairs(&encs).find_any(|_| true).expect("at least one attribute");
@@ -163,7 +158,7 @@ mod tests {
         let p_cols = ctx.k_p[0].row_size();
         let p_x_l = uni.sample_uniform(&params, 1, p_cols, DistType::BitDist);
 
-        let got = apply(pair, &ctx, &p_x_l, 0);
+        let got = apply_b2p(pair, &ctx, &p_x_l, 0);
 
         let c_row = pair.0.vector.concat_columns(&[&pair.1.vector]);
         let expect = &(&c_row * &ctx.ginv_stacked) - &(p_x_l * &ctx.k_p[0]);
