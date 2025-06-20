@@ -5,11 +5,11 @@ use crate::{
     },
     poly::{
         dcrt::{
-            matrix::base::BaseMatrix, DCRTPoly, DCRTPolyHashSampler, DCRTPolyParams,
-            DCRTPolyUniformSampler,
+            matrix::base::BaseMatrix, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
+            DCRTPolyParams, DCRTPolyUniformSampler,
         },
-        sampler::PolyUniformSampler,
-        PolyParams,
+        sampler::{DistType, PolyUniformSampler},
+        Poly, PolyMatrix, PolyParams,
     },
     utils::create_bit_random_poly,
 };
@@ -40,4 +40,49 @@ pub fn random_bgg_encodings_for_bits(
     let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
     encodings
+}
+
+pub fn bgg_encodings_and_input(
+    b_l: DCRTPolyMatrix,
+    inputs: Vec<usize>,
+    d: usize,
+    params: &DCRTPolyParams,
+    p_sigma: f64,
+) -> (DCRTPolyMatrix, DCRTPolyMatrix) {
+    let packed_input_size = inputs.len();
+    let log_base_q = params.modulus_digits();
+    // Create samplers
+    let key: [u8; 32] = rand::random();
+    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+    let uniform_sampler = DCRTPolyUniformSampler::new();
+    let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
+    // Generate random tag for sampling
+    let tag: u64 = rand::random();
+    let tag_bytes = tag.to_le_bytes();
+    // Create secret and plaintexts
+    let s_bars = uniform_sampler.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+    let s_x_l = {
+        let minus_one_poly = DCRTPoly::const_minus_one(&params);
+        let mut secrets = s_bars.to_vec();
+        secrets.push(minus_one_poly);
+        DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
+    };
+    let plaintexts: Vec<DCRTPoly> = (0..packed_input_size)
+        .into_iter()
+        .map(|i| DCRTPoly::const_int(params, inputs[i]))
+        .collect();
+    // Create random public keys
+    let p_x_l_error =
+        uniform_sampler.sample_uniform(&params, 1, m_b, DistType::GaussDist { sigma: p_sigma });
+    let reveal_plaintexts = vec![true; packed_input_size + 1];
+    let bgg_encoding_sampler = BGGEncodingSampler::new(params, &s_bars, uniform_sampler, 0.0);
+    let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+    let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+    let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(&params, plaintexts);
+    let s_connect = encoded_bits.tensor(&s_x_l);
+    let s_b = s_connect * &b_l;
+
+    let p_x_l = s_b + p_x_l_error;
+
+    (encodings[0].concat_vector(&encodings[1..]), p_x_l)
 }

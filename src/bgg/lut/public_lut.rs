@@ -67,13 +67,13 @@ impl PublicLut {
         params: &DCRTPolyParams,
         m: usize,
         p_x_l: DCRTPolyMatrix,
-        input: DCRTPolyMatrix,
+        c_x_k: DCRTPolyMatrix,
         k: usize,
-        x_l: DCRTPoly,
+        x_k: DCRTPoly,
     ) -> DCRTPolyMatrix {
-        let lhs = input * self.a_lt.1.decompose();
+        let lhs = c_x_k * self.a_lt.1.decompose();
         let i = DCRTPolyMatrix::identity(params, m, None);
-        let zi = DCRTPolyMatrix::identity(params, m, Some(x_l));
+        let zi = DCRTPolyMatrix::identity(params, m, Some(x_k));
         let zii = zi.concat_columns(&[&i]);
         let rhs = p_x_l * &self.l_k_vec[k] * zii;
         lhs + rhs
@@ -105,5 +105,11 @@ mod tests {
         let m = (d + 1) * params.modulus_digits();
         println!("m:{}", m);
         let lut = PublicLut::new(&params, d, m, 2, 0.0, f, 4);
+
+        /*
+            construct P_{x_L} and c_{x_k} which actual iO flow, evaluator receive from obfuscator.
+        */
+
+        // let c_y_k = lut.evaluate(&params, m, p_x_l, input, 0, DCRTPoly::const_int(&params, 0));
     }
 }
