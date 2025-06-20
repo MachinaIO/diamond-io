@@ -40,9 +40,10 @@ mod roundtrip_tests {
 
         /* P to BGG+ */
         let p2b_ctx = setup_p2b(&params, l, d_prime, sigma);
-        let enc_back = apply_p2b(&plain, &p2b_ctx, 0);
+        let (enc_one_back, enc_attr_back) = apply_p2b(&plain, &p2b_ctx, 0);
+        let enc_back_vec = enc_one_back.concat_vector(&[enc_attr_back]);
         let original = encs[0].concat_vector(&[encs[1].clone()]);
-        let enc_back_prefix = enc_back.vector;
+        let enc_back_prefix = enc_back_vec.slice(0, 1, 0, original.col_size());
 
         assert_eq!(enc_back_prefix, original);
     }

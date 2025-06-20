@@ -53,11 +53,22 @@ pub fn apply_p2b(
     plain_row: &DCRTPolyMatrix,
     ctx: &P2BContext,
     idx: usize,
-) -> BggEncoding<DCRTPolyMatrix> {
-    let vec = plain_row * &ctx.k_bgg[idx];
-    let a_prime_i = build_a_prime_i(&ctx.att_matrix, idx, ctx.b_l3.col_size());
-    let pubkey = BggPublicKey { matrix: a_prime_i, reveal_plaintext: false };
-    BggEncoding::new(vec, pubkey, None)
+) -> (BggEncoding<DCRTPolyMatrix>, BggEncoding<DCRTPolyMatrix>) {
+    let wide = plain_row * &ctx.k_bgg[idx];
+    let m = ctx.b_l3.col_size();
+
+    let vec_one = wide.slice(0, 1, 0, m);
+    let vec_attr = wide.slice(0, 1, m, 2 * m);
+
+    let a_prime_i = build_a_prime_i(&ctx.att_matrix, idx, m);
+    let d_plus_1 = a_prime_i.row_size();
+    let a_one = a_prime_i.slice(0, d_plus_1, 0, m);
+    let a_attr = a_prime_i.slice(0, d_plus_1, m, 2 * m);
+
+    let pk_one = BggPublicKey { matrix: a_one, reveal_plaintext: false };
+    let pk_attr = BggPublicKey { matrix: a_attr, reveal_plaintext: false };
+
+    (BggEncoding::new(vec_one, pk_one, None), BggEncoding::new(vec_attr, pk_attr, None))
 }
 
 #[cfg(test)]
@@ -89,13 +100,21 @@ mod tests {
         let m3 = ctx.b_l3.col_size();
 
         let plain = DCRTPolyMatrix::zero(&params, 1, m3);
-        let enc0 = apply_p2b(&plain, &ctx, 0);
+        let (enc_one, enc_attr) = apply_p2b(&plain, &ctx, 0);
 
-        assert_eq!(enc0.vector.row_size(), 1);
-        assert_eq!(enc0.vector.col_size(), 2 * m3);
+        assert_eq!(enc_one.vector.row_size(), 1);
+        assert_eq!(enc_attr.vector.row_size(), 1);
+        assert_eq!(enc_one.vector.col_size(), m3);
+        assert_eq!(enc_attr.vector.col_size(), m3);
 
         let d_plus_1 = 2;
-        assert_eq!(enc0.pubkey.matrix.row_size(), d_plus_1);
-        assert_eq!(enc0.pubkey.matrix.col_size(), 2 * m3);
+        assert_eq!(enc_one.pubkey.matrix.row_size(), d_plus_1);
+        assert_eq!(enc_attr.pubkey.matrix.row_size(), d_plus_1);
+        assert_eq!(enc_one.pubkey.matrix.col_size(), m3);
+        assert_eq!(enc_attr.pubkey.matrix.col_size(), m3);
+
+        let concat_vec = enc_one.concat_vector(&[enc_attr.clone()]);
+        assert_eq!(concat_vec.row_size(), 1);
+        assert_eq!(concat_vec.col_size(), 2 * m3);
     }
 }
