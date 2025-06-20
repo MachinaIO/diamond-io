@@ -121,7 +121,7 @@ mod tests {
         let d = 3;
         let inputs = vec![1, 0, 1, 1];
         let input_size = inputs.len();
-        let m = (1 + input_size) * params.modulus_digits();
+        let m = (1 + d) * params.modulus_digits();
         info!("t:{}, d:{}, input_size:{}, m:{}", t, d, input_size, m);
         let lut = PublicLut::new(&params, d, m, t, 0.0, f, input_size);
         let _c_y_k = lut.evaluate(&params, m, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
