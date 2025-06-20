@@ -31,7 +31,7 @@ mod roundtrip_tests {
         let c = random_bgg_encodings_for_bits(4, 1, &params);
         assert_eq!(c.len(), 2);
         for c_i in iter_pairs(&c).collect::<Vec<_>>().into_iter() {
-            let combined_c_i = c_i.c_one.concat_vector(&[c_i.c_attr.clone()]);
+            let combined_c_i = c_i.combined_matrix();
             let a_i = c_i.a_matrix();
 
             /* BGG+ to P */

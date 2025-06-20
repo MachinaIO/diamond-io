@@ -23,6 +23,13 @@ where
         let a_attr = &self.c_attr.pubkey.matrix;
         a_one.concat_columns(&[&a_attr])
     }
+
+    /// Return c_i = c_one | c_attr : (1 x 2m)
+    pub fn combined_matrix(&self) -> M {
+        let v_one = &self.c_one.vector;
+        let v_attr = &self.c_attr.vector;
+        v_one.concat_columns(&[v_attr])
+    }
 }
 
 pub fn iter_pairs<M>(encs: &[BggEncoding<M>]) -> impl IndexedParallelIterator<Item = Pair<'_, M>>
