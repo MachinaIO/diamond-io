@@ -50,11 +50,11 @@ pub(crate) fn build_a_prime_i(full: &DCRTPolyMatrix, i: usize, m: usize) -> DCRT
 }
 
 pub fn apply_p2b(
-    plain_row: &DCRTPolyMatrix,
+    p_i: &DCRTPolyMatrix,
     ctx: &P2BContext,
     idx: usize,
 ) -> (BggEncoding<DCRTPolyMatrix>, BggEncoding<DCRTPolyMatrix>) {
-    let wide = plain_row * &ctx.k_bgg[idx];
+    let wide = p_i * &ctx.k_bgg[idx];
     let m = ctx.b_l3.col_size();
 
     let vec_one = wide.slice(0, 1, 0, m);

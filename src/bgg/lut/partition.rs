@@ -13,6 +13,18 @@ where
     pub c_attr: &'a BggEncoding<M>,
 }
 
+impl<'a, M> Pair<'a, M>
+where
+    M: PolyMatrix + Clone,
+{
+    /// Return A_i: (d+1) x 2m
+    pub fn a_matrix(&self) -> M {
+        let a_one = &self.c_one.pubkey.matrix;
+        let a_attr = &self.c_attr.pubkey.matrix;
+        a_one.concat_columns(&[&a_attr])
+    }
+}
+
 pub fn iter_pairs<M>(encs: &[BggEncoding<M>]) -> impl IndexedParallelIterator<Item = Pair<'_, M>>
 where
     M: PolyMatrix,
