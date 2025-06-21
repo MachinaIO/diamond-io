@@ -7,8 +7,8 @@ use crate::{
     bgg::lut::utils::bgg_encodings_and_input,
     poly::{
         dcrt::{
-            DCRTPoly, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler,
+            sampler::trapdoor::DCRTTrapdoor, DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
+            DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
@@ -28,16 +28,18 @@ impl PublicLut {
     pub fn new(
         params: &DCRTPolyParams,
         n: usize,
-        trap_sigma: f64,
         f: HashMap<usize, (DCRTPoly, DCRTPoly)>,
         input_size: usize,
+        trapdoor: DCRTTrapdoor,
+        b_l: DCRTPolyMatrix,
+        trap_sampler: DCRTPolyTrapdoorSampler,
     ) -> Self {
         let m = (1 + n) * params.modulus_digits();
         let uni = DCRTPolyUniformSampler::new();
-        let trap_sampler = DCRTPolyTrapdoorSampler::new(params, trap_sigma);
+
         // todo: check size
         // public B_L: (n+1)L'xL'(n+1)[logq]
-        let (trapdoor, b_l) = trap_sampler.trapdoor(params, (1 + input_size) * (n + 1));
+
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)x2m
         let a_lt = uni.sample_uniform(&params, n + 1, 2 * m, DistType::BitDist);
@@ -118,9 +120,10 @@ mod tests {
         let d = 1;
         let inputs = vec![1, 0];
         let input_size = inputs.len();
-
+        let trap_sampler = DCRTPolyTrapdoorSampler::new(&params, 4.578);
+        let (trapdoor, b_l) = trap_sampler.trapdoor(&params, (1 + input_size) * (d + 1));
         info!("t:{}, d:{}, input_size:{}", t, d, input_size,);
-        let lut = PublicLut::new(&params, d, 4.578, f, input_size);
+        let lut = PublicLut::new(&params, d, f, input_size, trapdoor, b_l, trap_sampler);
         let _c_y_k = lut.evaluate(&params, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
     }
 }
