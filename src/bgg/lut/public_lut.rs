@@ -11,7 +11,7 @@ use crate::{
             DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
-        PolyMatrix,
+        PolyMatrix, PolyParams,
     },
 };
 
@@ -28,12 +28,11 @@ impl PublicLut {
     pub fn new(
         params: &DCRTPolyParams,
         n: usize,
-        m: usize,
-        t: usize,
         trap_sigma: f64,
         f: HashMap<usize, (DCRTPoly, DCRTPoly)>,
         input_size: usize,
     ) -> Self {
+        let m = (1 + n) * params.modulus_digits();
         let uni = DCRTPolyUniformSampler::new();
         let trap_sampler = DCRTPolyTrapdoorSampler::new(params, trap_sigma);
         // todo: check size
@@ -43,7 +42,7 @@ impl PublicLut {
         // new public BGG+matrix common for all rows: (n+1)x2m
         let a_lt = uni.sample_uniform(&params, n + 1, 2 * m, DistType::BitDist);
         info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
-        let l_k_vec: Vec<DCRTPolyMatrix> = (0..t)
+        let l_k_vec: Vec<DCRTPolyMatrix> = (0..f.len())
             .into_par_iter()
             .map(|k| {
                 let uni = DCRTPolyUniformSampler::new();
@@ -77,13 +76,13 @@ impl PublicLut {
     pub fn evaluate(
         &self,
         params: &DCRTPolyParams,
-        m: usize,
         n: usize,
         inputs: Vec<usize>,
         p_sigma: f64,
         k: usize,
         x_k: DCRTPoly,
     ) -> DCRTPolyMatrix {
+        let m = (1 + n) * params.modulus_digits();
         let (c_x_k, p_x_l) = bgg_encodings_and_input(m, &self.b_l, inputs, n, params, p_sigma);
         let lhs = c_x_k * self.a_lt.1.decompose();
         let i = DCRTPolyMatrix::identity(params, m, None);
@@ -96,14 +95,9 @@ impl PublicLut {
 
 #[cfg(test)]
 mod tests {
-    use tracing::info;
-
-    use crate::{
-        poly::{Poly, PolyParams},
-        utils::init_tracing,
-    };
-
     use super::*;
+    use crate::{poly::Poly, utils::init_tracing};
+    use tracing::info;
 
     #[test]
     fn test_public_lut() {
@@ -124,10 +118,9 @@ mod tests {
         let d = 1;
         let inputs = vec![1, 0];
         let input_size = inputs.len();
-        let log_q = params.modulus_digits();
-        let m = (1 + d) * log_q;
-        info!("t:{}, d:{}, input_size:{}, m:{}, log_q:{}", t, d, input_size, m, log_q);
-        let lut = PublicLut::new(&params, d, m, t, 4.578, f, input_size);
-        let _c_y_k = lut.evaluate(&params, m, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
+
+        info!("t:{}, d:{}, input_size:{}", t, d, input_size,);
+        let lut = PublicLut::new(&params, d, 4.578, f, input_size);
+        let _c_y_k = lut.evaluate(&params, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
     }
 }
