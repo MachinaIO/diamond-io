@@ -37,6 +37,7 @@ impl PublicLut {
         let uni = DCRTPolyUniformSampler::new();
         let trap_sampler = DCRTPolyTrapdoorSampler::new(params, trap_sigma);
         // todo: check size
+        // public B_L: (n+1)L'xL'(n+1)[logq]
         let (trapdoor, b_l) = trap_sampler.trapdoor(params, (1 + input_size) * (n + 1));
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)x2m
@@ -57,8 +58,10 @@ impl PublicLut {
                         &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k - &r_k * x_k)
                     ]);
                 info!("rhs_rhs ({}, {})", rhs_rhs.row_size(), rhs_rhs.col_size());
+                // rhs: (n+1)x2m
                 let rhs = &a_lt - rhs_rhs;
-                // computing u_1_L' ⊗ rhs
+                info!("rhs ({}, {})", rhs.row_size(), rhs.col_size());
+                // computing target u_1_L' ⊗ rhs: (n+1)L'x2m
                 let zeros =
                     DCRTPolyMatrix::zero(params, input_size * rhs.row_size(), rhs.col_size());
                 let target = rhs.concat_rows(&[&zeros]);
@@ -118,12 +121,13 @@ mod tests {
         // f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
         // f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
         let t = f.len();
-        let d = 3;
-        let inputs = vec![1, 0, 1, 1];
+        let d = 1;
+        let inputs = vec![1, 0];
         let input_size = inputs.len();
-        let m = (1 + d) * params.modulus_digits();
-        info!("t:{}, d:{}, input_size:{}, m:{}", t, d, input_size, m);
-        let lut = PublicLut::new(&params, d, m, t, 0.0, f, input_size);
+        let log_q = params.modulus_digits();
+        let m = (1 + d) * log_q;
+        info!("t:{}, d:{}, input_size:{}, m:{}, log_q:{}", t, d, input_size, m, log_q);
+        let lut = PublicLut::new(&params, d, m, t, 4.578, f, input_size);
         let _c_y_k = lut.evaluate(&params, m, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
     }
 }
