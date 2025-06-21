@@ -20,7 +20,8 @@ pub struct PublicLut {
     // new public BGG+matrix common for all rows: (n+1)xm, (n+1)xm
     a_lt: (DCRTPolyMatrix, DCRTPolyMatrix),
     // public matrix different for all k: (n+1)xm
-    l_k_vec: Vec<DCRTPolyMatrix>,
+    // k => (R_k, L_k)
+    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
     b_l: DCRTPolyMatrix,
 }
 
@@ -36,15 +37,12 @@ impl PublicLut {
     ) -> Self {
         let m = (1 + n) * params.modulus_digits();
         let uni = DCRTPolyUniformSampler::new();
-
-        // todo: check size
         // public B_L: (n+1)L'xL'(n+1)[logq]
-
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)x2m
         let a_lt = uni.sample_uniform(&params, n + 1, 2 * m, DistType::BitDist);
         info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
-        let l_k_vec: Vec<DCRTPolyMatrix> = (0..f.len())
+        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, DCRTPolyMatrix))> = (0..f.len())
             .into_par_iter()
             .map(|k| {
                 let uni = DCRTPolyUniformSampler::new();
@@ -67,12 +65,12 @@ impl PublicLut {
                     DCRTPolyMatrix::zero(params, input_size * rhs.row_size(), rhs.col_size());
                 let target = rhs.concat_rows(&[&zeros]);
                 info!("target ({}, {})", target.row_size(), target.col_size());
-                trap_sampler.preimage(params, &trapdoor, &b_l, &target)
+                (k, (r_k, trap_sampler.preimage(params, &trapdoor, &b_l, &target)))
             })
             .collect();
         let a_lt_0 = a_lt.slice(0, n + 1, 0, m);
         let a_lt_1 = a_lt.slice(0, n + 1, m, 2 * m);
-        Self { a_lt: (a_lt_0, a_lt_1), l_k_vec, b_l }
+        Self { a_lt: (a_lt_0, a_lt_1), lookup_hashmap: hashmap_vec.into_iter().collect(), b_l }
     }
 
     pub fn evaluate(
@@ -82,15 +80,14 @@ impl PublicLut {
         inputs: Vec<usize>,
         p_sigma: f64,
         k: usize,
-        x_k: DCRTPoly,
     ) -> DCRTPolyMatrix {
         let m = (1 + n) * params.modulus_digits();
+        let (r_k, l_k) = &self.lookup_hashmap.get(&k).unwrap();
         let (c_x_k, p_x_l) = bgg_encodings_and_input(m, &self.b_l, inputs, n, params, p_sigma);
-        let lhs = c_x_k * self.a_lt.1.decompose();
-        let i = DCRTPolyMatrix::identity(params, m, None);
-        let zi = DCRTPolyMatrix::identity(params, m, Some(x_k));
-        let zii = zi.concat_columns(&[&i]);
-        let rhs = p_x_l * &self.l_k_vec[k] * zii;
+        // lhs := c_{x_L}G^{-1}(R_k)
+        let lhs = c_x_k * r_k.decompose();
+        // rhs := p_{x_L}L_k
+        let rhs = p_x_l * l_k;
         lhs + rhs
     }
 }
@@ -124,6 +121,6 @@ mod tests {
         let (trapdoor, b_l) = trap_sampler.trapdoor(&params, (1 + input_size) * (d + 1));
         info!("t:{}, d:{}, input_size:{}", t, d, input_size,);
         let lut = PublicLut::new(&params, d, f, input_size, trapdoor, b_l, trap_sampler);
-        let _c_y_k = lut.evaluate(&params, d, inputs, 0.0, 0, DCRTPoly::const_int(&params, 0));
+        let _c_y_k = lut.evaluate(&params, d, inputs, 0.0, 0);
     }
 }
