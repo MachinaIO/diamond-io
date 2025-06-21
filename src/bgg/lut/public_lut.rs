@@ -84,7 +84,7 @@ impl PublicLut {
         k: usize,
         x_k: DCRTPoly,
     ) -> DCRTPolyMatrix {
-        let (c_x_k, p_x_l) = bgg_encodings_and_input(&self.b_l, inputs, n, params, p_sigma);
+        let (c_x_k, p_x_l) = bgg_encodings_and_input(m, &self.b_l, inputs, n, params, p_sigma);
         let lhs = c_x_k * self.a_lt.1.decompose();
         let i = DCRTPolyMatrix::identity(params, m, None);
         let zi = DCRTPolyMatrix::identity(params, m, Some(x_k));
