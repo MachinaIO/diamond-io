@@ -45,7 +45,6 @@ pub fn random_bgg_encodings_for_bits(
 }
 
 pub fn bgg_encodings_and_input(
-    m: usize,
     b_l: &DCRTPolyMatrix,
     inputs: Vec<usize>,
     d: usize,
@@ -76,8 +75,9 @@ pub fn bgg_encodings_and_input(
     );
     plaintexts.push(minus_t_bar);
     // Create random public keys
+    // todo this ncol need to be fix
     let p_x_l_error =
-        uniform_sampler.sample_uniform(&params, 1, m, DistType::GaussDist { sigma: p_sigma });
+        uniform_sampler.sample_uniform(&params, 1, 216, DistType::GaussDist { sigma: p_sigma });
     let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(&params, plaintexts);
     info!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size());
     let s_connect = encoded_bits.tensor(&s_x_l);
