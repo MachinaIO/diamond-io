@@ -16,12 +16,11 @@ use crate::{
 };
 
 /// Public Lookup Table
+/// Espeically considering adjusting on diamond-io case.
 pub struct PublicLut {
-    // new public BGG+matrix common for all rows: (n+1)xm, (n+1)xm
-    a_lt: (DCRTPolyMatrix, DCRTPolyMatrix),
     // public matrix different for all k: (n+1)xm
-    // k => (R_k, L_k)
-    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
+    // k => L_k
+    lookup_hashmap: HashMap<usize, DCRTPolyMatrix>,
     b_l: DCRTPolyMatrix,
 }
 
@@ -39,38 +38,37 @@ impl PublicLut {
         let uni = DCRTPolyUniformSampler::new();
         // public B_L: (n+1)L'xL'(n+1)[logq]
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
-        // new public BGG+matrix common for all rows: (n+1)x2m
-        let a_lt = uni.sample_uniform(&params, n + 1, 2 * m, DistType::BitDist);
+        // new public BGG+matrix common for all rows: (n+1)xm
+        let a_lt = uni.sample_uniform(&params, n + 1, m, DistType::BitDist);
         info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
-        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, DCRTPolyMatrix))> = (0..f.len())
+        let hashmap_vec: Vec<(usize, DCRTPolyMatrix)> = (0..f.len())
             .into_par_iter()
             .map(|k| {
                 let uni = DCRTPolyUniformSampler::new();
                 // public matrix different for all k: (n+1)xm
                 let r_k = uni.sample_uniform(params, n + 1, m, DistType::BitDist);
-                info!("r_k ({}, {})", r_k.row_size(), r_k.col_size());
+                let a_z = uni.sample_uniform(params, n + 1, m, DistType::BitDist);
+                info!("R_k ({}, {})", r_k.row_size(), r_k.col_size());
+                info!("A_z ({}, {})", a_z.row_size(), a_z.col_size());
                 let (x_k, y_k) = f.get(&k).expect("missing f(k)");
-                // computing rhs = A_{LT} - (R_k, (- x_k * R_k + y_k * G))
-                // todo: check size
-                let rhs_rhs =
-                    &r_k.concat_columns(&[
-                        &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k - &r_k * x_k)
-                    ]);
-                info!("rhs_rhs ({}, {})", rhs_rhs.row_size(), rhs_rhs.col_size());
+                // computing rhs = A_{LT} - A_{z}G^{-1}(R_k) + x_{k}R_{k} - y_{k}G
                 // rhs: (n+1)x2m
-                let rhs = &a_lt - rhs_rhs;
+                // todo: check size
+                let rhs = &a_lt -
+                    &(&r_k * x_k) -
+                    &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k) -
+                    a_z * &r_k.decompose();
                 info!("rhs ({}, {})", rhs.row_size(), rhs.col_size());
                 // computing target u_1_L' ⊗ rhs: (n+1)L'x2m
                 let zeros =
                     DCRTPolyMatrix::zero(params, input_size * rhs.row_size(), rhs.col_size());
                 let target = rhs.concat_rows(&[&zeros]);
                 info!("target ({}, {})", target.row_size(), target.col_size());
-                (k, (r_k, trap_sampler.preimage(params, &trapdoor, &b_l, &target)))
+                (k, trap_sampler.preimage(params, &trapdoor, &b_l, &target))
             })
             .collect();
-        let a_lt_0 = a_lt.slice(0, n + 1, 0, m);
-        let a_lt_1 = a_lt.slice(0, n + 1, m, 2 * m);
-        Self { a_lt: (a_lt_0, a_lt_1), lookup_hashmap: hashmap_vec.into_iter().collect(), b_l }
+
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), b_l }
     }
 
     pub fn evaluate(
@@ -82,13 +80,9 @@ impl PublicLut {
         k: usize,
     ) -> DCRTPolyMatrix {
         let m = (1 + n) * params.modulus_digits();
-        let (r_k, l_k) = &self.lookup_hashmap.get(&k).unwrap();
-        let (c_x_k, p_x_l) = bgg_encodings_and_input(m, &self.b_l, inputs, n, params, p_sigma);
-        // lhs := c_{x_L}G^{-1}(R_k)
-        let lhs = c_x_k * r_k.decompose();
-        // rhs := p_{x_L}L_k
-        let rhs = p_x_l * l_k;
-        lhs + rhs
+        let l_k = self.lookup_hashmap.get(&k).unwrap();
+        let p_x_l = bgg_encodings_and_input(m, &self.b_l, inputs, n, params, p_sigma);
+        &p_x_l * l_k
     }
 }
 
