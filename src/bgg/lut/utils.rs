@@ -44,7 +44,7 @@ pub fn random_bgg_encodings_for_bits(
     encodings
 }
 
-pub fn bgg_encodings_and_input(
+pub fn p_vector_for_inputs(
     b_l: &DCRTPolyMatrix,
     inputs: Vec<usize>,
     d: usize,

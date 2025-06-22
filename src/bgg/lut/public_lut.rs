@@ -1,11 +1,18 @@
-use crate::poly::{
-    dcrt::{
-        sampler::trapdoor::DCRTTrapdoor, DCRTPoly, DCRTPolyMatrix, DCRTPolyParams,
-        DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
+use crate::{
+    bgg::{
+        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+        BggEncoding,
     },
-    sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
-    PolyMatrix, PolyParams,
+    poly::{
+        dcrt::{
+            sampler::trapdoor::DCRTTrapdoor, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
+            DCRTPolyParams, DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
+        },
+        sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
+        PolyMatrix, PolyParams,
+    },
 };
+use keccak_asm::Keccak256;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashMap;
 use tracing::info;
@@ -14,8 +21,8 @@ use tracing::info;
 /// Espeically considering adjusting on diamond-io case.
 pub struct PublicLut {
     // public matrix different for all k: (n+1)xm
-    // k => L_k
-    lookup_hashmap: HashMap<usize, DCRTPolyMatrix>,
+    // k => (L_k,c_z)
+    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, BggEncoding<DCRTPolyMatrix>)>,
 }
 
 impl PublicLut {
@@ -35,18 +42,36 @@ impl PublicLut {
         // new public BGG+matrix common for all rows: (n+1)xm
         let a_lt = uni.sample_uniform(&params, n + 1, m, DistType::BitDist);
         info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
-        let hashmap_vec: Vec<(usize, DCRTPolyMatrix)> = (0..f.len())
+
+        /* BGG+ encoding setup */
+        let secrets = uni.sample_uniform(&params, 1, n, DistType::BitDist).get_row(0);
+        let key: [u8; 32] = rand::random();
+        let reveal_plaintexts = vec![false; 2];
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+
+        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, BggEncoding<DCRTPolyMatrix>))> = (0..f.len())
             .into_par_iter()
             .map(|k| {
+                let (x_k, y_k) = f.get(&k).expect("missing f(k)");
                 let uni = DCRTPolyUniformSampler::new();
+                let bgg_encoding_sampler = BGGEncodingSampler::new(params, &secrets, uni, 0.0);
+                let bgg_pubkey_sampler =
+                    BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, n);
+                let uni = DCRTPolyUniformSampler::new();
+                let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+                let plaintexts = vec![x_k.clone()];
+                let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+                assert_eq!(encodings.len(), 2);
+                let c_z = encodings[1].clone();
+                let a_z = c_z.clone().pubkey.matrix;
+
                 // public matrix different for all k: (n+1)xm
                 let r_k = uni.sample_uniform(params, n + 1, m, DistType::BitDist);
-                let a_z = uni.sample_uniform(params, n + 1, m, DistType::BitDist);
                 info!("R_k ({}, {})", r_k.row_size(), r_k.col_size());
                 info!("A_z ({}, {})", a_z.row_size(), a_z.col_size());
-                let (x_k, y_k) = f.get(&k).expect("missing f(k)");
+
                 // computing rhs = A_{LT} - A_{z}G^{-1}(R_k) + x_{k}R_{k} - y_{k}G : (n+1)xm
-                // todo: check size
                 let rhs = &a_lt -
                     &(&r_k * x_k) -
                     &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k) -
@@ -57,7 +82,8 @@ impl PublicLut {
                     DCRTPolyMatrix::zero(params, input_size * rhs.row_size(), rhs.col_size());
                 let target = rhs.concat_rows(&[&zeros]);
                 info!("target ({}, {})", target.row_size(), target.col_size());
-                (k, trap_sampler.preimage(params, &trapdoor, &b_l, &target))
+
+                (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z))
             })
             .collect();
 
@@ -65,15 +91,17 @@ impl PublicLut {
     }
 
     pub fn evaluate(&self, p_x_l: DCRTPolyMatrix, k: usize) -> DCRTPolyMatrix {
-        let l_k = self.lookup_hashmap.get(&k).unwrap();
-        &p_x_l * l_k
+        let (l_k, _c_z) = self.lookup_hashmap.get(&k).unwrap();
+        let c_y_k = &p_x_l * l_k;
+        // todo assert with c_{y_k} == c_{z}G^{-1}(R_k) + c_LT,k, where c_{z} = s_xL(Az - zG) + e
+        c_y_k
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{bgg::lut::utils::bgg_encodings_and_input, poly::Poly, utils::init_tracing};
+    use crate::{bgg::lut::utils::p_vector_for_inputs, poly::Poly, utils::init_tracing};
 
     #[test]
     fn test_public_lut() {
@@ -104,8 +132,7 @@ mod tests {
         /* Evaluation Step */
         let inputs = vec![1, 0];
         assert_eq!(inputs.len(), input_size);
-        let p_x_l = bgg_encodings_and_input(&b_l, inputs, d, &params, 0.0);
+        let p_x_l = p_vector_for_inputs(&b_l, inputs, d, &params, 0.0);
         let _c_y_k = lut.evaluate(p_x_l, 1);
-        //todo assert with c_{y_k} == c_{z}G^{-1}(R_k) + c_LT,k, where c_{z} = s_xL(Az - zG) + e
     }
 }
