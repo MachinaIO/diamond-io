@@ -1,8 +1,5 @@
 use crate::{
-    bgg::{
-        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-        BggEncoding,
-    },
+    bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler},
     poly::{
         dcrt::{
             sampler::trapdoor::DCRTTrapdoor, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
@@ -21,8 +18,8 @@ use tracing::info;
 /// Espeically considering adjusting on diamond-io case.
 pub struct PublicLut {
     // public matrix different for all k: (n+1)xm
-    // k => (L_k,c_z)
-    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, BggEncoding<DCRTPolyMatrix>)>,
+    // k => (L_k,c_z, R_k)
+    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix, DCRTPolyMatrix)>,
 }
 
 impl PublicLut {
@@ -50,7 +47,9 @@ impl PublicLut {
         let tag: u64 = rand::random();
         let tag_bytes = tag.to_le_bytes();
 
-        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, BggEncoding<DCRTPolyMatrix>))> = (0..f.len())
+        /* Sample c_z(BGG+ encoding), L_k(Preimage) */
+        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, DCRTPolyMatrix, DCRTPolyMatrix))> = (0..f
+            .len())
             .into_par_iter()
             .map(|k| {
                 let (x_k, y_k) = f.get(&k).expect("missing f(k)");
@@ -83,7 +82,7 @@ impl PublicLut {
                 let target = rhs.concat_rows(&[&zeros]);
                 info!("target ({}, {})", target.row_size(), target.col_size());
 
-                (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z))
+                (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z.vector, r_k))
             })
             .collect();
 
@@ -91,9 +90,10 @@ impl PublicLut {
     }
 
     pub fn evaluate(&self, p_x_l: DCRTPolyMatrix, k: usize) -> DCRTPolyMatrix {
-        let (l_k, _c_z) = self.lookup_hashmap.get(&k).unwrap();
-        let c_y_k = &p_x_l * l_k;
+        let (l_k, c_z, r_k) = self.lookup_hashmap.get(&k).unwrap();
+        let c_lt_k = &p_x_l * l_k;
         // todo assert with c_{y_k} == c_{z}G^{-1}(R_k) + c_LT,k, where c_{z} = s_xL(Az - zG) + e
+        let c_y_k = c_z * r_k.decompose() + c_lt_k;
         c_y_k
     }
 }
@@ -112,16 +112,16 @@ mod tests {
         let d = 1;
         let input_size = 2;
 
-        /* Lookup mapping */
+        /* Lookup mapping k => (x_k, y_k) */
         let mut f = HashMap::new();
         f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
         f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
-        // f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
-        // f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
-        // f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
-        // f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
-        // f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
-        // f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
+        f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
+        f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
+        f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
+        f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
+        f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
+        f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
 
         /* Obfuscation Step */
         let trap_sampler = DCRTPolyTrapdoorSampler::new(&params, 4.578);
