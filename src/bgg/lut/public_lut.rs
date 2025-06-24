@@ -1,3 +1,5 @@
+//! Public Lookup
+
 use crate::{
     bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler},
     poly::{
@@ -23,6 +25,7 @@ pub struct PublicLut {
     // k => (L_k,c_z)
     lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
     r_k_hashkey: [u8; 32],
+    d: usize,
 
     /* debugging purpose for correctness */
     #[cfg(feature = "debug")]
@@ -34,14 +37,14 @@ pub struct PublicLut {
 impl PublicLut {
     pub fn new(
         params: &DCRTPolyParams,
-        n: usize,
+        d: usize,
         f: HashMap<usize, (DCRTPoly, DCRTPoly)>,
         input_size: usize,
         trapdoor: DCRTTrapdoor,
         b_l: &DCRTPolyMatrix,
         trap_sampler: DCRTPolyTrapdoorSampler,
     ) -> Self {
-        let m = (1 + n) * params.modulus_digits();
+        let m = (1 + d) * params.modulus_digits();
         let uni = DCRTPolyUniformSampler::new();
         let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
         let r_k_hashkey: [u8; 32] = rand::random();
@@ -50,7 +53,7 @@ impl PublicLut {
             params,
             r_k_hashkey,
             TAG_R_K,
-            n + 1,
+            d + 1,
             m * t,
             DistType::FinRingDist,
         );
@@ -58,11 +61,11 @@ impl PublicLut {
         // public B_L: (n+1)L'xL'(n+1)[logq]
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)xm
-        let a_lt = uni.sample_uniform(&params, n + 1, m, DistType::BitDist);
+        let a_lt = uni.sample_uniform(&params, d + 1, m, DistType::BitDist);
         info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
 
         /* BGG+ encoding setup */
-        let secrets = uni.sample_uniform(&params, 1, n, DistType::BitDist).get_row(0);
+        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
         let s_x_l = {
             let minus_one_poly = DCRTPoly::const_minus_one(&params);
             let mut secrets = secrets.to_vec();
@@ -83,13 +86,13 @@ impl PublicLut {
                 let uni = DCRTPolyUniformSampler::new();
                 let bgg_encoding_sampler = BGGEncodingSampler::new(params, &secrets, uni, 0.0);
                 let bgg_pubkey_sampler =
-                    BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, n);
+                    BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
                 let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
                 let plaintexts = vec![x_k.clone()];
-                let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+                let mut encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
                 assert_eq!(encodings.len(), 2);
-                let c_z = encodings[1].clone();
-                let a_z = c_z.clone().pubkey.matrix;
+                let c_z = encodings.swap_remove(1);
+                let a_z = &c_z.pubkey.matrix;
 
                 // public matrix different for all k: (n+1)xm
                 let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
@@ -98,7 +101,7 @@ impl PublicLut {
 
                 // computing rhs = A_{LT} - A_{z}G^{-1}(R_k) + x_{k}R_{k} - y_{k}G : (n+1)xm
                 let rhs = &a_lt + &(&r_k * x_k) -
-                    &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k) -
+                    &(DCRTPolyMatrix::gadget_matrix(params, d + 1) * y_k) -
                     a_z * &r_k.decompose();
                 info!("rhs ({}, {})", rhs.row_size(), rhs.col_size());
                 // computing target u_1_L' ⊗ rhs: (n+1)L'xm
@@ -112,29 +115,29 @@ impl PublicLut {
             .collect();
         #[cfg(feature = "debug")]
         {
-            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey, s_x_l, a_lt }
+            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), d, r_k_hashkey, s_x_l, a_lt }
         }
         #[cfg(not(feature = "debug"))]
         {
-            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey }
+            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), d, r_k_hashkey }
         }
     }
 
     pub fn evaluate(
         &self,
         params: &DCRTPolyParams,
-        n: usize,
         t: usize,
         p_x_l: DCRTPolyMatrix,
         k: usize,
     ) -> DCRTPolyMatrix {
         let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
-        let m = (1 + n) * params.modulus_digits();
+        let d = self.d;
+        let m = (1 + d) * params.modulus_digits();
         let r_k_s = hash_sampler.sample_hash(
             params,
             self.r_k_hashkey,
             TAG_R_K,
-            n + 1,
+            d + 1,
             m * t,
             DistType::FinRingDist,
         );
@@ -142,7 +145,6 @@ impl PublicLut {
         let (l_k, c_z) = self.lookup_hashmap.get(&k).unwrap();
         let c_lt_k = &p_x_l * l_k;
         let c_y_k = c_z * r_k.decompose() + c_lt_k;
-
         c_y_k
     }
 }
@@ -184,7 +186,7 @@ mod tests {
         let k = 6;
         assert_eq!(inputs.len(), input_size);
         let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
-        let c_y_k = lut.evaluate(&params, d, t, p_x_l, k);
+        let c_y_k = lut.evaluate(&params, t, p_x_l, k);
 
         /* Information s and y_k is known Only debugging purpose */
         #[cfg(feature = "debug")]
