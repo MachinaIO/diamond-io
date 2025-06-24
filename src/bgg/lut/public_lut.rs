@@ -25,7 +25,9 @@ pub struct PublicLut {
     r_k_hashkey: [u8; 32],
 
     /* debugging purpose for correctness */
+    #[cfg(feature = "debug")]
     s_x_l: DCRTPolyMatrix,
+    #[cfg(feature = "debug")]
     a_lt: DCRTPolyMatrix,
 }
 
@@ -108,8 +110,14 @@ impl PublicLut {
                 (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z.vector))
             })
             .collect();
-
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey, s_x_l, a_lt }
+        #[cfg(feature = "debug")]
+        {
+            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey, s_x_l, a_lt }
+        }
+        #[cfg(not(feature = "debug"))]
+        {
+            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey }
+        }
     }
 
     pub fn evaluate(
@@ -119,7 +127,6 @@ impl PublicLut {
         t: usize,
         p_x_l: DCRTPolyMatrix,
         k: usize,
-        f: HashMap<usize, (DCRTPoly, DCRTPoly)>,
     ) -> DCRTPolyMatrix {
         let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
         let m = (1 + n) * params.modulus_digits();
@@ -135,12 +142,6 @@ impl PublicLut {
         let (l_k, c_z) = self.lookup_hashmap.get(&k).unwrap();
         let c_lt_k = &p_x_l * l_k;
         let c_y_k = c_z * r_k.decompose() + c_lt_k;
-
-        /* Information s and y_k is known Only debugging purpose */
-        let (_, y_k) = f.get(&k).expect("missing f(k)");
-        let expected_c_y_k =
-            &self.s_x_l * (&self.a_lt - &(DCRTPolyMatrix::gadget_matrix(&params, n + 1) * y_k));
-        debug_assert_eq!(expected_c_y_k, c_y_k);
 
         c_y_k
     }
@@ -180,8 +181,18 @@ mod tests {
 
         /* Evaluation Step */
         let inputs = vec![1, 0];
+        let k = 6;
         assert_eq!(inputs.len(), input_size);
         let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
-        let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 6, f);
+        let c_y_k = lut.evaluate(&params, d, t, p_x_l, k);
+
+        /* Information s and y_k is known Only debugging purpose */
+        #[cfg(feature = "debug")]
+        {
+            let (_, y_k) = f.get(&k).expect("missing f(k)");
+            let expected_c_y_k =
+                &lut.s_x_l * (&lut.a_lt - &(DCRTPolyMatrix::gadget_matrix(&params, d + 1) * y_k));
+            debug_assert_eq!(expected_c_y_k, c_y_k);
+        }
     }
 }
