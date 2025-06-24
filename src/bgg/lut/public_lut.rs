@@ -5,7 +5,7 @@ use crate::{
             sampler::trapdoor::DCRTTrapdoor, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
             DCRTPolyParams, DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
         },
-        sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
+        sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
 };
@@ -14,12 +14,15 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashMap;
 use tracing::info;
 
+const TAG_R_K: &[u8] = b"TAG_R_K";
+
 /// Public Lookup Table
 /// Espeically considering adjusting on diamond-io case.
 pub struct PublicLut {
     // public matrix different for all k: (n+1)xm
-    // k => (L_k,c_z, R_k)
-    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix, DCRTPolyMatrix)>,
+    // k => (L_k,c_z)
+    lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
+    r_k_hashkey: [u8; 32],
 }
 
 impl PublicLut {
@@ -34,6 +37,18 @@ impl PublicLut {
     ) -> Self {
         let m = (1 + n) * params.modulus_digits();
         let uni = DCRTPolyUniformSampler::new();
+        let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
+        let r_k_hashkey: [u8; 32] = rand::random();
+        let t = f.len();
+        let r_k_s = hash_sampler.sample_hash(
+            params,
+            r_k_hashkey,
+            TAG_R_K,
+            n + 1,
+            m * t,
+            DistType::FinRingDist,
+        );
+
         // public B_L: (n+1)L'xL'(n+1)[logq]
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)xm
@@ -48,8 +63,7 @@ impl PublicLut {
         let tag_bytes = tag.to_le_bytes();
 
         /* Sample c_z(BGG+ encoding), L_k(Preimage) */
-        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, DCRTPolyMatrix, DCRTPolyMatrix))> = (0..f
-            .len())
+        let hashmap_vec: Vec<(usize, (DCRTPolyMatrix, DCRTPolyMatrix))> = (0..t)
             .into_par_iter()
             .map(|k| {
                 let (x_k, y_k) = f.get(&k).expect("missing f(k)");
@@ -57,7 +71,6 @@ impl PublicLut {
                 let bgg_encoding_sampler = BGGEncodingSampler::new(params, &secrets, uni, 0.0);
                 let bgg_pubkey_sampler =
                     BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, n);
-                let uni = DCRTPolyUniformSampler::new();
                 let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
                 let plaintexts = vec![x_k.clone()];
                 let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
@@ -66,7 +79,7 @@ impl PublicLut {
                 let a_z = c_z.clone().pubkey.matrix;
 
                 // public matrix different for all k: (n+1)xm
-                let r_k = uni.sample_uniform(params, n + 1, m, DistType::BitDist);
+                let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
                 info!("R_k ({}, {})", r_k.row_size(), r_k.col_size());
                 info!("A_z ({}, {})", a_z.row_size(), a_z.col_size());
 
@@ -82,15 +95,33 @@ impl PublicLut {
                 let target = rhs.concat_rows(&[&zeros]);
                 info!("target ({}, {})", target.row_size(), target.col_size());
 
-                (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z.vector, r_k))
+                (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z.vector))
             })
             .collect();
 
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect() }
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey }
     }
 
-    pub fn evaluate(&self, p_x_l: DCRTPolyMatrix, k: usize) -> DCRTPolyMatrix {
-        let (l_k, c_z, r_k) = self.lookup_hashmap.get(&k).unwrap();
+    pub fn evaluate(
+        &self,
+        params: &DCRTPolyParams,
+        n: usize,
+        t: usize,
+        p_x_l: DCRTPolyMatrix,
+        k: usize,
+    ) -> DCRTPolyMatrix {
+        let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
+        let m = (1 + n) * params.modulus_digits();
+        let r_k_s = hash_sampler.sample_hash(
+            params,
+            self.r_k_hashkey,
+            TAG_R_K,
+            n + 1,
+            m * t,
+            DistType::FinRingDist,
+        );
+        let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
+        let (l_k, c_z) = self.lookup_hashmap.get(&k).unwrap();
         let c_lt_k = &p_x_l * l_k;
         // todo assert with c_{y_k} == c_{z}G^{-1}(R_k) + c_LT,k, where c_{z} = s_xL(Az - zG) + e
         let c_y_k = c_z * r_k.decompose() + c_lt_k;
@@ -126,6 +157,7 @@ mod tests {
         /* Obfuscation Step */
         let trap_sampler = DCRTPolyTrapdoorSampler::new(&params, 4.578);
         let (trapdoor, b_l) = trap_sampler.trapdoor(&params, (1 + input_size) * (d + 1));
+        let t = f.len();
 
         let lut = PublicLut::new(&params, d, f, input_size, trapdoor, &b_l, trap_sampler);
 
@@ -133,6 +165,6 @@ mod tests {
         let inputs = vec![1, 0];
         assert_eq!(inputs.len(), input_size);
         let p_x_l = p_vector_for_inputs(&b_l, inputs, d, &params, 0.0);
-        let _c_y_k = lut.evaluate(p_x_l, 1);
+        let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 1);
     }
 }
