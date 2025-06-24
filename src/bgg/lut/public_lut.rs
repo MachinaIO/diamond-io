@@ -119,6 +119,7 @@ impl PublicLut {
         t: usize,
         p_x_l: DCRTPolyMatrix,
         k: usize,
+        f: HashMap<usize, (DCRTPoly, DCRTPoly)>,
     ) -> DCRTPolyMatrix {
         let hash_sampler = DCRTPolyHashSampler::<Keccak256>::new();
         let m = (1 + n) * params.modulus_digits();
@@ -136,10 +137,9 @@ impl PublicLut {
         let c_y_k = c_z * r_k.decompose() + c_lt_k;
 
         /* Information s and y_k is known Only debugging purpose */
-        let expected_c_y_k = &self.s_x_l *
-            (&self.a_lt -
-                &(DCRTPolyMatrix::gadget_matrix(&params, n + 1) *
-                    DCRTPoly::const_int(&params, 5)));
+        let (_, y_k) = f.get(&k).expect("missing f(k)");
+        let expected_c_y_k =
+            &self.s_x_l * (&self.a_lt - &(DCRTPolyMatrix::gadget_matrix(&params, n + 1) * y_k));
         debug_assert_eq!(expected_c_y_k, c_y_k);
 
         c_y_k
@@ -176,12 +176,12 @@ mod tests {
         let (trapdoor, b_l) = trap_sampler.trapdoor(&params, (1 + input_size) * (d + 1));
         let t = f.len();
 
-        let lut = PublicLut::new(&params, d, f, input_size, trapdoor, &b_l, trap_sampler);
+        let lut = PublicLut::new(&params, d, f.clone(), input_size, trapdoor, &b_l, trap_sampler);
 
         /* Evaluation Step */
         let inputs = vec![1, 0];
         assert_eq!(inputs.len(), input_size);
         let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
-        let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 1);
+        let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 1, f);
     }
 }
