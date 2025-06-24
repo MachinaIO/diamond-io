@@ -17,12 +17,13 @@ use tracing::info;
 const TAG_R_K: &[u8] = b"TAG_R_K";
 
 /// Public Lookup Table
-/// Espeically considering adjusting on diamond-io case.
+/// Considering adjusting on diamond-io case.
 pub struct PublicLut {
     // public matrix different for all k: (n+1)xm
     // k => (L_k,c_z)
     lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
     r_k_hashkey: [u8; 32],
+
     /* debugging purpose for correctness */
     s_x_l: DCRTPolyMatrix,
     a_lt: DCRTPolyMatrix,
@@ -94,8 +95,7 @@ impl PublicLut {
                 info!("A_z ({}, {})", a_z.row_size(), a_z.col_size());
 
                 // computing rhs = A_{LT} - A_{z}G^{-1}(R_k) + x_{k}R_{k} - y_{k}G : (n+1)xm
-                let rhs = &a_lt -
-                    &(&r_k * x_k) -
+                let rhs = &a_lt + &(&r_k * x_k) -
                     &(DCRTPolyMatrix::gadget_matrix(params, n + 1) * y_k) -
                     a_z * &r_k.decompose();
                 info!("rhs ({}, {})", rhs.row_size(), rhs.col_size());
@@ -182,6 +182,6 @@ mod tests {
         let inputs = vec![1, 0];
         assert_eq!(inputs.len(), input_size);
         let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
-        let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 1, f);
+        let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 6, f);
     }
 }

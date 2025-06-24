@@ -67,9 +67,12 @@ pub fn p_vector_for_inputs(
     );
     plaintexts.push(minus_t_bar);
     // Create random public keys
-    // todo this ncol need to be fix
-    let p_x_l_error =
-        uniform_sampler.sample_uniform(&params, 1, 216, DistType::GaussDist { sigma: p_sigma });
+    let p_x_l_error = uniform_sampler.sample_uniform(
+        &params,
+        1,
+        b_l.ncol,
+        DistType::GaussDist { sigma: p_sigma },
+    );
     let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(&params, plaintexts);
     info!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size());
     let s_connect = encoded_bits.tensor(&s_x_l);
