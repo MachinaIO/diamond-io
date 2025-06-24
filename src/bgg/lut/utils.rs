@@ -47,22 +47,14 @@ pub fn random_bgg_encodings_for_bits(
 pub fn p_vector_for_inputs(
     b_l: &DCRTPolyMatrix,
     inputs: Vec<usize>,
-    d: usize,
     params: &DCRTPolyParams,
     p_sigma: f64,
+    s_x_l: &DCRTPolyMatrix,
 ) -> DCRTPolyMatrix {
     let input_size = inputs.len();
     let uniform_sampler = DCRTPolyUniformSampler::new();
     // Generate random tag for sampling
-    // Create secret and plaintexts
-    let s_bars = uniform_sampler.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-    let s_x_l = {
-        let minus_one_poly = DCRTPoly::const_minus_one(&params);
-        let mut secrets = s_bars.to_vec();
-        secrets.push(minus_one_poly);
-        DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
-    };
-    info!("s_x_l ({},{})", s_x_l.row_size(), s_x_l.col_size());
+    // Create plaintexts
     let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
     let minus_t_bar = -t_bar.entry(0, 0);
     let one = DCRTPoly::const_one(&params);

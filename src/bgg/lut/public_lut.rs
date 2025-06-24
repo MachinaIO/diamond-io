@@ -6,7 +6,7 @@ use crate::{
             DCRTPolyParams, DCRTPolyTrapdoorSampler, DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
-        PolyMatrix, PolyParams,
+        Poly, PolyMatrix, PolyParams,
     },
 };
 use keccak_asm::Keccak256;
@@ -23,6 +23,9 @@ pub struct PublicLut {
     // k => (L_k,c_z)
     lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
     r_k_hashkey: [u8; 32],
+    /* debugging purpose for correctness */
+    s_x_l: DCRTPolyMatrix,
+    a_lt: DCRTPolyMatrix,
 }
 
 impl PublicLut {
@@ -57,6 +60,13 @@ impl PublicLut {
 
         /* BGG+ encoding setup */
         let secrets = uni.sample_uniform(&params, 1, n, DistType::BitDist).get_row(0);
+        let s_x_l = {
+            let minus_one_poly = DCRTPoly::const_minus_one(&params);
+            let mut secrets = secrets.to_vec();
+            secrets.push(minus_one_poly);
+            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
+        };
+        info!("s_x_l ({},{})", s_x_l.row_size(), s_x_l.col_size());
         let key: [u8; 32] = rand::random();
         let reveal_plaintexts = vec![false; 2];
         let tag: u64 = rand::random();
@@ -99,7 +109,7 @@ impl PublicLut {
             })
             .collect();
 
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey }
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), r_k_hashkey, s_x_l, a_lt }
     }
 
     pub fn evaluate(
@@ -123,8 +133,15 @@ impl PublicLut {
         let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
         let (l_k, c_z) = self.lookup_hashmap.get(&k).unwrap();
         let c_lt_k = &p_x_l * l_k;
-        // todo assert with c_{y_k} == c_{z}G^{-1}(R_k) + c_LT,k, where c_{z} = s_xL(Az - zG) + e
         let c_y_k = c_z * r_k.decompose() + c_lt_k;
+
+        /* Information s and y_k is known Only debugging purpose */
+        let expected_c_y_k = &self.s_x_l *
+            (&self.a_lt -
+                &(DCRTPolyMatrix::gadget_matrix(&params, n + 1) *
+                    DCRTPoly::const_int(&params, 5)));
+        debug_assert_eq!(expected_c_y_k, c_y_k);
+
         c_y_k
     }
 }
@@ -164,7 +181,7 @@ mod tests {
         /* Evaluation Step */
         let inputs = vec![1, 0];
         assert_eq!(inputs.len(), input_size);
-        let p_x_l = p_vector_for_inputs(&b_l, inputs, d, &params, 0.0);
+        let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
         let _c_y_k = lut.evaluate(&params, d, t, p_x_l, 1);
     }
 }
