@@ -61,16 +61,16 @@ impl PublicLut {
         // public B_L: (n+1)L'xL'(n+1)[logq]
         info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         // new public BGG+matrix common for all rows: (n+1)xm
-        let a_lt = uni.sample_uniform(&params, d + 1, m, DistType::BitDist);
+        let a_lt = uni.sample_uniform(params, d + 1, m, DistType::BitDist);
         info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
 
         /* BGG+ encoding setup */
-        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+        let secrets = uni.sample_uniform(params, 1, d, DistType::BitDist).get_row(0);
         let s_x_l = {
-            let minus_one_poly = DCRTPoly::const_minus_one(&params);
+            let minus_one_poly = DCRTPoly::const_minus_one(params);
             let mut secrets = secrets.to_vec();
             secrets.push(minus_one_poly);
-            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
+            DCRTPolyMatrix::from_poly_vec_row(params, secrets)
         };
         info!("s_x_l ({},{})", s_x_l.row_size(), s_x_l.col_size());
         let key: [u8; 32] = rand::random();
@@ -87,9 +87,9 @@ impl PublicLut {
                 let bgg_encoding_sampler = BGGEncodingSampler::new(params, &secrets, uni, 0.0);
                 let bgg_pubkey_sampler =
                     BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-                let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+                let pubkeys = bgg_pubkey_sampler.sample(params, &tag_bytes, &reveal_plaintexts);
                 let plaintexts = vec![x_k.clone()];
-                let mut encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+                let mut encodings = bgg_encoding_sampler.sample(params, &pubkeys, &plaintexts);
                 assert_eq!(encodings.len(), 2);
                 let c_z = encodings.swap_remove(1);
                 let a_z = &c_z.pubkey.matrix;
@@ -110,7 +110,7 @@ impl PublicLut {
                 let target = rhs.concat_rows(&[&zeros]);
                 info!("target ({}, {})", target.row_size(), target.col_size());
 
-                (k, (trap_sampler.preimage(params, &trapdoor, &b_l, &target), c_z.vector))
+                (k, (trap_sampler.preimage(params, &trapdoor, b_l, &target), c_z.vector))
             })
             .collect();
         #[cfg(feature = "debug")]
@@ -144,8 +144,7 @@ impl PublicLut {
         let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
         let (l_k, c_z) = self.lookup_hashmap.get(&k).unwrap();
         let c_lt_k = &p_x_l * l_k;
-        let c_y_k = c_z * r_k.decompose() + c_lt_k;
-        c_y_k
+        c_z * r_k.decompose() + c_lt_k
     }
 }
 
@@ -185,12 +184,12 @@ mod tests {
         let inputs = vec![1, 0];
         let k = 6;
         assert_eq!(inputs.len(), input_size);
-        let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
-        let c_y_k = lut.evaluate(&params, t, p_x_l, k);
 
         /* Information s and y_k is known Only debugging purpose */
         #[cfg(feature = "debug")]
         {
+            let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
+            let c_y_k = lut.evaluate(&params, t, p_x_l, k);
             let (_, y_k) = f.get(&k).expect("missing f(k)");
             let expected_c_y_k =
                 &lut.s_x_l * (&lut.a_lt - &(DCRTPolyMatrix::gadget_matrix(&params, d + 1) * y_k));
