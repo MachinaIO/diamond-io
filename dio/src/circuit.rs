@@ -1,8 +1,8 @@
-use diamond_io::bgg::circuit::PolyCircuit;
+use diamond_io::{bgg::circuit::PolyCircuit, poly::dcrt::DCRTPolyMatrix};
 
 pub enum BenchCircuit {
-    AddMul(PolyCircuit),
-    AddMulVerify(PolyCircuit),
+    AddMul(PolyCircuit<DCRTPolyMatrix>),
+    AddMulVerify(PolyCircuit<DCRTPolyMatrix>),
 }
 
 impl BenchCircuit {
@@ -71,7 +71,7 @@ impl BenchCircuit {
         Self::AddMulVerify(public_circuit)
     }
 
-    pub fn as_poly_circuit(self) -> PolyCircuit {
+    pub fn as_poly_circuit(self) -> PolyCircuit<DCRTPolyMatrix> {
         match self {
             BenchCircuit::AddMul(poly_circuit) => poly_circuit,
             BenchCircuit::AddMulVerify(poly_circuit) => poly_circuit,

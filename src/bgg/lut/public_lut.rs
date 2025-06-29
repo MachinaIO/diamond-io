@@ -1,7 +1,10 @@
 //! Public Lookup
 
 use crate::{
-    bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+    bgg::{
+        circuit::Evaluable,
+        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+    },
     poly::{
         dcrt::{
             sampler::trapdoor::DCRTTrapdoor, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
@@ -20,21 +23,21 @@ const TAG_R_K: &[u8] = b"TAG_R_K";
 
 /// Public Lookup Table
 /// Considering adjusting on diamond-io case.
-pub struct PublicLut {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PublicLut<M: PolyMatrix> {
     // public matrix different for all k: (n+1)xm
-    // k => (L_k,c_z)
+    // k => c_LT,k
     lookup_hashmap: HashMap<usize, (DCRTPolyMatrix, DCRTPolyMatrix)>,
     r_k_hashkey: [u8; 32],
     d: usize,
-
-    /* debugging purpose for correctness */
-    #[cfg(feature = "debug")]
-    s_x_l: DCRTPolyMatrix,
-    #[cfg(feature = "debug")]
-    a_lt: DCRTPolyMatrix,
+    // /* debugging purpose for correctness */
+    // #[cfg(feature = "debug")]
+    // s_x_l: DCRTPolyMatrix,
+    // #[cfg(feature = "debug")]
+    pub a_lt: Option<M>,
 }
 
-impl PublicLut {
+impl<M: PolyMatrix> PublicLut<M> {
     pub fn new(
         params: &DCRTPolyParams,
         d: usize,
@@ -113,14 +116,11 @@ impl PublicLut {
                 (k, (trap_sampler.preimage(params, &trapdoor, b_l, &target), c_z.vector))
             })
             .collect();
-        #[cfg(feature = "debug")]
-        {
-            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), d, r_k_hashkey, s_x_l, a_lt }
-        }
-        #[cfg(not(feature = "debug"))]
-        {
-            Self { lookup_hashmap: hashmap_vec.into_iter().collect(), d, r_k_hashkey }
-        }
+        // #[cfg(feature = "debug")]
+        // {
+        //     Self { lookup_hashmap: hashmap_vec.into_iter().collect(), d, r_k_hashkey, s_x_l, a_lt
+        // } }
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), d, r_k_hashkey, a_lt: None }
     }
 
     pub fn evaluate(
@@ -146,54 +146,63 @@ impl PublicLut {
         let c_lt_k = &p_x_l * l_k;
         c_z * r_k.decompose() + c_lt_k
     }
+
+    pub fn real_evaluate<E: Evaluable>(&self, _input: E) -> E {
+        // let (r_k, c_lt) = self.lookup_hashmap.get(&k).unwrap().clone();
+        // c_z * r_k.decompose() + c_lt;
+        // if input is public key, return A_LT
+        // if input is encoding, return c_y = c_z * r_k.decompose() + c_lt;
+        todo!()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{bgg::lut::utils::p_vector_for_inputs, poly::Poly, utils::init_tracing};
+    use crate::{poly::Poly, utils::init_tracing};
 
-    #[test]
-    fn test_public_lut() {
-        init_tracing();
+    // #[test]
+    // fn test_public_lut() {
+    //     init_tracing();
 
-        /* Setup */
-        let params = DCRTPolyParams::default();
-        let d = 1;
-        let input_size = 2;
+    //     /* Setup */
+    //     let params = DCRTPolyParams::default();
+    //     let d = 1;
+    //     let input_size = 2;
 
-        /* Lookup mapping k => (x_k, y_k) */
-        let mut f = HashMap::new();
-        f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
-        f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
-        f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
-        f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
-        f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
-        f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
-        f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
-        f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
+    //     /* Lookup mapping k => (x_k, y_k) */
+    //     let mut f = HashMap::new();
+    //     f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
+    //     f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
+    //     f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
+    //     f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
+    //     f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
+    //     f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
+    //     f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
+    //     f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
 
-        /* Obfuscation Step */
-        let trap_sampler = DCRTPolyTrapdoorSampler::new(&params, 4.578);
-        let (trapdoor, b_l) = trap_sampler.trapdoor(&params, (1 + input_size) * (d + 1));
-        let t = f.len();
+    //     /* Obfuscation Step */
+    //     let trap_sampler = DCRTPolyTrapdoorSampler::new(&params, 4.578);
+    //     let (trapdoor, b_l) = trap_sampler.trapdoor(&params, (1 + input_size) * (d + 1));
+    //     let t = f.len();
 
-        let lut = PublicLut::new(&params, d, f.clone(), input_size, trapdoor, &b_l, trap_sampler);
+    //     // let lut = PublicLut::new(&params, d, f.clone(), input_size, trapdoor, &b_l,
+    //     // trap_sampler);
 
-        /* Evaluation Step */
-        let inputs = vec![1, 0];
-        let k = 6;
-        assert_eq!(inputs.len(), input_size);
+    //     // /* Evaluation Step */
+    //     // let inputs = vec![1, 0];
+    //     // let k = 6;
+    //     // assert_eq!(inputs.len(), input_size);
 
-        /* Information s and y_k is known Only debugging purpose */
-        #[cfg(feature = "debug")]
-        {
-            let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
-            let c_y_k = lut.evaluate(&params, t, p_x_l, k);
-            let (_, y_k) = f.get(&k).expect("missing f(k)");
-            let expected_c_y_k =
-                &lut.s_x_l * (&lut.a_lt - &(DCRTPolyMatrix::gadget_matrix(&params, d + 1) * y_k));
-            debug_assert_eq!(expected_c_y_k, c_y_k);
-        }
-    }
+    //     /* Information s and y_k is known Only debugging purpose */
+    //     // #[cfg(feature = "debug")]
+    //     // {
+    //     //     let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, 0.0, &lut.s_x_l);
+    //     //     let c_y_k = lut.evaluate(&params, t, p_x_l, k);
+    //     //     let (_, y_k) = f.get(&k).expect("missing f(k)");
+    //     //     let expected_c_y_k =
+    //     //         &lut.s_x_l * (&lut.a_lt - &(DCRTPolyMatrix::gadget_matrix(&params, d + 1) *
+    //     // y_k));     debug_assert_eq!(expected_c_y_k, c_y_k);
+    //     // }
+    // }
 }

@@ -12,22 +12,24 @@ use std::{
 };
 pub use utils::*;
 
-use crate::utils::debug_mem;
+use crate::{bgg::lut::public_lut::PublicLut, poly::PolyMatrix, utils::debug_mem};
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PolyCircuit {
+pub struct PolyCircuit<M: PolyMatrix> {
     gates: BTreeMap<usize, PolyGate>,
-    sub_circuits: BTreeMap<usize, Self>,
+    sub_circuits: BTreeMap<usize, PolyCircuit<M>>,
     output_ids: Vec<usize>,
     num_input: usize,
+    lookups: BTreeMap<usize, PublicLut<M>>,
 }
 
-impl PolyCircuit {
+impl<M: PolyMatrix> PolyCircuit<M> {
     pub fn new() -> Self {
         Self {
             gates: BTreeMap::new(),
             sub_circuits: BTreeMap::new(),
             output_ids: vec![],
             num_input: 0,
+            lookups: BTreeMap::new(),
         }
     }
 
@@ -170,6 +172,10 @@ impl PolyCircuit {
         self.new_gate_generic(vec![], PolyGateType::Const { digits: digits.to_vec() })
     }
 
+    pub fn public_lookup_gate(&mut self, input: usize, lookup_id: usize) -> usize {
+        self.new_gate_generic(vec![input], PolyGateType::PubLut { lookup_id })
+    }
+
     fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType) -> usize {
         #[cfg(debug_assertions)]
         {
@@ -248,7 +254,10 @@ impl PolyCircuit {
     }
 
     /// Evaluate the circuit using an iterative approach over a precomputed topological order.
-    pub fn eval<E: Evaluable>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E> {
+    pub fn eval<E>(&self, params: &E::Params, one: &E, inputs: &[E]) -> Vec<E>
+    where
+        E: Evaluable<Matrix = M>,
+    {
         #[cfg(debug_assertions)]
         {
             assert_eq!(self.num_input(), inputs.len());
@@ -323,6 +332,17 @@ impl PolyCircuit {
                     PolyGateType::Call { .. } => {
                         panic!("no more call gate type during evaluation");
                     }
+                    PolyGateType::PubLut { lookup_id } => {
+                        debug_mem("Public Lookup gate start");
+                        let input = wires
+                            .get(&gate.input_gates[0])
+                            .expect("wire missing for Public Lookup")
+                            .clone();
+                        let lookup =
+                            self.lookups.get(lookup_id).expect("lookup table missing for id");
+                        let result = input.public_lookup(lookup);
+                        result
+                    }
                 };
                 wires.insert(gate_id, result);
                 debug_mem(format!("Gate id {} finished", gate_id));
@@ -337,6 +357,12 @@ impl PolyCircuit {
             .collect();
         debug_mem("Outputs are collected");
         outputs
+    }
+
+    pub fn register_public_lookup(&mut self, public_lookup: PublicLut<M>) -> usize {
+        let plt_id = self.lookups.len();
+        self.lookups.insert(plt_id, public_lookup);
+        plt_id
     }
 
     pub fn register_sub_circuit(&mut self, sub_circuit: Self) -> usize {
@@ -376,7 +402,7 @@ impl PolyCircuit {
     fn inline_gate(
         &mut self,
         start_gate_id: usize,
-        sub_circuit: &PolyCircuit,
+        sub_circuit: &PolyCircuit<M>,
         gate_map: &mut BTreeMap<usize, usize>,
     ) -> usize {
         let mut stack = Vec::new();

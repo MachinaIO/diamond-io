@@ -68,8 +68,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
     a_decomposed_polys: &[P],
     b_decomposed_polys: &[P],
-    public_circuit: PolyCircuit,
-) -> PolyCircuit {
+    public_circuit: PolyCircuit<E::Matrix>,
+) -> PolyCircuit<E::Matrix> {
     let log_base_q = a_decomposed_polys.len();
     debug_assert_eq!(b_decomposed_polys.len(), log_base_q);
     let packed_eval_input_size = public_circuit.num_input() - (2 * log_base_q);

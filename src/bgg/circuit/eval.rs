@@ -1,4 +1,7 @@
-use crate::poly::{Poly, PolyElem, PolyParams};
+use crate::{
+    bgg::lut::public_lut::PublicLut,
+    poly::{dcrt::DCRTPolyMatrix, Poly, PolyElem, PolyMatrix, PolyParams},
+};
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
@@ -18,12 +21,16 @@ pub trait Evaluable:
     + for<'a> Mul<&'a Self, Output = Self>
 {
     type Params: Debug + Clone + Send + Sync;
+    type Matrix: PolyMatrix;
+
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
+    fn public_lookup(&self, plt: &PublicLut<Self::Matrix>) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
     type Params = P::Params;
+    type Matrix = DCRTPolyMatrix;
 
     fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
         let mut coeffs = self.coeffs();
@@ -37,5 +44,9 @@ impl<P: Poly> Evaluable for P {
             .map(|&digit| <P::Elem as PolyElem>::constant(&params.modulus(), digit as u64))
             .collect();
         Self::from_coeffs(params, &coeffs)
+    }
+
+    fn public_lookup(&self, _: &PublicLut<Self::Matrix>) -> Self {
+        self.clone()
     }
 }
