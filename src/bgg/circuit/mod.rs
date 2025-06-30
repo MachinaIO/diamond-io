@@ -331,8 +331,10 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                     }
                     PolyGateType::Rotate { shift } => {
                         debug_mem("Rotate gate start");
-                        let input =
-                            wires.get(&gate.input_gates[0]).expect("wire missing for Rotate");
+                        let input = wires
+                            .get(&gate.input_gates[0])
+                            .expect("wire missing for Rotate")
+                            .clone();
                         let result = input.rotate(params, *shift);
                         debug_mem("Rotate gate end");
                         result

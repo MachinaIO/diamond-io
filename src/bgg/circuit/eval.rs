@@ -23,16 +23,16 @@ pub trait Evaluable:
     type Params: Debug + Clone + Send + Sync;
     type Matrix: PolyMatrix;
 
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self;
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
-    fn public_lookup(&self, plt: &PublicLut<Self::Matrix>, p_x_l: Option<Self::Matrix>) -> Self;
+    fn public_lookup(self, plt: &PublicLut<Self::Matrix>, p_x_l: Option<Self::Matrix>) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
     type Params = P::Params;
     type Matrix = DCRTPolyMatrix;
 
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let mut coeffs = self.coeffs();
         coeffs.rotate_right(shift);
         Self::from_coeffs(params, &coeffs)
@@ -46,7 +46,7 @@ impl<P: Poly> Evaluable for P {
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn public_lookup(&self, _: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
-        self.clone()
+    fn public_lookup(self, _: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+        self
     }
 }

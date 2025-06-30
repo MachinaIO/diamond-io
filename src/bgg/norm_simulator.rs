@@ -111,8 +111,8 @@ impl Evaluable for NormSimulator {
     type Params = ();
     type Matrix = DCRTPolyMatrix;
 
-    fn rotate(&self, _: &Self::Params, _: usize) -> Self {
-        self.clone()
+    fn rotate(self, _: &Self::Params, _: usize) -> Self {
+        self
     }
 
     fn from_digits(_: &Self::Params, one: &Self, digits: &[u32]) -> Self {
@@ -123,7 +123,7 @@ impl Evaluable for NormSimulator {
         Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
 
-    fn public_lookup(&self, _plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+    fn public_lookup(self, _plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
         todo!()
     }
 }

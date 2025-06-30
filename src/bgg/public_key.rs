@@ -100,7 +100,7 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
     type Matrix = M;
 
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         debug_mem(format!("BGGPublicKey::rotate {:?}, {:?}", self.matrix.size(), shift));
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
         debug_mem("BGGPublicKey::rotate rotate_poly");
@@ -119,7 +119,7 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 
-    fn public_lookup(&self, plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+    fn public_lookup(self, plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
         Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
     }
 }

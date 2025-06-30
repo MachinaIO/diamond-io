@@ -153,7 +153,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
     type Matrix = M;
 
-    fn rotate(&self, params: &Self::Params, shift: usize) -> Self {
+    fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
         let vector = self.vector.clone() * &rotate_poly;
         let pubkey = self.pubkey.rotate(params, shift);
@@ -170,14 +170,14 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         Self { vector, pubkey, plaintext }
     }
 
-    fn public_lookup(&self, plt: &PublicLut<M>, p_x_l: Option<M>) -> Self {
-        let c_z = self.plaintext.clone().unwrap();
+    fn public_lookup(self, plt: &PublicLut<M>, p_x_l: Option<M>) -> Self {
+        let c_z = self.plaintext.unwrap();
         let k = c_z.to_const_int();
         let (r_k, l_k) = plt.lookup_hashmap.get(&k).unwrap();
-        let c_lt_k = p_x_l.unwrap() * l_k;
+        let c_lt_k = p_x_l.clone().unwrap() * l_k;
+        let pubkey = self.pubkey.public_lookup(plt, p_x_l);
         let (_x_k, y_k) = plt.f.get(&k).unwrap();
-        let vector = self.vector.clone() * &r_k.decompose() + c_lt_k;
-        let pubkey = BggPublicKey::new(plt.a_lt.clone(), self.pubkey.reveal_plaintext);
+        let vector = self.vector * &r_k.decompose() + c_lt_k;
         Self { vector, pubkey, plaintext: Some(y_k.clone()) }
     }
 }
