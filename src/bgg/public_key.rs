@@ -119,9 +119,8 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 
-    fn public_lookup(&self, plt: &PublicLut<Self::Matrix>) -> Self {
-        let matrix = plt.a_lt.clone().unwrap();
-        Self { matrix, reveal_plaintext: self.reveal_plaintext }
+    fn public_lookup(&self, plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+        Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
     }
 }
 
@@ -133,7 +132,10 @@ mod tests {
             BggPublicKey,
         },
         poly::{
-            dcrt::{params::DCRTPolyParams, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix},
+            dcrt::{
+                params::DCRTPolyParams, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
+                DCRTPolyUniformSampler,
+            },
             Poly,
         },
     };
@@ -143,51 +145,53 @@ mod tests {
     use std::{collections::HashMap, fs, path::Path};
     use tokio;
 
-    // #[test]
-    // fn test_pubkey_plt() {
-    //     // Create parameters for testing
-    //     let params = DCRTPolyParams::default();
-    //     /* Lookup mapping k => (x_k, y_k) */
-    //     let mut f = HashMap::new();
-    //     f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
-    //     f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
-    //     f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
-    //     f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
-    //     f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
-    //     f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
-    //     f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
-    //     f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
+    #[test]
+    fn test_pubkey_plt() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+        /* Lookup mapping k => (x_k, y_k) */
+        let mut f = HashMap::new();
+        f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
+        f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
+        f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
+        f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
+        f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
+        f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
+        f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
+        f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
 
-    //     // Create a hash sampler and BGGPublicKeySampler to be reused
-    //     let key: [u8; 32] = rand::random();
-    //     let d = 3;
-    //     let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-    //     // Generate random tag for sampling
-    //     let tag: u64 = rand::random();
-    //     let tag_bytes = tag.to_le_bytes();
+        // Create a hash sampler and BGGPublicKeySampler to be reused
+        let key: [u8; 32] = rand::random();
+        let d = 3;
+        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        // Generate random tag for sampling
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
 
-    //     // // Create a simple circuit with an Add operation
-    //     // let mut circuit = PolyCircuit::new();
-    //     // let inputs = circuit.input(1);
-    //     // let lut = PublicLut::<DCRTPolyMatrix>::default();
-    //     // let a_lt = lut.a_lt.clone().unwrap();
-    //     // let plt_id = circuit.register_public_lookup(lut);
-    //     // let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
-    //     // circuit.output(vec![plt_gate]);
+        // Create a simple circuit with an Add operation
+        let mut circuit = PolyCircuit::new();
+        let inputs = circuit.input(1);
+        let lut = PublicLut::<DCRTPolyMatrix>::new::<
+            DCRTPolyUniformSampler,
+            DCRTPolyHashSampler<Keccak256>,
+        >(&params, d, f, 1);
+        let a_lt = lut.a_lt.clone();
+        let plt_id = circuit.register_public_lookup(lut);
+        let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
+        circuit.output(vec![plt_gate]);
 
-    //     // // Create random public keys
-    //     // let reveal_plaintexts = [true; 2];
-    //     // let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-    //     // let pk_one = pubkeys[0].clone();
-    //     // let pk1 = pubkeys[1].clone();
+        // Create random public keys
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+        let pk_one = pubkeys[0].clone();
+        let pk1 = pubkeys[1].clone();
+        // Evaluate the circuit
+        let result = circuit.eval(&params, &pk_one, &[pk1], None);
 
-    //     // // Evaluate the circuit
-    //     // let result = circuit.eval(&params, &pk_one, &[pk1]);
-
-    //     // // Verify the result
-    //     // assert_eq!(result.len(), 1);
-    //     // assert_eq!(result[0].matrix, a_lt);
-    // }
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].matrix, a_lt);
+    }
 
     #[test]
     fn test_pubkey_add() {
@@ -217,7 +221,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result
         let expected = pk1.clone() + pk2.clone();
@@ -256,7 +260,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result
         let expected = pk1.clone() - pk2.clone();
@@ -295,7 +299,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result
         let expected = pk1.clone() * pk2.clone();
@@ -344,7 +348,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()], None);
 
         // Expected result: ((pk1 + pk2)-2) - pk3
         let expected = ((pk1.clone() + pk2.clone()) * (pk1.clone() + pk2.clone())) - pk3.clone();
@@ -405,8 +409,12 @@ mod tests {
         circuit.output(vec![f]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()]);
+        let result = circuit.eval(
+            &params,
+            &pk_one,
+            &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()],
+            None,
+        );
 
         // Expected result: (((pk1 + pk2) * (pk3 * pk4)) + (pk1 - pk3))^2
         let sum1 = pk1.clone() + pk2.clone();
@@ -478,7 +486,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()]);
+        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result: (pk1 + pk2) - (pk1 * pk2)
         let expected = (pk1.clone() + pk2.clone()) - (pk1.clone() * pk2.clone());
@@ -550,7 +558,8 @@ mod tests {
         main_circuit.output(vec![square_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()]);
+        let result =
+            main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()], None);
 
         // Expected result: ((pk1 * pk2) + pk3)^2
         let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()) *

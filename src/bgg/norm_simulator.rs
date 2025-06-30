@@ -37,7 +37,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                 )
             })
             .collect::<Vec<_>>();
-        let outputs = self.eval(&(), &one, &inputs);
+        let outputs = self.eval(&(), &one, &inputs, None);
         NormBounds::from_norm_simulators(&outputs)
     }
 }
@@ -123,7 +123,7 @@ impl Evaluable for NormSimulator {
         Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
 
-    fn public_lookup(&self, _plt: &PublicLut<Self::Matrix>) -> Self {
+    fn public_lookup(&self, _plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
         todo!()
     }
 }

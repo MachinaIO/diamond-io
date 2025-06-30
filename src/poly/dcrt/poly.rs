@@ -316,6 +316,10 @@ impl Poly for DCRTPoly {
             })
             .collect()
     }
+
+    fn to_const_int(&self) -> usize {
+        self.coeffs_digits()[0].try_into().unwrap()
+    }
 }
 
 impl PartialEq for DCRTPoly {

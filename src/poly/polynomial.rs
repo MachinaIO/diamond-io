@@ -98,6 +98,7 @@ pub trait Poly:
     }
     fn to_bool_vec(&self) -> Vec<bool>;
     fn to_compact_bytes(&self) -> Vec<u8>;
+    fn to_const_int(&self) -> usize;
 
     /// Reads a polynomial with id from files under the given directory.
     fn read_from_file<P: AsRef<Path> + Send + Sync>(

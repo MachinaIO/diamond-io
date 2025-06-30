@@ -101,7 +101,7 @@ mod tests {
 
         assert_eq!(inputs.len(), 2 * log_base_q + 1);
         let one = DCRTPoly::const_one(&params);
-        let outputs = circuit.eval(&params, &one, &inputs);
+        let outputs = circuit.eval(&params, &one, &inputs, None);
         assert_eq!(outputs.len(), log_base_q);
 
         // 7. Verify the correctness of the output

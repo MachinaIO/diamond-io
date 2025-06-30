@@ -353,7 +353,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs = final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..]);
+        let eval_outputs =
+            final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..], None);
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs

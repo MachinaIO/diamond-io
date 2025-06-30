@@ -174,6 +174,7 @@ async fn main() {
                     &params,
                     &DCRTPoly::const_one(&params),
                     &[hardcoded_key, input_poly],
+                    None,
                 );
                 assert_eq!(eval.len(), 1);
                 /*

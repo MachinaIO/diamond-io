@@ -326,7 +326,7 @@ where
         }
     }
     let output_encodings =
-        final_circuit.eval(params.as_ref(), &new_encodings[0], &new_encodings[1..]);
+        final_circuit.eval(params.as_ref(), &new_encodings[0], &new_encodings[1..], None);
     log_mem("final_circuit evaluated");
     let output_encoding_ints = output_encodings
         .par_chunks(log_base_q)

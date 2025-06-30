@@ -170,13 +170,15 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         Self { vector, pubkey, plaintext }
     }
 
-    fn public_lookup(&self, _plt: &PublicLut<M>) -> Self {
-        // turn k into integer to be index of PLT
-        let k = self.plaintext.clone().unwrap();
-        // with the k get R_k and c_{LT, k} from the plt
-        // c_z * r_k.decompose() + c_lt;
-        // c_y
-        todo!()
+    fn public_lookup(&self, plt: &PublicLut<M>, p_x_l: Option<M>) -> Self {
+        let c_z = self.plaintext.clone().unwrap();
+        let k = c_z.to_const_int();
+        let (r_k, l_k) = plt.lookup_hashmap.get(&k).unwrap();
+        let c_lt_k = p_x_l.unwrap() * l_k;
+        let (_x_k, y_k) = plt.f.get(&k).unwrap();
+        let vector = self.vector.clone() * &r_k.decompose() + c_lt_k;
+        let pubkey = BggPublicKey::new(plt.a_lt.clone(), self.pubkey.reveal_plaintext);
+        Self { vector, pubkey, plaintext: Some(y_k.clone()) }
     }
 }
 
@@ -185,7 +187,6 @@ mod tests {
     use crate::{
         bgg::{
             circuit::PolyCircuit,
-            lut::public_lut::PublicLut,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
             BggEncoding,
         },
@@ -197,14 +198,14 @@ mod tests {
                 DCRTPoly,
             },
             sampler::PolyUniformSampler,
-            Poly, PolyParams,
+            PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
-    use std::{collections::HashMap, fs, path::Path};
+    use std::{fs, path::Path};
     use tokio;
 
     // #[test]
@@ -304,7 +305,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one.clone(), &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, &enc_one.clone(), &[enc1.clone(), enc2.clone()], None);
 
         // Expected result
         let expected = enc1.clone() + enc2.clone();
@@ -354,7 +355,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()], None);
 
         // Expected result
         let expected = enc1.clone() - enc2.clone();
@@ -404,7 +405,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()]);
+        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()], None);
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
@@ -468,7 +469,8 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
+        let result =
+            circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()], None);
 
         // Expected result: ((enc1 + enc2)^2) - enc3
         let expected =
@@ -550,6 +552,7 @@ mod tests {
             &params,
             &enc_one,
             &[enc1.clone(), enc2.clone(), enc3.clone(), enc4.clone()],
+            None,
         );
 
         // Expected result: (((enc1 + enc2) * (enc3 * enc4)) + (enc1 - enc3)) * scalar
@@ -633,7 +636,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()]);
+        let result = main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()], None);
 
         // Expected result: (enc1 + enc2) - (enc1 * enc2)
         let expected = (enc1.clone() + enc2.clone()) - (enc1.clone() * enc2.clone());
@@ -721,7 +724,7 @@ mod tests {
 
         // Evaluate the main circuit
         let result =
-            main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()]);
+            main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()], None);
 
         // Expected result: ((enc1 * enc2) + enc3)^2
         let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
