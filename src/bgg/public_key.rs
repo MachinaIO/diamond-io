@@ -119,7 +119,13 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
 
-    fn public_lookup(self, plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+    fn public_lookup(
+        self,
+        _: &Self::Params,
+        plt: &PublicLut<Self::Matrix>,
+        _: Option<Self::Matrix>,
+        _: usize,
+    ) -> Self {
         Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
     }
 }

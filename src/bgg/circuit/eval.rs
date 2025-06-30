@@ -25,7 +25,13 @@ pub trait Evaluable:
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
-    fn public_lookup(self, plt: &PublicLut<Self::Matrix>, p_x_l: Option<Self::Matrix>) -> Self;
+    fn public_lookup(
+        self,
+        params: &Self::Params,
+        plt: &PublicLut<Self::Matrix>,
+        p_x_l: Option<Self::Matrix>,
+        input_size: usize,
+    ) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
@@ -46,7 +52,13 @@ impl<P: Poly> Evaluable for P {
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn public_lookup(self, _: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+    fn public_lookup(
+        self,
+        _: &Self::Params,
+        _: &PublicLut<Self::Matrix>,
+        _: Option<Self::Matrix>,
+        _: usize,
+    ) -> Self {
         self
     }
 }

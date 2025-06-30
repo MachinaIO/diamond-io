@@ -123,7 +123,13 @@ impl Evaluable for NormSimulator {
         Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
 
-    fn public_lookup(self, _plt: &PublicLut<Self::Matrix>, _: Option<Self::Matrix>) -> Self {
+    fn public_lookup(
+        self,
+        _: &Self::Params,
+        _plt: &PublicLut<Self::Matrix>,
+        _: Option<Self::Matrix>,
+        _: usize,
+    ) -> Self {
         todo!()
     }
 }

@@ -18,8 +18,10 @@ const TAG_R_K: &[u8] = b"TAG_R_K";
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PublicLut<M: PolyMatrix> {
     // public matrix different for all k: (n+1)xm
-    // k => (R_k, rhs)
+    // k => (R_k, rhs_k)
     pub lookup_hashmap: HashMap<usize, (M, M)>,
+    // todo: yes i know potentially we should sample r_k via hash sampler and slice thru k but for
+    // now due to conflicting types of generic not sure how to bypass
     r_k_hashkey: [u8; 32],
     // k => (x_k, y_k)
     pub f: HashMap<usize, (M::P, M::P)>,
@@ -74,11 +76,7 @@ impl<M: PolyMatrix> PublicLut<M> {
                 let rhs = a_lt.clone() + (r_k.clone() * x_k) -
                     &(M::gadget_matrix(params, d + 1) * y_k) -
                     a_z * r_k.decompose();
-                info!("rhs ({}, {})", rhs.row_size(), rhs.col_size());
-                // // computing target u_1_L' ⊗ rhs: (n+1)L'xm
-                // let zeros = M::zero(params, input_size * rhs.row_size(), rhs.col_size());
-                // let target = rhs.concat_rows(&[&zeros]);
-                // info!("target ({}, {})", target.row_size(), target.col_size());
+                info!("rhs_k ({}, {})", rhs.row_size(), rhs.col_size());
 
                 (k, (r_k, rhs))
             })

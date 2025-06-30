@@ -170,12 +170,22 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         Self { vector, pubkey, plaintext }
     }
 
-    fn public_lookup(self, plt: &PublicLut<M>, p_x_l: Option<M>) -> Self {
+    fn public_lookup(
+        self,
+        params: &Self::Params,
+        plt: &PublicLut<M>,
+        p_x_l: Option<M>,
+        input_size: usize,
+    ) -> Self {
         let c_z = self.plaintext.unwrap();
         let k = c_z.to_const_int();
-        let (r_k, l_k) = plt.lookup_hashmap.get(&k).unwrap();
+        let (r_k, rhs_k) = plt.lookup_hashmap.get(&k).unwrap();
+        // computing target u_1_L' ⊗ rhs: (n+1)L'xm
+        let zeros = M::zero(&params, input_size * rhs_k.row_size(), rhs_k.col_size());
+        // todo: l_k is actually target, we need to preimage sample.
+        let l_k = rhs_k.concat_rows(&[&zeros]);
         let c_lt_k = p_x_l.clone().unwrap() * l_k;
-        let pubkey = self.pubkey.public_lookup(plt, p_x_l);
+        let pubkey = self.pubkey.public_lookup(params, plt, p_x_l, input_size);
         let (_x_k, y_k) = plt.f.get(&k).unwrap();
         let vector = self.vector * &r_k.decompose() + c_lt_k;
         Self { vector, pubkey, plaintext: Some(y_k.clone()) }

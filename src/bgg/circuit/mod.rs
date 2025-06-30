@@ -350,7 +350,12 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                             .clone();
                         let lookup =
                             self.lookups.get(lookup_id).expect("lookup table missing for id");
-                        let result = input.public_lookup(lookup, helper_lookup.clone());
+                        let result = input.public_lookup(
+                            params,
+                            lookup,
+                            helper_lookup.clone(),
+                            self.num_input(),
+                        );
                         result
                     }
                 };
