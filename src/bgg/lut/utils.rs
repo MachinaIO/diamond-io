@@ -13,7 +13,6 @@ use crate::{
     },
     utils::create_bit_random_poly,
 };
-use itertools::Itertools;
 use keccak_asm::Keccak256;
 use tracing::info;
 
@@ -45,26 +44,24 @@ pub fn random_bgg_encodings_for_bits(
 
 pub fn p_vector_for_inputs(
     b_l: &DCRTPolyMatrix,
-    inputs: Vec<usize>,
+    plaintexts: Vec<DCRTPoly>,
     params: &DCRTPolyParams,
     p_sigma: f64,
     s_x_l: &DCRTPolyMatrix,
 ) -> DCRTPolyMatrix {
-    let input_size = inputs.len();
     let uniform_sampler = DCRTPolyUniformSampler::new();
     // Generate random tag for sampling
     // Create plaintexts
     let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
     let minus_t_bar = -t_bar.entry(0, 0);
     let one = DCRTPoly::const_one(params);
-    let mut plaintexts = vec![one];
-    plaintexts
-        .extend((0..input_size - 1).map(|i| DCRTPoly::const_int(params, inputs[i])).collect_vec());
-    plaintexts.push(minus_t_bar);
+    let mut extended_plaintexts = vec![one];
+    extended_plaintexts.extend(plaintexts);
+    extended_plaintexts.push(minus_t_bar);
     // Create random public keys
     let p_x_l_error =
         uniform_sampler.sample_uniform(params, 1, b_l.ncol, DistType::GaussDist { sigma: p_sigma });
-    let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, plaintexts);
+    let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, extended_plaintexts);
     info!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size());
     let s_connect = encoded_bits.tensor(s_x_l);
     info!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size());
