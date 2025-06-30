@@ -187,6 +187,7 @@ mod tests {
     use crate::{
         bgg::{
             circuit::PolyCircuit,
+            lut::{public_lut::PublicLut, utils::p_vector_for_inputs},
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
             BggEncoding,
         },
@@ -195,23 +196,27 @@ mod tests {
                 matrix::base::BaseMatrix,
                 params::DCRTPolyParams,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
-                DCRTPoly,
+                DCRTPoly, DCRTPolyMatrix, DCRTPolyTrapdoorSampler,
             },
-            sampler::PolyUniformSampler,
-            PolyParams,
+            sampler::{PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
+            Poly, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
-    use std::{fs, path::Path};
+    use std::{collections::HashMap, fs, path::Path};
     use tokio;
+
+    // const SIGMA: f64 = 4.578;
 
     // #[test]
     // fn test_encoding_plt() {
     //     // Create parameters for testing
     //     let params = DCRTPolyParams::default();
+    //     let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+
     //     /* Lookup mapping k => (x_k, y_k) */
     //     let mut f = HashMap::new();
     //     f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
@@ -237,8 +242,11 @@ mod tests {
     //     // Create a simple circuit with an plt operation
     //     let mut circuit = PolyCircuit::new();
     //     let inputs = circuit.input(1);
-    //     let lut = PublicLut::default();
-    //     let a_lt = lut.a_lt.clone().unwrap();
+    //     let lut = PublicLut::<DCRTPolyMatrix>::new::<
+    //         DCRTPolyUniformSampler,
+    //         DCRTPolyHashSampler<Keccak256>,
+    //     >(&params, d, f, 1);
+    //     let a_lt = lut.clone().a_lt;
     //     let plt_id = circuit.register_public_lookup(lut);
     //     let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
     //     circuit.output(vec![plt_gate]);
@@ -257,8 +265,11 @@ mod tests {
     //     let enc_one = encodings[0].clone();
     //     let enc1 = encodings[1].clone();
 
+    //     let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, d + 1);
+
     //     // Evaluate the circuit
-    //     let result = circuit.eval(&params, &enc_one, &[enc1]);
+    //     // let p_x_l = p_vector_for_inputs(&b_l, inputs, &params, p_sigma, s_x_l);
+    //     let result = circuit.eval(&params, &enc_one, &[enc1], None);
 
     //     // Verify the result
     //     assert_eq!(result.len(), 1);
