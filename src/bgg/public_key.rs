@@ -174,7 +174,7 @@ mod tests {
         let lut = PublicLut::<DCRTPolyMatrix>::new::<
             DCRTPolyUniformSampler,
             DCRTPolyHashSampler<Keccak256>,
-        >(&params, d, f, 1);
+        >(&params, d, f);
         let a_lt = lut.a_lt.clone();
         let plt_id = circuit.register_public_lookup(lut);
         let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);

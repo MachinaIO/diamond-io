@@ -18,7 +18,7 @@ const TAG_R_K: &[u8] = b"TAG_R_K";
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PublicLut<M: PolyMatrix> {
     // public matrix different for all k: (n+1)xm
-    // k => (R_k, L_k's target)
+    // k => (R_k, rhs)
     pub lookup_hashmap: HashMap<usize, (M, M)>,
     r_k_hashkey: [u8; 32],
     // k => (x_k, y_k)
@@ -31,7 +31,6 @@ impl<M: PolyMatrix> PublicLut<M> {
         params: &<M::P as Poly>::Params,
         d: usize,
         f: HashMap<usize, (M::P, M::P)>,
-        input_size: usize,
     ) -> Self {
         let m = (1 + d) * params.modulus_digits();
         let uni = SU::new();
@@ -76,12 +75,12 @@ impl<M: PolyMatrix> PublicLut<M> {
                     &(M::gadget_matrix(params, d + 1) * y_k) -
                     a_z * r_k.decompose();
                 info!("rhs ({}, {})", rhs.row_size(), rhs.col_size());
-                // computing target u_1_L' ⊗ rhs: (n+1)L'xm
-                let zeros = M::zero(params, input_size * rhs.row_size(), rhs.col_size());
-                let target = rhs.concat_rows(&[&zeros]);
-                info!("target ({}, {})", target.row_size(), target.col_size());
+                // // computing target u_1_L' ⊗ rhs: (n+1)L'xm
+                // let zeros = M::zero(params, input_size * rhs.row_size(), rhs.col_size());
+                // let target = rhs.concat_rows(&[&zeros]);
+                // info!("target ({}, {})", target.row_size(), target.col_size());
 
-                (k, (r_k, target))
+                (k, (r_k, rhs))
             })
             .collect();
         Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, r_k_hashkey, a_lt }
@@ -144,7 +143,7 @@ mod tests {
         let lut = PublicLut::<DCRTPolyMatrix>::new::<
             DCRTPolyUniformSampler,
             DCRTPolyHashSampler<Keccak256>,
-        >(&params, d, f, 1);
+        >(&params, d, f);
 
         // /* Evaluation Step */
         // let inputs = vec![1, 0];

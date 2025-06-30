@@ -253,7 +253,7 @@ mod tests {
         let lut = PublicLut::<DCRTPolyMatrix>::new::<
             DCRTPolyUniformSampler,
             DCRTPolyHashSampler<Keccak256>,
-        >(&params, d, f, 1);
+        >(&params, d, f);
         let a_lt = lut.clone().a_lt;
 
         // Create a simple circuit with an plt operation
