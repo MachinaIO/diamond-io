@@ -1,10 +1,7 @@
 //! Public Lookup
 
 use crate::{
-    bgg::{
-        circuit::Evaluable,
-        sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-    },
+    bgg::sampler::{BGGEncodingSampler, BGGPublicKeySampler},
     poly::{
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -24,12 +21,8 @@ pub struct PublicLut<M: PolyMatrix> {
     // k => (R_k, L_k's target)
     pub lookup_hashmap: HashMap<usize, (M, M)>,
     r_k_hashkey: [u8; 32],
-    // x_k => y_k
+    // k => (x_k, y_k)
     pub f: HashMap<usize, (M::P, M::P)>,
-    // /* debugging purpose for correctness */
-    // #[cfg(feature = "debug")]
-    // s_x_l: DCRTPolyMatrix,
-    // #[cfg(feature = "debug")]
     pub a_lt: M,
 }
 
@@ -106,38 +99,6 @@ impl<M: PolyMatrix> PublicLut<M> {
             })
             .collect();
         Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, r_k_hashkey, a_lt }
-    }
-
-    pub fn evaluate<SH: PolyHashSampler<[u8; 32], M = M>>(
-        &self,
-        params: &<M::P as Poly>::Params,
-        t: usize,
-        d: usize,
-        p_x_l: M,
-        k: usize,
-    ) -> M {
-        let hash_sampler = SH::new();
-        let m = (1 + d) * params.modulus_digits();
-        let r_k_s = hash_sampler.sample_hash(
-            params,
-            self.r_k_hashkey,
-            TAG_R_K,
-            d + 1,
-            m * t,
-            DistType::FinRingDist,
-        );
-        let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
-        let (l_k, c_z) = self.lookup_hashmap.get(&k).unwrap();
-        let c_lt_k = p_x_l * l_k;
-        c_z.clone() * r_k.decompose() + c_lt_k
-    }
-
-    pub fn real_evaluate<E: Evaluable>(&self, _input: E) -> E {
-        // let (r_k, c_lt) = self.lookup_hashmap.get(&k).unwrap().clone();
-        // c_z * r_k.decompose() + c_lt;
-        // if input is public key, return A_LT
-        // if input is encoding, return c_y = c_z * r_k.decompose() + c_lt;
-        todo!()
     }
 }
 
