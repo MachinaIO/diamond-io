@@ -184,18 +184,20 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         dir_path: PathBuf,
     ) -> Self {
         let m = (plt.d + 1) * params.modulus_digits();
-        let m_b = (2 + input_size) * (plt.d + 1) * (2 + params.modulus_digits());
-        let c_z = self.plaintext.unwrap();
+        let m_b = (2 + input_size) * m;
+        let c_z = self.plaintext.expect("the BGG encoding should revealed plaintext");
+        // *note* current design have constraint on public lookup have limit of x_k have to be
+        // constant polynomial
         let k = c_z.to_const_int();
-        let (r_k, _rhs_k) = plt.lookup_hashmap.get(&k).unwrap();
+        let (r_k, _) = plt.lookup_hashmap.get(&k).expect("no value for index k");
         let l_k = timed_read(
-            "l_k",
+            "L_k",
             || M::read_from_files(&params, m_b, m, &dir_path, &format!("L_{}", k)),
             &mut Duration::default(),
         );
-        let c_lt_k = p_x_l.clone().unwrap() * l_k;
-        let pubkey = self.pubkey.public_lookup(params, plt, p_x_l, input_size, dir_path);
-        let (_x_k, y_k) = plt.f.get(&k).unwrap();
+        let c_lt_k = p_x_l.expect("P_{x_L} needs in BGG encoding's helper") * l_k;
+        let pubkey = self.pubkey.public_lookup(params, plt, None, input_size, dir_path);
+        let (_, y_k) = plt.f.get(&k).expect("no value for index k");
         let vector = self.vector * &r_k.decompose() + c_lt_k;
         Self { vector, pubkey, plaintext: Some(y_k.clone()) }
     }
@@ -261,11 +263,10 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (2 + input_size));
         info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
-        // let i = trapdoor_sampler.preimage(params, trapdoor, public_matrix, target);
 
         /* BGG+ encoding setup */
         let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-        // in reality there should be input insertion step that updates the secret
+        // in reality there should be input insertion step that updates the secret s_init to s_x_l
         let s_x_l = {
             let minus_one_poly = DCRTPoly::const_minus_one(&params);
             let mut secrets = secrets.to_vec();
@@ -278,6 +279,7 @@ mod tests {
             DCRTPolyUniformSampler,
             DCRTPolyHashSampler<Keccak256>,
         >(&params, d, f);
+
         lut.preimage(
             &params,
             b_l.clone(),
@@ -303,6 +305,7 @@ mod tests {
         // Create random public keys
         let reveal_plaintexts = [true; 2];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+        assert_eq!(pubkeys.len(), 2);
 
         // Create secret and plaintexts
         let secrets = vec![create_bit_random_poly(&params); d];
@@ -319,10 +322,18 @@ mod tests {
         let result =
             circuit.eval(&params, &enc_one, &[enc1], Some(p_x_l), Some("tests/io_plt".into()));
 
+        // let expected_encodings = bgg_encoding_sampler.sample(
+        //     &params,
+        //     &[BggPublicKey::new(a_lt.clone(), true), BggPublicKey::new(a_lt.clone(), true)],
+        //     &[DCRTPoly::const_int(&params, 6)],
+        // );
+        // let expected_enc1 = expected_encodings[1].clone();
+
         // Verify the result
         assert_eq!(result.len(), 1);
-        // assert_eq!(result[0].vector, expected.vector);
-        assert_eq!(result[0].pubkey.matrix, a_lt);
+        // todo: not passing
+        // assert_eq!(result[0].vector, expected_enc1.vector);
+        assert_eq!(result[0].pubkey.matrix, a_lt.clone());
         assert_eq!(*result[0].plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 6));
     }
 

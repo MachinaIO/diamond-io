@@ -359,6 +359,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                             self.num_input(),
                             helper_preimage.clone().unwrap(),
                         );
+                        debug_mem("Public Lookup gate end");
                         result
                     }
                 };
