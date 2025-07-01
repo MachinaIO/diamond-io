@@ -8,7 +8,10 @@ use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, Mul, Sub};
+use std::{
+    ops::{Add, Mul, Sub},
+    path::PathBuf,
+};
 
 impl<M: PolyMatrix> PolyCircuit<M> {
     pub fn simulate_bgg_norm(
@@ -37,7 +40,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                 )
             })
             .collect::<Vec<_>>();
-        let outputs = self.eval(&(), &one, &inputs, None);
+        let outputs = self.eval(&(), &one, &inputs, None, None);
         NormBounds::from_norm_simulators(&outputs)
     }
 }
@@ -129,6 +132,7 @@ impl Evaluable for NormSimulator {
         _plt: &PublicLut<Self::Matrix>,
         _: Option<Self::Matrix>,
         _: usize,
+        _: PathBuf,
     ) -> Self {
         todo!()
     }

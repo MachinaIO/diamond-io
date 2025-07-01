@@ -6,6 +6,7 @@ use rayon::prelude::*;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Sub},
+    path::PathBuf,
 };
 
 pub trait Evaluable:
@@ -31,6 +32,7 @@ pub trait Evaluable:
         plt: &PublicLut<Self::Matrix>,
         p_x_l: Option<Self::Matrix>,
         input_size: usize,
+        dir_path: PathBuf,
     ) -> Self;
 }
 
@@ -58,6 +60,7 @@ impl<P: Poly> Evaluable for P {
         _: &PublicLut<Self::Matrix>,
         _: Option<Self::Matrix>,
         _: usize,
+        _: PathBuf,
     ) -> Self {
         self
     }

@@ -267,7 +267,7 @@ mod test {
         let mut inputs = vec![one.clone()];
         inputs.push(-(t_bar_matrix.entry(0, 0)).clone());
 
-        let circuit_outputs = final_circuit.eval(&params, &one, &inputs, None);
+        let circuit_outputs = final_circuit.eval(&params, &one, &inputs, None, None);
         assert_eq!(circuit_outputs.len(), log_q);
 
         // 8. Extract the output bits

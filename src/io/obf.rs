@@ -353,8 +353,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs =
-            final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..], None);
+        let eval_outputs = final_circuit.eval(
+            params.as_ref(),
+            &pub_key_att[0],
+            &pub_key_att[1..],
+            None,
+            Some(dir_path.clone()),
+        );
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
         let output_ints = eval_outputs
@@ -398,7 +403,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     join_all(handles).await;
 }
 
-fn store_and_drop_matrix<M: PolyMatrix + 'static>(
+pub fn store_and_drop_matrix<M: PolyMatrix + 'static>(
     matrix: M,
     dir_path: &Path,
     id: &str,
@@ -417,7 +422,7 @@ fn store_and_drop_matrix<M: PolyMatrix + 'static>(
 }
 
 #[cfg(feature = "debug")]
-fn store_and_drop_poly<P: Poly + 'static>(
+pub fn store_and_drop_poly<P: Poly + 'static>(
     poly: P,
     dir_path: &Path,
     id: &str,

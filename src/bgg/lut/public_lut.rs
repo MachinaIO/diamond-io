@@ -2,13 +2,15 @@
 
 use crate::{
     bgg::sampler::BGGPublicKeySampler,
+    io::obf::store_and_drop_matrix,
     poly::{
-        sampler::{DistType, PolyHashSampler, PolyUniformSampler},
+        sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
+use tokio::task::JoinHandle;
 use tracing::info;
 
 const TAG_R_K: &[u8] = b"TAG_R_K";
@@ -18,17 +20,18 @@ const TAG_R_K: &[u8] = b"TAG_R_K";
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PublicLut<M: PolyMatrix> {
     // public matrix different for all k: (n+1)xm
-    // k => (R_k, rhs_k)
+    // k => (R_k, L_k)
     pub lookup_hashmap: HashMap<usize, (M, M)>,
     // todo: yes i know potentially we should sample r_k via hash sampler and slice thru k but for
     // now due to conflicting types of generic not sure how to bypass
     r_k_hashkey: [u8; 32],
+    pub d: usize,
     // k => (x_k, y_k)
     pub f: HashMap<usize, (M::P, M::P)>,
     pub a_lt: M,
 }
 
-impl<M: PolyMatrix> PublicLut<M> {
+impl<M: PolyMatrix + 'static> PublicLut<M> {
     pub fn new<SU: PolyUniformSampler<M = M>, SH: PolyHashSampler<[u8; 32], M = M>>(
         params: &<M::P as Poly>::Params,
         d: usize,
@@ -81,7 +84,28 @@ impl<M: PolyMatrix> PublicLut<M> {
                 (k, (r_k, rhs))
             })
             .collect();
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, r_k_hashkey, a_lt }
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, d, r_k_hashkey, a_lt }
+    }
+
+    /// interface will be called in diamond io for storing preimage
+    pub fn preimage<ST: PolyTrapdoorSampler<M = M>>(
+        &self,
+        params: &<M::P as Poly>::Params,
+        b_l: M,
+        trapdoor_sampler: ST,
+        trapdoor: ST::Trapdoor,
+        input_size: usize,
+        dir_path: PathBuf,
+        handles: &mut Vec<JoinHandle<()>>,
+    ) {
+        for (k, (_, rhs_k)) in &self.lookup_hashmap {
+            // computing target u_1_L' ⊗ rhs: (n+1)L'xm
+            let zeros = M::zero(&params, input_size * rhs_k.row_size(), rhs_k.col_size());
+            let target = rhs_k.concat_rows(&[&zeros]);
+            let l_k = trapdoor_sampler.preimage(params, &trapdoor, &b_l, &target);
+            info!("l_k ({}, {})", l_k.row_size(), l_k.col_size());
+            handles.push(store_and_drop_matrix(l_k, &dir_path, &format!("L_{}", k)));
+        }
     }
 }
 
