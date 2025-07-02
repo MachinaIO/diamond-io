@@ -10,6 +10,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct BggEncoding<M: PolyMatrix> {
@@ -184,11 +185,12 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         dir_path: PathBuf,
     ) -> Self {
         let m = (plt.d + 1) * params.modulus_digits();
-        let m_b = (2 + input_size) * m;
+        let m_b = (2 + input_size) * (plt.d + 1) * (2 + params.modulus_digits());
         let c_z = self.plaintext.expect("the BGG encoding should revealed plaintext");
         // *note* current design have constraint on public lookup have limit of x_k have to be
         // constant polynomial
         let k = c_z.to_const_int();
+        info!("k is {}", k);
         let (r_k, _) = plt.lookup_hashmap.get(&k).expect("no value for index k");
         let l_k = timed_read(
             "L_k",
@@ -217,10 +219,10 @@ mod tests {
                 matrix::base::BaseMatrix,
                 params::DCRTPolyParams,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
-                DCRTPoly, DCRTPolyMatrix, DCRTPolyTrapdoorSampler,
+                DCRTPoly, DCRTPolyMatrix, DCRTPolyTrapdoorSampler, FinRingElem,
             },
             sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
-            Poly, PolyMatrix, PolyParams,
+            Poly, PolyElem, PolyMatrix, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly, init_tracing},
     };
@@ -241,16 +243,77 @@ mod tests {
         let params = DCRTPolyParams::default();
         let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
 
-        /* Lookup mapping k => (x_k, y_k) */
+        /* constant Lookup mapping k => (x_k, y_k) */
+        // let mut f = HashMap::new();
+        // f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
+        // f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
+        // f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
+        // f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
+        // f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
+        // f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
+        // f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
+        // f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
+
+        /* bit repr Lookup mapping k => (x_k, y_k) */
         let mut f = HashMap::new();
-        f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
-        f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
-        f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
-        f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
-        f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
-        f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
-        f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
-        f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
+        let one = FinRingElem::one(&params.modulus());
+        let zero = FinRingElem::zero(&params.modulus());
+        f.insert(
+            0,
+            (
+                DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), zero.clone()]),
+                DCRTPoly::const_int(&params, 0),
+            ),
+        );
+        f.insert(
+            1,
+            (
+                DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), one.clone()]),
+                DCRTPoly::const_int(&params, 1),
+            ),
+        );
+        f.insert(
+            2,
+            (
+                DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), zero.clone()]),
+                DCRTPoly::const_int(&params, 2),
+            ),
+        );
+        f.insert(
+            3,
+            (
+                DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
+                DCRTPoly::const_int(&params, 3),
+            ),
+        );
+        f.insert(
+            4,
+            (
+                DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), zero.clone()]),
+                DCRTPoly::const_int(&params, 4),
+            ),
+        );
+        f.insert(
+            5,
+            (
+                DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), one.clone()]),
+                DCRTPoly::const_int(&params, 5),
+            ),
+        );
+        f.insert(
+            6,
+            (
+                DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
+                DCRTPoly::const_int(&params, 6),
+            ),
+        );
+        f.insert(
+            7,
+            (
+                DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), one.clone()]),
+                DCRTPoly::const_int(&params, 7),
+            ),
+        );
 
         // Create samplers
         let key: [u8; 32] = rand::random();
@@ -334,7 +397,7 @@ mod tests {
         // todo: not passing
         // assert_eq!(result[0].vector, expected_enc1.vector);
         assert_eq!(result[0].pubkey.matrix, a_lt.clone());
-        assert_eq!(*result[0].plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 6));
+        assert_eq!(*result[0].plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 2));
     }
 
     #[test]

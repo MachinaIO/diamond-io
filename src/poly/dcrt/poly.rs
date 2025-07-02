@@ -318,7 +318,11 @@ impl Poly for DCRTPoly {
     }
 
     fn to_const_int(&self) -> usize {
-        self.coeffs_digits()[0].try_into().unwrap()
+        let mut sum = 0;
+        for (i, c) in self.coeffs_digits().into_iter().enumerate() {
+            sum += 2_u32.pow(i as u32) * c;
+        }
+        sum as usize
     }
 }
 
