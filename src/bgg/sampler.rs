@@ -9,6 +9,7 @@ use crate::{
 };
 use rayon::prelude::*;
 use std::marker::PhantomData;
+use tracing::info;
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
@@ -118,6 +119,7 @@ where
         plaintexts: &[<S::M as PolyMatrix>::P],
     ) -> Vec<BggEncoding<S::M>> {
         let secret_vec = &self.secret_vec;
+        info!("secret_vec, row: {}, col: {}", secret_vec.row_size(), secret_vec.col_size());
         let log_base_q = params.modulus_digits();
         let packed_input_size = 1 + plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
         let plaintexts: Vec<<S::M as PolyMatrix>::P> =

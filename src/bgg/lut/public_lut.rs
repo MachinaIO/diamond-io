@@ -60,7 +60,7 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         let tag: u64 = rand::random();
         let tag_bytes = tag.to_le_bytes();
 
-        /* Sample c_z(BGG+ encoding), L_k(Preimage) */
+        /* Sample R_k, L_k(Preimage) */
         let hashmap_vec: Vec<(usize, (M, M))> = (0..t)
             .into_par_iter()
             .map(|k| {
