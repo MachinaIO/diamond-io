@@ -10,7 +10,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
 pub struct BggEncoding<M: PolyMatrix> {
@@ -186,22 +186,27 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     ) -> Self {
         let m = (plt.d + 1) * params.modulus_digits();
         let m_b = (1 + input_size) * (plt.d + 1) * (2 + params.modulus_digits());
-        let c_z = self.plaintext.expect("the BGG encoding should revealed plaintext");
+        let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
         // *note* current design have constraint on public lookup have limit of x_k have to be
         // constant polynomial
         let k = c_z.to_const_int();
         info!("k is {}", k);
-        let (r_k, _) = plt.lookup_hashmap.get(&k).expect("no value for index k");
-        let l_k = timed_read(
-            "L_k",
-            || M::read_from_files(&params, m_b, m, &dir_path, &format!("L_{}", k)),
-            &mut Duration::default(),
-        );
-        let c_lt_k = p_x_l.expect("P_{x_L} needs in BGG encoding's helper") * l_k;
-        let pubkey = self.pubkey.public_lookup(params, plt, None, input_size, dir_path);
-        let (_, y_k) = plt.f.get(&k).expect("no value for index k");
-        let vector = self.vector * &r_k.decompose() + c_lt_k;
-        Self { vector, pubkey, plaintext: Some(y_k.clone()) }
+        if let Some((r_k, _)) = plt.lookup_hashmap.get(&k) {
+            // ---- normal path (key exists) ---------------------------------
+            let l_k = timed_read(
+                "L_k",
+                || M::read_from_files(&params, m_b, m, &dir_path, &format!("L_{}", k)),
+                &mut Duration::default(),
+            );
+            let c_lt_k = p_x_l.expect("P_{x_L} needs in BGG encoding's helper") * l_k;
+            let pubkey = self.pubkey.public_lookup(params, plt, None, input_size, dir_path);
+            let (_, y_k) = plt.f.get(&k).expect("no value for index k");
+            let vector = self.vector * &r_k.decompose() + c_lt_k;
+            Self { vector, pubkey, plaintext: Some(y_k.clone()) }
+        } else {
+            warn!("Public lookup: no row for index k = {}", k);
+            self
+        }
     }
 }
 
