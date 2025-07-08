@@ -273,7 +273,7 @@ where
         &mut total_load,
     );
     // c_att := p * K_att
-    let c_att = p_cur * final_preimage_att;
+    let c_att = p_cur.clone() * final_preimage_att;
     log_mem(format!("Computed c_att ({}, {})", c_att.row_size(), c_att.col_size()));
     let pub_key_att = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
     log_mem(format!("Sampled pub_key_att {} ", pub_key_att.len()));
@@ -329,7 +329,7 @@ where
         params.as_ref(),
         &new_encodings[0],
         &new_encodings[1..],
-        None,
+        Some(p_cur),
         Some(dir_path.clone()),
     );
     log_mem("final_circuit evaluated");

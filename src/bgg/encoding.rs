@@ -185,7 +185,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         dir_path: PathBuf,
     ) -> Self {
         let m = (plt.d + 1) * params.modulus_digits();
-        let m_b = (2 + input_size) * (plt.d + 1) * (2 + params.modulus_digits());
+        let m_b = (1 + input_size) * (plt.d + 1) * (2 + params.modulus_digits());
         let c_z = self.plaintext.expect("the BGG encoding should revealed plaintext");
         // *note* current design have constraint on public lookup have limit of x_k have to be
         // constant polynomial
@@ -325,7 +325,7 @@ mod tests {
         let bgg_pubkey_sampler =
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = DCRTPolyUniformSampler::new();
-        let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (2 + input_size));
+        let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
         info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
 
         /* BGG+ encoding setup */
@@ -337,7 +337,7 @@ mod tests {
             secrets.push(minus_one_poly);
             DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
         };
-        info!("s_x_l ({},{})", s_x_l.row_size(), s_x_l.col_size());
+        info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
         let tag: u64 = rand::random();
         let tag_bytes = tag.to_le_bytes();
         let lut = PublicLut::<DCRTPolyMatrix>::new::<
@@ -347,11 +347,11 @@ mod tests {
 
         lut.preimage(
             &params,
-            b_l.clone(),
-            trapdoor_sampler,
-            b_l_trapdoor,
+            &b_l.clone(),
+            &trapdoor_sampler,
+            &b_l_trapdoor,
             input_size + 1,
-            "tests/io_plt".into(),
+            &"tests/io_plt".into(),
             &mut handles,
         );
         join_all(handles).await;
@@ -373,7 +373,6 @@ mod tests {
         assert_eq!(pubkeys.len(), 2);
 
         // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
         let plaintexts = vec![DCRTPoly::const_int(&params, 2)];
 
         // Create encoding sampler and encodings

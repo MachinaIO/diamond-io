@@ -37,6 +37,7 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         d: usize,
         f: HashMap<usize, (M::P, M::P)>,
     ) -> Self {
+        // m := (n+1)[logq]
         let m = (1 + d) * params.modulus_digits();
         let uni = SU::new();
         let hash_sampler = SH::new();
@@ -53,7 +54,7 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
 
         // new public BGG+matrix common for all rows: (n+1)xm
         let a_lt = uni.sample_uniform(params, d + 1, m, DistType::BitDist);
-        info!("a_lt ({}, {})", a_lt.row_size(), a_lt.col_size());
+        info!("A_LT ({}, {})", a_lt.row_size(), a_lt.col_size());
 
         let key: [u8; 32] = rand::random();
         let reveal_plaintexts = vec![false; 2];
@@ -91,19 +92,21 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
     pub fn preimage<ST: PolyTrapdoorSampler<M = M>>(
         &self,
         params: &<M::P as Poly>::Params,
-        b_l: M,
-        trapdoor_sampler: ST,
-        trapdoor: ST::Trapdoor,
+        b_l: &M,
+        trapdoor_sampler: &ST,
+        trapdoor: &ST::Trapdoor,
         input_size: usize,
-        dir_path: PathBuf,
+        dir_path: &PathBuf,
         handles: &mut Vec<JoinHandle<()>>,
     ) {
         for (k, (_, rhs_k)) in &self.lookup_hashmap {
             // computing target u_1_L' ⊗ rhs: (n+1)L'xm
-            let zeros = M::zero(&params, input_size * rhs_k.row_size(), rhs_k.col_size());
+            let zeros = M::zero(&params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
             let target = rhs_k.concat_rows(&[&zeros]);
+            info!("target ({}, {})", target.row_size(), target.col_size());
+            debug_assert_eq!(target.row_size(), (input_size) * rhs_k.row_size());
             let l_k = trapdoor_sampler.preimage(params, &trapdoor, &b_l, &target);
-            info!("l_k ({}, {})", l_k.row_size(), l_k.col_size());
+            info!("L_k ({}, {})", l_k.row_size(), l_k.col_size());
             handles.push(store_and_drop_matrix(l_k, &dir_path, &format!("L_{}", k)));
         }
     }

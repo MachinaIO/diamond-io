@@ -20,7 +20,7 @@ pub struct PolyCircuit<M: PolyMatrix> {
     sub_circuits: BTreeMap<usize, PolyCircuit<M>>,
     output_ids: Vec<usize>,
     num_input: usize,
-    lookups: BTreeMap<usize, PublicLut<M>>,
+    pub lookups: BTreeMap<usize, PublicLut<M>>,
 }
 
 impl<M: PolyMatrix> PolyCircuit<M> {
@@ -194,7 +194,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
 
     /// Computes a topological order (as a vector of gate IDs) for all gates that
     /// are needed to evaluate the outputs. This is done via a DFS from each output gate.
-    fn topological_order(&self) -> Vec<usize> {
+    pub fn topological_order(&self) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
         let mut stack = Vec::new();
@@ -224,7 +224,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
     /// Computes a levelized grouping of gate ids.
     /// Input wires (keys 0..=num_input) are assigned level 0.
     /// Each non‐input gate's level is defined as max(levels of its inputs) + 1.
-    fn compute_levels(&self) -> Vec<Vec<usize>> {
+    pub fn compute_levels(&self) -> Vec<Vec<usize>> {
         let mut gate_levels: HashMap<usize, usize> = HashMap::new();
         let mut levels: Vec<Vec<usize>> = vec![vec![]];
         for i in 0..=self.num_input {

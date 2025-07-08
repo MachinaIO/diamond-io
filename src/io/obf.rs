@@ -1,7 +1,7 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
+    bgg::{lut::public_lut::PublicLut, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::{
         params::ObfuscationParams,
         utils::{
@@ -28,6 +28,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     hardcoded_key: M::P,
     rng: &mut R,
     dir_path: P,
+    plt: Option<PublicLut<M>>,
 ) where
     M: PolyMatrix + 'static,
     SU: PolyUniformSampler<M = M>,
@@ -268,6 +269,22 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
         b_star_cur = b_star_level;
+    }
+
+    /*
+    if PLT exist, preimage sample
+    todo: for now only one PLT passed
+    */
+    if let Some(lut) = plt {
+        lut.preimage(
+            &params,
+            &b_star_cur,
+            &sampler_trapdoor,
+            &b_star_trapdoor_cur,
+            packed_input_size + 1,
+            &dir_path,
+            &mut handles,
+        );
     }
 
     /*

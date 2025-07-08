@@ -50,12 +50,10 @@ pub fn p_vector_for_inputs(
     s_x_l: &DCRTPolyMatrix,
 ) -> DCRTPolyMatrix {
     let uniform_sampler = DCRTPolyUniformSampler::new();
-    let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
-    let minus_t_bar = -t_bar.entry(0, 0);
+    // let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
     let one = DCRTPoly::const_one(params);
     let mut extended_plaintexts = vec![one];
     extended_plaintexts.extend(plaintexts);
-    extended_plaintexts.push(minus_t_bar);
     let p_x_l_error =
         uniform_sampler.sample_uniform(params, 1, b_l.ncol, DistType::GaussDist { sigma: p_sigma });
     let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, extended_plaintexts);

@@ -1,5 +1,5 @@
 use crate::{
-    bgg::circuit::PolyCircuit,
+    bgg::{circuit::PolyCircuit, lut::public_lut::PublicLut},
     io::{eval::evaluate, obf::obfuscate, params::ObfuscationParams},
     poly::{
         dcrt::{
@@ -15,7 +15,7 @@ use keccak_asm::Keccak256;
 use num_bigint::BigUint;
 use num_traits::Num;
 use rand::Rng;
-use std::{fs, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tracing::info;
 
 const SIGMA: f64 = 4.578;
@@ -85,7 +85,7 @@ pub async fn test_io_common(
         DCRTPolyTrapdoorSampler,
         _,
         _,
-    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
+    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path, None)
     .await;
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
@@ -109,4 +109,155 @@ pub async fn test_io_common(
     let input_poly =
         DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
     assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
+}
+
+pub async fn test_io_plt(
+    ring_dim: u32,
+    crt_depth: usize,
+    crt_bits: usize,
+    base_bits: u32,
+    switched_modulus_str: &str,
+    d: usize,
+    input_size: usize,
+    level_width: usize,
+    p_sigma: f64,
+    hardcoded_key_sigma: f64,
+    dir_path: &str,
+) {
+    init_tracing();
+    let dir = Path::new(&dir_path);
+    if !dir.exists() {
+        fs::create_dir(dir).unwrap();
+    } else {
+        // Clean it first to ensure no old files interfere
+        fs::remove_dir_all(dir).unwrap();
+        fs::create_dir(dir).unwrap();
+    }
+
+    let start_time = std::time::Instant::now();
+    let params = DCRTPolyParams::new(ring_dim, crt_depth, crt_bits, base_bits);
+    let log_base_q = params.modulus_digits();
+    let switched_modulus = Arc::new(BigUint::from_str_radix(switched_modulus_str, 10).unwrap());
+    let mut public_circuit = PolyCircuit::new();
+
+    let mut f = HashMap::new();
+    let one = FinRingElem::one(&params.modulus());
+    let zero = FinRingElem::zero(&params.modulus());
+    f.insert(
+        0,
+        (
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), zero.clone()]),
+            DCRTPoly::const_int(&params, 0),
+        ),
+    );
+    f.insert(
+        1,
+        (
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), one.clone()]),
+            DCRTPoly::const_int(&params, 1),
+        ),
+    );
+    f.insert(
+        2,
+        (
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), zero.clone()]),
+            DCRTPoly::const_int(&params, 2),
+        ),
+    );
+    f.insert(
+        3,
+        (
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
+            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
+        ),
+    );
+    f.insert(
+        4,
+        (
+            DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), zero.clone()]),
+            DCRTPoly::const_int(&params, 4),
+        ),
+    );
+    f.insert(
+        5,
+        (
+            DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), one.clone()]),
+            DCRTPoly::const_int(&params, 5),
+        ),
+    );
+    f.insert(
+        6,
+        (
+            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
+            DCRTPoly::const_int(&params, 6),
+        ),
+    );
+    f.insert(
+        7,
+        (
+            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), one.clone()]),
+            DCRTPoly::const_int(&params, 7),
+        ),
+    );
+
+    let lut = PublicLut::<DCRTPolyMatrix>::new::<
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+    >(&params, d, f);
+
+    // inputs: BaseDecompose(ct), eval_input
+    // outputs: BaseDecompose(ct) AND eval_input
+    let inputs = public_circuit.input((2 * log_base_q) + 1);
+    let eval_input = inputs[2 * log_base_q];
+    let plt_id = public_circuit.register_public_lookup(lut.clone());
+    let plt_gate = public_circuit.public_lookup_gate(eval_input, plt_id);
+    public_circuit.output(vec![plt_gate]);
+
+    info!("{:?}", public_circuit.count_gates_by_type_vec());
+    info!("{:?}", public_circuit.topological_order());
+    info!("{:?}", public_circuit.compute_levels());
+
+    let obf_params = ObfuscationParams {
+        params: params.clone(),
+        switched_modulus,
+        input_size,
+        level_width,
+        public_circuit: public_circuit.clone(),
+        d,
+        p_sigma,
+        hardcoded_key_sigma,
+        trapdoor_sigma: SIGMA,
+    };
+
+    let sampler_uniform = DCRTPolyUniformSampler::new();
+    let mut rng = rand::rng();
+    let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+
+    obfuscate::<
+        DCRTPolyMatrix,
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+        DCRTPolyTrapdoorSampler,
+        _,
+        _,
+    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path, Some(lut))
+    .await;
+    let obfuscation_time = start_time.elapsed();
+    info!("Time to obfuscate: {:?}", obfuscation_time);
+
+    let obf_size = calculate_directory_size(dir_path);
+    log_mem(format!("Obfuscation size: {obf_size} bytes"));
+
+    let input = vec![false, true, true];
+
+    let start_time = std::time::Instant::now();
+    let output =
+        evaluate::<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler, _>(
+            obf_params, &input, &dir_path,
+        );
+    let eval_time = start_time.elapsed();
+    info!("Time for evaluation: {:?}", eval_time);
+    info!("Total time: {:?}", obfuscation_time + eval_time);
+    // Public lookup for 3(0,1,1) => 6(1,1,0)
+    assert_eq!(output, vec![true, true, false]);
 }
