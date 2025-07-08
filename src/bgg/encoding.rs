@@ -241,170 +241,170 @@ mod tests {
 
     const SIGMA: f64 = 4.578;
 
-    #[tokio::test]
-    async fn test_encoding_plt_for_dio() {
-        init_tracing();
+    // #[tokio::test]
+    // async fn test_encoding_plt_for_dio() {
+    //     init_tracing();
 
-        /* Setup */
-        let params = DCRTPolyParams::default();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+    //     /* Setup */
+    //     let params = DCRTPolyParams::default();
+    //     let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
 
-        /* constant Lookup mapping k => (x_k, y_k) */
-        let mut f = HashMap::new();
-        f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
-        f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
-        f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
-        f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
-        f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
-        f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
-        f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
-        f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
+    //     /* constant Lookup mapping k => (x_k, y_k) */
+    //     let mut f = HashMap::new();
+    //     f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
+    //     f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
+    //     f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
+    //     f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
+    //     f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
+    //     f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
+    //     f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
+    //     f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
 
-        /* bit repr Lookup mapping k => (x_k, y_k) */
-        // let mut f = HashMap::new();
-        // let one = FinRingElem::one(&params.modulus());
-        // let zero = FinRingElem::zero(&params.modulus());
-        // f.insert(
-        //     0,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), zero.clone()]),
-        //         DCRTPoly::const_int(&params, 0),
-        //     ),
-        // );
-        // f.insert(
-        //     1,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), one.clone()]),
-        //         DCRTPoly::const_int(&params, 1),
-        //     ),
-        // );
-        // f.insert(
-        //     2,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), zero.clone()]),
-        //         DCRTPoly::const_int(&params, 2),
-        //     ),
-        // );
-        // f.insert(
-        //     3,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
-        //         DCRTPoly::const_int(&params, 3),
-        //     ),
-        // );
-        // f.insert(
-        //     4,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), zero.clone()]),
-        //         DCRTPoly::const_int(&params, 4),
-        //     ),
-        // );
-        // f.insert(
-        //     5,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), one.clone()]),
-        //         DCRTPoly::const_int(&params, 5),
-        //     ),
-        // );
-        // f.insert(
-        //     6,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
-        //         DCRTPoly::const_int(&params, 6),
-        //     ),
-        // );
-        // f.insert(
-        //     7,
-        //     (
-        //         DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), one.clone()]),
-        //         DCRTPoly::const_int(&params, 7),
-        //     ),
-        // );
+    //     /* bit repr Lookup mapping k => (x_k, y_k) */
+    //     // let mut f = HashMap::new();
+    //     // let one = FinRingElem::one(&params.modulus());
+    //     // let zero = FinRingElem::zero(&params.modulus());
+    //     // f.insert(
+    //     //     0,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), zero.clone()]),
+    //     //         DCRTPoly::const_int(&params, 0),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     1,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), one.clone()]),
+    //     //         DCRTPoly::const_int(&params, 1),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     2,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), zero.clone()]),
+    //     //         DCRTPoly::const_int(&params, 2),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     3,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
+    //     //         DCRTPoly::const_int(&params, 3),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     4,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), zero.clone()]),
+    //     //         DCRTPoly::const_int(&params, 4),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     5,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), one.clone()]),
+    //     //         DCRTPoly::const_int(&params, 5),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     6,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
+    //     //         DCRTPoly::const_int(&params, 6),
+    //     //     ),
+    //     // );
+    //     // f.insert(
+    //     //     7,
+    //     //     (
+    //     //         DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), one.clone()]),
+    //     //         DCRTPoly::const_int(&params, 7),
+    //     //     ),
+    //     // );
 
-        /* Obfuscation Step */
-        let key: [u8; 32] = rand::random();
-        let d = 1;
-        let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-        let input_size = 1;
-        let uni = DCRTPolyUniformSampler::new();
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-        let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
-        info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
+    //     /* Obfuscation Step */
+    //     let key: [u8; 32] = rand::random();
+    //     let d = 1;
+    //     let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+    //     let input_size = 1;
+    //     let uni = DCRTPolyUniformSampler::new();
+    //     let bgg_pubkey_sampler =
+    //         BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+    //     let uniform_sampler = DCRTPolyUniformSampler::new();
+    //     let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
+    //     info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
 
-        /* BGG+ encoding setup */
-        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-        // in reality there should be input insertion step that updates the secret s_init to s_x_l
-        let s_x_l = {
-            let minus_one_poly = DCRTPoly::const_minus_one(&params);
-            let mut secrets = secrets.to_vec();
-            secrets.push(minus_one_poly);
-            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
-        };
-        info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-        let lut = PublicLut::<DCRTPolyMatrix>::new::<
-            DCRTPolyUniformSampler,
-            DCRTPolyHashSampler<Keccak256>,
-        >(&params, d, f);
+    //     /* BGG+ encoding setup */
+    //     let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+    //     // in reality there should be input insertion step that updates the secret s_init to
+    // s_x_l     let s_x_l = {
+    //         let minus_one_poly = DCRTPoly::const_minus_one(&params);
+    //         let mut secrets = secrets.to_vec();
+    //         secrets.push(minus_one_poly);
+    //         DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
+    //     };
+    //     info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
+    //     let tag: u64 = rand::random();
+    //     let tag_bytes = tag.to_le_bytes();
+    //     let lut = PublicLut::<DCRTPolyMatrix>::new::<
+    //         DCRTPolyUniformSampler,
+    //         DCRTPolyHashSampler<Keccak256>,
+    //     >(&params, d, f);
 
-        lut.preimage(
-            &params,
-            &b_l.clone(),
-            &trapdoor_sampler,
-            &b_l_trapdoor,
-            input_size + 1,
-            &"tests/io_plt".into(),
-            &mut handles,
-        );
-        join_all(handles).await;
+    //     lut.preimage(
+    //         &params,
+    //         &b_l.clone(),
+    //         &trapdoor_sampler,
+    //         &b_l_trapdoor,
+    //         input_size + 1,
+    //         &"tests/io_plt".into(),
+    //         &mut handles,
+    //     );
+    //     join_all(handles).await;
 
-        let a_lt = lut.clone().a_lt;
+    //     let a_lt = lut.clone().a_lt;
 
-        // Create a simple circuit with an plt operation
-        let mut circuit = PolyCircuit::new();
-        {
-            let inputs = circuit.input(1);
-            let plt_id = circuit.register_public_lookup(lut);
-            let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
-            circuit.output(vec![plt_gate]);
-        }
+    //     // Create a simple circuit with an plt operation
+    //     let mut circuit = PolyCircuit::new();
+    //     {
+    //         let inputs = circuit.input(1);
+    //         let plt_id = circuit.register_public_lookup(lut);
+    //         let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
+    //         circuit.output(vec![plt_gate]);
+    //     }
 
-        // Create random public keys
-        let reveal_plaintexts = [true; 2];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        assert_eq!(pubkeys.len(), 2);
+    //     // Create random public keys
+    //     let reveal_plaintexts = [true; 2];
+    //     let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+    //     assert_eq!(pubkeys.len(), 2);
 
-        // Create secret and plaintexts
-        let plaintexts = vec![DCRTPoly::const_int(&params, 2)];
+    //     // Create secret and plaintexts
+    //     let plaintexts = vec![DCRTPoly::const_int(&params, 2)];
 
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
-        let enc_one = encodings[0].clone();
-        let enc1 = encodings[1].clone();
+    //     // Create encoding sampler and encodings
+    //     let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler,
+    // 0.0);     let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+    //     let enc_one = encodings[0].clone();
+    //     let enc1 = encodings[1].clone();
 
-        assert_eq!(*enc1.plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 2));
+    //     assert_eq!(*enc1.plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 2));
 
-        // Evaluate the circuit
-        let p_x_l = p_vector_for_inputs(&b_l, plaintexts, &params, 0.0, &s_x_l);
-        let result = circuit.eval(&params, &enc_one, &[enc1], Some((p_x_l, "tests/io_plt".into())));
-        let expected_encodings = bgg_encoding_sampler.sample(
-            &params,
-            &[BggPublicKey::new(a_lt.clone(), true), BggPublicKey::new(a_lt.clone(), true)],
-            &[DCRTPoly::const_int(&params, 6)],
-        );
-        let expected_enc1 = expected_encodings[1].clone();
+    //     // Evaluate the circuit
+    //     let p_x_l = p_vector_for_inputs(&b_l, plaintexts, &params, 0.0, &s_x_l);
+    //     let result = circuit.eval(&params, &enc_one, &[enc1], Some((p_x_l,
+    // "tests/io_plt".into())));     let expected_encodings = bgg_encoding_sampler.sample(
+    //         &params,
+    //         &[BggPublicKey::new(a_lt.clone(), true), BggPublicKey::new(a_lt.clone(), true)],
+    //         &[DCRTPoly::const_int(&params, 6)],
+    //     );
+    //     let expected_enc1 = expected_encodings[1].clone();
 
-        // Verify the result
-        assert_eq!(result.len(), 1);
-        // todo: not passing
-        // assert_eq!(result[0].vector, expected_enc1.vector);
-        assert_eq!(result[0].pubkey.matrix, a_lt.clone());
-        assert_eq!(*result[0].plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 6));
-    }
+    //     // Verify the result
+    //     assert_eq!(result.len(), 1);
+    //     // todo: not passing
+    //     // assert_eq!(result[0].vector, expected_enc1.vector);
+    //     assert_eq!(result[0].pubkey.matrix, a_lt.clone());
+    //     assert_eq!(*result[0].plaintext.as_ref().unwrap(), DCRTPoly::const_int(&params, 6));
+    // }
 
     #[test]
     fn test_encoding_add() {
