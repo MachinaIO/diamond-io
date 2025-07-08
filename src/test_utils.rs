@@ -206,20 +206,14 @@ pub async fn test_io_plt(
     >(&params, d, f);
 
     // inputs: BaseDecompose(ct), eval_input
-    // outputs: BaseDecompose(ct) AND eval_input
+    // outputs: eval_input PLT
     let inputs = public_circuit.input((2 * log_base_q) + 1);
     let mut outputs = vec![];
     let eval_input = inputs[2 * log_base_q];
     let plt_id = public_circuit.register_public_lookup(lut.clone());
     let plt_gate = public_circuit.public_lookup_gate(eval_input, plt_id);
-    for ct_input in inputs[0..2 * log_base_q].iter() {
-        let muled = public_circuit.public_lookup_gate(*ct_input, plt_id);
-        outputs.push(muled);
-    }
     outputs.push(plt_gate);
     public_circuit.output(outputs);
-
-    info!("{:?}", public_circuit.count_gates_by_type_vec());
 
     let obf_params = ObfuscationParams {
         params: params.clone(),
