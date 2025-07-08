@@ -126,9 +126,8 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         self,
         _: &Self::Params,
         plt: &PublicLut<Self::Matrix>,
-        _: Option<Self::Matrix>,
+        _: Option<(Self::Matrix, PathBuf)>,
         _: usize,
-        _: PathBuf,
     ) -> Self {
         Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
     }
@@ -196,7 +195,7 @@ mod tests {
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1], None, Some("io_plt".into()));
+        let result = circuit.eval(&params, &pk_one, &[pk1], None);
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -231,7 +230,7 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None, None);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result
         let expected = pk1.clone() + pk2.clone();
@@ -270,7 +269,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None, None);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result
         let expected = pk1.clone() - pk2.clone();
@@ -309,7 +308,7 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None, None);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result
         let expected = pk1.clone() * pk2.clone();
@@ -358,8 +357,7 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()], None, None);
+        let result = circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()], None);
 
         // Expected result: ((pk1 + pk2)-2) - pk3
         let expected = ((pk1.clone() + pk2.clone()) * (pk1.clone() + pk2.clone())) - pk3.clone();
@@ -424,7 +422,6 @@ mod tests {
             &params,
             &pk_one,
             &[pk1.clone(), pk2.clone(), pk3.clone(), pk4.clone()],
-            None,
             None,
         );
 
@@ -498,7 +495,7 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None, None);
+        let result = main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone()], None);
 
         // Expected result: (pk1 + pk2) - (pk1 * pk2)
         let expected = (pk1.clone() + pk2.clone()) - (pk1.clone() * pk2.clone());
@@ -570,13 +567,8 @@ mod tests {
         main_circuit.output(vec![square_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(
-            &params,
-            &pk_one,
-            &[pk1.clone(), pk2.clone(), pk3.clone()],
-            None,
-            None,
-        );
+        let result =
+            main_circuit.eval(&params, &pk_one, &[pk1.clone(), pk2.clone(), pk3.clone()], None);
 
         // Expected result: ((pk1 * pk2) + pk3)^2
         let expected = ((pk1.clone() * pk2.clone()) + pk3.clone()) *

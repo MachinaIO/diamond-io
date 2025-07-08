@@ -91,7 +91,7 @@ fn test_build_final_step_circuit() {
     let pubkeys = bgg_pubkey_sampler.sample(&params, b"BGG_PUBKEY_INPUT:", &reveal_plaintexts);
     log_mem("Sampled pubkeys");
 
-    let eval_outputs = final_circuit.eval(&params, &pubkeys[0], &pubkeys[1..], None, None);
+    let eval_outputs = final_circuit.eval(&params, &pubkeys[0], &pubkeys[1..], None);
     log_mem("Evaluated outputs");
 
     let output_ints = eval_outputs
@@ -240,8 +240,7 @@ fn test_plt_build_final_step_circuit() {
     let pubkeys = bgg_pubkey_sampler.sample(&params, b"BGG_PUBKEY_INPUT:", &reveal_plaintexts);
     log_mem("Sampled pubkeys");
 
-    let eval_outputs =
-        final_circuit.eval(&params, &pubkeys[0], &pubkeys[1..], None, Some("io_test".into()));
+    let eval_outputs = final_circuit.eval(&params, &pubkeys[0], &pubkeys[1..], None);
     log_mem("Evaluated outputs");
 
     let output_ints = eval_outputs
