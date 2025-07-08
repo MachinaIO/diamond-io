@@ -254,7 +254,7 @@ pub async fn test_io_plt(
     let obf_size = calculate_directory_size(dir_path);
     log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
-    let input = vec![false, true, true];
+    let input = vec![false, false, true, true];
 
     let start_time = std::time::Instant::now();
     let output =
@@ -265,5 +265,5 @@ pub async fn test_io_plt(
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
     // Public lookup for 3(0,1,1) => 6(1,1,0)
-    assert_eq!(output, vec![true, true, false]);
+    assert_eq!(output, vec![false, true, true, false]);
 }

@@ -236,7 +236,7 @@ fn test_plt_build_final_step_circuit() {
 
     let bgg_pubkey_sampler =
         BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(hash_key, d);
-    let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
+    let reveal_plaintexts = vec![true; packed_input_size + 1];
     let pubkeys = bgg_pubkey_sampler.sample(&params, b"BGG_PUBKEY_INPUT:", &reveal_plaintexts);
     log_mem("Sampled pubkeys");
 

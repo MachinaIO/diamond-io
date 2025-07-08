@@ -4,6 +4,6 @@ mod test {
 
     #[tokio::test]
     async fn test_io_plt_dummy() {
-        test_io_plt(4, 2, 17, 10, "1", 3, 3, 1, 0.0, 0.0, "tests/io_plt").await;
+        test_io_plt(4, 2, 17, 10, "1", 3, 4, 1, 0.0, 0.0, "tests/io_plt").await;
     }
 }
