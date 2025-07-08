@@ -196,7 +196,7 @@ mod tests {
         let pk_one = pubkeys[0].clone();
         let pk1 = pubkeys[1].clone();
         // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1], None, None);
+        let result = circuit.eval(&params, &pk_one, &[pk1], None, Some("io_plt".into()));
 
         // Verify the result
         assert_eq!(result.len(), 1);
