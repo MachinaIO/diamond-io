@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 const TAG_R_K: &[u8] = b"TAG_R_K";
+const TAG_A_Z: &[u8] = b"A_Z:";
 
 /// Public Lookup Table
 /// Considering adjusting on diamond-io case.
@@ -58,8 +59,6 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
 
         let key: [u8; 32] = rand::random();
         let reveal_plaintexts = vec![false; 2];
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
 
         /* Sample R_k, L_k(Preimage) */
         let hashmap_vec: Vec<(usize, (M, M))> = (0..t)
@@ -67,7 +66,7 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
             .map(|k| {
                 let (x_k, y_k) = f.get(&k).expect("missing f(k)");
                 let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(key, d);
-                let mut pubkeys = bgg_pubkey_sampler.sample(params, &tag_bytes, &reveal_plaintexts);
+                let mut pubkeys = bgg_pubkey_sampler.sample(params, TAG_A_Z, &reveal_plaintexts);
                 assert_eq!(pubkeys.len(), 2);
                 let a_z = pubkeys.swap_remove(1).matrix;
 

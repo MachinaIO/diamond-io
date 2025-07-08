@@ -194,7 +194,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
 
     /// Computes a topological order (as a vector of gate IDs) for all gates that
     /// are needed to evaluate the outputs. This is done via a DFS from each output gate.
-    pub fn topological_order(&self) -> Vec<usize> {
+    fn topological_order(&self) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
         let mut stack = Vec::new();
@@ -224,7 +224,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
     /// Computes a levelized grouping of gate ids.
     /// Input wires (keys 0..=num_input) are assigned level 0.
     /// Each non‐input gate's level is defined as max(levels of its inputs) + 1.
-    pub fn compute_levels(&self) -> Vec<Vec<usize>> {
+    fn compute_levels(&self) -> Vec<Vec<usize>> {
         let mut gate_levels: HashMap<usize, usize> = HashMap::new();
         let mut levels: Vec<Vec<usize>> = vec![vec![]];
         for i in 0..=self.num_input {

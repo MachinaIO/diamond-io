@@ -220,8 +220,6 @@ pub async fn test_io_plt(
     public_circuit.output(outputs);
 
     info!("{:?}", public_circuit.count_gates_by_type_vec());
-    info!("{:?}", public_circuit.topological_order());
-    info!("{:?}", public_circuit.compute_levels());
 
     let obf_params = ObfuscationParams {
         params: params.clone(),
