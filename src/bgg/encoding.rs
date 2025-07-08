@@ -188,6 +188,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
         // *note* current design have constraint on public lookup have limit of x_k have to be
         // constant polynomial
+        info!("c_z {:?}", c_z.coeffs());
         let k = c_z.to_const_int();
         info!("k is {}", k);
         if let Some((r_k, _)) = plt.lookup_hashmap.get(&k) {
@@ -200,7 +201,8 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
             );
             let c_lt_k = p_x_l * l_k;
             let pubkey = self.pubkey.public_lookup(params, plt, None, input_size);
-            let (_, y_k) = plt.f.get(&k).expect("no value for index k");
+            let (x_k, y_k) = plt.f.get(&k).expect("no value for index k");
+            info!("x_k {:?}", x_k.coeffs());
             let vector = self.vector * &r_k.decompose() + c_lt_k;
             Self { vector, pubkey, plaintext: Some(y_k.clone()) }
         } else {

@@ -7,10 +7,11 @@ use crate::{
             DCRTPolyUniformSampler, FinRingElem,
         },
         sampler::{DistType, PolyUniformSampler},
-        Poly, PolyElem, PolyParams,
+        MatrixElem, Poly, PolyElem, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing, log_mem},
 };
+use itertools::Itertools;
 use keccak_asm::Keccak256;
 use num_bigint::BigUint;
 use num_traits::Num;
@@ -167,14 +168,14 @@ pub async fn test_io_plt(
     f.insert(
         3,
         (
-            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
             DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
         ),
     );
     f.insert(
         4,
         (
-            DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), zero.clone()]),
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), one.clone()]),
             DCRTPoly::const_int(&params, 4),
         ),
     );
@@ -188,7 +189,7 @@ pub async fn test_io_plt(
     f.insert(
         6,
         (
-            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
+            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone(), zero.clone()]),
             DCRTPoly::const_int(&params, 6),
         ),
     );
@@ -211,8 +212,11 @@ pub async fn test_io_plt(
     let mut outputs = vec![];
     let eval_input = inputs[2 * log_base_q];
     let plt_id = public_circuit.register_public_lookup(lut.clone());
-    let plt_gate = public_circuit.public_lookup_gate(eval_input, plt_id);
-    outputs.push(plt_gate);
+    let plt_out = public_circuit.public_lookup_gate(eval_input, plt_id);
+    for ct_input in inputs[0..2 * log_base_q].iter() {
+        let muled = public_circuit.mul_gate(*ct_input, plt_out);
+        outputs.push(muled);
+    }
     public_circuit.output(outputs);
 
     let obf_params = ObfuscationParams {
@@ -246,7 +250,7 @@ pub async fn test_io_plt(
     let obf_size = calculate_directory_size(dir_path);
     log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
-    let input = vec![false, false, true, true];
+    let input = vec![false, true, true];
 
     let start_time = std::time::Instant::now();
     let output =
@@ -256,6 +260,14 @@ pub async fn test_io_plt(
     let eval_time = start_time.elapsed();
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
+    let output_poly = DCRTPoly::from_coeffs(
+        &params,
+        &output
+            .iter()
+            .map(|b| FinRingElem::from_bytes(&params.modulus(), &[*b as u8]))
+            .collect_vec(),
+    );
+    let scale = DCRTPoly::const_int(&params, 6);
     // Public lookup for 3(0,1,1) => 6(1,1,0)
-    assert_eq!(output, vec![false, true, true, false]);
+    assert_eq!(output_poly, (hardcoded_key * scale));
 }
