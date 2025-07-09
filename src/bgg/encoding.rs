@@ -220,10 +220,10 @@ mod tests {
                 matrix::base::BaseMatrix,
                 params::DCRTPolyParams,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
-                DCRTPoly, DCRTPolyMatrix, DCRTPolyTrapdoorSampler, FinRingElem,
+                DCRTPoly, DCRTPolyMatrix, DCRTPolyTrapdoorSampler,
             },
             sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
-            Poly, PolyElem, PolyMatrix, PolyParams,
+            Poly, PolyMatrix, PolyParams,
         },
         utils::{create_bit_random_poly, create_random_poly, init_tracing},
     };
@@ -318,7 +318,6 @@ mod tests {
             &mut handles,
         );
         join_all(handles).await;
-        info!("pubkey eval");
 
         // Create secret and plaintexts
         let plaintexts = vec![DCRTPoly::const_int(&params, 2)];
