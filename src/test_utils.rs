@@ -86,7 +86,7 @@ pub async fn test_io_common(
         DCRTPolyTrapdoorSampler,
         _,
         _,
-    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path, None)
+    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
     .await;
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
@@ -193,7 +193,7 @@ pub async fn test_io_plt(
         DCRTPolyTrapdoorSampler,
         _,
         _,
-    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path, Some(lut))
+    >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
     .await;
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);

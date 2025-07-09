@@ -139,7 +139,7 @@ async fn main() {
                 DCRTPolyTrapdoorSampler,
                 _,
                 _,
-            >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &obf_dir, None)
+            >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &obf_dir)
             .await;
             let obfuscation_time = start_time.elapsed();
             info!("Time to obfuscate: {:?}", obfuscation_time);

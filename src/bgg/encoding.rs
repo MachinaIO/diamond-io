@@ -179,17 +179,16 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     fn public_lookup(
         self,
         params: &Self::Params,
-        plt: &PublicLut<M>,
+        plt: &mut PublicLut<M>,
         helper_lookup: Option<(M, PathBuf, usize, usize)>,
     ) -> Self {
         let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
-        // *note* current design have constraint on public lookup have limit of x_k have to be
-        // constant polynomial
         info!("c_z {:?}", c_z.coeffs());
         let k = c_z.to_const_int();
         info!("k is {}", k);
-        if let Some((r_k, _)) = plt.lookup_hashmap.get(&k) {
-            let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
+        let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
+        if plt.r_k_s.col_size() <= (k * m) {
+            let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
             let l_k = timed_read(
                 "L_k",
                 || M::read_from_files(params, m_b, m, &dir_path, &format!("L_{}", k)),

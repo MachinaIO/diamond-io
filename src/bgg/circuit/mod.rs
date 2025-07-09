@@ -9,18 +9,44 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
+use tokio::task::JoinHandle;
 pub use utils::*;
 
-use crate::{bgg::lut::public_lut::PublicLut, poly::PolyMatrix, utils::debug_mem};
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+use crate::{
+    bgg::lut::public_lut::PublicLut,
+    poly::{sampler::PolyTrapdoorSampler, Poly, PolyMatrix},
+    utils::debug_mem,
+};
+#[derive(Debug, Clone, Default)]
 pub struct PolyCircuit<M: PolyMatrix> {
     gates: BTreeMap<usize, PolyGate>,
     sub_circuits: BTreeMap<usize, PolyCircuit<M>>,
     output_ids: Vec<usize>,
     num_input: usize,
-    pub lookups: BTreeMap<usize, PublicLut<M>>,
+    pub lookups: HashMap<usize, Arc<Mutex<PublicLut<M>>>>,
+}
+
+impl<M> PartialEq for PolyCircuit<M>
+where
+    M: PolyMatrix,
+    PolyGate: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.gates == other.gates &&
+            self.sub_circuits == other.sub_circuits &&
+            self.output_ids == other.output_ids &&
+            self.num_input == other.num_input
+    }
+}
+
+impl<M> Eq for PolyCircuit<M>
+where
+    M: PolyMatrix,
+    PolyGate: Eq,
+{
 }
 
 impl<M: PolyMatrix> PolyCircuit<M> {
@@ -30,7 +56,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
             sub_circuits: BTreeMap::new(),
             output_ids: vec![],
             num_input: 0,
-            lookups: BTreeMap::new(),
+            lookups: HashMap::new(),
         }
     }
 
@@ -349,9 +375,11 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                             .get(&gate.input_gates[0])
                             .expect("wire missing for Public Lookup")
                             .clone();
-                        let lookup =
-                            self.lookups.get(lookup_id).expect("lookup table missing for id");
-                        let result = input.public_lookup(params, lookup, helper_lookup.clone());
+                        let lookup_arc =
+                            self.lookups.get(lookup_id).expect("lookup table missing").clone();
+                        let mut lookup = lookup_arc.lock().expect("mutex poisoned");
+                        let result =
+                            input.public_lookup(params, &mut *lookup, helper_lookup.clone());
                         debug_mem("Public Lookup gate end");
                         result
                     }
@@ -371,9 +399,34 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         outputs
     }
 
+    pub fn preimage_sample_all_lookups<ST>(
+        &self,
+        params: &<M::P as Poly>::Params,
+        b_l: &M,
+        trap_sampler: &ST,
+        trapdoor: &ST::Trapdoor,
+        input_size: usize,
+        dir_path: &Path,
+        handles_out: &mut Vec<JoinHandle<()>>,
+    ) where
+        ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+        M: PolyMatrix + Send + 'static,
+    {
+        let mut all_handles: Vec<JoinHandle<()>> = self
+            .lookups
+            .par_iter()
+            .flat_map(|(_id, lut_arc)| {
+                let lut = lut_arc.lock().expect("mutex poisoned");
+                lut.preimage(params, b_l, trap_sampler, trapdoor, input_size, dir_path)
+            })
+            .collect();
+
+        handles_out.append(&mut all_handles);
+    }
+
     pub fn register_public_lookup(&mut self, public_lookup: PublicLut<M>) -> usize {
         let plt_id = self.lookups.len();
-        self.lookups.insert(plt_id, public_lookup);
+        self.lookups.insert(plt_id, Arc::new(Mutex::new(public_lookup)));
         plt_id
     }
 

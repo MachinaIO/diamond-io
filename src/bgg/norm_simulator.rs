@@ -129,7 +129,7 @@ impl Evaluable for NormSimulator {
     fn public_lookup(
         self,
         _: &Self::Params,
-        _plt: &PublicLut<Self::Matrix>,
+        _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
         todo!()
