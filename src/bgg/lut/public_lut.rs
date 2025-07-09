@@ -1,7 +1,6 @@
 //! Public Lookup
 
 use crate::{
-    bgg::sampler::BGGPublicKeySampler,
     io::obf::store_and_drop_matrix,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
@@ -14,7 +13,6 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 const TAG_R_K: &[u8] = b"TAG_R_K";
-const TAG_A_Z: &[u8] = b"A_Z:";
 const TAG_A_PLT: &[u8] = b"A_PLT:";
 
 /// Public Lookup Table
@@ -22,15 +20,17 @@ const TAG_A_PLT: &[u8] = b"A_PLT:";
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PublicLut<M: PolyMatrix> {
     // public matrix different for all k: (n+1)xm
-    // k => (R_k, L_k's target)
-    pub lookup_hashmap: HashMap<usize, (M, M)>,
+    pub r_k_s: M,
+    pub target_hashmap: HashMap<usize, M>,
+    d: usize,
+    m: usize,
     // todo: yes i know potentially we should sample r_k via hash sampler and slice thru k but for
     // k => (x_k, y_k)
     pub f: HashMap<usize, (M::P, M::P)>,
     pub a_lt: M,
 }
 
-impl<M: PolyMatrix + 'static> PublicLut<M> {
+impl<M: PolyMatrix> PublicLut<M> {
     pub fn new<SU: PolyUniformSampler<M = M>, SH: PolyHashSampler<[u8; 32], M = M>>(
         params: &<M::P as Poly>::Params,
         d: usize,
@@ -60,58 +60,52 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
             DistType::FinRingDist,
         );
         info!("A_LT ({}, {})", a_lt.row_size(), a_lt.col_size());
+        Self { r_k_s, target_hashmap: Default::default(), f, d, m, a_lt }
+    }
 
-        let key: [u8; 32] = rand::random();
-        let reveal_plaintexts = vec![false; 2];
+    /// interface will be called in eval for compute rhs
+    pub fn compute_target(&mut self, params: &<M::P as Poly>::Params, a_z: &M) {
+        let t = self.f.len();
 
-        /* Sample R_k, L_k(Preimage) */
-        let hashmap_vec: Vec<(usize, (M, M))> = (0..t)
+        let target_tuple: Vec<(usize, M)> = (0..t)
             .into_par_iter()
             .map(|k| {
-                let (x_k, y_k) = f.get(&k).expect("missing f(k)");
-                let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(key, d);
-                let mut pubkeys = bgg_pubkey_sampler.sample(params, TAG_A_Z, &reveal_plaintexts);
-                assert_eq!(pubkeys.len(), 2);
-                let a_z = pubkeys.swap_remove(1).matrix;
-
-                // public matrix different for all k: (n+1)xm
-                let r_k = r_k_s.slice_columns(k * m, (k + 1) * m);
-                info!("R_k ({}, {})", r_k.row_size(), r_k.col_size());
-                info!("A_z ({}, {})", a_z.row_size(), a_z.col_size());
-
-                // computing rhs = A_{LT} - A_{z}G^{-1}(R_k) + x_{k}R_{k} - y_{k}G : (n+1)xm
-                let rhs = a_lt.clone() + (r_k.clone() * x_k) -
-                    &(M::gadget_matrix(params, d + 1) * y_k) -
-                    a_z * r_k.decompose();
-                info!("rhs_k ({}, {})", rhs.row_size(), rhs.col_size());
-
-                (k, (r_k, rhs))
+                let (x_k, y_k) = self.f.get(&k).expect("missing f(k)");
+                let r_k = self.r_k_s.slice_columns(k * self.m, (k + 1) * self.m);
+                // rhs  = A_LT - A_z·G⁻¹(R_k) + x_k·R_k - y_k·G
+                let rhs = self.a_lt.clone() + (r_k.clone() * x_k) -
+                    &(M::gadget_matrix(params, self.d + 1) * y_k) -
+                    a_z.clone() * r_k.decompose();
+                (k, rhs)
             })
             .collect();
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, a_lt }
+        self.target_hashmap = target_tuple.into_iter().collect();
     }
 
     /// interface will be called in diamond io for storing preimage
-    pub fn preimage<ST: PolyTrapdoorSampler<M = M>>(
+    pub fn preimage<ST>(
         &self,
         params: &<M::P as Poly>::Params,
         b_l: &M,
-        trapdoor_sampler: &ST,
+        trap_sampler: &ST,
         trapdoor: &ST::Trapdoor,
         input_size: usize,
         dir_path: &Path,
-        handles: &mut Vec<JoinHandle<()>>,
-    ) {
-        for (k, (_, rhs_k)) in &self.lookup_hashmap {
-            // computing target u_1_L' ⊗ rhs: (n+1)L'xm
+    ) -> Vec<JoinHandle<()>>
+    where
+        ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+        M: PolyMatrix + Send + 'static,
+    {
+        assert_eq!(self.f.len(), self.target_hashmap.len());
+
+        let mut handles = Vec::new();
+        for (k, rhs_k) in &self.target_hashmap {
             let zeros = M::zero(params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
             let target = rhs_k.concat_rows(&[&zeros]);
-            info!("target ({}, {})", target.row_size(), target.col_size());
-            debug_assert_eq!(target.row_size(), (input_size) * rhs_k.row_size());
-            let l_k = trapdoor_sampler.preimage(params, trapdoor, b_l, &target);
-            info!("L_k ({}, {})", l_k.row_size(), l_k.col_size());
-            handles.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{}", k)));
+            let l_k = trap_sampler.preimage(params, trapdoor, b_l, &target);
+            handles.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{k}")));
         }
+        handles
     }
 }
 

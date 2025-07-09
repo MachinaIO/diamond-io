@@ -1,7 +1,7 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 use crate::{
-    bgg::{lut::public_lut::PublicLut, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
+    bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::{
         params::ObfuscationParams,
         utils::{
@@ -28,12 +28,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     hardcoded_key: M::P,
     rng: &mut R,
     dir_path: P,
-    plt: Option<PublicLut<M>>,
 ) where
     M: PolyMatrix + 'static,
     SU: PolyUniformSampler<M = M>,
     SH: PolyHashSampler<[u8; 32], M = M>,
-    ST: PolyTrapdoorSampler<M = M>,
+    ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     R: RngCore,
     P: AsRef<Path>,
 {
@@ -272,22 +271,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     }
 
     /*
-    if PLT exist, preimage sample
-    todo: for now only one PLT passed
-    */
-    if let Some(lut) = plt {
-        lut.preimage(
-            &params,
-            &b_star_cur,
-            &sampler_trapdoor,
-            &b_star_trapdoor_cur,
-            packed_input_size + 1,
-            &dir_path,
-            &mut handles,
-        );
-    }
-
-    /*
     =============================================================================
      Preimage‐generation for final BGG+ encoding evaluation step (after all bit insertion)
 
@@ -374,6 +357,18 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..], None);
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
+
+        // after update the target matrix above while evaluation, now can sample preimage L_k
+        final_circuit.preimage_sample_all_lookups(
+            params,
+            &b_star_cur,
+            &sampler_trapdoor,
+            &b_star_trapdoor_cur,
+            packed_input_size + 1,
+            &dir_path,
+            &mut handles,
+        );
+
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
             .map(|digits| BggPublicKey::digits_to_int(digits, params))

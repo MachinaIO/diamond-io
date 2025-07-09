@@ -29,7 +29,7 @@ pub trait Evaluable:
     fn public_lookup(
         self,
         params: &Self::Params,
-        plt: &PublicLut<Self::Matrix>,
+        plt: &mut PublicLut<Self::Matrix>,
         helper: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self;
 }
@@ -55,7 +55,7 @@ impl<P: Poly> Evaluable for P {
     fn public_lookup(
         self,
         _: &Self::Params,
-        _: &PublicLut<Self::Matrix>,
+        _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
         self

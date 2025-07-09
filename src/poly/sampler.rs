@@ -59,7 +59,7 @@ pub trait PolyUniformSampler {
 
 pub trait PolyTrapdoorSampler {
     type M: PolyMatrix;
-    type Trapdoor;
+    type Trapdoor: Send + Sync;
 
     fn new(params: &<<Self::M as PolyMatrix>::P as Poly>::Params, sigma: f64) -> Self;
 
