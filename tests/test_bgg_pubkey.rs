@@ -172,7 +172,7 @@ fn test_plt_build_final_step_circuit() {
     let lut = PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
-    >(&params, d, f);
+    >(&params, d, f, rand::random());
 
     // inputs: BaseDecompose(ct), eval_input
     // outputs: BaseDecompose(ct) AND eval_input

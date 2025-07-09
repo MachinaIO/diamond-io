@@ -204,7 +204,7 @@ pub async fn test_io_plt(
     let lut = PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
-    >(&params, d, f);
+    >(&params, d, f, rand::random());
 
     // inputs: BaseDecompose(ct), eval_input
     // outputs: eval_input PLT

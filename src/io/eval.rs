@@ -329,7 +329,7 @@ where
         params.as_ref(),
         &new_encodings[0],
         &new_encodings[1..],
-        Some((p_cur, dir_path.clone())),
+        Some((p_cur, dir_path.clone(), m, m_b)),
     );
     log_mem("final_circuit evaluated");
     let output_encoding_ints = output_encodings

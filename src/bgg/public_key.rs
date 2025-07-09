@@ -126,8 +126,7 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         self,
         _: &Self::Params,
         plt: &PublicLut<Self::Matrix>,
-        _: Option<(Self::Matrix, PathBuf)>,
-        _: usize,
+        _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
         Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
     }
@@ -183,7 +182,7 @@ mod tests {
         let lut = PublicLut::<DCRTPolyMatrix>::new::<
             DCRTPolyUniformSampler,
             DCRTPolyHashSampler<Keccak256>,
-        >(&params, d, f);
+        >(&params, d, f, key);
         let a_lt = lut.a_lt.clone();
         let plt_id = circuit.register_public_lookup(lut);
         let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);

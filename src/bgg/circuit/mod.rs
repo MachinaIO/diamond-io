@@ -262,7 +262,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         params: &E::Params,
         one: &E,
         inputs: &[E],
-        helper_lookup: Option<(E::Matrix, PathBuf)>,
+        helper_lookup: Option<(E::Matrix, PathBuf, usize, usize)>,
     ) -> Vec<E>
     where
         E: Evaluable<Matrix = M>,
@@ -351,12 +351,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                             .clone();
                         let lookup =
                             self.lookups.get(lookup_id).expect("lookup table missing for id");
-                        let result = input.public_lookup(
-                            params,
-                            lookup,
-                            helper_lookup.clone(),
-                            self.num_input(),
-                        );
+                        let result = input.public_lookup(params, lookup, helper_lookup.clone());
                         debug_mem("Public Lookup gate end");
                         result
                     }

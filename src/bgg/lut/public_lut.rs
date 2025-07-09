@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::Path};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -25,9 +25,6 @@ pub struct PublicLut<M: PolyMatrix> {
     // k => (R_k, L_k's target)
     pub lookup_hashmap: HashMap<usize, (M, M)>,
     // todo: yes i know potentially we should sample r_k via hash sampler and slice thru k but for
-    // now due to conflicting types of generic not sure how to bypass
-    r_k_hashkey: [u8; 32],
-    pub d: usize,
     // k => (x_k, y_k)
     pub f: HashMap<usize, (M::P, M::P)>,
     pub a_lt: M,
@@ -38,12 +35,12 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         params: &<M::P as Poly>::Params,
         d: usize,
         f: HashMap<usize, (M::P, M::P)>,
+        r_k_hashkey: [u8; 32],
     ) -> Self {
         // m := (n+1)[logq]
         let m = (1 + d) * params.modulus_digits();
         let uni = SU::new();
         let hash_sampler = SH::new();
-        let r_k_hashkey: [u8; 32] = rand::random();
         let t = f.len();
         let r_k_s = hash_sampler.sample_hash(
             params,
@@ -92,7 +89,7 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
                 (k, (r_k, rhs))
             })
             .collect();
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, d, r_k_hashkey, a_lt }
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, a_lt }
     }
 
     /// interface will be called in diamond io for storing preimage
@@ -103,18 +100,18 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         trapdoor_sampler: &ST,
         trapdoor: &ST::Trapdoor,
         input_size: usize,
-        dir_path: &PathBuf,
+        dir_path: &Path,
         handles: &mut Vec<JoinHandle<()>>,
     ) {
         for (k, (_, rhs_k)) in &self.lookup_hashmap {
             // computing target u_1_L' ⊗ rhs: (n+1)L'xm
-            let zeros = M::zero(&params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
+            let zeros = M::zero(params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
             let target = rhs_k.concat_rows(&[&zeros]);
             info!("target ({}, {})", target.row_size(), target.col_size());
             debug_assert_eq!(target.row_size(), (input_size) * rhs_k.row_size());
-            let l_k = trapdoor_sampler.preimage(params, &trapdoor, &b_l, &target);
+            let l_k = trapdoor_sampler.preimage(params, trapdoor, b_l, &target);
             info!("L_k ({}, {})", l_k.row_size(), l_k.col_size());
-            handles.push(store_and_drop_matrix(l_k, &dir_path, &format!("L_{}", k)));
+            handles.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{}", k)));
         }
     }
 }
