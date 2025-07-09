@@ -210,6 +210,7 @@ pub async fn test_io_plt(
             obf_params, &input, &dir_path,
         );
     let eval_time = start_time.elapsed();
+    info!("output: {:?}", output);
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
     let output_poly = DCRTPoly::from_coeffs(
