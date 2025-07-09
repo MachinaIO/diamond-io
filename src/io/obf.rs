@@ -364,7 +364,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &b_star_cur,
             &sampler_trapdoor,
             &b_star_trapdoor_cur,
-            packed_input_size,
+            packed_input_size + 1,
             &dir_path,
             &mut handles,
         );
