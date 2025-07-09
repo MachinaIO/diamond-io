@@ -158,7 +158,7 @@ pub async fn test_io_plt(
     >(&params, d, f, rand::random());
 
     // inputs: BaseDecompose(ct), eval_input
-    // outputs: eval_input PLT
+    // outputs: (eval_input PLT) * BaseDecompose(ct)
     let inputs = public_circuit.input((2 * log_base_q) + 1);
     let mut outputs = vec![];
     let eval_input = inputs[2 * log_base_q];
@@ -201,7 +201,8 @@ pub async fn test_io_plt(
     let obf_size = calculate_directory_size(dir_path);
     log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
-    let input = vec![false, true, true];
+    // 0,0,1(lsb) -> 4
+    let input = vec![false, false, true];
 
     let start_time = std::time::Instant::now();
     let output =
@@ -218,7 +219,8 @@ pub async fn test_io_plt(
             .map(|b| FinRingElem::from_bytes(&params.modulus(), &[*b as u8]))
             .collect_vec(),
     );
-    let scale = DCRTPoly::const_int(&params, 6);
-    // Public lookup for 3(0,1,1) => 6(1,1,0)
+    let scale = DCRTPoly::const_int(&params, 4);
+    // Public lookup for 0,0,1(lsb) => 4
+    // 4 * hardcoded key = output
     assert_eq!(output_poly, (hardcoded_key * scale));
 }

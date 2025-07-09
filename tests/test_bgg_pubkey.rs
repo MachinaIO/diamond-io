@@ -9,11 +9,10 @@ use diamond_io::{
     poly::{
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
-            FinRingElem,
         },
         enc::rlwe_encrypt,
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
-        Poly, PolyElem, PolyParams,
+        Poly, PolyParams,
     },
     utils::{init_tracing, log_mem},
 };
@@ -109,65 +108,18 @@ fn test_plt_build_final_step_circuit() {
     let params = DCRTPolyParams::default();
     let log_base_q = params.modulus_digits();
     let mut public_circuit = PolyCircuit::new();
+
+    /* bit repr => const int repr */
     let mut f = HashMap::new();
-    let one = FinRingElem::one(&params.modulus());
-    let zero = FinRingElem::zero(&params.modulus());
-    f.insert(
-        0,
-        (
-            DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), zero.clone()]),
-            DCRTPoly::const_int(&params, 0),
-        ),
-    );
-    f.insert(
-        1,
-        (
-            DCRTPoly::from_coeffs(&params, &[zero.clone(), zero.clone(), one.clone()]),
-            DCRTPoly::const_int(&params, 1),
-        ),
-    );
-    f.insert(
-        2,
-        (
-            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), zero.clone()]),
-            DCRTPoly::const_int(&params, 2),
-        ),
-    );
-    f.insert(
-        3,
-        (
-            DCRTPoly::from_coeffs(&params, &[zero.clone(), one.clone(), one.clone()]),
-            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
-        ),
-    );
-    f.insert(
-        4,
-        (
-            DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), zero.clone()]),
-            DCRTPoly::const_int(&params, 4),
-        ),
-    );
-    f.insert(
-        5,
-        (
-            DCRTPoly::from_coeffs(&params, &[one.clone(), zero.clone(), one.clone()]),
-            DCRTPoly::const_int(&params, 5),
-        ),
-    );
-    f.insert(
-        6,
-        (
-            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]),
-            DCRTPoly::const_int(&params, 6),
-        ),
-    );
-    f.insert(
-        7,
-        (
-            DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), one.clone()]),
-            DCRTPoly::const_int(&params, 7),
-        ),
-    );
+    f.insert(0, (DCRTPoly::from_const_int_lsb(&params, 0), DCRTPoly::const_int(&params, 0)));
+    f.insert(1, (DCRTPoly::from_const_int_lsb(&params, 1), DCRTPoly::const_int(&params, 1)));
+    f.insert(2, (DCRTPoly::from_const_int_lsb(&params, 2), DCRTPoly::const_int(&params, 2)));
+    f.insert(3, (DCRTPoly::from_const_int_lsb(&params, 3), DCRTPoly::const_int(&params, 3)));
+    f.insert(4, (DCRTPoly::from_const_int_lsb(&params, 4), DCRTPoly::const_int(&params, 4)));
+    f.insert(5, (DCRTPoly::from_const_int_lsb(&params, 5), DCRTPoly::const_int(&params, 5)));
+    f.insert(6, (DCRTPoly::from_const_int_lsb(&params, 6), DCRTPoly::const_int(&params, 6)));
+    f.insert(7, (DCRTPoly::from_const_int_lsb(&params, 7), DCRTPoly::const_int(&params, 7)));
+
     let d = 1;
     let lut = PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
