@@ -173,7 +173,7 @@ pub fn build_poly_vec<M: PolyMatrix>(
     let bits_done = level_width * level;
     let dim = params.ring_dimension() as usize;
     let mut polys: Vec<M::P> = vec![<M::P as Poly>::const_one(params)];
-
+    println!("inputs {:?}", inputs);
     let mut coeffs = inputs[..bits_done]
         .iter()
         .map(|&b| {
@@ -184,7 +184,7 @@ pub fn build_poly_vec<M: PolyMatrix>(
             }
         })
         .collect::<Vec<_>>();
-
+    println!("coeffs {:?}", coeffs);
     coeffs.extend(std::iter::repeat_n(
         <M::P as Poly>::Elem::zero(&params.modulus()),
         input_size - bits_done,

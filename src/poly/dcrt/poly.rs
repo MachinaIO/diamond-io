@@ -1,4 +1,5 @@
 use rayon::prelude::*;
+use tracing::info;
 
 use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
@@ -320,6 +321,7 @@ impl Poly for DCRTPoly {
     fn to_const_int(&self) -> usize {
         let mut sum = 0;
         for (i, c) in self.coeffs_digits().into_iter().enumerate() {
+            info!("i {} c {}", i, c);
             sum += 2_u32.pow(i as u32) * c;
         }
         sum as usize

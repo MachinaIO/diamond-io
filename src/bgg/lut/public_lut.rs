@@ -15,6 +15,7 @@ use tracing::info;
 
 const TAG_R_K: &[u8] = b"TAG_R_K";
 const TAG_A_Z: &[u8] = b"A_Z:";
+const TAG_A_PLT: &[u8] = b"A_PLT:";
 
 /// Public Lookup Table
 /// Considering adjusting on diamond-io case.
@@ -51,7 +52,14 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         );
 
         // new public BGG+matrix common for all rows: (n+1)xm
-        let a_lt = uni.sample_uniform(params, d + 1, m, DistType::BitDist);
+        let a_lt = hash_sampler.sample_hash(
+            params,
+            r_k_hashkey,
+            TAG_A_PLT,
+            d + 1,
+            m,
+            DistType::FinRingDist,
+        );
         info!("A_LT ({}, {})", a_lt.row_size(), a_lt.col_size());
 
         let key: [u8; 32] = rand::random();
