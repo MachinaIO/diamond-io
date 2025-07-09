@@ -39,7 +39,6 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
     ) -> Self {
         // m := (n+1)[logq]
         let m = (1 + d) * params.modulus_digits();
-        let uni = SU::new();
         let hash_sampler = SH::new();
         let t = f.len();
         let r_k_s = hash_sampler.sample_hash(

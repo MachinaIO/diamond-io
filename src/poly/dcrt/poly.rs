@@ -177,6 +177,19 @@ impl Poly for DCRTPoly {
         Self::poly_gen_from_const(params, BigUint::from(int).to_string())
     }
 
+    /// Encode `int` in little-endian bit order
+    fn from_const_int_lsb(params: &Self::Params, int: usize) -> Self {
+        let n = params.ring_dimension() as usize;
+        let q = params.modulus();
+        let one = FinRingElem::one(&q);
+        let zero = FinRingElem::zero(&q);
+
+        let coeffs: Vec<FinRingElem> =
+            (0..n).map(|i| if (int >> i) & 1 == 1 { one.clone() } else { zero.clone() }).collect();
+
+        Self::from_coeffs(params, &coeffs)
+    }
+
     /// Decompose a polynomial of form b_0 + b_1 * x + b_2 * x^2 + ... + b_{n-1} * x^{n-1}
     /// where b_{j, h} is the h-th digit of the j-th coefficient of the polynomial.
     /// Return a vector of polynomials, where the h-th polynomial is defined as
@@ -407,8 +420,6 @@ impl SubAssign<&DCRTPoly> for DCRTPoly {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
     use crate::poly::{
         dcrt::DCRTPolyUniformSampler,
@@ -416,6 +427,23 @@ mod tests {
         PolyParams,
     };
     use rand::prelude::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_const_int_roundtrip() {
+        let mut rng = rand::rng();
+        let params = DCRTPolyParams::default();
+
+        for _ in 0..10 {
+            let value = rng.random_range(0..(2_i32.pow(params.ring_dimension() - 1) as usize));
+            let lsb_poly = DCRTPoly::from_const_int_lsb(&params, value);
+            let poly = DCRTPoly::const_int(&params, value);
+            let back = poly.to_const_int();
+            let back_from_lsb = lsb_poly.to_const_int();
+            assert_eq!(value, back);
+            assert_eq!(value, back_from_lsb);
+        }
+    }
 
     #[test]
     fn test_dcrtpoly_coeffs() {
