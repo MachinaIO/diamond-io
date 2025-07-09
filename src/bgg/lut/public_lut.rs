@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::Path};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -92,18 +92,18 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         trapdoor_sampler: &ST,
         trapdoor: &ST::Trapdoor,
         input_size: usize,
-        dir_path: &PathBuf,
+        dir_path: &Path,
         handles: &mut Vec<JoinHandle<()>>,
     ) {
         for (k, (_, rhs_k)) in &self.lookup_hashmap {
             // computing target u_1_L' ⊗ rhs: (n+1)L'xm
-            let zeros = M::zero(&params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
+            let zeros = M::zero(params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
             let target = rhs_k.concat_rows(&[&zeros]);
             info!("target ({}, {})", target.row_size(), target.col_size());
             debug_assert_eq!(target.row_size(), (input_size) * rhs_k.row_size());
-            let l_k = trapdoor_sampler.preimage(params, &trapdoor, &b_l, &target);
+            let l_k = trapdoor_sampler.preimage(params, trapdoor, b_l, &target);
             info!("L_k ({}, {})", l_k.row_size(), l_k.col_size());
-            handles.push(store_and_drop_matrix(l_k, &dir_path, &format!("L_{}", k)));
+            handles.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{}", k)));
         }
     }
 }

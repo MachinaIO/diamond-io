@@ -191,7 +191,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
             let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
             let l_k = timed_read(
                 "L_k",
-                || M::read_from_files(&params, m_b, m, &dir_path, &format!("L_{}", k)),
+                || M::read_from_files(params, m_b, m, &dir_path, &format!("L_{}", k)),
                 &mut Duration::default(),
             );
             let c_lt_k = p_x_l * l_k;
