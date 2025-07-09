@@ -187,7 +187,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         let k = c_z.to_const_int();
         info!("k is {}", k);
         let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
-        if plt.r_k_s.col_size() <= (k * m) {
+        if let Some((x_k, y_k)) = plt.f.get(&k) {
             let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
             let l_k = timed_read(
                 "L_k",
@@ -195,8 +195,7 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
                 &mut Duration::default(),
             );
             let c_lt_k = p_x_l * l_k;
-            let pubkey = self.pubkey.public_lookup(params, plt, None);
-            let (x_k, y_k) = plt.f.get(&k).expect("no value for index k");
+            let pubkey = BggPublicKey::new(plt.a_lt.clone(), self.pubkey.reveal_plaintext);
             info!("x_k {:?}", x_k.coeffs());
             let vector = self.vector * &r_k.decompose() + c_lt_k;
             Self { vector, pubkey, plaintext: Some(y_k.clone()) }
