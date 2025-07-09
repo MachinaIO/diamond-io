@@ -203,7 +203,7 @@ pub async fn test_io_plt(
     let lut = PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
-    >(&params, d, f);
+    >(&params, d, f, rand::random());
 
     // inputs: BaseDecompose(ct), eval_input
     // outputs: eval_input PLT
@@ -212,6 +212,10 @@ pub async fn test_io_plt(
     let eval_input = inputs[2 * log_base_q];
     let plt_id = public_circuit.register_public_lookup(lut.clone());
     let plt_gate = public_circuit.public_lookup_gate(eval_input, plt_id);
+    for ct_input in inputs[0..2 * log_base_q].iter() {
+        let muled = public_circuit.and_gate(*ct_input, plt_gate);
+        outputs.push(muled);
+    }
     outputs.push(plt_gate);
     public_circuit.output(outputs);
 
@@ -257,5 +261,6 @@ pub async fn test_io_plt(
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
     // Public lookup for 3(0,1,1) => 6(1,1,0)
-    assert_eq!(output, vec![false, true, true, false]);
+    let plt_poly = DCRTPoly::from_coeffs(&params, &[one.clone(), one.clone(), zero.clone()]);
+    assert_eq!(output, (hardcoded_key * plt_poly).to_bool_vec());
 }

@@ -30,8 +30,7 @@ pub trait Evaluable:
         self,
         params: &Self::Params,
         plt: &PublicLut<Self::Matrix>,
-        helper: Option<(Self::Matrix, PathBuf)>,
-        input_size: usize,
+        helper: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self;
 }
 
@@ -57,8 +56,7 @@ impl<P: Poly> Evaluable for P {
         self,
         _: &Self::Params,
         _: &PublicLut<Self::Matrix>,
-        _: Option<(Self::Matrix, PathBuf)>,
-        _: usize,
+        _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
         self
     }

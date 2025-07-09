@@ -1,7 +1,7 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::{
     bgg::lut::public_lut::PublicLut,
-    poly::{Poly, PolyMatrix, PolyParams},
+    poly::{Poly, PolyMatrix},
     utils::timed_read,
 };
 use rayon::prelude::*;
@@ -180,26 +180,22 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         self,
         params: &Self::Params,
         plt: &PublicLut<M>,
-        helper_lookup: Option<(M, PathBuf)>,
-        input_size: usize,
+        helper_lookup: Option<(M, PathBuf, usize, usize)>,
     ) -> Self {
-        let m = (plt.d + 1) * params.modulus_digits();
-        let m_b = (1 + input_size) * (plt.d + 1) * (2 + params.modulus_digits());
         let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
         // *note* current design have constraint on public lookup have limit of x_k have to be
         // constant polynomial
         let k = c_z.to_const_int();
         info!("k is {}", k);
         if let Some((r_k, _)) = plt.lookup_hashmap.get(&k) {
-            let (p_x_l, dir_path) = helper_lookup.expect("BGG encoding's helper needed");
-            // ---- normal path (key exists) ---------------------------------
+            let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
             let l_k = timed_read(
                 "L_k",
                 || M::read_from_files(&params, m_b, m, &dir_path, &format!("L_{}", k)),
                 &mut Duration::default(),
             );
             let c_lt_k = p_x_l * l_k;
-            let pubkey = self.pubkey.public_lookup(params, plt, None, input_size);
+            let pubkey = self.pubkey.public_lookup(params, plt, None);
             let (_, y_k) = plt.f.get(&k).expect("no value for index k");
             let vector = self.vector * &r_k.decompose() + c_lt_k;
             Self { vector, pubkey, plaintext: Some(y_k.clone()) }

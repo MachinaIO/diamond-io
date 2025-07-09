@@ -24,9 +24,6 @@ pub struct PublicLut<M: PolyMatrix> {
     // k => (R_k, L_k's target)
     pub lookup_hashmap: HashMap<usize, (M, M)>,
     // todo: yes i know potentially we should sample r_k via hash sampler and slice thru k but for
-    // now due to conflicting types of generic not sure how to bypass
-    r_k_hashkey: [u8; 32],
-    pub d: usize,
     // k => (x_k, y_k)
     pub f: HashMap<usize, (M::P, M::P)>,
     pub a_lt: M,
@@ -37,12 +34,12 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
         params: &<M::P as Poly>::Params,
         d: usize,
         f: HashMap<usize, (M::P, M::P)>,
+        r_k_hashkey: [u8; 32],
     ) -> Self {
         // m := (n+1)[logq]
         let m = (1 + d) * params.modulus_digits();
         let uni = SU::new();
         let hash_sampler = SH::new();
-        let r_k_hashkey: [u8; 32] = rand::random();
         let t = f.len();
         let r_k_s = hash_sampler.sample_hash(
             params,
@@ -84,7 +81,7 @@ impl<M: PolyMatrix + 'static> PublicLut<M> {
                 (k, (r_k, rhs))
             })
             .collect();
-        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, d, r_k_hashkey, a_lt }
+        Self { lookup_hashmap: hashmap_vec.into_iter().collect(), f, a_lt }
     }
 
     /// interface will be called in diamond io for storing preimage

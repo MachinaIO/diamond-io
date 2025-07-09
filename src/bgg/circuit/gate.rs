@@ -31,5 +31,6 @@ impl PolyGateType {
             PolyGateType::Add | PolyGateType::Sub | PolyGateType::Mul => 2,
             PolyGateType::Call { num_input, .. } => *num_input,
         }
+        lookup_id
     }
 }
