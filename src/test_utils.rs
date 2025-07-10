@@ -247,5 +247,5 @@ pub async fn test_io_plt(
     let scale = DCRTPoly::from_const_int_lsb(&params, 7);
     // Public lookup for 0,1,1(lsb) => 1,1,1(lsb)
     // (1,1,1) * hardcoded key = output
-    assert_eq!(output_poly, (hardcoded_key * scale));
+    assert_eq!(output_poly.coeffs(), (hardcoded_key * scale).coeffs());
 }
