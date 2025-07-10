@@ -15,6 +15,7 @@ use crate::{
 use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc, time::Duration};
+use tracing::info;
 
 pub fn evaluate<M, SH, ST, P>(
     obf_params: ObfuscationParams<M>,
@@ -374,5 +375,11 @@ where
         assert_eq!(z.size(), (1, packed_output_size));
     }
     log_mem(format!("total loading time {total_load:?}"));
-    z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
+    z.get_row(0)
+        .into_iter()
+        .flat_map(|p| {
+            info!("p={:#?}", p.coeffs());
+            return p.extract_bits_with_threshold(&params)
+        })
+        .collect_vec()
 }

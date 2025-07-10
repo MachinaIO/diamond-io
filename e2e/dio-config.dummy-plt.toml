@@ -1,0 +1,11 @@
+ring_dimension = 4
+crt_depth = 2
+crt_bits = 17
+base_bits = 10
+switched_modulus = "1"
+d = 3
+input_size = 3
+level_width = 1
+hardcoded_key_sigma = 0.0
+p_sigma = 0.0
+input = [false, true, true]

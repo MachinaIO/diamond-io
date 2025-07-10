@@ -36,8 +36,11 @@ use std::{
 };
 use tracing::info;
 
+use crate::plt::setup_plt;
+
 pub mod circuit;
 pub mod config;
+pub mod plt;
 
 /// Simple program to obfuscate and evaluate
 #[derive(Parser, Debug)]
@@ -64,6 +67,19 @@ enum Commands {
 
         #[arg(long)]
         mul_num: usize,
+    },
+    RunBenchPlt {
+        #[arg(short, long)]
+        config: PathBuf,
+
+        #[arg(short, long)]
+        obf_dir: PathBuf,
+
+        #[arg(short, long, default_value = "true")]
+        verify: bool,
+
+        #[arg(long)]
+        t_num: usize,
     },
     SimBenchNorm {
         #[arg(short, long)]
@@ -277,6 +293,104 @@ async fn main() {
                 obf_params.public_circuit,
             );
             info!("Final Circuit: {:?}", final_circuit.count_gates_by_type_vec());
+        }
+        Commands::RunBenchPlt { config, obf_dir, verify, t_num } => {
+            let contents = fs::read_to_string(&config).unwrap();
+            let dio_config: RunBenchConfig = toml::from_str(&contents).unwrap();
+            let dir = Path::new(&obf_dir);
+            if !dir.exists() {
+                fs::create_dir(dir).unwrap();
+            } else {
+                // Clean it first to ensure no old files interfere
+                fs::remove_dir_all(dir).unwrap();
+                fs::create_dir(dir).unwrap();
+            }
+            let start_time = std::time::Instant::now();
+            let params = DCRTPolyParams::new(
+                dio_config.ring_dimension,
+                dio_config.crt_depth,
+                dio_config.crt_bits,
+                dio_config.base_bits,
+            );
+            let log_base_q = params.modulus_digits();
+            let switched_modulus = Arc::new(dio_config.switched_modulus);
+            let lut = setup_plt(t_num, &params, dio_config.d);
+            let public_circuit = BenchCircuit::new_plt(log_base_q, lut.clone()).as_poly_circuit();
+
+            let obf_params = ObfuscationParams {
+                params: params.clone(),
+                switched_modulus,
+                input_size: dio_config.input_size,
+                level_width: dio_config.level_width,
+                public_circuit,
+                d: dio_config.d,
+                hardcoded_key_sigma: dio_config.hardcoded_key_sigma,
+                p_sigma: dio_config.p_sigma,
+                trapdoor_sigma: dio_config.trapdoor_sigma.unwrap_or_default(),
+            };
+            let sampler_uniform = DCRTPolyUniformSampler::new();
+            let mut rng = rand::rng();
+            let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+            obfuscate::<
+                DCRTPolyMatrix,
+                DCRTPolyUniformSampler,
+                DCRTPolyHashSampler<Keccak256>,
+                DCRTPolyTrapdoorSampler,
+                _,
+                _,
+            >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &obf_dir)
+            .await;
+            let obfuscation_time = start_time.elapsed();
+            info!("Time to obfuscate: {:?}", obfuscation_time);
+
+            let obf_size = calculate_directory_size(&obf_dir);
+            info!("Obfuscation size: {obf_size} bytes");
+
+            let input = dio_config.input;
+            assert_eq!(input.len(), dio_config.input_size);
+
+            let start_time = std::time::Instant::now();
+            let output = evaluate::<
+                DCRTPolyMatrix,
+                DCRTPolyHashSampler<Keccak256>,
+                DCRTPolyTrapdoorSampler,
+                _,
+            >(obf_params, &input, &obf_dir);
+            let eval_time = start_time.elapsed();
+            let total_time = obfuscation_time + eval_time;
+            info!("Time for evaluation: {:?}", eval_time);
+            info!("Total time: {:?}", total_time);
+            if verify {
+                let input_coeffs: Vec<_> = input
+                    .iter()
+                    .cloned()
+                    .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
+                    .collect();
+                let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
+                let k = input_poly.to_const_int();
+                let (_, y_k) = lut.f.get(&k).expect("fetch x_k and y_k");
+                let verify_circuit = BenchCircuit::new_plt_verify().as_poly_circuit();
+                let eval = verify_circuit.eval(
+                    &params,
+                    &DCRTPoly::const_one(&params),
+                    &[hardcoded_key, y_k.clone()],
+                    None,
+                );
+                assert_eq!(eval.len(), 1);
+                /*
+                    Since we are computing b' - a' * t in the decryption part of the final circuit,
+                    where a' = acc * a and b' = acc * b are the outputs of the public circuit,
+                    b' - a' * t = acc * b - acc * a * t = acc * (a * t + e + [q/2] x - a*t) = acc * (e + [q/2] x) should hold,
+                    where e is the LWE error and x is the hardcoded key.
+                    If e = 0, it follows that b' - a' * t = acc * [q/2] x.
+                */
+                let half_q = FinRingElem::half_q(&params.modulus());
+                for e in eval {
+                    let expected_output = (DCRTPoly::from_const(&params, &half_q) * e)
+                        .extract_bits_with_threshold(&params);
+                    assert_eq!(output, expected_output);
+                }
+            }
         }
     }
 }
