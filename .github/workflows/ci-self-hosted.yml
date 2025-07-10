@@ -30,6 +30,7 @@ jobs:
 
   launch-ec2:
     runs-on: ubuntu-latest
+    timeout-minutes: 5760 #4days
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
