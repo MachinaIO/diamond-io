@@ -231,12 +231,8 @@ mod tests {
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
-    use std::{
-        collections::HashMap,
-        fs,
-        path::{Path, PathBuf},
-        str::FromStr,
-    };
+    use std::{collections::HashMap, fs, path::Path};
+    use tempfile::tempdir;
     use tokio;
     use tracing::info;
 
@@ -245,6 +241,8 @@ mod tests {
     #[tokio::test]
     async fn test_encoding_plt_for_dio() {
         init_tracing();
+
+        let tmp_dir = tempdir().unwrap().into_path();
 
         /* Setup */
         let params = DCRTPolyParams::default();
@@ -314,7 +312,7 @@ mod tests {
             &trapdoor_sampler,
             &b_l_trapdoor,
             input_size + 1,
-            &PathBuf::from_str("tests/io_plt2").unwrap(),
+            &tmp_dir,
             &mut handles,
         );
         join_all(handles).await;
@@ -332,8 +330,7 @@ mod tests {
 
         // Evaluate the circuit
         let p_x_l = p_vector_for_inputs(&b_l, plaintexts, &params, 0.0, &s_x_l);
-        let result =
-            circuit.eval(&params, &enc_one, &[enc1], Some((p_x_l, "tests/io_plt2".into(), m, m_b)));
+        let result = circuit.eval(&params, &enc_one, &[enc1], Some((p_x_l, tmp_dir, m, m_b)));
 
         let expected_encodings = bgg_encoding_sampler.sample(
             &params,

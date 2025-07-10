@@ -143,14 +143,38 @@ pub async fn test_io_plt(
 
     /* bit repr => const int repr */
     let mut f = HashMap::new();
-    f.insert(0, (DCRTPoly::from_const_int_lsb(&params, 0), DCRTPoly::const_int(&params, 0)));
-    f.insert(1, (DCRTPoly::from_const_int_lsb(&params, 1), DCRTPoly::const_int(&params, 1)));
-    f.insert(2, (DCRTPoly::from_const_int_lsb(&params, 2), DCRTPoly::const_int(&params, 2)));
-    f.insert(3, (DCRTPoly::from_const_int_lsb(&params, 3), DCRTPoly::const_int(&params, 3)));
-    f.insert(4, (DCRTPoly::from_const_int_lsb(&params, 4), DCRTPoly::const_int(&params, 4)));
-    f.insert(5, (DCRTPoly::from_const_int_lsb(&params, 5), DCRTPoly::const_int(&params, 5)));
-    f.insert(6, (DCRTPoly::from_const_int_lsb(&params, 6), DCRTPoly::const_int(&params, 6)));
-    f.insert(7, (DCRTPoly::from_const_int_lsb(&params, 7), DCRTPoly::const_int(&params, 7)));
+    f.insert(
+        0,
+        (DCRTPoly::from_const_int_lsb(&params, 0), DCRTPoly::from_const_int_lsb(&params, 3)),
+    );
+    f.insert(
+        1,
+        (DCRTPoly::from_const_int_lsb(&params, 1), DCRTPoly::from_const_int_lsb(&params, 4)),
+    );
+    f.insert(
+        2,
+        (DCRTPoly::from_const_int_lsb(&params, 2), DCRTPoly::from_const_int_lsb(&params, 2)),
+    );
+    f.insert(
+        3,
+        (DCRTPoly::from_const_int_lsb(&params, 3), DCRTPoly::from_const_int_lsb(&params, 6)),
+    );
+    f.insert(
+        4,
+        (DCRTPoly::from_const_int_lsb(&params, 4), DCRTPoly::from_const_int_lsb(&params, 1)),
+    );
+    f.insert(
+        5,
+        (DCRTPoly::from_const_int_lsb(&params, 5), DCRTPoly::from_const_int_lsb(&params, 0)),
+    );
+    f.insert(
+        6,
+        (DCRTPoly::from_const_int_lsb(&params, 6), DCRTPoly::from_const_int_lsb(&params, 7)),
+    );
+    f.insert(
+        7,
+        (DCRTPoly::from_const_int_lsb(&params, 7), DCRTPoly::from_const_int_lsb(&params, 5)),
+    );
 
     let lut = PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
@@ -201,8 +225,8 @@ pub async fn test_io_plt(
     let obf_size = calculate_directory_size(dir_path);
     log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
-    // 0,0,1(lsb) -> 4
-    let input = vec![false, false, true];
+    // 0,1,1(lsb) -> 4
+    let input = vec![false, true, true];
 
     let start_time = std::time::Instant::now();
     let output =
@@ -220,8 +244,8 @@ pub async fn test_io_plt(
             .map(|b| FinRingElem::from_bytes(&params.modulus(), &[*b as u8]))
             .collect_vec(),
     );
-    let scale = DCRTPoly::const_int(&params, 4);
-    // Public lookup for 0,0,1(lsb) => 4
-    // 4 * hardcoded key = output
+    let scale = DCRTPoly::from_const_int_lsb(&params, 7);
+    // Public lookup for 0,1,1(lsb) => 1,1,1(lsb)
+    // (1,1,1) * hardcoded key = output
     assert_eq!(output_poly, (hardcoded_key * scale));
 }
