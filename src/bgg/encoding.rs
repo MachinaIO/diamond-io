@@ -183,11 +183,10 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         helper_lookup: Option<(M, PathBuf, usize, usize)>,
     ) -> Self {
         let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
-        info!("c_z {:?}", c_z.coeffs());
         let k = c_z.to_const_int();
-        info!("k is {}", k);
+        info!("Performing public lookup, k={}", k);
         let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
-        if let Some((x_k, y_k)) = plt.f.get(&k) {
+        if let Some((_, y_k)) = plt.f.get(&k) {
             let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
             let l_k = timed_read(
                 &format!("L_{k}"),
@@ -196,7 +195,6 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
             );
             let c_lt_k = p_x_l * l_k;
             let pubkey = BggPublicKey::new(plt.a_lt.clone(), self.pubkey.reveal_plaintext);
-            info!("x_k {:?}", x_k.coeffs());
             let vector = self.vector * &r_k.decompose() + c_lt_k;
             Self { vector, pubkey, plaintext: Some(y_k.clone()) }
         } else {

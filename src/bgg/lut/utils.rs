@@ -14,7 +14,6 @@ use crate::{
     utils::create_bit_random_poly,
 };
 use keccak_asm::Keccak256;
-use tracing::info;
 
 pub fn random_bgg_encodings_for_bits(
     input_size: usize,
@@ -57,9 +56,7 @@ pub fn p_vector_for_inputs(
     let p_x_l_error =
         uniform_sampler.sample_uniform(params, 1, b_l.ncol, DistType::GaussDist { sigma: p_sigma });
     let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, extended_plaintexts);
-    info!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size());
     let s_connect = encoded_bits.tensor(s_x_l);
-    info!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size());
     let s_b = s_connect * b_l;
     s_b + p_x_l_error
 }
