@@ -124,12 +124,12 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
 
     fn public_lookup(
         self,
-        params: &Self::Params,
+        _: &Self::Params,
         plt: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
         let a_z = self.matrix;
-        plt.compute_target(params, &a_z);
+        plt.insert_a_z(&a_z);
         Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
     }
 }
