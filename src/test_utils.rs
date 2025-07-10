@@ -169,7 +169,7 @@ pub async fn test_io_plt(
     );
     f.insert(
         6,
-        (DCRTPoly::from_const_int_lsb(&params, 6), DCRTPoly::from_const_int_lsb(&params, 7)),
+        (DCRTPoly::from_const_int_lsb(&params, 6), DCRTPoly::from_const_int_lsb(&params, 1)),
     );
     f.insert(
         7,
@@ -183,16 +183,18 @@ pub async fn test_io_plt(
 
     // inputs: BaseDecompose(ct), eval_input
     // outputs: (eval_input PLT) * BaseDecompose(ct)
-    let inputs = public_circuit.input((2 * log_base_q) + 1);
-    let mut outputs = vec![];
-    let eval_input = inputs[2 * log_base_q];
-    let plt_id = public_circuit.register_public_lookup(lut.clone());
-    let plt_out = public_circuit.public_lookup_gate(eval_input, plt_id);
-    for ct_input in inputs[0..2 * log_base_q].iter() {
-        let muled = public_circuit.mul_gate(*ct_input, plt_out);
-        outputs.push(muled);
+    {
+        let inputs = public_circuit.input((2 * log_base_q) + 1);
+        let mut outputs = vec![];
+        let eval_input = inputs[2 * log_base_q];
+        let plt_id = public_circuit.register_public_lookup(lut.clone());
+        let plt_out = public_circuit.public_lookup_gate(eval_input, plt_id);
+        for ct_input in inputs[0..2 * log_base_q].iter() {
+            let muled = public_circuit.mul_gate(*ct_input, plt_out);
+            outputs.push(muled);
+        }
+        public_circuit.output(outputs);
     }
-    public_circuit.output(outputs);
 
     let obf_params = ObfuscationParams {
         params: params.clone(),
@@ -244,8 +246,8 @@ pub async fn test_io_plt(
             .map(|b| FinRingElem::from_bytes(&params.modulus(), &[*b as u8]))
             .collect_vec(),
     );
-    let scale = DCRTPoly::from_const_int_lsb(&params, 7);
-    // Public lookup for 0,1,1(lsb) => 1,1,1(lsb)
+    let scale = DCRTPoly::from_const_int_lsb(&params, 1);
+    // Public lookup for 0,1,1(lsb) => 1,0,0(lsb)
     // (1,1,1) * hardcoded key = output
-    assert_eq!(output_poly.coeffs(), (hardcoded_key * scale).coeffs());
+    assert_eq!(output_poly.to_bool_vec(), (hardcoded_key * scale).to_bool_vec());
 }
