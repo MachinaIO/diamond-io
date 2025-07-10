@@ -189,7 +189,7 @@ impl PolyMatrix for DCRTPolyMatrix {
 
         let output = (0..identity_size)
             .flat_map(|i| {
-                debug_mem(format!("mul_tensor_identity_decompose at {}", i));
+                debug_mem(format!("mul_tensor_identity_decompose at {i}"));
                 let slice = self.slice(0, self.nrow, i * slice_width, (i + 1) * slice_width);
                 (0..other.ncol).map(move |j| &slice * &other.get_column_matrix_decompose(j))
             })
@@ -223,7 +223,7 @@ impl PolyMatrix for DCRTPolyMatrix {
                 id, block_size, row_range.start, row_range.end, col_range.start, col_range.end
             ));
             let bytes = std::fs::read(&path)
-                .unwrap_or_else(|_| panic!("Failed to read matrix file {:?}", path));
+                .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
             let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
 
             parallel_iter!(0..row_range.len())
@@ -322,13 +322,13 @@ impl DCRTPolyMatrix {
             nrow,
             ncol,
         );
-        debug_mem(format!("matrix_ptr MatrixGen row={}, col={}", nrow, ncol));
+        debug_mem(format!("matrix_ptr MatrixGen row={nrow}, col={ncol}"));
         for i in 0..nrow {
             for j in 0..ncol {
                 SetMatrixElement(matrix_ptr.as_mut().unwrap(), i, j, self.entry(i, j).get_poly());
             }
         }
-        debug_mem(format!("SetMatrixElement row={}, col={}", nrow, ncol));
+        debug_mem(format!("SetMatrixElement row={nrow}, col={ncol}"));
         CppMatrix::new(&self.params, matrix_ptr)
     }
 
@@ -338,7 +338,7 @@ impl DCRTPolyMatrix {
         let matrix_inner = parallel_iter!(0..nrow)
             .map(|i| parallel_iter!(0..ncol).map(|j| cpp_matrix.entry(i, j)).collect::<Vec<_>>())
             .collect::<Vec<_>>();
-        debug_mem(format!("GetMatrixElement row={}, col={}", nrow, ncol));
+        debug_mem(format!("GetMatrixElement row={nrow}, col={ncol}"));
         DCRTPolyMatrix::from_poly_vec(params, matrix_inner)
     }
 

@@ -39,14 +39,14 @@ impl<M: PolyMatrix> BggEncoding<M> {
         id: &str,
     ) {
         // Write the vector
-        self.vector.write_to_files(&dir_path, &format!("{}_vector", id)).await;
+        self.vector.write_to_files(&dir_path, &format!("{id}_vector")).await;
 
         // Write the pubkey
-        self.pubkey.write_to_files(&dir_path, &format!("{}_pubkey", id)).await;
+        self.pubkey.write_to_files(&dir_path, &format!("{id}_pubkey")).await;
 
         // Write the plaintext component if it exists
         if let Some(plaintext) = &self.plaintext {
-            plaintext.write_to_file(&dir_path, &format!("{}_plaintext", id)).await;
+            plaintext.write_to_file(&dir_path, &format!("{id}_plaintext")).await;
         }
     }
 
@@ -62,7 +62,7 @@ impl<M: PolyMatrix> BggEncoding<M> {
         let ncol = d1 * log_base_q;
 
         // Read the vector
-        let vector = M::read_from_files(params, 1, ncol, &dir_path, &format!("{}_vector", id));
+        let vector = M::read_from_files(params, 1, ncol, &dir_path, &format!("{id}_vector"));
 
         // Read the pubkey
         let pubkey = BggPublicKey::read_from_files(
@@ -70,13 +70,13 @@ impl<M: PolyMatrix> BggEncoding<M> {
             d1,
             ncol,
             &dir_path,
-            &format!("{}_pubkey", id),
+            &format!("{id}_pubkey"),
             reveal_plaintext,
         );
 
         // If reveal_plaintext is true, read the plaintext
         let plaintext = if reveal_plaintext {
-            Some(M::P::read_from_file(params, &dir_path, &format!("{}_plaintext", id)))
+            Some(M::P::read_from_file(params, &dir_path, &format!("{id}_plaintext")))
         } else {
             None
         };
@@ -190,8 +190,8 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         if let Some((x_k, y_k)) = plt.f.get(&k) {
             let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
             let l_k = timed_read(
-                &format!("L_{}", k),
-                || M::read_from_files(params, m_b, m, &dir_path, &format!("L_{}", k)),
+                &format!("L_{k}"),
+                || M::read_from_files(params, m_b, m, &dir_path, &format!("L_{k}")),
                 &mut Duration::default(),
             );
             let c_lt_k = p_x_l * l_k;

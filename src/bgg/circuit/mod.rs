@@ -301,7 +301,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
 
         let wires = DashMap::new();
         let levels = self.compute_levels();
-        debug_mem(format!("Levels: {:?}", levels));
+        debug_mem(format!("Levels: {levels:?}"));
         debug_mem("Levels are computed");
 
         wires.insert(0, one.clone());
@@ -314,16 +314,16 @@ impl<M: PolyMatrix> PolyCircuit<M> {
             debug_mem("New level started");
             // All gates in the same level can be processed in parallel.
             level.par_iter().for_each(|&gate_id| {
-                debug_mem(format!("Gate id {} started", gate_id));
+                debug_mem(format!("Gate id {gate_id} started"));
                 if wires.contains_key(&gate_id) {
-                    debug_mem(format!("Gate id {} already evaluated", gate_id));
+                    debug_mem(format!("Gate id {gate_id} already evaluated"));
                     return;
                 }
                 let gate = self.gates.get(&gate_id).expect("gate not found").clone();
                 debug_mem("Get gate");
                 let result = match &gate.gate_type {
                     PolyGateType::Input => {
-                        panic!("Input gate {:?} should already be preloaded", gate);
+                        panic!("Input gate {gate:?} should already be preloaded");
                     }
                     PolyGateType::Const { digits } => E::from_digits(params, one, digits),
                     PolyGateType::Add => {
@@ -385,7 +385,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                     }
                 };
                 wires.insert(gate_id, result);
-                debug_mem(format!("Gate id {} finished", gate_id));
+                debug_mem(format!("Gate id {gate_id} finished"));
             });
             debug_mem("Evaluated gate in parallel");
         }

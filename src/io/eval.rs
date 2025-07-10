@@ -195,7 +195,7 @@ where
             let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
             let s_connect = encoded_bits.tensor(&s_cur);
             let expected_p = s_connect * &b_stars[level];
-            assert_eq!(p, expected_p, "debug check failed at level {}", level);
+            assert_eq!(p, expected_p, "debug check failed at level {level}");
         }
 
         p_cur = p;
@@ -373,6 +373,6 @@ where
         }
         assert_eq!(z.size(), (1, packed_output_size));
     }
-    log_mem(format!("total loading time {:?}", total_load));
+    log_mem(format!("total loading time {total_load:?}"));
     z.get_row(0).into_iter().flat_map(|p| p.extract_bits_with_threshold(&params)).collect_vec()
 }

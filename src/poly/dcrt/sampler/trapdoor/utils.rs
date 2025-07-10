@@ -25,7 +25,7 @@ fn find_in_vec(vec: &[f64], search: f64) -> u32 {
         // returns 1-indexed position
         (pos + 1) as u32
     } else {
-        panic!("Value not found: {}", search)
+        panic!("Value not found: {search}")
     }
 }
 

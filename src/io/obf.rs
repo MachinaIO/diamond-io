@@ -187,7 +187,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         u_nums.push(masks_at_level);
     }
 
-    log_mem(format!("Computed u_0, .. u_{}", depth));
+    log_mem(format!("Computed u_0, .. u_{depth}"));
     #[cfg(feature = "debug")]
     handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
@@ -211,7 +211,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         handles.push(store_and_drop_matrix(
             b_star_level.clone(),
             &dir_path,
-            &format!("b_star_{}", level),
+            &format!("b_star_{level}"),
         ));
 
         for num in 0..level_size {
@@ -228,7 +228,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             handles.push(store_and_drop_matrix(
                 s_i_num.clone(),
                 &dir_path,
-                &format!("s_{}_{}", level, num),
+                &format!("s_{level}_{num}"),
             ));
 
             log_mem(format!(

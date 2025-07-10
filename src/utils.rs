@@ -32,23 +32,23 @@ pub fn ceil_log2(q: &BigUint) -> usize {
 
 /// Print a ring element
 pub fn print_ring_element(label: &str, ring_el: &[u64]) {
-    print!("{} [", label);
+    print!("{label} [");
     for (k, &val) in ring_el.iter().enumerate() {
         if k > 0 {
             print!(", ");
         }
-        print!("{}", val);
+        print!("{val}");
     }
     println!("]");
 }
 
 /// Print a matrix of ring elements
 pub fn print_matrix_ring(label: &str, matrix: &[Vec<Vec<u64>>]) {
-    println!("\n{}", label,);
+    println!("\n{label}",);
 
     for (i, row) in matrix.iter().enumerate() {
         for (j, col) in row.iter().enumerate() {
-            print!("r{}c{}: ", i, j);
+            print!("r{i}c{j}: ");
             print_ring_element("", col);
         }
     }
@@ -56,9 +56,9 @@ pub fn print_matrix_ring(label: &str, matrix: &[Vec<Vec<u64>>]) {
 
 /// Print a vector of ring elements
 pub fn print_vector_ring(label: &str, vec: &[Vec<u64>]) {
-    println!("\n{}", label);
+    println!("\n{label}");
     for (i, inner_vec) in vec.iter().enumerate() {
-        print!("{}[{}]: ", label, i);
+        print!("{label}[{i}]: ");
         print_ring_element("", inner_vec);
     }
 }
@@ -138,7 +138,7 @@ pub fn timed_read<T, F: FnOnce() -> T>(label: &str, f: F, total: &mut Duration) 
     let res = f();
     let elapsed = start.elapsed();
     *total += elapsed;
-    crate::utils::log_mem(format!("{} loaded in {:?}", label, elapsed));
+    crate::utils::log_mem(format!("{label} loaded in {elapsed:?}"));
     res
 }
 

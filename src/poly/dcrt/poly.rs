@@ -325,7 +325,7 @@ impl Poly for DCRTPoly {
                 } else if v == &BigUint::from(1u32) {
                     true
                 } else {
-                    panic!("Coefficient is not 0 or 1: {}", v);
+                    panic!("Coefficient is not 0 or 1: {v}");
                 }
             })
             .collect()
