@@ -72,8 +72,10 @@ impl<M: PolyMatrix> PublicLut<M> {
         &self,
         params: &<M::P as Poly>::Params,
         b_l: &M,
+        b_l_plus_one: &M,
         trap_sampler: &ST,
-        trapdoor: &ST::Trapdoor,
+        b_l_trapdoor: &ST::Trapdoor,
+        b_l_plus_one_trapdoor: &ST::Trapdoor,
         input_size: usize,
         dir_path: &Path,
     ) -> Vec<JoinHandle<()>>
@@ -84,7 +86,7 @@ impl<M: PolyMatrix> PublicLut<M> {
         let t = self.f.len();
         let mut handles = Vec::new();
 
-        let rhs_tuple: Vec<(usize, M)> = (0..t)
+        let target_tuple: Vec<(usize, M)> = (0..t)
             .into_par_iter()
             .map(|k| {
                 let (x_k, y_k) = self.f.get(&k).expect("missing f(k)");
@@ -97,10 +99,20 @@ impl<M: PolyMatrix> PublicLut<M> {
             })
             .collect();
 
-        for (k, rhs_k) in rhs_tuple {
-            let zeros = M::zero(params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
-            let target = rhs_k.concat_rows(&[&zeros]);
-            let l_k = trap_sampler.preimage(params, trapdoor, b_l, &target);
+        // first sample L_common
+        let id = M::identity(params, b_l.row_size(), None);
+        let zeros = M::zero(params, (input_size - 1) * id.row_size(), id.col_size());
+        let tensor_lhs = id.concat_rows(&[&zeros]);
+        info!("tensor_lhs ({}, {})", tensor_lhs.row_size(), tensor_lhs.col_size());
+        info!("b_l_plus_one ({}, {})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
+        let l_common_target = tensor_lhs * b_l_plus_one;
+        let l_common = trap_sampler.preimage(params, b_l_trapdoor, b_l, &l_common_target);
+        handles.push(store_and_drop_matrix(l_common, dir_path, &format!("L_common")));
+
+        for (k, target_k) in target_tuple {
+            // let zeros = M::zero(params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
+            // let target = rhs_k.concat_rows(&[&zeros]);
+            let l_k = trap_sampler.preimage(params, b_l_plus_one_trapdoor, b_l_plus_one, &target_k);
             handles.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{k}")));
         }
 

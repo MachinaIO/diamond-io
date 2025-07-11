@@ -79,6 +79,11 @@ pub trait PolyMatrix:
         vec[index] = Self::P::const_one(params);
         Self::from_poly_vec_column(params, vec)
     }
+    fn unit_row_vector(params: &<Self::P as Poly>::Params, size: usize, index: usize) -> Self {
+        let mut coeffs = vec![Self::P::const_zero(params); size];
+        coeffs[index] = Self::P::const_one(params);
+        Self::from_poly_vec_row(params, coeffs)
+    }
     /// Constructs a gadget matrix Gₙ
     ///
     /// Gadget vector g = (b^0, b^1, ..., b^{log_b(q)-1}),
