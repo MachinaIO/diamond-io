@@ -15,9 +15,9 @@ debug feature enable
 cargo install --features debug --path .
 ```
 
-### Run
+### Run AddMul
 
-Execute the end-to-end workflow from obfuscation to evaluation:
+Execute the end-to-end workflow from obfuscation to evaluation for AddMul circuit:
 
 ```
 dio run-bench \
@@ -25,6 +25,17 @@ dio run-bench \
   -o {OBFUSCATION-DIRECTORY-PATH} \
   --add-num {ADD-GATE-NUMBER} \
   --mul-num {MUL-GATE-NUMBER}
+```
+
+### Run Plt
+
+Execute the end-to-end workflow from obfuscation to evaluation for Plt circuit:
+
+```
+dio run-bench \
+  -c {CONFIG-TOML-PATH} \
+  -o {OBFUSCATION-DIRECTORY-PATH} \
+  --t-num {TABLE-ROW-NUMBER} \
 ```
 
 ### Build Circuit
