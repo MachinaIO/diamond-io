@@ -22,6 +22,7 @@ def log_params_to_file(
     input_width: int,
     add_num: int,
     mul_num: int,
+    t_num: int,
     max_crt_depth: int,
     secpar: int,
     n: int,
@@ -55,7 +56,8 @@ def log_params_to_file(
         f"input_size={input_size}, "
         f"input_width={input_width}, "
         f"add_num={add_num}, "
-        f"mul_num={mul_num}, "
+        f"mul_num={mul_num}, ",
+        f"t_num={t_num}, "
         f"max_crt_depth={max_crt_depth}, "
         f"secpar={secpar}, "
         f"n={n}, "
@@ -79,7 +81,6 @@ def log_params_to_file(
 
     print(f"Parameters logged to params.log")
 
-
 def find_params(
     target_secpar: int,
     log2_n: int,
@@ -90,8 +91,10 @@ def find_params(
     max_crt_depth: int,
     input_size: int,
     input_width: int,
+    bench_type: str,
     add_num: int,
     mul_num: int,
+    t_num: int
 ):
     for d in range(1, max_d + 1):
         print(f"Trying d: {d}")
@@ -99,12 +102,13 @@ def find_params(
         for base_bits in range(min_base_bits, max_base_bits + 1):
             print(f"Trying base_bits: {base_bits}")
             config = {
+                "d": d,
                 "log_ring_dim": log2_n,
                 "max_crt_depth": max_crt_depth,
                 "crt_bits": crt_bits,
                 "base_bits": base_bits,
             }
-            config_file = f"sim_norm_config_{input_size}_{input_width}_{add_num}_{mul_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json"
+            config_file = f"sim_norm_config_{input_size}_{input_width}_{bench_type}_{add_num}_{mul_num}_{t_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json"
             with open(
                 os.path.join(
                     script_dir,
@@ -115,22 +119,22 @@ def find_params(
                 f.write(json.dumps(config, indent=4))
             norms_path = os.path.join(
                 script_dir,
-                f"norms_{input_size}_{input_width}_{add_num}_{mul_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json",
+                f"norms_{input_size}_{input_width}_{bench_type}_{add_num}_{mul_num}_{t_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json",
             )
-            subprocess.run(
-                [
-                    "dio",
-                    "sim-bench-norm",
-                    "-c",
-                    config_file,
-                    "-o",
-                    norms_path,
-                    "--add-num",
-                    str(add_num),
-                    "--mul-num",
-                    str(mul_num),
-                ]
-            )
+            cmd = [
+                "dio",
+                "sim-bench-norm",
+                "-c", config_file,
+                "-o", norms_path,
+                "--bench-type", bench_type,
+            ]
+            if bench_type == "add_mul":
+                cmd += ["--add-num", str(add_num), "--mul-num", str(mul_num)]
+            elif bench_type == "plt":
+                cmd += ["--t-num", str(t_num)]
+            else:
+                raise ValueError(f"Unsupported bench_type: {bench_type}")
+            subprocess.run(cmd, check=True)
             os.remove(config_file)
 
             n = 2**log2_n
@@ -597,8 +601,10 @@ if __name__ == "__main__":
     max_crt_depth = 20
     input_size = 4
     input_width = 1
-    add_num = 3
-    mul_num = 3
+    bench_type = "plt"
+    add_num = 0
+    mul_num = 0
+    t_num = 8
     if input_size % input_width != 0:
         raise ValueError("input_size should be divisible by input_width")
     (
@@ -620,8 +626,10 @@ if __name__ == "__main__":
         max_crt_depth,
         input_size,
         input_width,
+        bench_type,
         add_num,
         mul_num,
+        t_num,
     )
     print(f"input_size: {input_size}")
     print(f"input_width: {input_width}")
@@ -641,6 +649,7 @@ if __name__ == "__main__":
         input_width,
         add_num,
         mul_num,
+        t_num,
         max_crt_depth,
         secpar,
         2**log2_n,
