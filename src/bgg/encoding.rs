@@ -1,7 +1,7 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::{
     bgg::lut::public_lut::PublicLut,
-    poly::{Poly, PolyMatrix},
+    poly::{Poly, PolyMatrix, PolyParams},
     utils::timed_read,
 };
 use rayon::prelude::*;
@@ -185,15 +185,22 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
         let k = c_z.to_const_int();
         info!("Performing public lookup, k={}", k);
+        let m_a = (plt.d + 1) * (params.modulus_digits() + 2);
+
         let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
         if let Some((_, y_k)) = plt.f.get(&k) {
             let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
-            let l_k = timed_read(
-                &format!("L_{k}"),
-                || M::read_from_files(params, m_b, m, &dir_path, &format!("L_{k}")),
+            let l_common: M = timed_read(
+                "L_common",
+                || M::read_from_files(params, m_b, m_a, &dir_path, "L_common"),
                 &mut Duration::default(),
             );
-            let c_lt_k = p_x_l * l_k;
+            let l_k = timed_read(
+                &format!("L_{k}"),
+                || M::read_from_files(params, m_a, m, &dir_path, &format!("L_{k}")),
+                &mut Duration::default(),
+            );
+            let c_lt_k = p_x_l * l_common * l_k;
             let pubkey = BggPublicKey::new(plt.a_lt.clone(), self.pubkey.reveal_plaintext);
             let vector = self.vector * &r_k.decompose() + c_lt_k;
             Self { vector, pubkey, plaintext: Some(y_k.clone()) }
@@ -268,6 +275,8 @@ mod tests {
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
+        let (b_l_plus_one_trapdoor, b_l_plus_one) =
+            trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
         info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
         let m = (1 + d) * params.modulus_digits();
         let m_b = (1 + input_size) * (d + 1) * (2 + params.modulus_digits());
@@ -308,8 +317,10 @@ mod tests {
         circuit.preimage_sample_all_lookups(
             &params,
             &b_l,
+            &b_l_plus_one,
             &trapdoor_sampler,
             &b_l_trapdoor,
+            &b_l_plus_one_trapdoor,
             input_size + 1,
             &tmp_dir,
             &mut handles,

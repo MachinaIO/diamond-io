@@ -403,8 +403,10 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         &self,
         params: &<M::P as Poly>::Params,
         b_l: &M,
+        b_l_plus_one: &M,
         trap_sampler: &ST,
-        trapdoor: &ST::Trapdoor,
+        b_l_trapdoor: &ST::Trapdoor,
+        b_l_plus_one_trapdoor: &ST::Trapdoor,
         input_size: usize,
         dir_path: &Path,
         handles_out: &mut Vec<JoinHandle<()>>,
@@ -417,7 +419,16 @@ impl<M: PolyMatrix> PolyCircuit<M> {
             .par_iter()
             .flat_map(|(_id, lut_arc)| {
                 let lut = lut_arc.lock().expect("mutex poisoned");
-                lut.preimage(params, b_l, trap_sampler, trapdoor, input_size, dir_path)
+                lut.preimage(
+                    params,
+                    b_l,
+                    b_l_plus_one,
+                    trap_sampler,
+                    b_l_trapdoor,
+                    b_l_plus_one_trapdoor,
+                    input_size,
+                    dir_path,
+                )
             })
             .collect();
 

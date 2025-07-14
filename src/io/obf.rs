@@ -281,6 +281,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     =============================================================================
     */
 
+    // Sample input dependent random matrix B_*
+    let (b_l_plus_one_trapdoor, b_l_plus_one) = sampler_trapdoor.trapdoor(&params, d + 1);
+
     #[cfg(feature = "bgm")]
     {
         player.play_music("bgm/obf_bgm5.mp3");
@@ -362,8 +365,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         final_circuit.preimage_sample_all_lookups(
             params,
             &b_star_cur,
+            &b_l_plus_one,
             &sampler_trapdoor,
             &b_star_trapdoor_cur,
+            &b_l_plus_one_trapdoor,
             packed_input_size + 1,
             &dir_path,
             &mut handles,
