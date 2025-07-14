@@ -1,6 +1,6 @@
-ring_dimension = 4
-crt_depth = 2
-crt_bits = 17
+ring_dimension = 16
+crt_depth = 4
+crt_bits = 21
 base_bits = 10
 switched_modulus = "1"
 d = 3
