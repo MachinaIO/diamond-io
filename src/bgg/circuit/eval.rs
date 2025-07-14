@@ -58,6 +58,6 @@ impl<P: Poly> Evaluable for P {
         _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
-        self
+        todo!("Poly haven't implemented public_lookup")
     }
 }
