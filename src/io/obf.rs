@@ -282,8 +282,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     */
 
     // Sample input dependent random matrix B_*
-    let (b_l_plus_one_trapdoor, b_l_plus_one) =
-        sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
+    let (b_l_plus_one_trapdoor, b_l_plus_one) = sampler_trapdoor.trapdoor(&params, d + 1);
 
     #[cfg(feature = "bgm")]
     {

@@ -22,7 +22,7 @@ pub struct PublicLut<M: PolyMatrix> {
     pub r_k_s: M,
     // public matrix A_z
     a_z: Option<M>,
-    d: usize,
+    pub d: usize,
     /// m := (n+1)[logq]
     m: usize,
     /// mapping f: k => (x_k, y_k)
@@ -100,11 +100,13 @@ impl<M: PolyMatrix> PublicLut<M> {
             .collect();
 
         // first sample L_common
-        let id = M::identity(params, b_l.row_size(), None);
+        let id = M::identity(params, b_l_plus_one.row_size(), None);
         let zeros = M::zero(params, (input_size - 1) * id.row_size(), id.col_size());
         let tensor_lhs = id.concat_rows(&[&zeros]);
-        info!("tensor_lhs ({}, {})", tensor_lhs.row_size(), tensor_lhs.col_size());
-        info!("b_l_plus_one ({}, {})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
+        // info!("id ({}, {})", id.row_size(), id.col_size());
+        // info!("tensor_lhs ({}, {})", tensor_lhs.row_size(), tensor_lhs.col_size());
+        // info!("b_l_plus_one ({}, {})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
+        // info!("b_l ({}, {})", b_l.row_size(), b_l.col_size());
         let l_common_target = tensor_lhs * b_l_plus_one;
         let l_common = trap_sampler.preimage(params, b_l_trapdoor, b_l, &l_common_target);
         handles.push(store_and_drop_matrix(l_common, dir_path, &format!("L_common")));
@@ -112,6 +114,7 @@ impl<M: PolyMatrix> PublicLut<M> {
         for (k, target_k) in target_tuple {
             // let zeros = M::zero(params, (input_size - 1) * rhs_k.row_size(), rhs_k.col_size());
             // let target = rhs_k.concat_rows(&[&zeros]);
+            info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
             let l_k = trap_sampler.preimage(params, b_l_plus_one_trapdoor, b_l_plus_one, &target_k);
             handles.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{k}")));
         }

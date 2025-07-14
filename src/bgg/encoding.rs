@@ -1,7 +1,7 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::{
     bgg::lut::public_lut::PublicLut,
-    poly::{Poly, PolyMatrix},
+    poly::{Poly, PolyMatrix, PolyParams},
     utils::timed_read,
 };
 use rayon::prelude::*;
@@ -185,17 +185,19 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
         let k = c_z.to_const_int();
         info!("Performing public lookup, k={}", k);
+        let m_a = (plt.d + 1) * (params.modulus_digits() + 2);
+
         let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
         if let Some((_, y_k)) = plt.f.get(&k) {
             let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
             let l_common: M = timed_read(
                 "L_common",
-                || M::read_from_files(params, m_b, m, &dir_path, "L_common"),
+                || M::read_from_files(params, m_b, m_a, &dir_path, "L_common"),
                 &mut Duration::default(),
             );
             let l_k = timed_read(
                 &format!("L_{k}"),
-                || M::read_from_files(params, m_b, m, &dir_path, &format!("L_{k}")),
+                || M::read_from_files(params, m_a, m, &dir_path, &format!("L_{k}")),
                 &mut Duration::default(),
             );
             let c_lt_k = p_x_l * l_common * l_k;
