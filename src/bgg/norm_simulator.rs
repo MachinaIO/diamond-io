@@ -132,7 +132,7 @@ impl Evaluable for NormSimulator {
         _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
-        todo!()
+        self
     }
 }
 
