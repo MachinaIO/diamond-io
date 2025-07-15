@@ -275,8 +275,7 @@ mod tests {
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
-        let (b_l_plus_one_trapdoor, b_l_plus_one) =
-            trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
+        let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
         info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
         let m = (1 + d) * params.modulus_digits();
         let m_b = (1 + input_size) * (d + 1) * (2 + params.modulus_digits());
