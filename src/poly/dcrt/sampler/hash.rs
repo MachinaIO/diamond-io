@@ -37,11 +37,10 @@ where
     ) -> DCRTPolyMatrix {
         let out_sz = <H as digest::Digest>::output_size();
         let n = params.ring_dimension() as usize;
-        let bytes_per_poly = (n + 7) / 8;
-        let hashes_per_poly = (bytes_per_poly + out_sz - 1) / out_sz;
+        let bytes_per_poly = n.div_ceil(8);
+        let hashes_per_poly = bytes_per_poly.div_ceil(out_sz);
         let hash_output_size = <H as digest::Digest>::output_size() * 8;
         let q = params.modulus();
-        let log_q = params.modulus_bits();
         let num_hash_bit_per_poly = n.div_ceil(hash_output_size);
         let mut new_matrix = DCRTPolyMatrix::new_empty(params, nrow, ncol);
         let mut hasher: H = H::new();
@@ -58,31 +57,20 @@ where
                                 hasher.update(j.to_le_bytes());
                                 let mut buf = vec![0u8; hashes_per_poly * out_sz];
                                 for blk in 0..hashes_per_poly {
-                                    let mut h = hasher.clone(); // cheap 200‑B copy
+                                    let mut h = hasher.clone();
                                     h.update((blk as u64).to_le_bytes()); // counter
                                     h.finalize_into(
                                         (&mut buf[blk * out_sz..(blk + 1) * out_sz]).into(),
                                     );
                                 }
-
                                 let bits = &buf[..bytes_per_poly];
-                                let coeffs = if log_q <= 64 {
-                                    (0..n)
-                                        .map(|k| {
-                                            let byte = bits[k >> 3]; // k / 8
-                                            let bit = (byte >> (k & 7)) & 1;
-                                            FinRingElem::new(bit as u64, q.clone())
-                                        })
-                                        .collect::<Vec<_>>()
-                                } else {
-                                    (0..n)
-                                        .map(|k| {
-                                            let byte = bits[k >> 3];
-                                            let bit = (byte >> (k & 7)) & 1;
-                                            FinRingElem::new(BigUint::from(bit), q.clone())
-                                        })
-                                        .collect::<Vec<_>>()
-                                };
+                                let coeffs = (0..n)
+                                    .map(|k| {
+                                        let byte = bits[k >> 3];
+                                        let bit = (byte >> (k & 7)) & 1;
+                                        FinRingElem::new(BigUint::from(bit), q.clone())
+                                    })
+                                    .collect::<Vec<_>>();
                                 DCRTPoly::from_coeffs(params, &coeffs)
                             })
                             .collect()
