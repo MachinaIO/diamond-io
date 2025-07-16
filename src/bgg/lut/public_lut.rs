@@ -41,6 +41,7 @@ impl<M: PolyMatrix> PublicLut<M> {
         let m = (1 + d) * params.modulus_digits();
         let hash_sampler = SH::new();
         let t = f.len();
+        // todo: R_k could be sampled from uniform if we decided to dump it in disk.
         let r_k_s = hash_sampler.sample_hash(
             params,
             r_k_hashkey,
