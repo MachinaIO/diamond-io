@@ -35,20 +35,6 @@ impl DCRTPoly {
         &self.ptr_poly
     }
 
-    pub fn modulus_switch(
-        &self,
-        params: &DCRTPolyParams,
-        new_modulus: <DCRTPolyParams as PolyParams>::Modulus,
-    ) -> Self {
-        debug_assert!(new_modulus < params.modulus());
-        let coeffs = self.coeffs();
-        let new_coeffs = coeffs
-            .par_iter()
-            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
-            .collect::<Vec<FinRingElem>>();
-        DCRTPoly::from_coeffs(params, &new_coeffs)
-    }
-
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
         DCRTPoly::new(ffi::DCRTPolyGenFromVec(
             params.ring_dimension(),
@@ -71,6 +57,20 @@ impl DCRTPoly {
 impl Poly for DCRTPoly {
     type Elem = FinRingElem;
     type Params = DCRTPolyParams;
+
+    fn modulus_switch(
+        &self,
+        params: &Self::Params,
+        new_modulus: <Self::Params as PolyParams>::Modulus,
+    ) -> Self {
+        debug_assert!(new_modulus < params.modulus());
+        let coeffs = self.coeffs();
+        let new_coeffs = coeffs
+            .par_iter()
+            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
+            .collect::<Vec<FinRingElem>>();
+        DCRTPoly::from_coeffs(params, &new_coeffs)
+    }
 
     fn coeffs(&self) -> Vec<Self::Elem> {
         let poly_encoding = self.ptr_poly.GetCoefficientsBytes();
