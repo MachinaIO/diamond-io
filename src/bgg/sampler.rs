@@ -1,5 +1,6 @@
 use super::{BggEncoding, BggPublicKey};
 use crate::{
+    bgg::crt::CRTBggEncoding,
     parallel_iter,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
@@ -158,6 +159,43 @@ where
                 }
             })
             .collect()
+    }
+
+    /// Sample single CRTBggEncoding for single plaintext and publickey
+    pub fn sample_single_crt(
+        &self,
+        params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
+        public_key: BggPublicKey<S::M>,
+        plaintexts: <S::M as PolyMatrix>::P,
+    ) -> CRTBggEncoding<S::M> {
+        let secret_vec = &self.secret_vec;
+        let log_base_q = params.modulus_digits();
+        let secret_vec_size = self.secret_vec.col_size();
+        let columns = secret_vec_size * log_base_q;
+        let error: S::M = self.error_sampler.sample_uniform(
+            params,
+            1,
+            columns,
+            DistType::GaussDist { sigma: self.gauss_sigma },
+        );
+        let first_term = secret_vec.clone() * public_key.clone().matrix;
+        let gadget = S::M::gadget_matrix(params, secret_vec_size);
+        let mut new_inner = Vec::new();
+        for modulus in params.to_crt() {
+            // plaintext mod q_i
+            let switched_pt = plaintexts.modulus_switch(params, modulus);
+            let encoded_polys_vec = S::M::from_poly_vec_row(params, vec![switched_pt.clone()]);
+            let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget.clone()));
+            let vector = first_term.clone() - second_term + error.clone();
+            let encoding = BggEncoding {
+                vector,
+                pubkey: public_key.clone(),
+                plaintext: if public_key.reveal_plaintext { Some(switched_pt) } else { None },
+            };
+            new_inner.push(encoding);
+        }
+
+        CRTBggEncoding { inner: new_inner }
     }
 }
 
@@ -337,6 +375,48 @@ mod tests {
                         (multiplication.pubkey.matrix - (g * multiplication.plaintext.unwrap())))
                 )
             }
+        }
+    }
+
+    #[test]
+    fn test_sample_crt() {
+        let params = DCRTPolyParams::default();
+        let d = 3;
+        let packed_size = 2;
+        let key: [u8; 32] = rand::random();
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+        let pk_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let reveal = vec![true; packed_size + 1];
+        let mut pks = pk_sampler.sample(&params, &tag_bytes, &reveal);
+        let public_key = pks.pop().expect("at least one public key was sampled");
+        let plaintext = create_random_poly(&params);
+        let uniform = DCRTPolyUniformSampler::new();
+        let secrets = vec![create_bit_random_poly(&params); d];
+
+        let encoder = BGGEncodingSampler::new(&params, &secrets, uniform, 0.0);
+        let crt_encoding =
+            encoder.sample_single_crt(&params, public_key.clone(), plaintext.clone());
+        let crt_primes = params.to_crt(); // {q_0,...,q_{L-1}}
+        assert_eq!(crt_encoding.inner.len(), crt_primes.len());
+
+        let secret_vec_size = encoder.secret_vec.col_size();
+        let gadget = DCRTPolyMatrix::gadget_matrix(&params, secret_vec_size);
+        for ((enc, q_i), idx) in crt_encoding.inner.iter().zip(crt_primes.iter()).zip(0usize..) {
+            let switched_pt = plaintext.modulus_switch(&params, q_i.clone());
+            assert_eq!(
+                enc.plaintext.as_ref().expect("plaintext should be present"),
+                &switched_pt,
+                "tower {}: plaintext mismatch after modulus switch",
+                idx
+            );
+
+            assert_eq!(enc.pubkey, public_key, "tower {}: public key was altered", idx);
+            let first_term = encoder.secret_vec.clone() * public_key.matrix.clone();
+            let encoded_pt = DCRTPolyMatrix::from_poly_vec_row(&params, vec![switched_pt]);
+            let second_term = encoded_pt.tensor(&(encoder.secret_vec.clone() * gadget.clone()));
+            let expected_vec = first_term - second_term;
+            assert_eq!(enc.vector, expected_vec, "tower {}: vector equation does not hold", idx);
         }
     }
 }

@@ -1,4 +1,5 @@
 pub mod circuit;
+pub mod crt;
 pub mod digits_to_int;
 pub mod encoding;
 pub mod lut;
