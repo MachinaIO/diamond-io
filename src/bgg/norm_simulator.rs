@@ -132,14 +132,14 @@ impl Evaluable for NormSimulator {
         _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
-        // |self.vector · r_k.decompose()| ≤ |h| · (β‑1)·√d
-        let part1 =
-            &self.h_norm * &BigUint::from((self.base - 1) as u32) * BigUint::from(self.dim_sqrt);
+        // |self.vector · r_k.decompose()|
+        let part1 = self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1));
 
-        // bound for c_lt_k, (β−1)³
+        // c_lt_k
         let part2 = MPolyCoeffs::new(vec![
             BigUint::from((self.base - 1) as u32).pow(3) * BigUint::from(self.dim_sqrt).pow(3),
-        ]);
+        ])
+        .right_rotate(2);
 
         Self {
             h_norm: part1 + &part2,
