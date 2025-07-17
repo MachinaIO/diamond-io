@@ -6,7 +6,7 @@ use crate::{
 };
 use itertools::Itertools;
 use num_bigint::BigUint;
-use num_traits::{One, Zero};
+use num_traits::One;
 use serde::{Deserialize, Serialize};
 use std::{
     ops::{Add, Mul, Sub},
@@ -23,21 +23,11 @@ impl<M: PolyMatrix> PolyCircuit<M> {
     where
         NormSimulator: Evaluable<Matrix = M>,
     {
-        let one = NormSimulator::new(
-            MPolyCoeffs::new(vec![BigUint::one()]),
-            BigUint::one(),
-            dim,
-            base_bits,
-        );
+        let one = NormSimulator::new(MPolyCoeffs::one(), BigUint::one(), dim, base_bits);
         let inputs = packed_input_norms
             .into_iter()
             .map(|plaintext_norm| {
-                NormSimulator::new(
-                    MPolyCoeffs::new(vec![BigUint::one()]),
-                    plaintext_norm,
-                    dim,
-                    base_bits,
-                )
+                NormSimulator::new(MPolyCoeffs::one(), plaintext_norm, dim, base_bits)
             })
             .collect::<Vec<_>>();
         let outputs = self.eval(&(), &one, &inputs, None);
@@ -121,8 +111,8 @@ impl Evaluable for NormSimulator {
     fn from_digits(_: &Self::Params, one: &Self, digits: &[u32]) -> Self {
         let digit_max = digits.iter().max().unwrap();
         let dim_sqrt = one.dim_sqrt;
-        let h_norm = one.h_norm.clone() * BigUint::from(digit_max * dim_sqrt);
-        let plaintext_norm = one.plaintext_norm.clone() * BigUint::from(*digit_max);
+        let h_norm = &one.h_norm * &BigUint::from(digit_max * dim_sqrt);
+        let plaintext_norm = &one.plaintext_norm * &BigUint::from(*digit_max);
         Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
 
@@ -132,18 +122,11 @@ impl Evaluable for NormSimulator {
         _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
-        // |self.vector · r_k.decompose()|
-        let part1 = self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1));
-
-        // c_lt_k
-        let part2 = MPolyCoeffs::new(vec![
-            BigUint::from((self.base - 1) as u32).pow(3) * BigUint::from(self.dim_sqrt).pow(3),
-        ])
-        .right_rotate(2);
-
         Self {
-            h_norm: part1 + &part2,
-            plaintext_norm: BigUint::from((self.base - 1) as u32),
+            // |c_z · r_k.decompose()| + c_lt_k
+            h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) +
+                MPolyCoeffs::one(),
+            plaintext_norm: BigUint::from(self.base - 1),
             dim_sqrt: self.dim_sqrt,
             base: self.base,
         }
@@ -158,8 +141,14 @@ impl MPolyCoeffs {
         Self(coeffs)
     }
 
+    #[inline]
+    pub fn one() -> Self {
+        Self::new(vec![BigUint::one()])
+    }
+
+    #[inline]
     pub fn right_rotate(&self, scale: u64) -> Self {
-        let mut coeffs = vec![BigUint::zero()];
+        let mut coeffs = vec![BigUint::ZERO];
         coeffs.extend(self.0.iter().map(|coeff| coeff * scale).collect_vec());
         Self(coeffs)
     }
@@ -173,8 +162,8 @@ impl_binop_with_refs!(MPolyCoeffs => Add::add(self, rhs: &MPolyCoeffs) -> MPolyC
     let mut result = Vec::with_capacity(max_len);
 
     for i in 0..max_len {
-        let a = if i < self_len { self.0[i].clone() } else { BigUint::zero() };
-        let b = if i < rhs_len { rhs.0[i].clone() } else { BigUint::zero() };
+        let a = if i < self_len { self.0[i].clone() } else { BigUint::ZERO };
+        let b = if i < rhs_len { rhs.0[i].clone() } else { BigUint::ZERO };
         result.push(a + b);
     }
 
