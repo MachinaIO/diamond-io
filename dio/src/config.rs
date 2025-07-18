@@ -54,4 +54,5 @@ pub struct SimBenchNormConfig {
     pub crt_bits: usize,
     /// bit size of the base for the gadget vector and decomposition
     pub base_bits: u32,
+    pub d: usize,
 }

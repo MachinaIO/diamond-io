@@ -132,7 +132,21 @@ impl Evaluable for NormSimulator {
         _: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
-        todo!("norm simulator haven't implemented public_lookup")
+        // |self.vector · r_k.decompose()| ≤ |h| · (β‑1)·√d
+        let part1 =
+            &self.h_norm * &BigUint::from((self.base - 1) as u32) * BigUint::from(self.dim_sqrt);
+
+        // bound for c_lt_k, (β−1)³
+        let part2 = MPolyCoeffs::new(vec![
+            BigUint::from((self.base - 1) as u32).pow(3) * BigUint::from(self.dim_sqrt).pow(3),
+        ]);
+
+        Self {
+            h_norm: part1 + &part2,
+            plaintext_norm: BigUint::from((self.base - 1) as u32),
+            dim_sqrt: self.dim_sqrt,
+            base: self.base,
+        }
     }
 }
 

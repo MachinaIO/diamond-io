@@ -189,6 +189,9 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
 
         let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
         if let Some((_, y_k)) = plt.f.get(&k) {
+            // todo: R_k should be passed to evaluator via disk or hash sampler.
+            // todo: Furthermore, everthing in plt we have to assume evaluator could able to
+            // construct this.
             let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
             let l_common: M = timed_read(
                 "L_common",
@@ -275,8 +278,7 @@ mod tests {
             BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
-        let (b_l_plus_one_trapdoor, b_l_plus_one) =
-            trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
+        let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
         info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
         let m = (1 + d) * params.modulus_digits();
         let m_b = (1 + input_size) * (d + 1) * (2 + params.modulus_digits());
