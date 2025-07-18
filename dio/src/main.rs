@@ -89,11 +89,14 @@ enum Commands {
         #[arg(short, long)]
         out_path: PathBuf,
 
-        #[arg(long)]
-        add_num: usize,
+        #[arg(long, value_enum, default_value_t = BenchType::AddMul)]
+        bench_type: BenchType,
 
-        #[arg(long)]
-        mul_num: usize,
+        #[arg(long, requires_if("add_mul", "bench_type"))]
+        add_num: Option<usize>,
+
+        #[arg(long, requires_if("add_mul", "bench_type"))]
+        mul_num: Option<usize>,
     },
     BuildCircuit {
         #[arg(short, long)]
@@ -241,7 +244,7 @@ async fn main() {
                 }
             }
         }
-        Commands::SimBenchNorm { config, out_path, add_num, mul_num } => {
+        Commands::SimBenchNorm { config, out_path, add_num, mul_num, bench_type } => {
             let dio_config: SimBenchNormConfig =
                 serde_json::from_reader(fs::File::open(&config).unwrap()).unwrap();
             let log_n = dio_config.log_ring_dim;
@@ -254,8 +257,18 @@ async fn main() {
             debug_assert_eq!(crt_bits * max_crt_depth, log_q);
             let log_base_q = params.modulus_digits();
 
-            let public_circuit =
-                BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
+            let public_circuit = match bench_type {
+                BenchType::AddMul => {
+                    let add_num = add_num.unwrap();
+                    let mul_num = mul_num.unwrap();
+                    BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit()
+                }
+                BenchType::Plt => {
+                    // To simulate the norm, value T(=table row size) is not relevant
+                    let lut = setup_plt(0, &params, dio_config.d);
+                    BenchCircuit::new_plt(log_base_q, lut.clone()).as_poly_circuit()
+                }
+            };
             let a_rlwe_bar = DCRTPoly::const_max(&params);
             let b = DCRTPoly::const_max(&params);
 
