@@ -22,7 +22,6 @@ def log_params_to_file(
     input_width: int,
     add_num: int,
     mul_num: int,
-    t_num: int,
     max_crt_depth: int,
     secpar: int,
     n: int,
@@ -57,7 +56,6 @@ def log_params_to_file(
         f"input_width={input_width}, "
         f"add_num={add_num}, "
         f"mul_num={mul_num}, "
-        f"t_num={t_num}, "
         f"max_crt_depth={max_crt_depth}, "
         f"secpar={secpar}, "
         f"n={n}, "
