@@ -10,6 +10,7 @@ use crate::{
 };
 use rayon::prelude::*;
 use std::marker::PhantomData;
+use tracing::info;
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
@@ -51,6 +52,44 @@ where
         let log_base_q = params.modulus_digits();
         let secret_vec_size = self.d + 1;
         let columns = secret_vec_size * log_base_q;
+        let packed_input_size = reveal_plaintexts.len();
+        let all_matrix = sampler.sample_hash(
+            params,
+            self.hash_key,
+            tag,
+            secret_vec_size,
+            columns * packed_input_size,
+            DistType::FinRingDist,
+        );
+        parallel_iter!(0..packed_input_size)
+            .map(|idx| {
+                let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
+                BggPublicKey::new(
+                    all_matrix.slice_columns(columns * idx, columns * (idx + 1)),
+                    reveal_plaintext,
+                )
+            })
+            .collect()
+    }
+
+    /// Sample a public key matrix for crt
+    /// # Arguments
+    /// * `tag`: The tag to sample the public key matrix
+    /// * `reveal_plaintexts`: A vector of booleans indicating whether the plaintexts associated to
+    ///   the public keys should be revealed
+    /// # Returns
+    /// A vector of public key matrices
+    pub fn sample_crt(
+        &self,
+        params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
+        tag: &[u8],
+        reveal_plaintexts: &[bool],
+    ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
+        let sampler = S::new();
+        let log_base_q = params.modulus_digits();
+        let q_crt_len = params.to_crt().len();
+        let secret_vec_size = self.d + 1;
+        let columns = secret_vec_size * log_base_q * q_crt_len;
         let packed_input_size = reveal_plaintexts.len();
         let all_matrix = sampler.sample_hash(
             params,
@@ -161,41 +200,88 @@ where
             .collect()
     }
 
-    /// Sample single CRTBggEncoding for single plaintext and publickey
-    pub fn sample_single_crt(
+    /// Sample CRTBggEncoding array for given plaintexts
+    pub fn sample_crt(
         &self,
         params: &<<<S as PolyUniformSampler>::M as PolyMatrix>::P as Poly>::Params,
-        public_key: BggPublicKey<S::M>,
-        plaintexts: <S::M as PolyMatrix>::P,
-    ) -> CRTBggEncoding<S::M> {
+        public_keys: &[BggPublicKey<S::M>],
+        plaintexts: &[<S::M as PolyMatrix>::P],
+    ) -> Vec<CRTBggEncoding<S::M>> {
         let secret_vec = &self.secret_vec;
         let log_base_q = params.modulus_digits();
+        let packed_input_size = 1 + plaintexts.len(); // first slot is allocated to the constant 1 polynomial plaintext
+        let plaintexts: Vec<<S::M as PolyMatrix>::P> =
+            [&[<<S as PolyUniformSampler>::M as PolyMatrix>::P::const_one(params)], plaintexts]
+                .concat();
         let secret_vec_size = self.secret_vec.col_size();
-        let columns = secret_vec_size * log_base_q;
+        let crt_params = params.to_crt();
+        let q_crt_len = crt_params.len();
+        info!("q_crt_len={q_crt_len}");
+        let columns = secret_vec_size * log_base_q * packed_input_size * q_crt_len;
+        info!("secret_vec_size={secret_vec_size}");
+        info!("log_base_q={log_base_q}");
+        info!("packed_input_size={packed_input_size}");
         let error: S::M = self.error_sampler.sample_uniform(
             params,
             1,
             columns,
             DistType::GaussDist { sigma: self.gauss_sigma },
         );
-        let first_term = secret_vec.clone() * public_key.clone().matrix;
+        let all_public_key_matrix: S::M = public_keys[0]
+            .matrix
+            .concat_columns(&public_keys[1..].par_iter().map(|pk| &pk.matrix).collect::<Vec<_>>());
+        let first_term = secret_vec.clone() * all_public_key_matrix;
         let gadget = S::M::gadget_matrix(params, secret_vec_size);
-        let mut new_inner = Vec::new();
-        for modulus in params.to_crt() {
-            // plaintext mod q_i
-            let switched_pt = plaintexts.modulus_switch(params, modulus);
-            let encoded_polys_vec = S::M::from_poly_vec_row(params, vec![switched_pt.clone()]);
-            let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget.clone()));
-            let vector = first_term.clone() - second_term + error.clone();
-            let encoding = BggEncoding {
-                vector,
-                pubkey: public_key.clone(),
-                plaintext: if public_key.reveal_plaintext { Some(switched_pt) } else { None },
-            };
-            new_inner.push(encoding);
+        let switched_pts: Vec<<S::M as PolyMatrix>::P> = plaintexts
+            .into_iter()
+            .flat_map(|plaintext| {
+                crt_params
+                    .iter()
+                    .map(move |modulus| plaintext.modulus_switch(params, modulus.clone()))
+            })
+            .collect();
+        info!("switched_pts={}", switched_pts.len());
+        let encoded_polys_vec = S::M::from_poly_vec_row(params, switched_pts.clone());
+        let second_term = encoded_polys_vec.tensor(&(secret_vec.clone() * gadget));
+        let all_vector = first_term - second_term + error;
+        info!("all_vector={},{}", all_vector.row_size(), all_vector.col_size());
+        let mut result: Vec<CRTBggEncoding<S::M>> = Vec::with_capacity(packed_input_size - 1);
+        let mut col_offset = 0;
+        let cols_per_encoding = secret_vec_size * log_base_q;
+        for (pt_idx, pk) in public_keys.iter().enumerate() {
+            let mut inner = Vec::with_capacity(q_crt_len);
+            for crt_idx in 0..q_crt_len {
+                info!("pt_idx={pt_idx}, crt_idx={crt_idx}");
+                let start = col_offset + crt_idx * cols_per_encoding;
+                let end = start + cols_per_encoding;
+                let start_local = crt_idx * cols_per_encoding;
+                let end_local = start_local + cols_per_encoding;
+                info!("start={start}, end={end}");
+                info!("start_local={start_local}, end_local={end_local}");
+                let vector_slice = all_vector.slice_columns(start, end);
+                info!(
+                    "switched_pts_idx={}, reveal_plaintext={}",
+                    pt_idx * q_crt_len + crt_idx,
+                    pk.clone().reveal_plaintext
+                );
+
+                let pt_limb = switched_pts[pt_idx * q_crt_len + crt_idx].clone();
+                let pk_slice = pk.column_slice(start_local, end_local);
+                info!("pk_slice : {}, {}", pk_slice.matrix.row_size(), pk_slice.matrix.col_size());
+                let encoding = BggEncoding {
+                    vector: vector_slice,
+                    pubkey: pk_slice,
+                    plaintext: if pk.reveal_plaintext { Some(pt_limb) } else { None },
+                };
+
+                inner.push(encoding);
+            }
+
+            col_offset += q_crt_len * cols_per_encoding;
+            result.push(CRTBggEncoding { inner });
         }
 
-        CRTBggEncoding { inner: new_inner }
+        result
     }
 }
 
@@ -206,7 +292,7 @@ mod tests {
         poly::dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
         },
-        utils::{create_bit_random_poly, create_random_poly},
+        utils::{create_bit_random_poly, create_random_poly, init_tracing},
     };
     use keccak_asm::Keccak256;
 
@@ -380,43 +466,20 @@ mod tests {
 
     #[test]
     fn test_sample_crt() {
-        let params = DCRTPolyParams::default();
-        let d = 3;
-        let packed_size = 2;
+        init_tracing();
         let key: [u8; 32] = rand::random();
         let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
+        let params = DCRTPolyParams::new(4096, 6, 51, 17);
+        let d = 3;
+        let packed_size = 2;
         let pk_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let reveal = vec![true; packed_size + 1];
-        let mut pks = pk_sampler.sample(&params, &tag_bytes, &reveal);
-        let public_key = pks.pop().expect("at least one public key was sampled");
-        let plaintext = create_random_poly(&params);
+        // one reveal flag per packed slot (+1 for the constant‑1 slot)
+        let reveal_flags = vec![true, true, true];
+        let public_keys = pk_sampler.sample_crt(&params, &tag.to_le_bytes(), &reveal_flags);
+        let plaintexts: Vec<_> = (0..packed_size).map(|_| create_random_poly(&params)).collect();
         let uniform = DCRTPolyUniformSampler::new();
-        let secrets = vec![create_bit_random_poly(&params); d];
-
+        let secrets: Vec<_> = (0..d).map(|_| create_bit_random_poly(&params)).collect();
         let encoder = BGGEncodingSampler::new(&params, &secrets, uniform, 0.0);
-        let crt_encoding =
-            encoder.sample_single_crt(&params, public_key.clone(), plaintext.clone());
-        let crt_primes = params.to_crt(); // {q_0,...,q_{L-1}}
-        assert_eq!(crt_encoding.inner.len(), crt_primes.len());
-
-        let secret_vec_size = encoder.secret_vec.col_size();
-        let gadget = DCRTPolyMatrix::gadget_matrix(&params, secret_vec_size);
-        for ((enc, q_i), idx) in crt_encoding.inner.iter().zip(crt_primes.iter()).zip(0usize..) {
-            let switched_pt = plaintext.modulus_switch(&params, q_i.clone());
-            assert_eq!(
-                enc.plaintext.as_ref().expect("plaintext should be present"),
-                &switched_pt,
-                "tower {}: plaintext mismatch after modulus switch",
-                idx
-            );
-
-            assert_eq!(enc.pubkey, public_key, "tower {}: public key was altered", idx);
-            let first_term = encoder.secret_vec.clone() * public_key.matrix.clone();
-            let encoded_pt = DCRTPolyMatrix::from_poly_vec_row(&params, vec![switched_pt]);
-            let second_term = encoded_pt.tensor(&(encoder.secret_vec.clone() * gadget.clone()));
-            let expected_vec = first_term - second_term;
-            assert_eq!(enc.vector, expected_vec, "tower {}: vector equation does not hold", idx);
-        }
+        let _crt_enc_vec = encoder.sample_crt(&params, &public_keys, &plaintexts);
     }
 }

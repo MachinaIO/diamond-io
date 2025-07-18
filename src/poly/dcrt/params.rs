@@ -62,10 +62,6 @@ impl PolyParams for DCRTPolyParams {
             .map(|m| Arc::new(BigUint::from_str_radix(&m, 10).expect("invalid CRT modulus")))
             .collect()
     }
-
-    fn from_crt(crt: Vec<Self>) -> Self {
-        todo!()
-    }
 }
 
 impl Default for DCRTPolyParams {

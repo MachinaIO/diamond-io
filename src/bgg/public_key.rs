@@ -25,6 +25,20 @@ impl<M: PolyMatrix> BggPublicKey<M> {
         self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
     }
 
+    /// Return a new public‑key whose matrix is the column slice
+    /// `[start, end)` of the current matrix.
+    pub fn column_slice(&self, start: usize, end: usize) -> Self {
+        assert!(start < end, "column_slice: start must be < end");
+        assert!(
+            end <= self.matrix.col_size(),
+            "column_slice: end ({end}) exceeds matrix col_size ({})",
+            self.matrix.col_size()
+        );
+
+        let sliced = self.matrix.slice_columns(start, end);
+        Self { matrix: sliced, reveal_plaintext: self.reveal_plaintext }
+    }
+
     /// Writes the public key with id to files under the given directory.
     pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
         &self,
