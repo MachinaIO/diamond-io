@@ -97,9 +97,6 @@ enum Commands {
 
         #[arg(long, requires_if("add_mul", "bench_type"))]
         mul_num: Option<usize>,
-
-        #[arg(long, requires_if("plt", "bench_type"))]
-        t_num: Option<usize>,
     },
     BuildCircuit {
         #[arg(short, long)]
@@ -247,7 +244,7 @@ async fn main() {
                 }
             }
         }
-        Commands::SimBenchNorm { config, out_path, add_num, mul_num, bench_type, t_num } => {
+        Commands::SimBenchNorm { config, out_path, add_num, mul_num, bench_type } => {
             let dio_config: SimBenchNormConfig =
                 serde_json::from_reader(fs::File::open(&config).unwrap()).unwrap();
             let log_n = dio_config.log_ring_dim;
@@ -267,8 +264,8 @@ async fn main() {
                     BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit()
                 }
                 BenchType::Plt => {
-                    let t_num = t_num.unwrap();
-                    let lut = setup_plt(t_num, &params, dio_config.d);
+                    // To simulate the norm, value T(=table row size) is not relevant
+                    let lut = setup_plt(0, &params, dio_config.d);
                     BenchCircuit::new_plt(log_base_q, lut.clone()).as_poly_circuit()
                 }
             };

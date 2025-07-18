@@ -94,7 +94,6 @@ def find_params(
     bench_type: str,
     add_num: int,
     mul_num: int,
-    t_num: int
 ):
     for d in range(1, max_d + 1):
         print(f"Trying d: {d}")
@@ -108,7 +107,7 @@ def find_params(
                 "crt_bits": crt_bits,
                 "base_bits": base_bits,
             }
-            config_file = f"sim_norm_config_{input_size}_{input_width}_{bench_type}_{add_num}_{mul_num}_{t_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json"
+            config_file = f"sim_norm_config_{input_size}_{input_width}_{bench_type}_{add_num}_{mul_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json"
             with open(
                 os.path.join(
                     script_dir,
@@ -119,7 +118,7 @@ def find_params(
                 f.write(json.dumps(config, indent=4))
             norms_path = os.path.join(
                 script_dir,
-                f"norms_{input_size}_{input_width}_{bench_type}_{add_num}_{mul_num}_{t_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json",
+                f"norms_{input_size}_{input_width}_{bench_type}_{add_num}_{mul_num}_{log2_n}_{max_crt_depth}_{crt_bits}_{base_bits}.json",
             )
             cmd = [
                 "dio",
@@ -131,7 +130,7 @@ def find_params(
             if bench_type == "add_mul":
                 cmd += ["--add-num", str(add_num), "--mul-num", str(mul_num)]
             elif bench_type == "plt":
-                cmd += ["--t-num", str(t_num)]
+                cmd
             else:
                 raise ValueError(f"Unsupported bench_type: {bench_type}")
             subprocess.run(cmd, check=True)
@@ -599,12 +598,11 @@ if __name__ == "__main__":
     max_base_bits = 20
     crt_bits = 51
     max_crt_depth = 20
-    input_size = 4
+    input_size = 1
     input_width = 1
     bench_type = "plt"
     add_num = 0
     mul_num = 0
-    t_num = 8
     if input_size % input_width != 0:
         raise ValueError("input_size should be divisible by input_width")
     (
@@ -629,7 +627,6 @@ if __name__ == "__main__":
         bench_type,
         add_num,
         mul_num,
-        t_num,
     )
     print(f"input_size: {input_size}")
     print(f"input_width: {input_width}")
@@ -649,7 +646,6 @@ if __name__ == "__main__":
         input_width,
         add_num,
         mul_num,
-        t_num,
         max_crt_depth,
         secpar,
         2**log2_n,
