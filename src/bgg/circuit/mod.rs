@@ -13,6 +13,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::task::JoinHandle;
+use tracing::info;
 pub use utils::*;
 
 use crate::{
@@ -414,25 +415,21 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
         M: PolyMatrix + Send + 'static,
     {
-        let mut all_handles: Vec<JoinHandle<()>> = self
-            .lookups
-            .par_iter()
-            .flat_map(|(_id, lut_arc)| {
-                let lut = lut_arc.lock().expect("mutex poisoned");
-                lut.preimage(
-                    params,
-                    b_l,
-                    b_l_plus_one,
-                    trap_sampler,
-                    b_l_trapdoor,
-                    b_l_plus_one_trapdoor,
-                    input_size,
-                    dir_path,
-                )
-            })
-            .collect();
-
-        handles_out.append(&mut all_handles);
+        for (id, lut_arc) in &self.lookups {
+            info!("id={id} lut preiamge sampling");
+            let lut = lut_arc.lock().unwrap();
+            lut.preimage(
+                params,
+                b_l,
+                b_l_plus_one,
+                trap_sampler,
+                b_l_trapdoor,
+                b_l_plus_one_trapdoor,
+                input_size,
+                dir_path,
+                handles_out,
+            );
+        }
     }
 
     pub fn register_public_lookup(&mut self, public_lookup: PublicLut<M>) -> usize {
