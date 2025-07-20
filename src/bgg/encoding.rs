@@ -219,8 +219,8 @@ mod tests {
     use crate::{
         bgg::{
             circuit::PolyCircuit,
-            lut::utils::p_vector_for_inputs,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
+            utils::random_bgg_encodings_for_bits,
             BggEncoding, BggPublicKey,
         },
         poly::{
@@ -246,6 +246,30 @@ mod tests {
     use tracing::info;
 
     const SIGMA: f64 = 4.578;
+
+    fn p_vector_for_inputs(
+        b_l: &DCRTPolyMatrix,
+        plaintexts: Vec<DCRTPoly>,
+        params: &DCRTPolyParams,
+        p_sigma: f64,
+        s_x_l: &DCRTPolyMatrix,
+    ) -> DCRTPolyMatrix {
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        // let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
+        let one = DCRTPoly::const_one(params);
+        let mut extended_plaintexts = vec![one];
+        extended_plaintexts.extend(plaintexts);
+        let p_x_l_error = uniform_sampler.sample_uniform(
+            params,
+            1,
+            b_l.ncol,
+            DistType::GaussDist { sigma: p_sigma },
+        );
+        let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, extended_plaintexts);
+        let s_connect = encoded_bits.tensor(s_x_l);
+        let s_b = s_connect * b_l;
+        s_b + p_x_l_error
+    }
 
     #[tokio::test]
     #[ignore = "file cannot be read"]
@@ -349,29 +373,9 @@ mod tests {
     fn test_encoding_add() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 3];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 2;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -399,29 +403,9 @@ mod tests {
     fn test_encoding_sub() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 3];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 2;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -449,29 +433,9 @@ mod tests {
     fn test_encoding_mul() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 3];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 2;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -499,33 +463,9 @@ mod tests {
     fn test_encoding_circuit_operations() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 4];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-        ];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 3;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -565,34 +505,9 @@ mod tests {
     fn test_encoding_complex_circuit() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 5];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-        ];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 4;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -652,29 +567,9 @@ mod tests {
     fn test_encoding_register_and_call_sub_circuit() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 3];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![create_random_poly(&params), create_random_poly(&params)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 2;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -730,33 +625,9 @@ mod tests {
     fn test_encoding_nested_sub_circuits() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
         let d = 3;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 4];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-        ];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let input_size = 3;
+        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();

@@ -137,32 +137,16 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        bgg::{circuit::PolyCircuit, lut::public_lut::PublicLut, sampler::BGGPublicKeySampler},
-        poly::{
-            dcrt::{
-                params::DCRTPolyParams, DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix,
-                DCRTPolyUniformSampler,
-            },
-            Poly,
-        },
+        bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},
+        poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
+        test_utils::setup_constant_plt,
     };
     use keccak_asm::Keccak256;
-    use std::collections::HashMap;
 
     #[test]
     fn test_pubkey_plt() {
         // Create parameters for testing
         let params = DCRTPolyParams::default();
-        /* Lookup mapping k => (x_k, y_k) */
-        let mut f = HashMap::new();
-        f.insert(0, (DCRTPoly::const_int(&params, 0), DCRTPoly::const_int(&params, 7)));
-        f.insert(1, (DCRTPoly::const_int(&params, 1), DCRTPoly::const_int(&params, 5)));
-        f.insert(2, (DCRTPoly::const_int(&params, 2), DCRTPoly::const_int(&params, 6)));
-        f.insert(3, (DCRTPoly::const_int(&params, 3), DCRTPoly::const_int(&params, 1)));
-        f.insert(4, (DCRTPoly::const_int(&params, 4), DCRTPoly::const_int(&params, 0)));
-        f.insert(5, (DCRTPoly::const_int(&params, 5), DCRTPoly::const_int(&params, 3)));
-        f.insert(6, (DCRTPoly::const_int(&params, 6), DCRTPoly::const_int(&params, 4)));
-        f.insert(7, (DCRTPoly::const_int(&params, 7), DCRTPoly::const_int(&params, 2)));
 
         // Create a hash sampler and BGGPublicKeySampler to be reused
         let key: [u8; 32] = rand::random();
@@ -175,12 +159,9 @@ mod tests {
         // Create a simple circuit with an Add operation
         let mut circuit = PolyCircuit::new();
         let inputs = circuit.input(1);
-        let lut = PublicLut::<DCRTPolyMatrix>::new::<
-            DCRTPolyUniformSampler,
-            DCRTPolyHashSampler<Keccak256>,
-        >(&params, d, f, key);
-        let a_lt = lut.a_lt.clone();
-        let plt_id = circuit.register_public_lookup(lut);
+        let plt = setup_constant_plt(8, &params, d);
+        let a_lt = plt.a_lt.clone();
+        let plt_id = circuit.register_public_lookup(plt);
         let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
         circuit.output(vec![plt_gate]);
 

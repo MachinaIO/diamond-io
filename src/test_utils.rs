@@ -207,27 +207,6 @@ pub async fn test_io_plt(
     assert_eq!(output, (hardcoded_key * scale).to_bool_vec());
 }
 
-pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
-    let mut f = HashMap::new();
-    let mut rng = rng();
-    for k in 0..t_n {
-        let r_val: usize = rng.random_range(0..t_n as usize);
-        f.insert(
-            k,
-            (
-                DCRTPoly::from_const_int_lsb(&params, k),
-                DCRTPoly::from_const_int_lsb(&params, r_val),
-            ),
-        );
-    }
-
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
-    plt
-}
-
 /// only used for `test_io_plt` to map either [true, ...] or [false, ...] format
 fn setup_lsb_constant_binary_plt(
     t_n: usize,
@@ -241,6 +220,27 @@ fn setup_lsb_constant_binary_plt(
         f.insert(
             k,
             (DCRTPoly::from_const_int_lsb(&params, k), DCRTPoly::const_int(&params, r_val)),
+        );
+    }
+
+    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+    >(params, d, f, rand::random());
+    plt
+}
+
+pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
+    let mut f = HashMap::new();
+    let mut rng = rng();
+    for k in 0..t_n {
+        let r_val: usize = rng.random_range(0..t_n as usize);
+        f.insert(
+            k,
+            (
+                DCRTPoly::from_const_int_lsb(&params, k),
+                DCRTPoly::from_const_int_lsb(&params, r_val),
+            ),
         );
     }
 
