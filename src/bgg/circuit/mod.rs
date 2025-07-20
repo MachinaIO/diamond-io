@@ -415,10 +415,10 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
         M: PolyMatrix + Send + 'static,
     {
-        for (id, lut_arc) in &self.lookups {
-            info!("id={id} lut preiamge sampling");
-            let lut = lut_arc.lock().unwrap();
-            lut.preimage(
+        for (id, plt_arc) in &self.lookups {
+            info!("id={id} plt preimage sampling");
+            let plt = plt_arc.lock().unwrap();
+            plt.preimage(
                 params,
                 b_l,
                 b_l_plus_one,

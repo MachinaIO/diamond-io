@@ -46,6 +46,7 @@ pub trait Poly:
 {
     type Elem: PolyElem;
     type Params: PolyParams<Modulus = <Self::Elem as PolyElem>::Modulus>;
+    fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self;
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self;
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_decomposed(params: &Self::Params, decomposed: &[Self]) -> Self;

@@ -335,6 +335,14 @@ impl Poly for DCRTPoly {
         }
         sum as usize
     }
+
+    fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
+        let coeffs: Vec<_> = coeffs
+            .into_iter()
+            .map(|i| FinRingElem::constant(&params.modulus(), *i as u64))
+            .collect();
+        DCRTPoly::from_coeffs(&params, &coeffs)
+    }
 }
 
 impl PartialEq for DCRTPoly {
