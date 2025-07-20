@@ -220,7 +220,7 @@ mod tests {
         bgg::{
             circuit::PolyCircuit,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
-            utils::random_bgg_encodings_for_bits,
+            utils::random_bgg_encodings,
             BggEncoding, BggPublicKey,
         },
         poly::{
@@ -375,7 +375,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 2;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -405,7 +405,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 2;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -435,7 +435,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 2;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -465,7 +465,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 3;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -507,7 +507,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 4;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -569,7 +569,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 2;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();
@@ -627,7 +627,7 @@ mod tests {
         let params = DCRTPolyParams::default();
         let d = 3;
         let input_size = 3;
-        let encodings = random_bgg_encodings_for_bits(input_size, d, &params);
+        let encodings = random_bgg_encodings(input_size, d, &params);
         let enc_one = encodings[0].clone();
         let enc1 = encodings[1].clone();
         let enc2 = encodings[2].clone();

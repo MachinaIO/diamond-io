@@ -10,11 +10,11 @@ use crate::{
         },
         sampler::PolyUniformSampler,
     },
-    utils::create_bit_random_poly,
+    utils::{create_bit_random_poly, create_random_poly},
 };
 use keccak_asm::Keccak256;
 
-pub fn random_bgg_encodings_for_bits(
+pub fn random_bgg_encodings(
     input_size: usize,
     secret_size: usize,
     params: &DCRTPolyParams,
@@ -30,7 +30,7 @@ pub fn random_bgg_encodings_for_bits(
     let tag_bytes = tag.to_le_bytes();
     // Create secret and plaintexts
     let secrets = vec![create_bit_random_poly(params); secret_size];
-    let plaintexts = vec![create_bit_random_poly(params); input_size];
+    let plaintexts = vec![create_random_poly(params); input_size];
 
     // Create random public keys
     let reveal_plaintexts = vec![true; input_size + 1];
