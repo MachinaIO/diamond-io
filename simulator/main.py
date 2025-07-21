@@ -131,7 +131,7 @@ def find_params(
             if bench_type == "add_mul":
                 cmd += ["--add-num", str(add_num), "--mul-num", str(mul_num)]
             elif bench_type == "plt":
-                cmd += ["--t_num", str(t_num)]
+                cmd += ["--t-num", str(t_num)]
             else:
                 raise ValueError(f"Unsupported bench_type: {bench_type}")
             subprocess.run(cmd, check=True)
