@@ -212,7 +212,7 @@ fn setup_lsb_constant_binary_plt(
     t_n: usize,
     params: &DCRTPolyParams,
     d: usize,
-) -> PublicLut<DCRTPolyMatrix> {
+) -> PublicLut<DCRTPoly> {
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
@@ -223,14 +223,11 @@ fn setup_lsb_constant_binary_plt(
         );
     }
 
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
+    let plt = PublicLut::<DCRTPoly>::new(f);
     plt
 }
 
-pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
+pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPoly> {
     let mut f = HashMap::new();
     for k in 0..t_n {
         let r_val: usize = t_n - k;
@@ -243,18 +240,11 @@ pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut
         );
     }
 
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
+    let plt = PublicLut::<DCRTPoly>::new(f);
     plt
 }
 
-pub fn setup_constant_plt(
-    t_n: usize,
-    params: &DCRTPolyParams,
-    d: usize,
-) -> PublicLut<DCRTPolyMatrix> {
+pub fn setup_constant_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly> {
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
@@ -262,9 +252,6 @@ pub fn setup_constant_plt(
         f.insert(k, (DCRTPoly::const_int(&params, k), DCRTPoly::const_int(&params, r_val)));
     }
 
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
+    let plt = PublicLut::<DCRTPoly>::new(f);
     plt
 }

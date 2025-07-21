@@ -1,4 +1,4 @@
-use crate::poly::PolyMatrix;
+use crate::poly::{Poly, PolyMatrix};
 
 use super::{PolyCircuit, PolyGateType};
 use serde::{Deserialize, Serialize};
@@ -65,7 +65,7 @@ impl SerializablePolyCircuit {
         Self { gates, sub_circuits, output_ids, num_input }
     }
 
-    pub fn from_circuit<M: PolyMatrix>(circuit: &PolyCircuit<M>) -> Self {
+    pub fn from_circuit<P: Poly>(circuit: &PolyCircuit<P>) -> Self {
         let mut gates = BTreeMap::new();
         for (gate_id, gate) in circuit.gates.iter() {
             let gate_type = match &gate.gate_type {
@@ -103,7 +103,7 @@ impl SerializablePolyCircuit {
         Self::new(gates, sub_circuits, circuit.output_ids.clone(), circuit.num_input)
     }
 
-    pub fn to_circuit<M: PolyMatrix>(&self) -> PolyCircuit<M> {
+    pub fn to_circuit<P: Poly>(&self) -> PolyCircuit<P> {
         let mut circuit = PolyCircuit::new();
         circuit.input(self.num_input);
         for (_, serializable_sub_circuit) in self.sub_circuits.iter() {
@@ -175,12 +175,12 @@ impl SerializablePolyCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::dcrt::DCRTPolyMatrix;
+    use crate::poly::dcrt::{DCRTPoly, DCRTPolyMatrix};
 
     #[test]
     fn test_serialization_roundtrip() {
         // Create a complex circuit with various operations
-        let mut original_circuit: PolyCircuit<DCRTPolyMatrix> = PolyCircuit::new();
+        let mut original_circuit: PolyCircuit<DCRTPoly> = PolyCircuit::new();
 
         // Add inputs
         let inputs = original_circuit.input(3);
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn test_serialization_roundtrip_json() {
         // Create a complex circuit with various operations
-        let mut original_circuit: PolyCircuit<DCRTPolyMatrix> = PolyCircuit::new();
+        let mut original_circuit: PolyCircuit<DCRTPoly> = PolyCircuit::new();
 
         // Add inputs
         let inputs = original_circuit.input(3);

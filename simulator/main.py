@@ -81,6 +81,7 @@ def log_params_to_file(
 
     print(f"Parameters logged to params.log")
 
+
 def find_params(
     target_secpar: int,
     log2_n: int,
@@ -124,9 +125,12 @@ def find_params(
             cmd = [
                 "dio",
                 "sim-bench-norm",
-                "-c", config_file,
-                "-o", norms_path,
-                "--bench-type", bench_type,
+                "-c",
+                config_file,
+                "-o",
+                norms_path,
+                "--bench-type",
+                bench_type,
             ]
             if bench_type == "add_mul":
                 cmd += ["--add-num", str(add_num), "--mul-num", str(mul_num)]
@@ -594,10 +598,10 @@ def sqrt_ceil(x):
 if __name__ == "__main__":
     secpar = 100
     log2_n = 13
-    max_d = 3
+    max_d = 1
     min_base_bits = 16
     max_base_bits = 20
-    crt_bits = 51
+    crt_bits = 7
     max_crt_depth = 20
     input_size = 1
     input_width = 1

@@ -9,9 +9,9 @@ use super::PolyCircuit;
 /// 2. An FHE decryption circuit that takes each ciphertext and the FHE secret key -t_bar as inputs
 ///    and returns the base decomposed plaintext for each cipheretxt
 pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
-    public_circuit: PolyCircuit<E::Matrix>,
+    public_circuit: PolyCircuit<E::P>,
     log_base_q: usize,
-) -> PolyCircuit<E::Matrix> {
+) -> PolyCircuit<E::P> {
     let num_pub_circuit_input = public_circuit.num_input();
     let num_pub_circuit_output = public_circuit.num_output();
     debug_assert_eq!(num_pub_circuit_output % (2 * log_base_q), 0);
@@ -44,7 +44,7 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
 mod tests {
     use super::*;
     use crate::{
-        bgg::DigitsToInt,
+        bgg::{circuit::PolyPltEvaluator, DigitsToInt},
         poly::{
             dcrt::{params::DCRTPolyParams, poly::DCRTPoly, DCRTPolyUniformSampler},
             enc::rlwe_encrypt,
@@ -101,7 +101,7 @@ mod tests {
 
         assert_eq!(inputs.len(), 2 * log_base_q + 1);
         let one = DCRTPoly::const_one(&params);
-        let outputs = circuit.eval(&params, &one, &inputs, None);
+        let outputs = circuit.eval(&params, &one, &inputs, None::<PolyPltEvaluator>);
         assert_eq!(outputs.len(), log_base_q);
 
         // 7. Verify the correctness of the output
