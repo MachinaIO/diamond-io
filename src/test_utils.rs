@@ -232,9 +232,8 @@ fn setup_lsb_constant_binary_plt(
 
 pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
     let mut f = HashMap::new();
-    let mut rng = rng();
     for k in 0..t_n {
-        let r_val: usize = rng.random_range(0..t_n as usize);
+        let r_val: usize = t_n - k;
         f.insert(
             k,
             (

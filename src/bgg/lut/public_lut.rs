@@ -70,15 +70,13 @@ impl<M: PolyMatrix> PublicLut<M> {
 
     /// Find the row k with the maximum coefficient in the second M::P (y_k) of f HashMap
     /// Returns (k, max_coefficient)
-    pub fn max_output_row(&self) -> Option<(usize, <M::P as Poly>::Elem)> {
+    pub fn max_output_row(&self) -> (usize, <M::P as Poly>::Elem) {
+        assert!(!self.f.is_empty(), "f must contain at least one element");
         self.f
             .iter()
-            .map(|(&k, (_, y_k))| {
-                let max_coeff = y_k.coeffs().iter().max().cloned();
-                (k, max_coeff)
-            })
-            .filter_map(|(k, max_coeff)| max_coeff.map(|coeff| (k, coeff)))
-            .max_by_key(|(_, coeff)| coeff.clone())
+            .filter_map(|(&k, (_, y_k))| y_k.coeffs().iter().max().cloned().map(|coeff| (k, coeff)))
+            .max_by(|a, b| a.1.cmp(&b.1))
+            .expect("no coefficients found in any y_k")
     }
 
     /// Compute target, sample preimage and store it as file.
