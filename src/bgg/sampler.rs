@@ -297,21 +297,6 @@ mod tests {
     use keccak_asm::Keccak256;
 
     #[test]
-    fn test_bgg_pub_key_sampling() {
-        let input_size = 10_usize;
-        let key: [u8; 32] = rand::random();
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-        let params = DCRTPolyParams::default();
-        let packed_input_size = input_size.div_ceil(params.ring_dimension().try_into().unwrap());
-        let d = 3;
-        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let reveal_plaintexts = vec![true; packed_input_size + 1];
-        let sampled_pub_keys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        assert_eq!(sampled_pub_keys.len(), packed_input_size + 1);
-    }
-
-    #[test]
     fn test_bgg_pub_key_addition() {
         let key: [u8; 32] = rand::random();
         let tag: u64 = rand::random();

@@ -20,6 +20,7 @@ use diamond_io::{
         enc::rlwe_encrypt,
         sampler::{DistType, PolyUniformSampler},
     },
+    test_utils::setup_lsb_plt,
     utils::{calculate_directory_size, init_tracing},
 };
 use num_traits::identities::One;
@@ -36,11 +37,8 @@ use std::{
 };
 use tracing::info;
 
-use crate::plt::setup_plt;
-
 pub mod circuit;
 pub mod config;
-pub mod plt;
 
 /// Simple program to obfuscate and evaluate
 #[derive(Parser, Debug)]
@@ -97,9 +95,6 @@ enum Commands {
 
         #[arg(long, requires_if("add_mul", "bench_type"))]
         mul_num: Option<usize>,
-
-        #[arg(long, requires_if("plt", "bench_type"))]
-        t_num: Option<usize>,
     },
     BuildCircuit {
         #[arg(short, long)]
@@ -138,7 +133,7 @@ async fn main() {
             );
             let log_base_q = params.modulus_digits();
             let switched_modulus = Arc::new(dio_config.switched_modulus);
-            let (public_circuit, lut) = match bench_type {
+            let (public_circuit, plt) = match bench_type {
                 BenchType::AddMul => {
                     let add_num = add_num.unwrap();
                     let mul_num = mul_num.unwrap();
@@ -149,13 +144,13 @@ async fn main() {
                 }
                 BenchType::Plt => {
                     let t_num = t_num.unwrap();
-                    let lut = setup_plt(t_num, &params, dio_config.d);
-                    (BenchCircuit::new_plt(log_base_q, lut.clone()).as_poly_circuit(), Some(lut))
+                    let plt = setup_lsb_plt(t_num, &params, dio_config.d);
+                    (BenchCircuit::new_plt(log_base_q, plt.clone()).as_poly_circuit(), Some(plt))
                 }
             };
 
             let obf_params = ObfuscationParams {
-                params: params.clone(),
+                params,
                 switched_modulus,
                 input_size: dio_config.input_size,
                 level_width: dio_config.level_width,
@@ -167,7 +162,7 @@ async fn main() {
             };
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
-            let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+            let hardcoded_key = sampler_uniform.sample_poly(&obf_params.params, &DistType::BitDist);
             obfuscate::<
                 DCRTPolyMatrix,
                 DCRTPolyUniformSampler,
@@ -192,18 +187,13 @@ async fn main() {
                 DCRTPolyHashSampler<Keccak256>,
                 DCRTPolyTrapdoorSampler,
                 _,
-            >(obf_params, &input, &obf_dir);
+            >(obf_params.clone(), &input, &obf_dir);
             let eval_time = start_time.elapsed();
             let total_time = obfuscation_time + eval_time;
             info!("Time for evaluation: {:?}", eval_time);
             info!("Total time: {:?}", total_time);
             if verify {
-                let input_coeffs: Vec<_> = input
-                    .iter()
-                    .cloned()
-                    .map(|i| FinRingElem::constant(&params.modulus(), i as u64))
-                    .collect();
-                let input_poly = DCRTPoly::from_coeffs(&params, &input_coeffs);
+                let input_poly = DCRTPoly::from_bool_vec(&obf_params.params, &input);
                 let eval = match bench_type {
                     BenchType::AddMul => {
                         let add_num = add_num.unwrap();
@@ -211,20 +201,20 @@ async fn main() {
                         let verify_circuit =
                             BenchCircuit::new_add_mul_verify(add_num, mul_num).as_poly_circuit();
                         verify_circuit.eval(
-                            &params,
-                            &DCRTPoly::const_one(&params),
+                            &obf_params.params,
+                            &DCRTPoly::const_one(&obf_params.params),
                             &[hardcoded_key, input_poly],
                             None,
                         )
                     }
                     BenchType::Plt => {
                         let k = input_poly.to_const_int();
-                        let lut = lut.unwrap();
-                        let (_, y_k) = lut.f.get(&k).expect("fetch x_k and y_k");
+                        let plt = plt.unwrap();
+                        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
                         let verify_circuit = BenchCircuit::new_plt_verify().as_poly_circuit();
                         verify_circuit.eval(
-                            &params,
-                            &DCRTPoly::const_one(&params),
+                            &obf_params.params,
+                            &DCRTPoly::const_one(&obf_params.params),
                             &[hardcoded_key, y_k.clone()],
                             None,
                         )
@@ -239,15 +229,15 @@ async fn main() {
                     where e is the LWE error and x is the hardcoded key.
                     If e = 0, it follows that b' - a' * t = acc * [q/2] x.
                 */
-                let half_q = FinRingElem::half_q(&params.modulus());
+                let half_q = FinRingElem::half_q(&obf_params.params.modulus());
                 for e in eval {
-                    let expected_output = (DCRTPoly::from_const(&params, &half_q) * e)
-                        .extract_bits_with_threshold(&params);
+                    let expected_output = (DCRTPoly::from_const(&obf_params.params, &half_q) * e)
+                        .extract_bits_with_threshold(&obf_params.params);
                     assert_eq!(output, expected_output);
                 }
             }
         }
-        Commands::SimBenchNorm { config, out_path, add_num, mul_num, bench_type, t_num } => {
+        Commands::SimBenchNorm { config, out_path, add_num, mul_num, bench_type } => {
             let dio_config: SimBenchNormConfig =
                 serde_json::from_reader(fs::File::open(&config).unwrap()).unwrap();
             let log_n = dio_config.log_ring_dim;
@@ -267,9 +257,9 @@ async fn main() {
                     BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit()
                 }
                 BenchType::Plt => {
-                    let t_num = t_num.unwrap();
-                    let lut = setup_plt(t_num, &params, dio_config.d);
-                    BenchCircuit::new_plt(log_base_q, lut.clone()).as_poly_circuit()
+                    // To simulate the norm, value T(=table row size) is not relevant
+                    let plt = setup_lsb_plt(0, &params, dio_config.d);
+                    BenchCircuit::new_plt(log_base_q, plt.clone()).as_poly_circuit()
                 }
             };
             let a_rlwe_bar = DCRTPoly::const_max(&params);
@@ -306,7 +296,7 @@ async fn main() {
             let public_circuit =
                 BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit();
             let obf_params = ObfuscationParams {
-                params: params.clone(),
+                params,
                 switched_modulus,
                 input_size: dio_config.input_size,
                 level_width: dio_config.level_width,
@@ -318,24 +308,25 @@ async fn main() {
             };
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
-            let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
+            let hardcoded_key = sampler_uniform.sample_poly(&obf_params.params, &DistType::BitDist);
             let hash_key = rng.random::<[u8; 32]>();
             let public_data =
                 PublicSampledData::<DCRTPolyHashSampler<Keccak256>>::sample(&obf_params, hash_key);
             let hardcoded_key_matrix =
-                DCRTPolyMatrix::from_poly_vec_row(&params, vec![hardcoded_key.clone()]);
-            let t_bar_matrix = sampler_uniform.sample_uniform(&params, 1, 1, DistType::FinRingDist);
+                DCRTPolyMatrix::from_poly_vec_row(&obf_params.params, vec![hardcoded_key.clone()]);
+            let t_bar_matrix =
+                sampler_uniform.sample_uniform(&obf_params.params, 1, 1, DistType::FinRingDist);
             let a = public_data.a_rlwe_bar;
             let b = rlwe_encrypt(
-                &params,
+                &obf_params.params,
                 &sampler_uniform,
                 &t_bar_matrix,
                 &a,
                 &hardcoded_key_matrix,
                 obf_params.hardcoded_key_sigma,
             );
-            let a_decomposed = a.entry(0, 0).decompose_base(&params);
-            let b_decomposed = b.entry(0, 0).decompose_base(&params);
+            let a_decomposed = a.entry(0, 0).decompose_base(&obf_params.params);
+            let b_decomposed = b.entry(0, 0).decompose_base(&obf_params.params);
             let final_circuit = build_final_digits_circuit::<DCRTPoly, BggPublicKey<DCRTPolyMatrix>>(
                 &a_decomposed,
                 &b_decomposed,

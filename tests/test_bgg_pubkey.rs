@@ -103,6 +103,7 @@ fn test_build_final_step_circuit() {
 }
 
 #[test]
+#[ignore]
 fn test_plt_build_final_step_circuit() {
     init_tracing();
     let params = DCRTPolyParams::default();

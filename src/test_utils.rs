@@ -11,11 +11,10 @@ use crate::{
     },
     utils::{calculate_directory_size, init_tracing, log_mem},
 };
-use itertools::Itertools;
 use keccak_asm::Keccak256;
 use num_bigint::BigUint;
 use num_traits::Num;
-use rand::Rng;
+use rand::{rng, Rng};
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tracing::info;
 
@@ -141,53 +140,14 @@ pub async fn test_io_plt(
     let switched_modulus = Arc::new(BigUint::from_str_radix(switched_modulus_str, 10).unwrap());
     let mut public_circuit = PolyCircuit::new();
 
-    /* bit repr => const int repr */
-    let mut f = HashMap::new();
-    f.insert(
-        0,
-        (DCRTPoly::from_const_int_lsb(&params, 0), DCRTPoly::from_const_int_lsb(&params, 3)),
-    );
-    f.insert(
-        1,
-        (DCRTPoly::from_const_int_lsb(&params, 1), DCRTPoly::from_const_int_lsb(&params, 4)),
-    );
-    f.insert(
-        2,
-        (DCRTPoly::from_const_int_lsb(&params, 2), DCRTPoly::from_const_int_lsb(&params, 2)),
-    );
-    f.insert(
-        3,
-        (DCRTPoly::from_const_int_lsb(&params, 3), DCRTPoly::from_const_int_lsb(&params, 6)),
-    );
-    f.insert(
-        4,
-        (DCRTPoly::from_const_int_lsb(&params, 4), DCRTPoly::from_const_int_lsb(&params, 1)),
-    );
-    f.insert(
-        5,
-        (DCRTPoly::from_const_int_lsb(&params, 5), DCRTPoly::from_const_int_lsb(&params, 0)),
-    );
-    f.insert(
-        6,
-        (DCRTPoly::from_const_int_lsb(&params, 6), DCRTPoly::from_const_int_lsb(&params, 1)),
-    );
-    f.insert(
-        7,
-        (DCRTPoly::from_const_int_lsb(&params, 7), DCRTPoly::from_const_int_lsb(&params, 5)),
-    );
-
-    let lut = PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(&params, d, f, rand::random());
-
+    let plt = setup_lsb_constant_binary_plt(8, &params, d);
     // inputs: BaseDecompose(ct), eval_input
     // outputs: (eval_input PLT) * BaseDecompose(ct)
     {
         let inputs = public_circuit.input((2 * log_base_q) + 1);
         let mut outputs = vec![];
         let eval_input = inputs[2 * log_base_q];
-        let plt_id = public_circuit.register_public_lookup(lut.clone());
+        let plt_id = public_circuit.register_public_lookup(plt.clone());
         let plt_out = public_circuit.public_lookup_gate(eval_input, plt_id);
         for ct_input in inputs[0..2 * log_base_q].iter() {
             let muled = public_circuit.mul_gate(*ct_input, plt_out);
@@ -229,7 +189,7 @@ pub async fn test_io_plt(
 
     // 0,1,1(lsb) -> 4
     let input = vec![false, true, true];
-
+    let input_poly = DCRTPoly::from_bool_vec(&params, &input);
     let start_time = std::time::Instant::now();
     let output =
         evaluate::<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler, _>(
@@ -239,15 +199,73 @@ pub async fn test_io_plt(
     info!("output: {:?}", output);
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
-    let output_poly = DCRTPoly::from_coeffs(
-        &params,
-        &output
-            .iter()
-            .map(|b| FinRingElem::from_bytes(&params.modulus(), &[*b as u8]))
-            .collect_vec(),
-    );
-    let scale = DCRTPoly::from_const_int_lsb(&params, 1);
+
+    let k = input_poly.to_const_int();
+    let (_, scale) = plt.f.get(&k).expect("fetch x_k and y_k");
     // Public lookup for 0,1,1(lsb) => 1,0,0(lsb)
     // (1,1,1) * hardcoded key = output
-    assert_eq!(output_poly.to_bool_vec(), (hardcoded_key * scale).to_bool_vec());
+    assert_eq!(output, (hardcoded_key * scale).to_bool_vec());
+}
+
+/// only used for `test_io_plt` to map either [true, ...] or [false, ...] format
+fn setup_lsb_constant_binary_plt(
+    t_n: usize,
+    params: &DCRTPolyParams,
+    d: usize,
+) -> PublicLut<DCRTPolyMatrix> {
+    let mut f = HashMap::new();
+    let mut rng = rng();
+    for k in 0..t_n {
+        let r_val: usize = rng.random_range(0..2 as usize);
+        f.insert(
+            k,
+            (DCRTPoly::from_const_int_lsb(&params, k), DCRTPoly::const_int(&params, r_val)),
+        );
+    }
+
+    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+    >(params, d, f, rand::random());
+    plt
+}
+
+pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
+    let mut f = HashMap::new();
+    let mut rng = rng();
+    for k in 0..t_n {
+        let r_val: usize = rng.random_range(0..t_n as usize);
+        f.insert(
+            k,
+            (
+                DCRTPoly::from_const_int_lsb(&params, k),
+                DCRTPoly::from_const_int_lsb(&params, r_val),
+            ),
+        );
+    }
+
+    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+    >(params, d, f, rand::random());
+    plt
+}
+
+pub fn setup_constant_plt(
+    t_n: usize,
+    params: &DCRTPolyParams,
+    d: usize,
+) -> PublicLut<DCRTPolyMatrix> {
+    let mut f = HashMap::new();
+    let mut rng = rng();
+    for k in 0..t_n {
+        let r_val: usize = rng.random_range(0..t_n as usize);
+        f.insert(k, (DCRTPoly::const_int(&params, k), DCRTPoly::const_int(&params, r_val)));
+    }
+
+    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+        DCRTPolyUniformSampler,
+        DCRTPolyHashSampler<Keccak256>,
+    >(params, d, f, rand::random());
+    plt
 }
