@@ -68,8 +68,8 @@ impl<S: PolyHashSampler<[u8; 32]>> PublicSampledData<S> {
 pub fn build_final_digits_circuit<P: Poly, E: Evaluable>(
     a_decomposed_polys: &[P],
     b_decomposed_polys: &[P],
-    public_circuit: PolyCircuit<E::Matrix>,
-) -> PolyCircuit<E::Matrix> {
+    public_circuit: PolyCircuit<E::P>,
+) -> PolyCircuit<E::P> {
     let log_base_q = a_decomposed_polys.len();
     debug_assert_eq!(b_decomposed_polys.len(), log_base_q);
     let packed_eval_input_size = public_circuit.num_input() - (2 * log_base_q);
@@ -202,7 +202,7 @@ mod test {
 
     use super::*;
     use crate::{
-        bgg::DigitsToInt,
+        bgg::{circuit::PolyPltEvaluator, DigitsToInt},
         poly::{
             dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
             enc::rlwe_encrypt,
@@ -267,7 +267,7 @@ mod test {
         let mut inputs = vec![one.clone()];
         inputs.push(-(t_bar_matrix.entry(0, 0)).clone());
 
-        let circuit_outputs = final_circuit.eval(&params, &one, &inputs, None);
+        let circuit_outputs = final_circuit.eval(&params, &one, &inputs, None::<PolyPltEvaluator>);
         assert_eq!(circuit_outputs.len(), log_q);
 
         // 8. Extract the output bits

@@ -18,6 +18,7 @@ use std::ops::Range;
 const SIGMA: f64 = 4.578;
 const SPECTRAL_CONSTANT: f64 = 1.8;
 
+#[derive(Debug, Clone)]
 pub struct DCRTPolyTrapdoorSampler {
     sigma: f64,
     base: u32,

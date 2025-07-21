@@ -272,7 +272,7 @@ mod tests {
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
-    use std::{fs, path::Path};
+    use std::{fs, path::Path, sync::Arc};
     use tempfile::tempdir;
     use tokio;
     use tracing::info;
@@ -356,15 +356,18 @@ mod tests {
         let reveal_plaintexts = [true; 2];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         assert_eq!(pubkeys.len(), 2);
-        let pubkey_plt_evaluator =
-            BggPubKeyPltEvaluator::<
-                DCRTPolyMatrix,
-                DCRTPolyHashSampler<Keccak256>,
-                DCRTPolyUniformSampler,
-                DCRTPolyTrapdoorSampler,
-            >::new(
-                key, trapdoor_sampler, b_l_plus_one, b_l_plus_one_trapdoor, tmp_dir.clone()
-            );
+        let pubkey_plt_evaluator = BggPubKeyPltEvaluator::<
+            DCRTPolyMatrix,
+            DCRTPolyHashSampler<Keccak256>,
+            DCRTPolyUniformSampler,
+            DCRTPolyTrapdoorSampler,
+        >::new(
+            key,
+            trapdoor_sampler,
+            Arc::new(b_l_plus_one),
+            Arc::new(b_l_plus_one_trapdoor),
+            tmp_dir.clone(),
+        );
 
         let expected_pubkey_output =
             &circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], Some(pubkey_plt_evaluator))

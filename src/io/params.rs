@@ -9,7 +9,7 @@ pub struct ObfuscationParams<M: PolyMatrix> {
     pub switched_modulus: <<<M as PolyMatrix>::P as Poly>::Params as PolyParams>::Modulus,
     pub input_size: usize,
     pub level_width: usize, // number of bits to be inserted at each level
-    pub public_circuit: PolyCircuit<M>,
+    pub public_circuit: PolyCircuit<M::P>,
     /// number of secret key polynomials. This used due to module LWE assumption.
     pub d: usize,
     pub p_sigma: f64,

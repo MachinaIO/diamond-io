@@ -1,7 +1,10 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
+    bgg::{
+        encoding::BggEncodingPltEvaluator, public_key::BggPubKeyPltEvaluator,
+        sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt,
+    },
     io::{
         params::ObfuscationParams,
         utils::{
@@ -30,9 +33,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     dir_path: P,
 ) where
     M: PolyMatrix + 'static,
-    SU: PolyUniformSampler<M = M>,
-    SH: PolyHashSampler<[u8; 32], M = M>,
-    ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+    SU: PolyUniformSampler<M = M> + Send + Sync,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
+    ST: PolyTrapdoorSampler<M = M> + Send + Sync + Clone,
     R: RngCore,
     P: AsRef<Path>,
 {
@@ -276,13 +279,22 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
      1) Build the "final digits" circuit f[x_L] from a_decomposed, b_decomposed and the public circuit.
      2) Evaluate f[x_L] on (C = {a_decomposed, b_decomposed}, public key bits…).
-     3) Form the target matrix Y = (eval_outputs_matrix + a_prf) ∥ 0.
-     4) Sample a trapdoor preimage of Y under B*_star_basis → final_preimage.
+     3) Form the target matrix Y = (eval_outputs_matrix + a_prf).
+     4) Sample a trapdoor preimage of Y under b_l_plus_one.
     =============================================================================
     */
 
     // Sample input dependent random matrix B_*
     let (b_l_plus_one_trapdoor, b_l_plus_one) = sampler_trapdoor.trapdoor(&params, d + 1);
+    let k_l_plus_one_target = {
+        let id = M::identity(&params, d + 1, None);
+        let zeros = M::zero(&params, packed_input_size * id.row_size(), id.col_size());
+        let tensor_lhs = id.concat_rows(&[&zeros]);
+        tensor_lhs * &b_l_plus_one
+    };
+    let k_l_plus_one =
+        sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_l_plus_one_target);
+    handles.push(store_and_drop_matrix(k_l_plus_one, &dir_path, "k_l_plus_one"));
 
     #[cfg(feature = "bgm")]
     {
@@ -348,7 +360,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
     handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
 
-    // P_F := u_1_L' ⊗ (A_F + A_p)
+    let b_l_plus_one = Arc::new(b_l_plus_one);
+    let b_l_plus_one_trapdoor = Arc::new(b_l_plus_one_trapdoor);
+    // P_F := A_F + A_p
     let final_preimage_target_f = {
         let final_circuit = build_final_digits_circuit::<M::P, BggPublicKey<M>>(
             &a_decomposed,
@@ -356,23 +370,35 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs =
-            final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..], None);
+
+        let bgg_plt_evaluator = BggPubKeyPltEvaluator::<M, SH, SU, ST>::new(
+            hash_key,
+            sampler_trapdoor.clone(),
+            b_l_plus_one.clone(),
+            b_l_plus_one_trapdoor.clone(),
+            dir_path.clone(),
+        );
+        let eval_outputs = final_circuit.eval(
+            params.as_ref(),
+            &pub_key_att[0],
+            &pub_key_att[1..],
+            Some(bgg_plt_evaluator),
+        );
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
 
-        // after update the target matrix above while evaluation, now can sample preimage L_k
-        final_circuit.preimage_sample_all_lookups(
-            &params,
-            &b_star_cur,
-            &b_l_plus_one,
-            &sampler_trapdoor,
-            &b_star_trapdoor_cur,
-            &b_l_plus_one_trapdoor,
-            packed_input_size + 1,
-            &dir_path,
-            &mut handles,
-        );
+        // // after update the target matrix above while evaluation, now can sample preimage L_k
+        // final_circuit.preimage_sample_all_lookups(
+        //     &params,
+        //     &b_star_cur,
+        //     &b_l_plus_one,
+        //     &sampler_trapdoor,
+        //     &b_star_trapdoor_cur,
+        //     &b_l_plus_one_trapdoor,
+        //     packed_input_size + 1,
+        //     &dir_path,
+        //     &mut handles,
+        // );
 
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
@@ -387,19 +413,19 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
         ));
-        let summat = eval_outputs_matrix + public_data.a_prf;
-        let extra_blocks = packed_input_size;
-        let zero_rows = extra_blocks * summat.row_size();
-        let zero_cols = summat.col_size();
-        let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
-        summat.concat_rows(&[&zeros])
+        eval_outputs_matrix + public_data.a_prf
+        // let extra_blocks = packed_input_size;
+        // let zero_rows = extra_blocks * summat.row_size();
+        // let zero_cols = summat.col_size();
+        // let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
+        // summat.concat_rows(&[&zeros])
     };
     log_mem("Computed final_preimage_target_f");
 
     let final_preimage_f = sampler_trapdoor.preimage(
         params,
-        &b_star_trapdoor_cur,
-        &b_star_cur,
+        &b_l_plus_one_trapdoor,
+        &b_l_plus_one,
         &final_preimage_target_f,
     );
     log_mem("Sampled final_preimage_f");

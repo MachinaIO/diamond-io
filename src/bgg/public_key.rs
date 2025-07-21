@@ -13,6 +13,7 @@ use std::{
     marker::PhantomData,
     ops::{Add, Mul, Sub},
     path::PathBuf,
+    sync::Arc,
 };
 use tokio::task::JoinHandle;
 
@@ -151,8 +152,8 @@ where
 {
     pub hash_key: [u8; 32],
     pub trap_sampler: ST,
-    pub pub_matrix: M,
-    pub trapdoor: ST::Trapdoor,
+    pub pub_matrix: Arc<M>,
+    pub trapdoor: Arc<ST::Trapdoor>,
     pub dir_path: PathBuf,
     // handles_out: Vec<JoinHandle<()>>,
     _sh: PhantomData<SH>,
@@ -204,8 +205,8 @@ where
     pub fn new(
         hash_key: [u8; 32],
         trap_sampler: ST,
-        pub_matrix: M,
-        trapdoor: ST::Trapdoor,
+        pub_matrix: Arc<M>,
+        trapdoor: Arc<ST::Trapdoor>,
         dir_path: PathBuf,
     ) -> Self {
         Self {
