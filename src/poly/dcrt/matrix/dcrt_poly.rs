@@ -11,6 +11,7 @@ use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
 use std::{ops::Range, path::Path, sync::Arc};
 use tokio::fs::write;
+use tracing::info;
 
 use super::base::BaseMatrix;
 
@@ -224,7 +225,8 @@ impl PolyMatrix for DCRTPolyMatrix {
             ));
             let bytes = std::fs::read(&path)
                 .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
-            let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
+            let entries_bytes: Vec<Vec<Vec<u8>>> =
+                bincode::decode_from_slice(&bytes, bincode::config::standard()).unwrap().0;
 
             parallel_iter!(0..row_range.len())
                 .map(|i| {
@@ -243,6 +245,7 @@ impl PolyMatrix for DCRTPolyMatrix {
 
     async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
         let block_size = block_size();
+        info!("{block_size}");
         #[cfg(feature = "disk")]
         let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
         #[cfg(not(feature = "disk"))]
@@ -283,7 +286,10 @@ impl PolyMatrix for DCRTPolyMatrix {
                                     row.iter().map(|poly| poly.to_compact_bytes()).collect_vec()
                                 })
                                 .collect_vec();
-                            let serialized_data = serde_json::to_vec(&entries_bytes)?;
+                            let serialized_data =
+                                bincode::encode_to_vec(&entries_bytes, bincode::config::standard())
+                                    .unwrap();
+                            info!("serialized_len={}", serialized_data.len());
                             write(path, &serialized_data).await
                         }
                     })
@@ -364,9 +370,12 @@ impl DCRTPolyMatrix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::{
-        dcrt::{DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
-        sampler::{DistType, PolyUniformSampler},
+    use crate::{
+        poly::{
+            dcrt::{DCRTPolyParams, DCRTPolyUniformSampler, FinRingElem},
+            sampler::{DistType, PolyUniformSampler},
+        },
+        utils::init_tracing,
     };
     use num_bigint::BigUint;
     use rand::{rng, Rng};
@@ -746,17 +755,51 @@ mod tests {
         matrix.concat_diag(&others[..])
     }
 
+    /*
+    // using serde_json
+            2025-07-21T11:11:24.488480Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+        2025-07-21T11:11:27.943461Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=2076428
+        2025-07-21T11:11:28.988041Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+        2025-07-21T11:11:43.147909Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=83177228
+        2025-07-21T11:11:57.958658Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+        2025-07-21T11:12:05.092664Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=2076428
+        test poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read ... ok
+
+        successes:
+
+        successes:
+            poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read
+
+        test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 46.58s
+
+         // using bincode
+        2025-07-21T11:13:26.591743Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+    2025-07-21T11:13:30.082664Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=4149481
+    2025-07-21T11:13:31.148609Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+    2025-07-21T11:13:47.388098Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=294758582
+    2025-07-21T11:14:04.712093Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+    2025-07-21T11:14:12.037493Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=4485804
+    test poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read ... ok
+
+    successes:
+
+    successes:
+        poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 50.83s
+         */
     #[tokio::test]
     #[serial]
     async fn test_matrix_write_read() {
-        let params = DCRTPolyParams::default();
+        init_tracing();
+        let params = DCRTPolyParams::new(8192, 7, 51, 17);
         let sampler = DCRTPolyUniformSampler::new();
 
         let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
         std::env::set_var("BLOCK_SIZE", "10");
         for dist in dists {
-            let ncol = rng().random_range(5..=15);
-            let nrow = rng().random_range(5..=15);
+            let ncol = 15;
+            let nrow = 15;
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
