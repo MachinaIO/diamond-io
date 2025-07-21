@@ -119,14 +119,14 @@ impl Evaluable for NormSimulator {
     fn public_lookup(
         self,
         _: &Self::Params,
-        _: &mut PublicLut<Self::Matrix>,
+        plt: &mut PublicLut<Self::Matrix>,
         _: Option<(Self::Matrix, PathBuf, usize, usize)>,
     ) -> Self {
         Self {
             // |c_z · r_k.decompose()| + c_lt_k
             h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) +
                 MPolyCoeffs::one(),
-            plaintext_norm: BigUint::from(self.base - 1),
+            plaintext_norm: plt.max_output_row().unwrap().1.value().clone(),
             dim_sqrt: self.dim_sqrt,
             base: self.base,
         }

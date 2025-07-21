@@ -68,6 +68,19 @@ impl<M: PolyMatrix> PublicLut<M> {
         self.a_z = Some(a_z.clone())
     }
 
+    /// Find the row k with the maximum coefficient in the second M::P (y_k) of f HashMap
+    /// Returns (k, max_coefficient)
+    pub fn max_output_row(&self) -> Option<(usize, <M::P as Poly>::Elem)> {
+        self.f
+            .iter()
+            .map(|(&k, (_, y_k))| {
+                let max_coeff = y_k.coeffs().iter().max().cloned();
+                (k, max_coeff)
+            })
+            .filter_map(|(k, max_coeff)| max_coeff.map(|coeff| (k, coeff)))
+            .max_by_key(|(_, coeff)| coeff.clone())
+    }
+
     /// Compute target, sample preimage and store it as file.
     pub fn preimage<ST>(
         &self,
