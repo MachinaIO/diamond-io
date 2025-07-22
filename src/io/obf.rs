@@ -1,5 +1,7 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
+#[cfg(feature = "debug")]
+use crate::utils::store_and_drop_poly;
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::{
@@ -14,14 +16,13 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
-    utils::log_mem,
+    utils::{log_mem, store_and_drop_matrix},
 };
 use futures::future::join_all;
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
-use tokio::runtime::Handle;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -413,40 +414,4 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     handles.push(store_hash_key);
 
     join_all(handles).await;
-}
-
-pub fn store_and_drop_matrix<M: PolyMatrix + 'static>(
-    matrix: M,
-    dir_path: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir_path = dir_path.to_path_buf();
-    let id_str = id.to_string();
-
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id_str}"));
-        Handle::current().block_on(async {
-            matrix.write_to_files(&dir_path, &id_str).await;
-        });
-        drop(matrix);
-        log_mem(format!("Stored {id_str}"));
-    })
-}
-
-#[cfg(feature = "debug")]
-pub fn store_and_drop_poly<P: Poly + 'static>(
-    poly: P,
-    dir_path: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir_path = dir_path.to_path_buf();
-    let id_str = id.to_string();
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id_str}"));
-        Handle::current().block_on(async {
-            poly.write_to_file(&dir_path, &id_str).await;
-        });
-        drop(poly);
-        log_mem(format!("Stored {id_str}"));
-    })
 }

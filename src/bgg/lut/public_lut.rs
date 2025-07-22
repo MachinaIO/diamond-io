@@ -1,11 +1,11 @@
 //! Public Lookup
 
 use crate::{
-    io::obf::store_and_drop_matrix,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
+    utils::store_and_drop_matrix,
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::{collections::HashMap, path::Path};

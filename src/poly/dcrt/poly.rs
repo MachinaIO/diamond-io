@@ -104,47 +104,6 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
-    /// Create a polynomial from a compact byte representation based on `to_compact_bytes` encoding
-    fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
-        let ring_dimension = params.ring_dimension() as usize;
-        let modulus = params.modulus();
-
-        // First four bytes contain the maximum byte size per coefficient
-        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-
-        // Next ceil(n/8) bytes contain the bit vector indicating if coefficients are negative
-        let bit_vector_byte_size = ring_dimension.div_ceil(8);
-        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
-
-        // Remaining bytes contain coefficient values
-        let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
-            .map(|i| {
-                let start = 4 + bit_vector_byte_size + (i * max_byte_size);
-                let end = start + max_byte_size;
-                let value_bytes = &bytes[start..end];
-
-                let value = BigUint::from_bytes_le(value_bytes);
-
-                let byte_idx = i / 8;
-                let bit_idx = i % 8;
-                let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
-
-                // Convert back from centered representation
-                let final_value = if is_negative {
-                    // If negative flag is set, compute q - value
-                    modulus.as_ref() - &value
-                } else {
-                    // Otherwise, use value as is
-                    value
-                };
-
-                FinRingElem::new(final_value, modulus.clone())
-            })
-            .collect();
-
-        Self::from_coeffs(params, &coeffs)
-    }
-
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
@@ -234,6 +193,48 @@ impl Poly for DCRTPoly {
             .collect()
     }
 
+    /// Create a polynomial from a compact byte representation based on `to_compact_bytes` encoding
+    #[inline]
+    fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
+        let ring_dimension = params.ring_dimension() as usize;
+        let modulus = params.modulus();
+
+        // First four bytes contain the maximum byte size per coefficient
+        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+
+        // Next ceil(n/8) bytes contain the bit vector indicating if coefficients are negative
+        let bit_vector_byte_size = ring_dimension.div_ceil(8);
+        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
+
+        // Remaining bytes contain coefficient values
+        let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
+            .map(|i| {
+                let start = 4 + bit_vector_byte_size + (i * max_byte_size);
+                let end = start + max_byte_size;
+                let value_bytes = &bytes[start..end];
+
+                let value = BigUint::from_bytes_le(value_bytes);
+
+                let byte_idx = i / 8;
+                let bit_idx = i % 8;
+                let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
+
+                // Convert back from centered representation
+                let final_value = if is_negative {
+                    // If negative flag is set, compute q - value
+                    modulus.as_ref() - &value
+                } else {
+                    // Otherwise, use value as is
+                    value
+                };
+
+                FinRingElem::new(final_value, modulus.clone())
+            })
+            .collect();
+
+        Self::from_coeffs(params, &coeffs)
+    }
+
     /// Convert the polynomial to a compact byte representation
     /// The returned bytes vector is encoded as follows:
     /// 1. The first four bytes contain the `max_byte_size`, namely the maximum byte size of any
@@ -241,6 +242,7 @@ impl Poly for DCRTPoly {
     /// 2. The next `ceil(n/8)` bytes contain a bit vector, where each bit indicates if the
     ///    corresponding coefficient is negative (> `q_half`) and `n` is the ring dimension
     /// 3. The remaining `n * max_byte_size` contain the coefficient values
+    #[inline]
     fn to_compact_bytes(&self) -> Vec<u8> {
         let modulus = self.ptr_poly.GetModulus();
         let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();

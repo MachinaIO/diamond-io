@@ -9,7 +9,7 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{ops::Range, path::Path, sync::Arc};
+use std::{ops::Range, path::Path, sync::Arc, time::Instant};
 use tokio::fs::write;
 use tracing::info;
 
@@ -207,6 +207,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         .decompose()
     }
 
+    #[inline]
     fn read_from_files<P: AsRef<Path> + Send + Sync>(
         params: &<Self::P as Poly>::Params,
         nrow: usize,
@@ -243,6 +244,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix
     }
 
+    #[inline]
     async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
         let block_size = block_size();
         info!("{block_size}");
@@ -378,7 +380,6 @@ mod tests {
         utils::init_tracing,
     };
     use num_bigint::BigUint;
-    use rand::{rng, Rng};
     use serial_test::serial;
     use std::{fs, sync::Arc};
 
@@ -756,29 +757,18 @@ mod tests {
     }
 
     /*
-    // using serde_json
-            2025-07-21T11:11:24.488480Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
-        2025-07-21T11:11:27.943461Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=2076428
-        2025-07-21T11:11:28.988041Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
-        2025-07-21T11:11:43.147909Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=83177228
-        2025-07-21T11:11:57.958658Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
-        2025-07-21T11:12:05.092664Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=2076428
-        test poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read ... ok
-
-        successes:
-
-        successes:
-            poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read
-
-        test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 46.58s
-
-         // using bincode
-        2025-07-21T11:13:26.591743Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
-    2025-07-21T11:13:30.082664Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=4149481
-    2025-07-21T11:13:31.148609Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
-    2025-07-21T11:13:47.388098Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=294758582
-    2025-07-21T11:14:04.712093Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
-    2025-07-21T11:14:12.037493Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=4485804
+       2025-07-21T12:17:02.141281Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+    2025-07-21T12:17:05.506038Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=2075191
+    2025-07-21T12:17:05.506915Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: write_to_files took 3.37s
+    2025-07-21T12:17:06.240498Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: read_from_files took 733.54ms
+    2025-07-21T12:17:06.487198Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+    2025-07-21T12:17:18.209603Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=83176441
+    2025-07-21T12:17:18.236761Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: write_to_files took 11.75s
+    2025-07-21T12:17:29.218260Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: read_from_files took 10.98s
+    2025-07-21T12:17:29.401712Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+    2025-07-21T12:17:36.642533Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=2075191
+    2025-07-21T12:17:36.643478Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: write_to_files took 7.24s
+    2025-07-21T12:17:41.772820Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: read_from_files took 5.13s
     test poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read ... ok
 
     successes:
@@ -786,8 +776,24 @@ mod tests {
     successes:
         poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read
 
-    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 50.83s
-         */
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 39.83s
+
+             // using bincode
+            2025-07-21T11:13:26.591743Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+        2025-07-21T11:13:30.082664Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=4149481
+        2025-07-21T11:13:31.148609Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+        2025-07-21T11:13:47.388098Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=294758582
+        2025-07-21T11:14:04.712093Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: 10
+        2025-07-21T11:14:12.037493Z  INFO diamond_io::poly::dcrt::matrix::dcrt_poly: serialized_len=4485804
+        test poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read ... ok
+
+        successes:
+
+        successes:
+            poly::dcrt::matrix::dcrt_poly::tests::test_matrix_write_read
+
+        test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 50.83s
+             */
     #[tokio::test]
     #[serial]
     async fn test_matrix_write_read() {
@@ -796,7 +802,7 @@ mod tests {
         let sampler = DCRTPolyUniformSampler::new();
 
         let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
-        std::env::set_var("BLOCK_SIZE", "10");
+        std::env::set_var("BLOCK_SIZE", "100");
         for dist in dists {
             let ncol = 15;
             let nrow = 15;
