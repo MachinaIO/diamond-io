@@ -1,4 +1,3 @@
-pub mod crt;
 pub mod eval;
 pub mod gate;
 pub mod serde;
@@ -10,18 +9,11 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
-    path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio::task::JoinHandle;
-use tracing::info;
 pub use utils::*;
 
-use crate::{
-    bgg::lut::public_lut::PublicLut,
-    poly::{sampler::PolyTrapdoorSampler, Poly, PolyMatrix},
-    utils::debug_mem,
-};
+use crate::{bgg::lut::public_lut::PublicLut, poly::Poly, utils::debug_mem};
 #[derive(Debug, Clone, Default)]
 pub struct PolyCircuit<P: Poly> {
     gates: BTreeMap<usize, PolyGate>,
