@@ -216,16 +216,23 @@ where
         let pubkey = BggPublicKey::new(a_lt, true);
 
         let m = (d + 1) * params.modulus_digits();
-        let nrow_preimage = (d + 1) * (params.modulus_digits() + 2);
 
         let r_k = timed_read(
             &format!("R_{id}_{k}"),
-            || M::read_from_files(params, nrow_preimage, m, &self.dir_path, &format!("R_{id}_{k}")),
+            || M::read_from_files(params, d + 1, m, &self.dir_path, &format!("R_{id}_{k}")),
             &mut Duration::default(),
         );
         let l_k = timed_read(
             &format!("L_{id}_{k}"),
-            || M::read_from_files(params, nrow_preimage, m, &self.dir_path, &format!("L_{id}_{k}")),
+            || {
+                M::read_from_files(
+                    params,
+                    (d + 1) * (params.modulus_digits() + 2),
+                    m,
+                    &self.dir_path,
+                    &format!("L_{id}_{k}"),
+                )
+            },
             &mut Duration::default(),
         );
         let c_lt_k = self.p.clone() * l_k;
@@ -301,109 +308,6 @@ mod tests {
         let s_connect = encoded_bits.tensor(s_x_l);
         let s_b = s_connect * b_l;
         s_b + p_x_l_error
-    }
-
-    #[tokio::test]
-    #[ignore = "file cannot be read"]
-    async fn test_encoding_plt_for_dio() {
-        init_tracing();
-
-        let tmp_dir = tempdir().unwrap().into_path();
-
-        /* Setup */
-        let params = DCRTPolyParams::default();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
-
-        /* Obfuscation Step */
-        let key: [u8; 32] = rand::random();
-        let d = 1;
-        let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-        let input_size = 1;
-        let uni = DCRTPolyUniformSampler::new();
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-        let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
-        info!("b_l_plus_one ({},{})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
-        let m = (d + 1) * params.modulus_digits();
-        let m_b = (d + 1) * (params.modulus_digits() + 2);
-        /* BGG+ encoding setup */
-        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-        // in reality there should be input insertion step that updates the secret s_init to
-        let s_x_l = {
-            let minus_one_poly = DCRTPoly::const_minus_one(&params);
-            let mut secrets = secrets.to_vec();
-            secrets.push(minus_one_poly);
-            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
-        };
-        info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
-        let p = s_x_l.clone() * &b_l_plus_one;
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-        let plt = setup_constant_plt(8, &params);
-        // let a_lt = plt.clone().a_lt;
-
-        // Create a simple circuit with an plt operation
-        let mut circuit = PolyCircuit::new();
-        {
-            let inputs = circuit.input(1);
-            let plt_id = circuit.register_public_lookup(plt.clone());
-            let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
-            circuit.output(vec![plt_gate]);
-        }
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 2];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        assert_eq!(pubkeys.len(), 2);
-        let pubkey_plt_evaluator = BggPubKeyPltEvaluator::<
-            DCRTPolyMatrix,
-            DCRTPolyHashSampler<Keccak256>,
-            DCRTPolyUniformSampler,
-            DCRTPolyTrapdoorSampler,
-        >::new(
-            key,
-            trapdoor_sampler,
-            Arc::new(b_l_plus_one),
-            Arc::new(b_l_plus_one_trapdoor),
-            tmp_dir.clone(),
-        );
-
-        let expected_pubkey_output =
-            &circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], Some(pubkey_plt_evaluator))
-                [0];
-
-        // Create secret and plaintexts
-        let k = 2;
-        let plaintexts = vec![DCRTPoly::const_int(&params, k)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
-        let enc_one = encodings[0].clone();
-        let enc1 = encodings[1].clone();
-
-        assert_eq!(*enc1.plaintext.as_ref().unwrap(), plaintexts[0]);
-
-        // Evaluate the circuit
-        let bgg_encoding_plt_evaluator = BggEncodingPltEvaluator::<
-            DCRTPolyMatrix,
-            DCRTPolyHashSampler<Keccak256>,
-        >::new(key, tmp_dir.clone(), p);
-        let result = circuit.eval(&params, &enc_one, &[enc1], Some(bgg_encoding_plt_evaluator));
-        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
-        let expected_encodings = bgg_encoding_sampler.sample(
-            &params,
-            &[pubkeys[0].clone(), expected_pubkey_output.clone()],
-            &[y_k.clone()],
-        );
-        let expected_enc1 = expected_encodings[1].clone();
-
-        // Verify the result
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].vector, expected_enc1.vector);
-        assert_eq!(result[0].pubkey.matrix, expected_enc1.pubkey.matrix);
-        assert_eq!(*result[0].plaintext.as_ref().unwrap(), y_k.clone());
     }
 
     #[test]
@@ -749,6 +653,107 @@ mod tests {
         assert_eq!(result[0].vector, expected.vector);
         assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
         assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
+
+    #[tokio::test]
+    #[ignore = "file cannot be read"]
+    async fn test_encoding_plt_for_dio() {
+        init_tracing();
+
+        let tmp_dir = tempdir().unwrap().into_path();
+
+        /* Setup */
+        let params = DCRTPolyParams::default();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+
+        /* Obfuscation Step */
+        let key: [u8; 32] = rand::random();
+        let d = 1;
+        let uni = DCRTPolyUniformSampler::new();
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
+        info!("b_l_plus_one ({},{})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
+        let m = (d + 1) * params.modulus_digits();
+        let m_b = (d + 1) * (params.modulus_digits() + 2);
+        /* BGG+ encoding setup */
+        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+        // in reality there should be input insertion step that updates the secret s_init to
+        let s_x_l = {
+            let minus_one_poly = DCRTPoly::const_minus_one(&params);
+            let mut secrets = secrets.to_vec();
+            secrets.push(minus_one_poly);
+            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
+        };
+        info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
+        let p = s_x_l.clone() * &b_l_plus_one;
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+        let plt = setup_constant_plt(8, &params);
+        // let a_lt = plt.clone().a_lt;
+
+        // Create a simple circuit with an plt operation
+        let mut circuit = PolyCircuit::new();
+        {
+            let inputs = circuit.input(1);
+            let plt_id = circuit.register_public_lookup(plt.clone());
+            let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
+            circuit.output(vec![plt_gate]);
+        }
+
+        // Create random public keys
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+        assert_eq!(pubkeys.len(), 2);
+        let pubkey_plt_evaluator = BggPubKeyPltEvaluator::<
+            DCRTPolyMatrix,
+            DCRTPolyHashSampler<Keccak256>,
+            DCRTPolyUniformSampler,
+            DCRTPolyTrapdoorSampler,
+        >::new(
+            key,
+            trapdoor_sampler,
+            Arc::new(b_l_plus_one),
+            Arc::new(b_l_plus_one_trapdoor),
+            tmp_dir.clone(),
+        );
+
+        let expected_pubkey_output =
+            &circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], Some(pubkey_plt_evaluator))
+                [0];
+
+        // Create secret and plaintexts
+        let k = 2;
+        let plaintexts = vec![DCRTPoly::const_int(&params, k)];
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+
+        assert_eq!(*enc1.plaintext.as_ref().unwrap(), plaintexts[0]);
+
+        // Evaluate the circuit
+        let bgg_encoding_plt_evaluator = BggEncodingPltEvaluator::<
+            DCRTPolyMatrix,
+            DCRTPolyHashSampler<Keccak256>,
+        >::new(key, tmp_dir.clone(), p);
+        let result = circuit.eval(&params, &enc_one, &[enc1], Some(bgg_encoding_plt_evaluator));
+        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
+        let expected_encodings = bgg_encoding_sampler.sample(
+            &params,
+            &[pubkeys[0].clone(), expected_pubkey_output.clone()],
+            &[y_k.clone()],
+        );
+        let expected_enc1 = expected_encodings[1].clone();
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vector, expected_enc1.vector);
+        assert_eq!(result[0].pubkey.matrix, expected_enc1.pubkey.matrix);
+        assert_eq!(*result[0].plaintext.as_ref().unwrap(), y_k.clone());
     }
 
     #[tokio::test]

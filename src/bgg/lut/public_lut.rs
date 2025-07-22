@@ -91,9 +91,11 @@ impl<P: Poly> PublicLut<P> {
         M: PolyMatrix<P = P>,
         SH: PolyHashSampler<[u8; 32], M = M>,
     {
+        info!("Deriving A_LT for id: {id}");
         let m = (d + 1) * params.modulus_digits();
         let hash_sampler = SH::new();
         let tag = format!("A_LT_{id}");
+        info!("Tag for A_LT: {tag}");
         hash_sampler.sample_hash(
             params,
             hash_key,
@@ -121,15 +123,18 @@ impl<P: Poly> PublicLut<P> {
         SU: PolyUniformSampler<M = M> + Send + Sync,
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     {
+        info!("Preimage for id: {id}");
         let t = self.f.len();
-        let d = pub_matrix.row_size();
+        let d = pub_matrix.row_size() - 1;
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();
         let matrices = (0..t)
             .into_par_iter()
             .map(|k| {
+                info!("Processing k: {k}");
                 let (x_k, y_k) = self.f.get(&k).expect("missing f(k)");
                 let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
+                info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
                 let r_k_decomposed = r_k.decompose();
                 let target_k = (r_k.clone() * x_k) + a_lt -
                     &(M::gadget_matrix(params, d + 1) * y_k) -
@@ -138,6 +143,7 @@ impl<P: Poly> PublicLut<P> {
                 (r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
             })
             .collect::<Vec<_>>();
+        info!("Preimage matrices computed for id: {id}");
         // [TODO] Use a channel within the above iterator to bound the memory usage.
         for (k, (r_k, l_k)) in matrices.into_iter().enumerate() {
             handles_out.push(store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}")));
