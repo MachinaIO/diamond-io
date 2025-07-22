@@ -9,7 +9,7 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{ops::Range, path::Path, sync::Arc, time::Instant};
+use std::{ops::Range, path::Path, sync::Arc};
 use tokio::fs::write;
 use tracing::info;
 

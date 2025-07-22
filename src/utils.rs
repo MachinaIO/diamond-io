@@ -54,6 +54,16 @@ pub fn store_and_drop_poly<P: Poly + 'static>(
     })
 }
 
+/// ideal thread chunk size for parallel
+pub fn chunk_size_for(original: usize) -> usize {
+    match original {
+        0..=2048 => 128,
+        2049..=4096 => 256,
+        4097..=8192 => 512,
+        _ => 1024,
+    }
+}
+
 pub fn ceil_log2(q: &BigUint) -> usize {
     assert!(!q.is_zero(), "log2 is undefined for zero");
 
