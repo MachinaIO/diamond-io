@@ -4,7 +4,7 @@ use config::{RunBenchConfig, SimBenchNormConfig};
 #[cfg(feature = "disk")]
 use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
-    bgg::BggPublicKey,
+    bgg::{BggPublicKey, circuit::PolyPltEvaluator},
     io::{
         eval::evaluate,
         obf::obfuscate,
@@ -207,7 +207,7 @@ async fn main() {
                             &obf_params.params,
                             &DCRTPoly::const_one(&obf_params.params),
                             &[hardcoded_key, input_poly],
-                            None,
+                            None::<PolyPltEvaluator>,
                         )
                     }
                     BenchType::Plt => {
@@ -219,7 +219,7 @@ async fn main() {
                             &obf_params.params,
                             &DCRTPoly::const_one(&obf_params.params),
                             &[hardcoded_key, y_k.clone()],
-                            None,
+                            Some(PolyPltEvaluator::new()),
                         )
                     }
                 };
