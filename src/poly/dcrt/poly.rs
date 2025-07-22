@@ -82,12 +82,15 @@ impl Poly for DCRTPoly {
     }
 
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
-        let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
-        for coeff in coeffs {
-            debug_assert_eq!(coeff.modulus(), params.modulus().as_ref());
-            coeffs_cxx.push(coeff.value().to_string());
-        }
-        Self::poly_gen_from_vec(params, coeffs_cxx)
+        let new_coeffs = coeffs
+            .par_iter()
+            .map(|coeff| {
+                debug_assert_eq!(coeff.modulus(), params.modulus().as_ref());
+                coeff.value().to_string()
+            })
+            .collect::<Vec<String>>();
+
+        Self::poly_gen_from_vec(params, new_coeffs)
     }
 
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self {
@@ -205,7 +208,7 @@ impl Poly for DCRTPoly {
         let bit_vector_byte_size = ring_dimension.div_ceil(8);
         let bit_vector = &bytes[4..4 + bit_vector_byte_size];
         let coeffs_base_offset = 4 + bit_vector_byte_size;
-        // Remaining bytes contain coefficient values
+
         let coeffs: Vec<FinRingElem> = reconstruct_coeffs_chunked(
             bytes,
             ring_dimension,

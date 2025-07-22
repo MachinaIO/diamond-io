@@ -317,6 +317,42 @@ impl PolyMatrix for DCRTPolyMatrix {
             }
         }
     }
+
+    fn to_compact_bytes(&self) -> Vec<u8> {
+        let entries = self.block_entries(0..self.nrow, 0..self.ncol);
+        let entries_bytes: Vec<Vec<Vec<u8>>> = entries
+            .iter()
+            .map(|row| row.iter().map(|poly| poly.to_compact_bytes()).collect())
+            .collect();
+
+        bincode::encode_to_vec(&entries_bytes, bincode::config::standard())
+            .expect("Failed to serialize matrix to compact bytes")
+    }
+
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: &[u8]) -> Self {
+        let entries_bytes: Vec<Vec<Vec<u8>>> =
+            bincode::decode_from_slice(bytes, bincode::config::standard())
+                .expect("Failed to deserialize matrix from compact bytes")
+                .0;
+
+        let nrow = entries_bytes.len();
+        let ncol = if nrow > 0 { entries_bytes[0].len() } else { 0 };
+        let mut matrix = Self::new_empty(params, nrow, ncol);
+
+        let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            row_range
+                .map(|i| {
+                    col_range
+                        .clone()
+                        .map(|j| DCRTPoly::from_compact_bytes(params, &entries_bytes[i][j]))
+                        .collect()
+                })
+                .collect()
+        };
+
+        matrix.replace_entries(0..nrow, 0..ncol, f);
+        matrix
+    }
 }
 
 impl DCRTPolyMatrix {
@@ -832,6 +868,42 @@ mod tests {
             assert_eq!(matrix, read_matrix);
 
             fs::remove_dir_all(test_dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_matrix_compact_bytes() {
+        let params = DCRTPolyParams::new(8192, 7, 51, 17);
+        let sampler = DCRTPolyUniformSampler::new();
+
+        let dists = [DistType::BitDist, DistType::FinRingDist];
+        for dist in dists {
+            // todo: interesting finding. if its more square shape (e.g (50,50)more than 2m> (100,1)
+            // - total 37s) slower
+            let ncol = 100;
+            let nrow = 1;
+
+            // Create a random matrix
+            let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
+
+            // Convert to compact bytes
+            let start_serialize = std::time::Instant::now();
+            let compact_bytes = matrix.to_compact_bytes();
+            let serialize_time = start_serialize.elapsed();
+            println!(
+                "to_compact_bytes took: {:?}, bytes_length={}",
+                serialize_time,
+                compact_bytes.len()
+            );
+
+            // Reconstruct from compact bytes
+            let start_deserialize = std::time::Instant::now();
+            let reconstructed_matrix = DCRTPolyMatrix::from_compact_bytes(&params, &compact_bytes);
+            let deserialize_time = start_deserialize.elapsed();
+            println!("from_compact_bytes took: {:?}", deserialize_time);
+
+            // Verify the matrices are equal
+            assert_eq!(matrix, reconstructed_matrix);
         }
     }
 }
