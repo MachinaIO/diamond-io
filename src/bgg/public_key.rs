@@ -190,12 +190,15 @@ where
             &mut handle_outs,
         );
         // [TODO] Use channels
-        // Handle futures synchronously using spawn_blocking to avoid "runtime from within runtime" error
+        // Handle futures synchronously using spawn_blocking to avoid "runtime from within runtime"
+        // error
         if !handle_outs.is_empty() {
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 rt.block_on(join_all(handle_outs));
-            }).join().unwrap();
+            })
+            .join()
+            .unwrap();
         }
         BggPublicKey { matrix: a_lt, reveal_plaintext: true }
     }
