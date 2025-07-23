@@ -1,7 +1,7 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
+use crate::storage::{store_and_drop_matrix, StorageHandle};
 #[cfg(feature = "debug")]
-use crate::utils::store_and_drop_poly;
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::{
@@ -16,7 +16,8 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
-    utils::{log_mem, store_and_drop_matrix},
+    storage::store_and_drop_poly,
+    utils::log_mem,
 };
 use futures::future::join_all;
 use itertools::Itertools;
@@ -43,6 +44,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     player.play_music("bgm/obf_bgm1.mp3");
 
     let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+    let mut storage_handles: Vec<StorageHandle> = Vec::new();
     let dir_path = dir_path.as_ref().to_path_buf();
     if !dir_path.exists() {
         std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
@@ -145,9 +147,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     );
     let p_init = s_b + p_init_error;
     log_mem(format!("Computed p_epsilon ({},{})", p_init.row_size(), p_init.col_size()));
-    handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
+    storage_handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
+    storage_handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
     let identity_1_plus_packed_input_size =
         M::identity(params.as_ref(), 1 + packed_input_size, None);
     log_mem(format!(
@@ -190,7 +192,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     log_mem(format!("Computed u_0, .. u_{depth}"));
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
+    storage_handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
 
     /*
     Trapdoor preimage generation for the input insertion step.
@@ -209,14 +211,13 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         ));
 
         #[cfg(feature = "debug")]
-        handles.push(store_and_drop_matrix(
+        storage_handles.push(store_and_drop_matrix(
             b_star_level.clone(),
             &dir_path,
             &format!("b_star_{level}"),
         ));
 
         for num in 0..level_size {
-            let mut handles_per_level: Vec<tokio::task::JoinHandle<()>> = Vec::new();
             #[cfg(feature = "bgm")]
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
@@ -226,7 +227,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
             #[cfg(feature = "debug")]
-            handles.push(store_and_drop_matrix(
+            storage_handles.push(store_and_drop_matrix(
                 s_i_num.clone(),
                 &dir_path,
                 &format!("s_{level}_{num}"),
@@ -259,12 +260,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 k_preimage_num.row_size(),
                 k_preimage_num.col_size()
             ));
-            handles_per_level.push(store_and_drop_matrix(
+            storage_handles.push(store_and_drop_matrix(
                 k_preimage_num,
                 &dir_path,
                 &format!("k_preimage_{level}_{num}"),
             ));
-            join_all(handles_per_level).await;
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
@@ -322,7 +322,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
-    handles.push(store_and_drop_matrix(b, &dir_path, "b"));
+    storage_handles.push(store_and_drop_matrix(b, &dir_path, "b"));
 
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_d+1
     // computing u_1_L' ⊗ A_att
@@ -346,8 +346,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_att,
     );
     log_mem("Sampled final_preimage_att");
-    handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
-    handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
+    storage_handles.push(store_and_drop_matrix(
+        final_preimage_att,
+        &dir_path,
+        "final_preimage_att",
+    ));
+    storage_handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
 
     // P_F := u_1_L' ⊗ (A_F + A_p)
     let final_preimage_target_f = {
@@ -383,7 +387,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         #[cfg(feature = "debug")]
         assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         #[cfg(feature = "debug")]
-        handles.push(store_and_drop_matrix(
+        storage_handles.push(store_and_drop_matrix(
             eval_outputs_matrix.clone() + public_data.a_prf.clone(),
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
@@ -404,7 +408,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_f,
     );
     log_mem("Sampled final_preimage_f");
-    handles.push(store_and_drop_matrix(final_preimage_f, &dir_path, "final_preimage_f"));
+    storage_handles.push(store_and_drop_matrix(final_preimage_f, &dir_path, "final_preimage_f"));
 
     let store_hash_key = tokio::task::spawn_blocking(move || {
         let path = dir_path.join("hash_key");
@@ -413,5 +417,21 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     });
     handles.push(store_hash_key);
 
-    join_all(handles).await;
+    // Wait for all CPU preprocessing to complete first
+    let io_completion_handles: Result<Vec<_>, _> =
+        futures::future::try_join_all(storage_handles.into_iter().map(|h| h.wait_cpu_complete()))
+            .await;
+
+    match io_completion_handles {
+        Ok(_io_handles) => {
+            log_mem("All CPU preprocessing completed - I/O continues in background");
+            // Wait for any remaining non-storage tasks
+            join_all(handles).await;
+        }
+        Err(e) => {
+            eprintln!("CPU preprocessing failed: {:?}", e);
+            // Still wait for other handles
+            join_all(handles).await;
+        }
+    }
 }

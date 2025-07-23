@@ -353,6 +353,11 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix.replace_entries(0..nrow, 0..ncol, f);
         matrix
     }
+
+    fn block_entries(&self, rows: std::ops::Range<usize>, cols: std::ops::Range<usize>) -> Vec<Vec<Self::P>> {
+        // Delegate to the BaseMatrix implementation
+        self.block_entries(rows, cols)
+    }
 }
 
 impl DCRTPolyMatrix {

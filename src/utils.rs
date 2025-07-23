@@ -5,7 +5,7 @@ use std::{thread, time};
 use crate::poly::{
     dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
     sampler::{DistType, PolyUniformSampler},
-    Poly, PolyMatrix,
+    Poly,
 };
 use memory_stats::memory_stats;
 use num_bigint::BigUint;
@@ -16,43 +16,8 @@ use std::time::{Duration, Instant};
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 #[cfg(feature = "disk")]
 use tempfile::env::temp_dir;
-use tokio::runtime::Handle;
 use tracing::{debug, info};
 use walkdir::WalkDir;
-
-pub fn store_and_drop_matrix<M>(matrix: M, dir: &Path, id: &str) -> tokio::task::JoinHandle<()>
-where
-    M: PolyMatrix + Send + 'static,
-{
-    let dir = dir.to_path_buf();
-    let id = id.to_owned();
-
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id}"));
-        Handle::current().block_on(async {
-            matrix.write_to_files(&dir, &id).await;
-        });
-        drop(matrix);
-        log_mem(format!("Stored {id}"));
-    })
-}
-
-#[cfg(feature = "debug")]
-pub fn store_and_drop_poly<P: Poly + 'static>(
-    poly: P,
-    dir: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir = dir.to_path_buf();
-    let id = id.to_owned();
-
-    tokio::spawn(async move {
-        log_mem(format!("Storing {id}"));
-        poly.write_to_file(&dir, &id).await;
-        drop(poly);
-        log_mem(format!("Stored {id}"));
-    })
-}
 
 /// ideal thread chunk size for parallel
 pub fn chunk_size_for(original: usize) -> usize {
@@ -259,104 +224,3 @@ macro_rules! impl_binop_with_refs {
         }
     };
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::poly::dcrt::DCRTPolyMatrix;
-//     use futures::future::join_all;
-//     use std::{fs, path::Path, time::Instant};
-//     use tokio::{sync::mpsc, task::JoinSet};
-//     use tracing::info;
-
-//     /*
-//          ┌──────────────── comparison ───────────────┐
-//     2025-07-22T06:44:05.495608Z  INFO diamond_io::utils::tests: │ vec + join_all  : 114426 ms │
-//     2025-07-22T06:44:05.495630Z  INFO diamond_io::utils::tests: │ pipeline mpsc   : 109998 ms │
-// (faster 1.0×)     2025-07-22T06:44:05.495635Z  INFO diamond_io::utils::tests:
-// └───────────────────────────────────────────── */     /// Adjust to taste
-//     const N_MATS: usize = 20; // how many matrices we write
-//     const CHANNEL_CAP: usize = 5; // queue depth for the pipeline
-
-//     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-//     async fn compare_vec_vs_pipeline() {
-//         init_tracing();
-//         std::env::set_var("BLOCK_SIZE", "1000");
-
-//         // ─── crypto params & sampler ───────────────────────────────────────────────
-//         let params = DCRTPolyParams::new(8192, 7, 51, 17);
-//         let sampler = DCRTPolyUniformSampler::new();
-//         let dist = DistType::BitDist;
-
-//         // ─── generate the matrices *once* so both variants write the same data ——──
-//         let mats: Vec<_> = (0..N_MATS)
-//             .map(|i| (format!("mat_{i}"), sampler.sample_uniform(&params, 32, 32, dist)))
-//             .collect();
-
-//         // fresh output dirs
-//         let dir_vec = Path::new("out_vec");
-//         let dir_pipe = Path::new("out_pipe");
-//         for d in [dir_vec, dir_pipe] {
-//             if d.exists() {
-//                 fs::remove_dir_all(d).unwrap();
-//             }
-//             fs::create_dir(d).unwrap();
-//         }
-
-//         // ╔════════════════════════════════════════════╗
-//         // ║ 1. current vec + join_all                  ║
-//         // ╚════════════════════════════════════════════╝
-//         let t0_vec = Instant::now();
-//         let mut handles = Vec::new();
-
-//         for (id, mat) in mats.iter().cloned() {
-//             handles.push(store_and_drop_matrix(mat, dir_vec, &id));
-//         }
-
-//         // wait for them all
-//         join_all(handles).await;
-//         let dur_vec = t0_vec.elapsed();
-
-//         // ╔════════════════════════════════════════════╗
-//         // ║ 2. pipeline with bounded channel           ║
-//         // ╚════════════════════════════════════════════╝
-//         let t0_pipe = Instant::now();
-
-//         let (tx, mut rx) = mpsc::channel::<(String, DCRTPolyMatrix)>(CHANNEL_CAP);
-
-//         // single writer task; uses JoinSet so matrix writes overlap
-//         let dir_pipe_clone = dir_pipe.to_path_buf();
-//         let writer = tokio::spawn(async move {
-//             let mut js = JoinSet::new();
-//             while let Some((id, mat)) = rx.recv().await {
-//                 js.spawn(store_and_drop_matrix(mat, &dir_pipe_clone, &id));
-//             }
-//             while let Some(r) = js.join_next().await {
-//                 r.expect("matrix‑store failed").unwrap();
-//             }
-//         });
-
-//         // producer side
-//         for (id, mat) in mats.iter().cloned() {
-//             tx.send((id, mat)).await.unwrap();
-//         }
-//         drop(tx); // close channel
-//         writer.await.unwrap();
-
-//         let dur_pipe = t0_pipe.elapsed();
-
-//         // ─── perf summary ──────────────────────────────────────────────────────────
-//         info!("┌──────────────── comparison ───────────────┐");
-//         info!("│ vec + join_all  : {:>6} ms │", dur_vec.as_millis());
-//         info!(
-//             "│ pipeline mpsc   : {:>6} ms │ ({}{:.1}×)",
-//             dur_pipe.as_millis(),
-//             if dur_pipe < dur_vec { "faster " } else { "slower " },
-//             dur_vec.as_secs_f64() / dur_pipe.as_secs_f64()
-//         );
-//         info!("└─────────────────────────────────────────────┘");
-
-//         // sanity: pipeline should not be catastrophically slower
-//         assert!(dur_pipe < dur_vec * 2, "pipeline unexpectedly slower than vec/join_all");
-//     }
-// }
