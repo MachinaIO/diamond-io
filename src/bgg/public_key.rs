@@ -25,14 +25,14 @@ impl<M: PolyMatrix> BggPublicKey<M> {
         self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
     }
 
-    /// Writes the public key with id to files under the given directory.
-    pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
-        &self,
-        dir_path: P,
-        id: &str,
-    ) {
-        self.matrix.write_to_files(dir_path, id).await;
-    }
+    // /// Writes the public key with id to files under the given directory.
+    // pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
+    //     &self,
+    //     dir_path: P,
+    //     id: &str,
+    // ) {
+    //     self.matrix.write_to_files(dir_path, id).await;
+    // }
 
     /// Reads a public of given rows and cols with id from files under the given directory.
     pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(

@@ -251,27 +251,27 @@ pub fn storage_handle_to_join_handle(storage_handle: StorageHandle) -> tokio::ta
     })
 }
 
-// Legacy function for backward compatibility - will be deprecated
-pub fn store_and_drop_matrix_legacy<M>(
-    matrix: M,
-    dir: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()>
-where
-    M: PolyMatrix + Send + 'static,
-{
-    let dir = dir.to_path_buf();
-    let id = id.to_owned();
+// // Legacy function for backward compatibility - will be deprecated
+// pub fn store_and_drop_matrix_legacy<M>(
+//     matrix: M,
+//     dir: &Path,
+//     id: &str,
+// ) -> tokio::task::JoinHandle<()>
+// where
+//     M: PolyMatrix + Send + 'static,
+// {
+//     let dir = dir.to_path_buf();
+//     let id = id.to_owned();
 
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id} (legacy)"));
-        Handle::current().block_on(async {
-            matrix.write_to_files(&dir, &id).await;
-        });
-        drop(matrix);
-        log_mem(format!("Stored {id} (legacy)"));
-    })
-}
+//     tokio::task::spawn_blocking(move || {
+//         log_mem(format!("Storing {id} (legacy)"));
+//         Handle::current().block_on(async {
+//             matrix.write_to_files(&dir, &id).await;
+//         });
+//         drop(matrix);
+//         log_mem(format!("Stored {id} (legacy)"));
+//     })
+// }
 
 #[cfg(feature = "debug")]
 pub fn store_and_drop_poly<P: Poly + 'static>(
