@@ -75,7 +75,7 @@ impl StorageService {
     }
 
     /// Queue data to be written to disk - returns immediately
-    pub async fn store_data(
+    pub fn store_data(
         &self,
         data: Vec<u8>,
         path: PathBuf,
@@ -208,8 +208,7 @@ where
         for block in serialized_matrix.blocks {
             let path = dir.join(&block.filename);
             let block_id = format!("{}::{}", id, block.filename);
-            let completion_receiver =
-                Handle::current().block_on(storage_service.store_data(block.data, path, block_id));
+            let completion_receiver = storage_service.store_data(block.data, path, block_id);
             io_tasks.push(completion_receiver);
         }
 
