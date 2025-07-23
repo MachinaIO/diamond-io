@@ -1,7 +1,7 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
-use crate::storage::{store_and_drop_matrix, StorageHandle};
 #[cfg(feature = "debug")]
+use crate::storage::store_and_drop_poly;
 use crate::{
     bgg::{sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt},
     io::{
@@ -13,10 +13,11 @@ use crate::{
     },
     poly::{
         enc::rlwe_encrypt,
+        polynomial::Poly,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
-        Poly, PolyMatrix, PolyParams,
+        PolyMatrix, PolyParams,
     },
-    storage::store_and_drop_poly,
+    storage::{store_and_drop_matrix, StorageHandle},
     utils::log_mem,
 };
 use futures::future::join_all;

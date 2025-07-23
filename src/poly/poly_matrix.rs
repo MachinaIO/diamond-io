@@ -126,5 +126,9 @@ pub trait PolyMatrix:
         id: &str,
     ) -> impl std::future::Future<Output = ()> + Send;
     /// Extract block entries for parallel processing (used by storage service)
-    fn block_entries(&self, rows: std::ops::Range<usize>, cols: std::ops::Range<usize>) -> Vec<Vec<Self::P>>;
+    fn block_entries(
+        &self,
+        rows: std::ops::Range<usize>,
+        cols: std::ops::Range<usize>,
+    ) -> Vec<Vec<Self::P>>;
 }

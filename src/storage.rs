@@ -1,3 +1,7 @@
+use crate::{
+    poly::{Poly, PolyMatrix},
+    utils::{block_size, log_mem},
+};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     path::{Path, PathBuf},
@@ -6,13 +10,6 @@ use std::{
 use tokio::{
     runtime::Handle,
     sync::{mpsc, oneshot},
-};
-
-#[cfg(feature = "debug")]
-use crate::poly::Poly;
-use crate::{
-    poly::PolyMatrix,
-    utils::{block_size, log_mem},
 };
 
 #[derive(Debug)]
