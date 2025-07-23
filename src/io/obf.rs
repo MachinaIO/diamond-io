@@ -18,7 +18,7 @@ use crate::{
         PolyMatrix, PolyParams,
     },
     storage::{store_and_drop_matrix, StorageHandle},
-    utils::log_mem,
+    utils::{debug_mem, log_mem},
 };
 use futures::future::join_all;
 use itertools::Itertools;
@@ -425,7 +425,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     match io_completion_handles {
         Ok(_io_handles) => {
-            log_mem("All CPU preprocessing completed - I/O continues in background");
+            debug_mem("All CPU preprocessing completed - I/O continues in background");
             // Wait for any remaining non-storage tasks
             join_all(handles).await;
         }

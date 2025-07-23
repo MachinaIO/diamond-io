@@ -217,17 +217,15 @@ fn setup_lsb_constant_binary_plt(
     let mut rng = rng();
     for k in 0..t_n {
         let r_val: usize = rng.random_range(0..2_usize);
-        f.insert(
-            k,
-            (DCRTPoly::from_const_int_lsb(params, k), DCRTPoly::const_int(params, r_val)),
-        );
+        f.insert(k, (DCRTPoly::from_const_int_lsb(params, k), DCRTPoly::const_int(params, r_val)));
     }
 
-    
-    PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random())
+    PublicLut::<DCRTPolyMatrix>::new::<DCRTPolyUniformSampler, DCRTPolyHashSampler<Keccak256>>(
+        params,
+        d,
+        f,
+        rand::random(),
+    )
 }
 
 pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
@@ -236,18 +234,16 @@ pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut
         let r_val: usize = t_n - k;
         f.insert(
             k,
-            (
-                DCRTPoly::from_const_int_lsb(params, k),
-                DCRTPoly::from_const_int_lsb(params, r_val),
-            ),
+            (DCRTPoly::from_const_int_lsb(params, k), DCRTPoly::from_const_int_lsb(params, r_val)),
         );
     }
 
-    
-    PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random())
+    PublicLut::<DCRTPolyMatrix>::new::<DCRTPolyUniformSampler, DCRTPolyHashSampler<Keccak256>>(
+        params,
+        d,
+        f,
+        rand::random(),
+    )
 }
 
 pub fn setup_constant_plt(
@@ -262,9 +258,10 @@ pub fn setup_constant_plt(
         f.insert(k, (DCRTPoly::const_int(params, k), DCRTPoly::const_int(params, r_val)));
     }
 
-    
-    PublicLut::<DCRTPolyMatrix>::new::<
-        DCRTPolyUniformSampler,
-        DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random())
+    PublicLut::<DCRTPolyMatrix>::new::<DCRTPolyUniformSampler, DCRTPolyHashSampler<Keccak256>>(
+        params,
+        d,
+        f,
+        rand::random(),
+    )
 }

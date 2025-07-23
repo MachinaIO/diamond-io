@@ -1,6 +1,6 @@
 use crate::{
     poly::{Poly, PolyMatrix},
-    utils::{block_size, log_mem},
+    utils::{block_size, debug_mem, log_mem},
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -54,7 +54,7 @@ impl StorageService {
                     let _permit =
                         semaphore.acquire().await.expect("Semaphore should not be closed");
 
-                    log_mem(format!("Writing {} to disk", task.id));
+                    debug_mem(format!("Writing {} to disk", task.id));
                     let result = tokio::fs::write(&task.path, &task.serialized_data).await;
 
                     match result {
@@ -131,7 +131,7 @@ where
     M: PolyMatrix + Send + 'static,
 {
     let block_size_val = block_size();
-    log_mem(format!("CPU preprocessing started: {id}"));
+    debug_mem(format!("CPU preprocessing started: {id}"));
 
     // CPU-HEAVY: Extract matrix blocks and serialize in parallel
     let (nrow, ncol) = matrix.size();
@@ -179,7 +179,7 @@ where
         }
     }
 
-    log_mem(format!("CPU preprocessing completed: {} ({} blocks)", id, serialized_blocks.len()));
+    debug_mem(format!("CPU preprocessing completed: {} ({} blocks)", id, serialized_blocks.len()));
     SerializedMatrix { id: id.to_string(), blocks: serialized_blocks }
 }
 
@@ -199,7 +199,7 @@ where
         let serialized_matrix = preprocess_matrix_for_storage(matrix, &id);
 
         // Early drop after serialization
-        log_mem(format!("Matrix {id} dropped after preprocessing"));
+        debug_mem(format!("Matrix {id} dropped after preprocessing"));
 
         // Send ALL blocks to I/O service and wait for completion
         let storage_service = get_storage_service();

@@ -278,10 +278,8 @@ impl Poly for DCRTPoly {
     }
 
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
-        let coeffs: Vec<_> = coeffs
-            .iter()
-            .map(|i| FinRingElem::constant(&params.modulus(), *i as u64))
-            .collect();
+        let coeffs: Vec<_> =
+            coeffs.iter().map(|i| FinRingElem::constant(&params.modulus(), *i as u64)).collect();
         DCRTPoly::from_coeffs(params, &coeffs)
     }
 }
