@@ -86,7 +86,7 @@ impl StorageService {
         let task = StorageTask { serialized_data: data, path, id, completion_sender };
 
         // Send to I/O worker - this never blocks
-        if let Err(_) = self.task_sender.send(task) {
+        if self.task_sender.send(task).is_err() {
             eprintln!("Storage service is shut down");
         }
 
@@ -131,7 +131,7 @@ where
     M: PolyMatrix + Send + 'static,
 {
     let block_size_val = block_size();
-    log_mem(format!("CPU preprocessing started: {}", id));
+    log_mem(format!("CPU preprocessing started: {id}"));
 
     // CPU-HEAVY: Extract matrix blocks and serialize in parallel
     let (nrow, ncol) = matrix.size();
@@ -199,7 +199,7 @@ where
         let serialized_matrix = preprocess_matrix_for_storage(matrix, &id);
 
         // Early drop after serialization
-        log_mem(format!("Matrix {} dropped after preprocessing", id));
+        log_mem(format!("Matrix {id} dropped after preprocessing"));
 
         // Send ALL blocks to I/O service and wait for completion
         let storage_service = get_storage_service();
@@ -208,9 +208,8 @@ where
         for block in serialized_matrix.blocks {
             let path = dir.join(&block.filename);
             let block_id = format!("{}::{}", id, block.filename);
-
-            let completion_receiver = Handle::current()
-                .block_on(async { storage_service.store_data(block.data, path, block_id).await });
+            let completion_receiver =
+                Handle::current().block_on(storage_service.store_data(block.data, path, block_id));
             io_tasks.push(completion_receiver);
         }
 
@@ -221,11 +220,11 @@ where
                 match io_task.await {
                     Ok(Ok(())) => {}
                     Ok(Err(e)) => {
-                        eprintln!("I/O failed for {}: {:?}", id, e);
+                        eprintln!("I/O failed for {id}: {e:?}");
                         all_success = false;
                     }
                     Err(_) => {
-                        eprintln!("I/O task cancelled for {}", id);
+                        eprintln!("I/O task cancelled for {id}");
                         all_success = false;
                     }
                 }
@@ -233,7 +232,7 @@ where
             if all_success {
                 Ok(())
             } else {
-                Err(std::io::Error::new(std::io::ErrorKind::Other, "Some I/O operations failed"))
+                Err(std::io::Error::other("Some I/O operations failed"))
             }
         });
 
@@ -247,7 +246,7 @@ where
 pub fn storage_handle_to_join_handle(storage_handle: StorageHandle) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         if let Err(e) = storage_handle.wait_all_complete().await {
-            eprintln!("Storage operation failed: {:?}", e);
+            eprintln!("Storage operation failed: {e:?}");
         }
     })
 }

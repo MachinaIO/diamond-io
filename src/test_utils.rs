@@ -216,18 +216,18 @@ fn setup_lsb_constant_binary_plt(
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
-        let r_val: usize = rng.random_range(0..2 as usize);
+        let r_val: usize = rng.random_range(0..2_usize);
         f.insert(
             k,
-            (DCRTPoly::from_const_int_lsb(&params, k), DCRTPoly::const_int(&params, r_val)),
+            (DCRTPoly::from_const_int_lsb(params, k), DCRTPoly::const_int(params, r_val)),
         );
     }
 
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+    
+    PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
-    plt
+    >(params, d, f, rand::random())
 }
 
 pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPolyMatrix> {
@@ -237,17 +237,17 @@ pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut
         f.insert(
             k,
             (
-                DCRTPoly::from_const_int_lsb(&params, k),
-                DCRTPoly::from_const_int_lsb(&params, r_val),
+                DCRTPoly::from_const_int_lsb(params, k),
+                DCRTPoly::from_const_int_lsb(params, r_val),
             ),
         );
     }
 
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+    
+    PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
-    plt
+    >(params, d, f, rand::random())
 }
 
 pub fn setup_constant_plt(
@@ -258,13 +258,13 @@ pub fn setup_constant_plt(
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
-        let r_val: usize = rng.random_range(0..t_n as usize);
-        f.insert(k, (DCRTPoly::const_int(&params, k), DCRTPoly::const_int(&params, r_val)));
+        let r_val: usize = rng.random_range(0..t_n);
+        f.insert(k, (DCRTPoly::const_int(params, k), DCRTPoly::const_int(params, r_val)));
     }
 
-    let plt = PublicLut::<DCRTPolyMatrix>::new::<
+    
+    PublicLut::<DCRTPolyMatrix>::new::<
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
-    >(params, d, f, rand::random());
-    plt
+    >(params, d, f, rand::random())
 }

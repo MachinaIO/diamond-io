@@ -854,7 +854,7 @@ mod tests {
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
-            let matrix_id = format!("test_matrix_{:?}", dist);
+            let matrix_id = format!("test_matrix_{dist:?}");
 
             // Create a temporary directory for testing
             let test_dir = Path::new("test_matrix_write_read");
@@ -909,7 +909,7 @@ mod tests {
             let start_deserialize = std::time::Instant::now();
             let reconstructed_matrix = DCRTPolyMatrix::from_compact_bytes(&params, &compact_bytes);
             let deserialize_time = start_deserialize.elapsed();
-            println!("from_compact_bytes took: {:?}", deserialize_time);
+            println!("from_compact_bytes took: {deserialize_time:?}");
 
             // Verify the matrices are equal
             assert_eq!(matrix, reconstructed_matrix);

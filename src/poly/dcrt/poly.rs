@@ -279,10 +279,10 @@ impl Poly for DCRTPoly {
 
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
         let coeffs: Vec<_> = coeffs
-            .into_iter()
+            .iter()
             .map(|i| FinRingElem::constant(&params.modulus(), *i as u64))
             .collect();
-        DCRTPoly::from_coeffs(&params, &coeffs)
+        DCRTPoly::from_coeffs(params, &coeffs)
     }
 }
 
@@ -468,7 +468,7 @@ fn reconstruct_single_coeff(
 fn process_coeffs_chunked(coeffs: &[FinRingElem], chunk_size: usize) -> Vec<(bool, Vec<u8>)> {
     coeffs
         .par_chunks(chunk_size)
-        .flat_map(|chunk| chunk.iter().map(|coeff| process_single_coeff(coeff)).collect::<Vec<_>>())
+        .flat_map(|chunk| chunk.iter().map(process_single_coeff).collect::<Vec<_>>())
         .collect()
 }
 
@@ -767,7 +767,7 @@ mod tests {
         for dist in dists {
             // Create a random polynomial
             let poly = sampler.sample_poly(&params, &dist);
-            let poly_id = format!("test_poly_{:?}", dist);
+            let poly_id = format!("test_poly_{dist:?}",);
 
             // Write the polynomial to a file
             poly.write_to_file(test_dir, &poly_id).await;
@@ -776,7 +776,7 @@ mod tests {
             let read_poly = DCRTPoly::read_from_file(&params, test_dir, &poly_id);
 
             // Verify the polynomials are equal
-            assert_eq!(poly, read_poly, "Read polynomial does not match original for {:?}", dist);
+            assert_eq!(poly, read_poly, "Read polynomial does not match original for {dist:?}",);
         }
 
         // Clean up

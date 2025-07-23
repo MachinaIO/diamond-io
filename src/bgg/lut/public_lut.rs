@@ -117,9 +117,7 @@ impl<M: PolyMatrix> PublicLut<M> {
         let l_common_target = tensor_lhs * b_l_plus_one;
         let l_common = trap_sampler.preimage(params, b_l_trapdoor, b_l, &l_common_target);
         handles_out.push(storage_handle_to_join_handle(store_and_drop_matrix(
-            l_common,
-            dir_path,
-            &format!("L_common"),
+            l_common, dir_path, "L_common",
         )));
 
         for (k, target_k) in target_tuple {

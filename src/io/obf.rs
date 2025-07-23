@@ -369,7 +369,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
         // after update the target matrix above while evaluation, now can sample preimage L_k
         final_circuit.preimage_sample_all_lookups(
-            &params,
+            params,
             &b_star_cur,
             &b_l_plus_one,
             &sampler_trapdoor,
@@ -430,7 +430,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             join_all(handles).await;
         }
         Err(e) => {
-            eprintln!("CPU preprocessing failed: {:?}", e);
+            eprintln!("CPU preprocessing failed: {e:?}");
             // Still wait for other handles
             join_all(handles).await;
         }
