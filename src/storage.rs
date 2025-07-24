@@ -273,18 +273,12 @@ pub fn storage_handle_to_join_handle(storage_handle: StorageHandle) -> tokio::ta
 // }
 
 #[cfg(feature = "debug")]
-pub fn store_and_drop_poly<P: Poly + 'static>(
-    poly: P,
-    dir: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir = dir.to_path_buf();
-    let id = id.to_owned();
+pub fn store_and_drop_poly<P: Poly>(poly: P, dir: &Path, id: &str) -> tokio::task::JoinHandle<()> {
+    log_mem(format!("Storing {id}"));
+    poly.write_to_file(dir, id);
+    drop(poly);
+    log_mem(format!("Stored {id}"));
 
-    tokio::spawn(async move {
-        log_mem(format!("Storing {id}"));
-        poly.write_to_file(&dir, &id).await;
-        drop(poly);
-        log_mem(format!("Stored {id}"));
-    })
+    // Return a completed handle since the work is already done synchronously.
+    tokio::spawn(async {})
 }

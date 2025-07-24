@@ -768,7 +768,7 @@ mod tests {
             let poly_id = format!("test_poly_{dist:?}",);
 
             // Write the polynomial to a file
-            poly.write_to_file(test_dir, &poly_id).await;
+            poly.write_to_file(test_dir, &poly_id);
 
             // Read the polynomial back
             let read_poly = DCRTPoly::read_from_file(&params, test_dir, &poly_id);
