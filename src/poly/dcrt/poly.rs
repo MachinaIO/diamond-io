@@ -12,6 +12,7 @@ use openfhe::{
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
+    hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     str::FromStr,
     sync::Arc,
@@ -355,6 +356,18 @@ impl PartialEq for DCRTPoly {
 }
 
 impl Eq for DCRTPoly {}
+
+impl Hash for DCRTPoly {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        if self.ptr_poly.is_null() {
+            panic!("Cannot hash a null DCRTPoly pointer");
+        }
+        let coeffs = self.coeffs();
+        for coeff in coeffs {
+            coeff.value().hash(state);
+        }
+    }
+}
 
 impl_binop_with_refs!(DCRTPoly => Add::add(self, rhs: &DCRTPoly) -> DCRTPoly {
     DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))

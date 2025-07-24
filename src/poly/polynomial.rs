@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::{
     fmt::Debug,
+    hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     path::Path,
 };
@@ -31,6 +32,7 @@ pub trait Poly:
     + Debug
     + PartialEq
     + Eq
+    + Hash
     + Add<Output = Self>
     + Sub<Output = Self>
     + Mul<Output = Self>

@@ -598,10 +598,10 @@ def sqrt_ceil(x):
 if __name__ == "__main__":
     secpar = 100
     log2_n = 13
-    max_d = 1
-    min_base_bits = 16
+    max_d = 3
+    min_base_bits = 20
     max_base_bits = 20
-    crt_bits = 7
+    crt_bits = 21
     max_crt_depth = 20
     input_size = 1
     input_width = 1

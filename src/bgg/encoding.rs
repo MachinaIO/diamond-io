@@ -204,11 +204,7 @@ where
         id: usize,
     ) -> BggEncoding<M> {
         let z = &input.plaintext.clone().expect("the BGG encoding should revealed plaintext");
-        let (k, y_k) = plt
-            .f
-            .iter()
-            .find_map(|(k, (x_k, y_k))| if x_k == z { Some((*k, y_k)) } else { None })
-            .expect(&format!("There is no x_k equivalent to {:?}", z.coeffs()));
+        let (k, y_k) = plt.f[z].clone();
         info!("Performing public lookup, k={}", k);
         let d = input.pubkey.matrix.row_size() - 1;
         let hash_key = &self.hash_key;
@@ -741,7 +737,7 @@ mod tests {
             DCRTPolyHashSampler<Keccak256>,
         >::new(key, tmp_dir.clone(), p);
         let result = circuit.eval(&params, &enc_one, &[enc1], Some(bgg_encoding_plt_evaluator));
-        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
+        let (_, y_k) = plt.f[&plaintexts[0]].clone();
         let expected_encodings = bgg_encoding_sampler.sample(
             &params,
             &[pubkeys[0].clone(), expected_pubkey_output.clone()],

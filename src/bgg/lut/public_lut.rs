@@ -7,19 +7,19 @@ use crate::{
         Poly, PolyMatrix, PolyParams,
     },
 };
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
 use tokio::task::JoinHandle;
 use tracing::info;
 
 /// Public Lookup Table
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 pub struct PublicLut<P: Poly> {
-    pub f: HashMap<usize, (P, P)>,
+    pub f: HashMap<P, (usize, P)>,
 }
 
 impl<P: Poly> PublicLut<P> {
-    pub fn new(f: HashMap<usize, (P, P)>) -> Self {
+    pub fn new(f: HashMap<P, (usize, P)>) -> Self {
         Self { f }
     }
 
@@ -29,7 +29,7 @@ impl<P: Poly> PublicLut<P> {
         assert!(!self.f.is_empty(), "f must contain at least one element");
         self.f
             .iter()
-            .filter_map(|(&k, (_, y_k))| y_k.coeffs().iter().max().cloned().map(|coeff| (k, coeff)))
+            .filter_map(|(_, (k, y_k))| y_k.coeffs().iter().max().cloned().map(|coeff| (*k, coeff)))
             .max_by(|a, b| a.1.cmp(&b.1))
             .expect("no coefficients found in any y_k")
     }
@@ -82,16 +82,18 @@ impl<P: Poly> PublicLut<P> {
         let d = pub_matrix.row_size() - 1;
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();
-        let matrices = (0..t)
+        let matrices = self
+            .f
+            .iter()
+            .collect::<Vec<_>>()
             .into_par_iter()
-            .map(|k| {
+            .map(|(x_k, (k, y_k))| {
                 info!("Processing k: {k}");
-                let (x_k, y_k) = self.f.get(&k).expect("missing f(k)");
                 let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
                 info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
                 let r_k_decomposed = r_k.decompose();
                 let target_k = (r_k.clone() * x_k) + a_lt -
-                    &(M::gadget_matrix(params, d + 1) * y_k) -
+                    &(pub_matrix.clone() * y_k) -
                     a_z.clone() * r_k_decomposed;
                 info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
                 (r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))

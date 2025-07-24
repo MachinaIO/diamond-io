@@ -54,12 +54,13 @@ pub trait PltEvaluator<E: Evaluable>: Send + Sync {
 pub struct PolyPltEvaluator {}
 impl<P: Poly> PltEvaluator<P> for PolyPltEvaluator {
     fn public_lookup(&self, _: &P::Params, plt: &PublicLut<P>, input: P, id: usize) -> P {
-        for (_, (x_k, y_k)) in &plt.f {
-            if *x_k == input {
-                return y_k.clone();
-            }
-        }
-        panic!("There is no corresponding input for {id}, {:?}", input.coeffs());
+        // for (_, (x_k, y_k)) in &plt.f {
+        //     if *x_k == input {
+        //         return y_k.clone();
+        //     }
+        // }
+        // panic!("There is no corresponding input for {id}, {:?}", input.coeffs());
+        plt.f[&input].1.clone()
     }
 }
 

@@ -213,7 +213,8 @@ async fn main() {
                     BenchType::Plt => {
                         let k = input_poly.to_const_int();
                         let plt = plt.unwrap();
-                        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
+                        let (_, y_k) =
+                            plt.f[&DCRTPoly::from_const_int_lsb(&obf_params.params, k)].clone();
                         let verify_circuit = BenchCircuit::new_plt_verify().as_poly_circuit();
                         verify_circuit.eval(
                             &obf_params.params,
