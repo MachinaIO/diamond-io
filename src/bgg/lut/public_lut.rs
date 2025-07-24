@@ -81,6 +81,7 @@ impl<P: Poly> PublicLut<P> {
         let d = pub_matrix.row_size() - 1;
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();
+        let gadget = M::gadget_matrix(params, d + 1);
         let matrices = self
             .f
             .iter()
@@ -92,7 +93,7 @@ impl<P: Poly> PublicLut<P> {
                 info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
                 let r_k_decomposed = r_k.decompose();
                 let target_k = (r_k.clone() * x_k) + a_lt -
-                    &(pub_matrix.clone() * y_k) -
+                    &(gadget.clone() * y_k) -
                     a_z.clone() * r_k_decomposed;
                 info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
                 (r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
