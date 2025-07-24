@@ -18,7 +18,10 @@ use crate::{
 };
 use futures::future::join_all;
 use rand::{Rng, RngCore};
-use rayon::{iter::ParallelIterator, iter::IntoParallelIterator, slice::ParallelSlice};
+use rayon::{
+    iter::{IntoParallelIterator, ParallelIterator},
+    slice::ParallelSlice,
+};
 use std::{path::Path, sync::Arc};
 use tokio::runtime::Handle;
 
@@ -161,33 +164,25 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     }
     let level_size = (1u64 << obf_params.level_width) as usize;
     let depth = obf_params.input_size / level_width;
-    
+
     // Parallel generation of all u_mask combinations
     let u_nums = {
         let mut u_nums = Vec::with_capacity(depth);
-        
+
         for j in 0..depth {
             let mut masks_at_level = Vec::with_capacity(level_size);
             masks_at_level.push(identity_1_plus_packed_input_size.clone());
-            
+
             if level_size > 1 {
                 // Parallel generation of masks for i=1..level_size
                 let parallel_masks = (1..level_size)
                     .into_par_iter()
-                    .map(|i| {
-                        build_u_mask_multi::<M>(
-                            &params,
-                            packed_input_size,
-                            level_width,
-                            j,
-                            i,
-                        )
-                    })
+                    .map(|i| build_u_mask_multi::<M>(&params, packed_input_size, level_width, j, i))
                     .collect::<Vec<_>>();
-                
+
                 masks_at_level.extend(parallel_masks);
             }
-            
+
             u_nums.push(masks_at_level);
         }
         u_nums
@@ -239,10 +234,10 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                     s_i_num.row_size(),
                     s_i_num.col_size()
                 ));
-                
+
                 let u = &u_nums[level - 1][num];
                 log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
-                
+
                 // Compute U⊗S tensor product in parallel
                 let u_tensor_s = u.tensor(&s_i_num);
                 log_mem(format!(
@@ -250,18 +245,14 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                     u_tensor_s.row_size(),
                     u_tensor_s.col_size()
                 ));
-                
+
                 (num, s_i_num, u_tensor_s)
             })
             .collect::<Vec<_>>();
         for (num, s_i_num, u_tensor_s) in u_tensor_s_results {
             #[cfg(feature = "debug")]
-            handles.push(store_and_drop_matrix(
-                s_i_num,
-                &dir_path,
-                &format!("s_{level}_{num}"),
-            ));
-            
+            handles.push(store_and_drop_matrix(s_i_num, &dir_path, &format!("s_{level}_{num}")));
+
             // Complete k_target computation
             let k_target = {
                 let matrix_mult = u_tensor_s * &b_star_level;
@@ -273,19 +264,15 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 );
                 matrix_mult + k_target_error
             };
-            
-            let k_preimage_num = sampler_trapdoor.preimage(
-                &params, 
-                &b_star_trapdoor_cur, 
-                &b_star_cur, 
-                &k_target
-            );
-            
+
+            let k_preimage_num =
+                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
+
             log_mem(format!(
                 "Computed k_preimage_num ({},{})",
                 k_preimage_num.row_size(),
                 k_preimage_num.col_size()
-            ));  
+            ));
             let handles_per_level = vec![store_and_drop_matrix(
                 k_preimage_num,
                 &dir_path,
@@ -386,12 +373,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs = final_circuit.eval(
-            params.as_ref(), 
-            &pub_key_att[0], 
-            &pub_key_att[1..], 
-            None
-        );
+        let eval_outputs =
+            final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..], None);
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
 
