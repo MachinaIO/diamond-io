@@ -6,11 +6,13 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+    time::Instant,
 };
 use tokio::{
     runtime::Handle,
     sync::{mpsc, oneshot},
 };
+use tracing::info;
 
 #[derive(Debug)]
 pub struct SerializedBlock {
@@ -130,6 +132,7 @@ fn preprocess_matrix_for_storage<M>(matrix: M, id: &str) -> SerializedMatrix
 where
     M: PolyMatrix + Send + 'static,
 {
+    let start = Instant::now();
     let block_size_val = block_size();
     debug_mem(format!("CPU preprocessing started: {id}"));
 
@@ -174,12 +177,17 @@ where
                 "{}_{}_{}.{}_{}.{}.matrix",
                 id, block_size_val, row_range.start, row_range.end, col_range.start, col_range.end
             );
+            info!("SerializedBlock len {}", data.len());
 
             serialized_blocks.push(SerializedBlock { filename, data });
         }
     }
-
-    debug_mem(format!("CPU preprocessing completed: {} ({} blocks)", id, serialized_blocks.len()));
+    let elapsed = start.elapsed();
+    log_mem(format!(
+        "CPU preprocessing completed: {} ({} blocks) {elapsed:?}",
+        id,
+        serialized_blocks.len()
+    ));
     SerializedMatrix { id: id.to_string(), blocks: serialized_blocks }
 }
 
@@ -195,13 +203,8 @@ where
     let (io_completion_sender, io_completion_receiver) = oneshot::channel();
 
     let cpu_handle = tokio::task::spawn_blocking(move || {
-        // CPU-HEAVY: Serialize matrix blocks in parallel
         let serialized_matrix = preprocess_matrix_for_storage(matrix, &id);
-
-        // Early drop after serialization
         debug_mem(format!("Matrix {id} dropped after preprocessing"));
-
-        // Send ALL blocks to I/O service and wait for completion
         let storage_service = get_storage_service();
         let mut io_tasks = Vec::new();
 
