@@ -1,4 +1,4 @@
-use crate::poly::{Poly, PolyMatrix};
+use crate::poly::Poly;
 
 use super::{PolyCircuit, PolyGateType};
 use serde::{Deserialize, Serialize};
@@ -175,7 +175,7 @@ impl SerializablePolyCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::poly::dcrt::{DCRTPoly, DCRTPolyMatrix};
+    use crate::poly::dcrt::DCRTPoly;
 
     #[test]
     fn test_serialization_roundtrip() {

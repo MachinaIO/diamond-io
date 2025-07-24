@@ -140,7 +140,7 @@ pub async fn test_io_plt(
     let switched_modulus = Arc::new(BigUint::from_str_radix(switched_modulus_str, 10).unwrap());
     let mut public_circuit = PolyCircuit::new();
 
-    let plt = setup_lsb_constant_binary_plt(8, &params, d);
+    let plt = setup_lsb_constant_binary_plt(8, &params);
     // inputs: BaseDecompose(ct), eval_input
     // outputs: (eval_input PLT) * BaseDecompose(ct)
     {
@@ -208,11 +208,7 @@ pub async fn test_io_plt(
 }
 
 /// only used for `test_io_plt` to map either [true, ...] or [false, ...] format
-fn setup_lsb_constant_binary_plt(
-    t_n: usize,
-    params: &DCRTPolyParams,
-    d: usize,
-) -> PublicLut<DCRTPoly> {
+fn setup_lsb_constant_binary_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly> {
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
@@ -227,7 +223,7 @@ fn setup_lsb_constant_binary_plt(
     plt
 }
 
-pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams, d: usize) -> PublicLut<DCRTPoly> {
+pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly> {
     let mut f = HashMap::new();
     for k in 0..t_n {
         let r_val: usize = t_n - k;

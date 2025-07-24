@@ -256,7 +256,7 @@ mod tests {
             public_key::BggPubKeyPltEvaluator,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
             utils::random_bgg_encodings,
-            BggEncoding, BggPublicKey,
+            BggEncoding,
         },
         poly::{
             dcrt::{
@@ -271,7 +271,6 @@ mod tests {
         test_utils::setup_constant_plt,
         utils::{create_bit_random_poly, create_random_poly, init_tracing},
     };
-    use futures::future::join_all;
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
@@ -281,30 +280,6 @@ mod tests {
     use tracing::info;
 
     const SIGMA: f64 = 4.578;
-
-    fn p_vector_for_inputs(
-        b_l: &DCRTPolyMatrix,
-        plaintexts: Vec<DCRTPoly>,
-        params: &DCRTPolyParams,
-        p_sigma: f64,
-        s_x_l: &DCRTPolyMatrix,
-    ) -> DCRTPolyMatrix {
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-        // let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
-        let one = DCRTPoly::const_one(params);
-        let mut extended_plaintexts = vec![one];
-        extended_plaintexts.extend(plaintexts);
-        let p_x_l_error = uniform_sampler.sample_uniform(
-            params,
-            1,
-            b_l.ncol,
-            DistType::GaussDist { sigma: p_sigma },
-        );
-        let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, extended_plaintexts);
-        let s_connect = encoded_bits.tensor(s_x_l);
-        let s_b = s_connect * b_l;
-        s_b + p_x_l_error
-    }
 
     #[test]
     fn test_encoding_add() {
@@ -656,7 +631,7 @@ mod tests {
     async fn test_encoding_plt_for_dio() {
         init_tracing();
 
-        let tmp_dir = tempdir().unwrap().into_path();
+        let tmp_dir = tempdir().unwrap().path().to_path_buf();
 
         /* Setup */
         let params = DCRTPolyParams::default();
@@ -671,8 +646,6 @@ mod tests {
         let uniform_sampler = DCRTPolyUniformSampler::new();
         let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
         info!("b_l_plus_one ({},{})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
-        let m = (d + 1) * params.modulus_digits();
-        let m_b = (d + 1) * (params.modulus_digits() + 2);
         /* BGG+ encoding setup */
         let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
         // in reality there should be input insertion step that updates the secret s_init to

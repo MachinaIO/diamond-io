@@ -2,8 +2,7 @@
 use super::bgm::Player;
 use crate::{
     bgg::{
-        encoding::BggEncodingPltEvaluator, public_key::BggPubKeyPltEvaluator,
-        sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt,
+        public_key::BggPubKeyPltEvaluator, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt,
     },
     io::{
         params::ObfuscationParams,
@@ -387,19 +386,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
 
-        // // after update the target matrix above while evaluation, now can sample preimage L_k
-        // final_circuit.preimage_sample_all_lookups(
-        //     &params,
-        //     &b_star_cur,
-        //     &b_l_plus_one,
-        //     &sampler_trapdoor,
-        //     &b_star_trapdoor_cur,
-        //     &b_l_plus_one_trapdoor,
-        //     packed_input_size + 1,
-        //     &dir_path,
-        //     &mut handles,
-        // );
-
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
             .map(|digits| BggPublicKey::digits_to_int(digits, params))
@@ -414,11 +400,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             "eval_outputs_matrix_plus_a_prf",
         ));
         eval_outputs_matrix + public_data.a_prf
-        // let extra_blocks = packed_input_size;
-        // let zero_rows = extra_blocks * summat.row_size();
-        // let zero_cols = summat.col_size();
-        // let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
-        // summat.concat_rows(&[&zeros])
     };
     log_mem("Computed final_preimage_target_f");
 

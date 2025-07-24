@@ -2,19 +2,13 @@ use super::circuit::{Evaluable, PolyCircuit};
 use crate::{
     bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
     impl_binop_with_refs,
-    poly::{
-        dcrt::{DCRTPoly, DCRTPolyMatrix},
-        Poly, PolyMatrix,
-    },
+    poly::dcrt::DCRTPoly,
 };
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::One;
 use serde::{Deserialize, Serialize};
-use std::{
-    ops::{Add, Mul, Sub},
-    path::PathBuf,
-};
+use std::ops::{Add, Mul, Sub};
 
 impl PolyCircuit<DCRTPoly> {
     pub fn simulate_bgg_norm(
@@ -118,22 +112,6 @@ impl Evaluable for NormSimulator {
         let plaintext_norm = &one.plaintext_norm * &BigUint::from(*digit_max);
         Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
-
-    // fn public_lookup(
-    //     self,
-    //     _: &Self::Params,
-    //     plt: &mut PublicLut<Self::Matrix>,
-    //     _: Option<(Self::Matrix, PathBuf, usize, usize)>,
-    // ) -> Self {
-    //     Self {
-    //         // |c_z · r_k.decompose()| + c_lt_k
-    //         h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) +
-    //             MPolyCoeffs::one(),
-    //         plaintext_norm: plt.max_output_row().1.value().clone(),
-    //         dim_sqrt: self.dim_sqrt,
-    //         base: self.base,
-    //     }
-    // }
 }
 
 pub struct NormPltEvaluator {}

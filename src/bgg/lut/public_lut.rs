@@ -78,7 +78,6 @@ impl<P: Poly> PublicLut<P> {
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     {
         info!("Preimage for id: {id}");
-        let t = self.f.len();
         let d = pub_matrix.row_size() - 1;
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();

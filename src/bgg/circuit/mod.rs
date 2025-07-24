@@ -363,7 +363,6 @@ impl<P: Poly> PolyCircuit<P> {
                             .clone();
                         let lookup =
                             self.lookups.get(lookup_id).expect("lookup table missing").as_ref();
-                        // let mut lookup = lookup_arc.lock().expect("mutex poisoned");
                         let result = plt_evaluator
                             .as_ref()
                             .expect("public lookup evaluator missing")
