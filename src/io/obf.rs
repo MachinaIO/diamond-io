@@ -33,7 +33,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 ) where
     M: PolyMatrix + 'static,
     SU: PolyUniformSampler<M = M>,
-    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
+    SH: PolyHashSampler<[u8; 32], M = M>,
     ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     R: RngCore,
     P: AsRef<Path>,
