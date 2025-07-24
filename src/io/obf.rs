@@ -17,9 +17,8 @@ use crate::{
     utils::log_mem,
 };
 use futures::future::join_all;
-use itertools::Itertools;
 use rand::{Rng, RngCore};
-use rayon::{iter::ParallelIterator, slice::ParallelSlice};
+use rayon::{iter::ParallelIterator, iter::IntoParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
 use tokio::runtime::Handle;
 
@@ -31,7 +30,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 ) where
     M: PolyMatrix + 'static,
     SU: PolyUniformSampler<M = M>,
-    SH: PolyHashSampler<[u8; 32], M = M>,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
     ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     R: RngCore,
     P: AsRef<Path>,
@@ -89,7 +88,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     // This plaintexts is (1, 0_L, t), total length is L + 2, packed_input_size - 1 is L
     let one = M::P::const_one(&params);
     let mut plaintexts = vec![one];
-    plaintexts.extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
+    plaintexts.extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)));
     plaintexts.push(minus_t_bar);
 
     let mut reveal_plaintexts = vec![true; plaintexts.len()];
@@ -154,38 +153,45 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         identity_1_plus_packed_input_size.row_size(),
         identity_1_plus_packed_input_size.col_size()
     ));
-    // number of bits to be inserted at each level
     let level_width = obf_params.level_width;
     assert_eq!(obf_params.input_size % level_width, 0);
-    // otherwise we need >1 polynomial to insert the bits for each level
     assert!(level_width <= n);
-    // otherwise we get to a point in which the inserted bits have to be split between two
-    // polynomials
     if obf_params.input_size > n {
         assert_eq!(n % level_width, 0);
     }
     let level_size = (1u64 << obf_params.level_width) as usize;
-    // number of levels necessary to encode the input
     let depth = obf_params.input_size / level_width;
-    let mut u_nums = Vec::with_capacity(depth);
-
-    for j in 0..depth {
-        let mut masks_at_level = Vec::with_capacity(level_size);
-        masks_at_level.push(identity_1_plus_packed_input_size.clone());
-        if level_size > 0 {
-            for i in 1..level_size {
-                masks_at_level.push(build_u_mask_multi::<M>(
-                    &params,
-                    packed_input_size,
-                    level_width,
-                    j,
-                    i,
-                ));
+    
+    // Parallel generation of all u_mask combinations
+    let u_nums = {
+        let mut u_nums = Vec::with_capacity(depth);
+        
+        for j in 0..depth {
+            let mut masks_at_level = Vec::with_capacity(level_size);
+            masks_at_level.push(identity_1_plus_packed_input_size.clone());
+            
+            if level_size > 1 {
+                // Parallel generation of masks for i=1..level_size
+                let parallel_masks = (1..level_size)
+                    .into_par_iter()
+                    .map(|i| {
+                        build_u_mask_multi::<M>(
+                            &params,
+                            packed_input_size,
+                            level_width,
+                            j,
+                            i,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                
+                masks_at_level.extend(parallel_masks);
             }
+            
+            u_nums.push(masks_at_level);
         }
-
-        u_nums.push(masks_at_level);
-    }
+        u_nums
+    };
 
     log_mem(format!("Computed u_0, .. u_{depth}"));
     #[cfg(feature = "debug")]
@@ -214,55 +220,77 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &format!("b_star_{level}"),
         ));
 
-        for num in 0..level_size {
-            let mut handles_per_level: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-            #[cfg(feature = "bgm")]
-            {
-                player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
-            }
+        // Parallel computation of U⊗S tensor products for this level
+        let u_tensor_s_results = (0..level_size)
+            .into_par_iter()
+            .map(|num| {
+                #[cfg(feature = "bgm")]
+                {
+                    let player = Player::new();
+                    player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
+                }
 
-            let s_i_bar = sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
-            let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
+                // Generate S matrix in parallel
+                let s_i_bar = SU::new().sample_uniform(&params, d, d, DistType::BitDist);
+                let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
+                log_mem(format!(
+                    "Computed S ({},{}) (d+1)x(d+1)",
+                    s_i_num.row_size(),
+                    s_i_num.col_size()
+                ));
+                
+                let u = &u_nums[level - 1][num];
+                log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
+                
+                // Compute U⊗S tensor product in parallel
+                let u_tensor_s = u.tensor(&s_i_num);
+                log_mem(format!(
+                    "Computed U ⊗ S ({},{})",
+                    u_tensor_s.row_size(),
+                    u_tensor_s.col_size()
+                ));
+                
+                (num, s_i_num, u_tensor_s)
+            })
+            .collect::<Vec<_>>();
+        for (num, s_i_num, u_tensor_s) in u_tensor_s_results {
             #[cfg(feature = "debug")]
             handles.push(store_and_drop_matrix(
-                s_i_num.clone(),
+                s_i_num,
                 &dir_path,
                 &format!("s_{level}_{num}"),
             ));
-
-            log_mem(format!(
-                "Computed S ({},{}) (d+1)x(d+1)",
-                s_i_num.row_size(),
-                s_i_num.col_size()
-            ));
-            let u = &u_nums[level - 1][num];
-            log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
-            let u_tensor_s = u.tensor(&s_i_num);
-            let k_target_error = sampler_uniform.sample_uniform(
-                &params,
-                (1 + packed_input_size) * (d + 1),
-                m_b,
-                DistType::GaussDist { sigma: obf_params.p_sigma },
+            
+            // Complete k_target computation
+            let k_target = {
+                let matrix_mult = u_tensor_s * &b_star_level;
+                let k_target_error = sampler_uniform.sample_uniform(
+                    &params,
+                    (1 + packed_input_size) * (d + 1),
+                    m_b,
+                    DistType::GaussDist { sigma: obf_params.p_sigma },
+                );
+                matrix_mult + k_target_error
+            };
+            
+            let k_preimage_num = sampler_trapdoor.preimage(
+                &params, 
+                &b_star_trapdoor_cur, 
+                &b_star_cur, 
+                &k_target
             );
-            log_mem(format!(
-                "Computed U ⊗ S ({},{})",
-                u_tensor_s.row_size(),
-                u_tensor_s.col_size()
-            ));
-            let k_target = (u_tensor_s * &b_star_level) + k_target_error;
-            let k_preimage_num =
-                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
+            
             log_mem(format!(
                 "Computed k_preimage_num ({},{})",
                 k_preimage_num.row_size(),
                 k_preimage_num.col_size()
-            ));
-            handles_per_level.push(store_and_drop_matrix(
+            ));  
+            let handles_per_level = vec![store_and_drop_matrix(
                 k_preimage_num,
                 &dir_path,
                 &format!("k_preimage_{level}_{num}"),
-            ));
+            )];
             join_all(handles_per_level).await;
         }
 
@@ -291,9 +319,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     // Sample A_att
     let pub_key_att = sample_public_key_by_id(&bgg_pubkey_sampler, &params, 0, &reveal_plaintexts);
-    let (first_key, other_keys) =
-        pub_key_att.split_first().expect("pub_key_att must contain at least one key");
-    let pub_key_att_matrix: M = first_key.concat_matrix(other_keys);
+    let pub_key_att_matrix: M = {
+        let (first_key, other_keys) =
+            pub_key_att.split_first().expect("pub_key_att must contain at least one key");
+        first_key.concat_matrix(other_keys)
+    };
     log_mem(format!(
         "Sampled pub_key_att_matrix ({},{})",
         pub_key_att_matrix.row_size(),
@@ -356,12 +386,16 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             public_circuit,
         );
         log_mem("Computed final_circuit");
-        let eval_outputs =
-            final_circuit.eval(params.as_ref(), &pub_key_att[0], &pub_key_att[1..], None);
+        let eval_outputs = final_circuit.eval(
+            params.as_ref(), 
+            &pub_key_att[0], 
+            &pub_key_att[1..], 
+            None
+        );
         log_mem("Evaluated outputs");
         debug_assert_eq!(eval_outputs.len(), log_base_q * packed_output_size);
 
-        // after update the target matrix above while evaluation, now can sample preimage L_k
+        // Parallel preimage sampling for lookups
         final_circuit.preimage_sample_all_lookups(
             &params,
             &b_star_cur,
@@ -381,18 +415,22 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         #[cfg(feature = "debug")]
         assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
+        let summat = eval_outputs_matrix + &public_data.a_prf;
         #[cfg(feature = "debug")]
         handles.push(store_and_drop_matrix(
-            eval_outputs_matrix.clone() + public_data.a_prf.clone(),
+            summat.clone(),
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
         ));
-        let summat = eval_outputs_matrix + public_data.a_prf;
         let extra_blocks = packed_input_size;
-        let zero_rows = extra_blocks * summat.row_size();
-        let zero_cols = summat.col_size();
-        let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
-        summat.concat_rows(&[&zeros])
+        if extra_blocks == 0 {
+            summat
+        } else {
+            let zero_rows = extra_blocks * summat.row_size();
+            let zero_cols = summat.col_size();
+            let zeros = M::zero(params.as_ref(), zero_rows, zero_cols);
+            summat.concat_rows(&[&zeros])
+        }
     };
     log_mem("Computed final_preimage_target_f");
 
