@@ -187,10 +187,10 @@ pub async fn test_io_plt(
     let obf_size = calculate_directory_size(dir_path);
     log_mem(format!("Obfuscation size: {obf_size} bytes"));
 
-    // 0,1,1(lsb) -> 4
     let input = vec![false, true, true];
     let input_poly = DCRTPoly::from_bool_vec(&params, &input);
     let start_time = std::time::Instant::now();
+    println!("hardcoded_key: {:?}", hardcoded_key.coeffs());
     let output =
         evaluate::<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>, DCRTPolyTrapdoorSampler, _>(
             obf_params, &input, &dir_path,
@@ -200,10 +200,8 @@ pub async fn test_io_plt(
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
 
-    let k = input_poly.to_const_int();
-    let (_, scale) = plt.f[&DCRTPoly::from_const_int_lsb(&params, k)].clone();
-    // Public lookup for 0,1,1(lsb) => 1,0,0(lsb)
-    // (1,1,1) * hardcoded key = output
+    let (_, scale) = plt.f[&input_poly].clone();
+    println!("Scale: {:?}", scale.coeffs());
     assert_eq!(output, (hardcoded_key * scale).to_bool_vec());
 }
 
@@ -213,6 +211,7 @@ fn setup_lsb_constant_binary_plt(t_n: usize, params: &DCRTPolyParams) -> PublicL
     let mut rng = rng();
     for k in 0..t_n {
         let r_val: usize = rng.random_range(0..2 as usize);
+        println!("k: {k}, r_val: {r_val}");
         f.insert(
             DCRTPoly::from_const_int_lsb(&params, k),
             (k, DCRTPoly::const_int(&params, r_val)),

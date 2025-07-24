@@ -599,9 +599,9 @@ if __name__ == "__main__":
     secpar = 100
     log2_n = 13
     max_d = 3
-    min_base_bits = 20
+    min_base_bits = 16
     max_base_bits = 20
-    crt_bits = 21
+    crt_bits = 51
     max_crt_depth = 20
     input_size = 1
     input_width = 1
