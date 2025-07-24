@@ -15,7 +15,6 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BggPublicKey<M: PolyMatrix> {
@@ -109,7 +108,6 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
     type P = M::P;
-    // type PltHelper = BggEncodingPltHelper<M>;
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         debug_mem(format!("BGGPublicKey::rotate {:?}, {:?}", self.matrix.size(), shift));
@@ -129,17 +127,6 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         debug_mem("BGGPublicKey::from_digits matrix multiplied");
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
-
-    // fn public_lookup(
-    //     self,
-    //     _: &Self::Params,
-    //     plt: &PublicLut<Self::Matrix>,
-    //     _: Option<(Self::Matrix, PathBuf, usize, usize)>,
-    // ) -> Self {
-    //     let a_z = self.matrix;
-    //     plt.insert_a_z(&a_z);
-    //     Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
-    // }
 }
 
 #[derive(Debug)]
@@ -155,7 +142,6 @@ where
     pub pub_matrix: Arc<M>,
     pub trapdoor: Arc<ST::Trapdoor>,
     pub dir_path: PathBuf,
-    // handles_out: Vec<JoinHandle<()>>,
     _sh: PhantomData<SH>,
     _su: PhantomData<SU>,
     _st: PhantomData<ST>,
@@ -230,59 +216,3 @@ where
         }
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use crate::{
-//         bgg::{
-//             circuit::PolyCircuit, public_key::BggPubKeyPltEvaluator,
-// sampler::BGGPublicKeySampler,         },
-//         poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
-//         test_utils::setup_constant_plt,
-//     };
-//     use keccak_asm::Keccak256;
-
-//     #[test]
-//     fn test_pubkey_plt() {
-//         // Create parameters for testing
-//         let params = DCRTPolyParams::default();
-
-//         // Create a hash sampler and BGGPublicKeySampler to be reused
-//         let key: [u8; 32] = rand::random();
-//         let d = 3;
-//         let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-//         // Generate random tag for sampling
-//         let tag: u64 = rand::random();
-//         let tag_bytes = tag.to_le_bytes();
-
-//         // Create a simple circuit with an Add operation
-//         let mut circuit = PolyCircuit::new();
-//         let inputs = circuit.input(1);
-//         let plt = setup_constant_plt(8, &params);
-//         // let a_lt = plt.a_lt.clone();
-//         let plt_id = circuit.register_public_lookup(plt);
-//         let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
-//         circuit.output(vec![plt_gate]);
-
-//         // Create random public keys
-//         let reveal_plaintexts = [true; 2];
-//         let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-//         let pk_one = pubkeys[0].clone();
-//         let pk1 = pubkeys[1].clone();
-
-//         let trap_sampler =
-//         let plt_evaluator = BggPubKeyPltEvaluator::new(
-//             key,
-//             bgg_sampler.trap_sampler.clone(),
-//             pk1.matrix.clone(),
-//             bgg_sampler.trap_sampler.trapdoor.clone(),
-//             std::path::PathBuf::from("test_dir"),
-//         );
-//         // Evaluate the circuit
-//         let result = circuit.eval(&params, &pk_one, &[pk1], None);
-
-//         // Verify the result
-//         assert_eq!(result.len(), 1);
-//         assert_eq!(result[0].matrix, a_lt);
-//     }
-// }

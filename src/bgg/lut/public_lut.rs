@@ -12,62 +12,16 @@ use std::{collections::HashMap, path::Path};
 use tokio::task::JoinHandle;
 use tracing::info;
 
-// const TAG_R_K: &[u8] = b"TAG_R_K";
-// const TAG_A_PLT: &[u8] = b"A_PLT:";
-
 /// Public Lookup Table
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PublicLut<P: Poly> {
-    // // public matrix R_k that concated for all k
-    // pub r_k_s: M,
-    // public matrix A_z
-    // a_z: Option<M>,
-    // pub d: usize,
-    /// m := (n+1)[logq]
-    // m: usize,
-    /// mapping f: k => (x_k, y_k)
     pub f: HashMap<usize, (P, P)>,
-    //  Common public matrix A_LT: (n+1)xm
-    // pub a_lt: M,
 }
 
 impl<P: Poly> PublicLut<P> {
-    pub fn new(
-        // params: &<M::P as Poly>::Params,
-        // d: usize,
-        f: HashMap<usize, (P, P)>,
-        // r_k_hashkey: [u8; 32],
-    ) -> Self {
-        // let m = (1 + d) * params.modulus_digits();
-        // let hash_sampler = SH::new();
-        // let t = f.len();
-        // todo: R_k could be sampled from uniform if we decided to dump it in disk.
-        // let r_k_s = hash_sampler.sample_hash(
-        //     params,
-        //     r_k_hashkey,
-        //     TAG_R_K,
-        //     d + 1,
-        //     m * t,
-        //     DistType::FinRingDist,
-        // );
-
-        // let a_lt = hash_sampler.sample_hash(
-        //     params,
-        //     r_k_hashkey,
-        //     TAG_A_PLT,
-        //     d + 1,
-        //     m,
-        //     DistType::FinRingDist,
-        // );
-        // info!("A_LT ({}, {})", a_lt.row_size(), a_lt.col_size());
-        // Self { r_k_s, a_z: None, f, d, m, a_lt }
+    pub fn new(f: HashMap<usize, (P, P)>) -> Self {
         Self { f }
     }
-
-    // /// Insert A_z public matrix
-    // pub fn insert_a_z(&mut self, a_z: &M) {
-    //     self.a_z = Some(a_z.clone())
-    // }
 
     /// Find the row k with the maximum coefficient in the second M::P (y_k) of f HashMap
     /// Returns (k, max_coefficient)
