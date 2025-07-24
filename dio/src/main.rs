@@ -1,7 +1,6 @@
 use circuit::BenchCircuit;
 use clap::{Parser, Subcommand, ValueEnum};
 use config::{RunBenchConfig, SimBenchNormConfig};
-#[cfg(feature = "disk")]
 use diamond_io::{
     bgg::{BggPublicKey, circuit::PolyPltEvaluator},
     io::{
@@ -24,7 +23,6 @@ use diamond_io::{
 };
 use num_traits::identities::One;
 
-#[cfg(feature = "disk")]
 use keccak_asm::Keccak256;
 use num_bigint::BigUint;
 use rand::Rng;
