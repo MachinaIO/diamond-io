@@ -2,7 +2,6 @@ use circuit::BenchCircuit;
 use clap::{Parser, Subcommand, ValueEnum};
 use config::{RunBenchConfig, SimBenchNormConfig};
 #[cfg(feature = "disk")]
-use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
     bgg::{BggPublicKey, circuit::PolyPltEvaluator},
     io::{
@@ -26,7 +25,6 @@ use diamond_io::{
 use num_traits::identities::One;
 
 #[cfg(feature = "disk")]
-use diamond_io::utils::log_mem;
 use keccak_asm::Keccak256;
 use num_bigint::BigUint;
 use rand::Rng;
@@ -147,7 +145,7 @@ async fn main() {
                 }
                 BenchType::Plt => {
                     let t_num = t_num.unwrap();
-                    let plt = setup_lsb_plt(t_num, &params, dio_config.d);
+                    let plt = setup_lsb_plt(t_num, &params);
                     (BenchCircuit::new_plt(log_base_q, plt.clone()).as_poly_circuit(), Some(plt))
                 }
             };
@@ -262,7 +260,7 @@ async fn main() {
                 }
                 BenchType::Plt => {
                     let t_num = t_num.unwrap();
-                    let plt = setup_lsb_plt(t_num, &params, dio_config.d);
+                    let plt = setup_lsb_plt(t_num, &params);
                     BenchCircuit::new_plt(log_base_q, plt.clone()).as_poly_circuit()
                 }
             };
