@@ -18,9 +18,8 @@ use crate::{
         PolyMatrix, PolyParams,
     },
     storage::{store_and_drop_matrix, StorageHandle},
-    utils::{debug_mem, log_mem},
+    utils::log_mem,
 };
-use futures::future::join_all;
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
@@ -44,7 +43,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     #[cfg(feature = "bgm")]
     player.play_music("bgm/obf_bgm1.mp3");
 
-    let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
     let mut storage_handles: Vec<StorageHandle> = Vec::new();
     let dir_path = dir_path.as_ref().to_path_buf();
     if !dir_path.exists() {
@@ -377,7 +375,6 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             &b_l_plus_one_trapdoor,
             packed_input_size + 1,
             &dir_path,
-            &mut handles,
         );
 
         let output_ints = eval_outputs
@@ -411,28 +408,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled final_preimage_f");
     storage_handles.push(store_and_drop_matrix(final_preimage_f, &dir_path, "final_preimage_f"));
 
-    let store_hash_key = tokio::task::spawn_blocking(move || {
-        let path = dir_path.join("hash_key");
-        std::fs::write(&path, hash_key).expect("Failed to write hash_key file");
-        log_mem("Stored hash_key");
-    });
-    handles.push(store_hash_key);
+    let path = dir_path.join("hash_key");
+    std::fs::write(&path, hash_key).expect("Failed to write hash_key file");
+    log_mem("Stored hash_key");
 
     // Wait for all CPU preprocessing to complete first
-    let io_completion_handles: Result<Vec<_>, _> =
+    let _: Result<Vec<_>, _> =
         futures::future::try_join_all(storage_handles.into_iter().map(|h| h.wait_cpu_complete()))
             .await;
-
-    match io_completion_handles {
-        Ok(_io_handles) => {
-            debug_mem("All CPU preprocessing completed - I/O continues in background");
-            // Wait for any remaining non-storage tasks
-            join_all(handles).await;
-        }
-        Err(e) => {
-            eprintln!("CPU preprocessing failed: {e:?}");
-            // Still wait for other handles
-            join_all(handles).await;
-        }
-    }
 }

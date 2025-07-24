@@ -12,7 +12,6 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-use tokio::task::JoinHandle;
 use tracing::info;
 pub use utils::*;
 
@@ -410,7 +409,6 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         b_l_plus_one_trapdoor: &ST::Trapdoor,
         input_size: usize,
         dir_path: &Path,
-        handles_out: &mut Vec<JoinHandle<()>>,
     ) where
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
         M: PolyMatrix + Send + 'static,
@@ -427,7 +425,6 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                 b_l_plus_one_trapdoor,
                 input_size,
                 dir_path,
-                handles_out,
             );
         }
     }

@@ -235,7 +235,6 @@ mod tests {
         test_utils::setup_constant_plt,
         utils::init_tracing,
     };
-    use futures::future::join_all;
     use keccak_asm::Keccak256;
     use tempfile::tempdir;
     use tokio;
@@ -281,7 +280,6 @@ mod tests {
         /* Obfuscation Step */
         let key: [u8; 32] = rand::random();
         let d = 1;
-        let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
         let input_size = 1;
         let uni = DCRTPolyUniformSampler::new();
         let bgg_pubkey_sampler =
@@ -331,9 +329,7 @@ mod tests {
             &b_l_plus_one_trapdoor,
             input_size + 1,
             &tmp_dir,
-            &mut handles,
         );
-        join_all(handles).await;
 
         // Create secret and plaintexts
         let k = 2;

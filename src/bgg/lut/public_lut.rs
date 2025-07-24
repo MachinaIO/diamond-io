@@ -90,11 +90,12 @@ impl<M: PolyMatrix> PublicLut<M> {
         b_l_plus_one_trapdoor: &ST::Trapdoor,
         input_size: usize,
         dir_path: &Path,
-        handles_out: &mut Vec<JoinHandle<()>>,
-    ) where
+    ) -> Vec<JoinHandle<()>>
+    where
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
         M: PolyMatrix + Send + 'static,
     {
+        let mut handles_out = Vec::new();
         let t = self.f.len();
 
         let target_tuple: Vec<(usize, M)> = (0..t)
@@ -116,9 +117,16 @@ impl<M: PolyMatrix> PublicLut<M> {
         let tensor_lhs = id.concat_rows(&[&zeros]);
         let l_common_target = tensor_lhs * b_l_plus_one;
         let l_common = trap_sampler.preimage(params, b_l_trapdoor, b_l, &l_common_target);
-        handles_out.push(storage_handle_to_join_handle(store_and_drop_matrix(
-            l_common, dir_path, "L_common",
-        )));
+
+        // Non-blocking storage: only wait for CPU preprocessing, let I/O happen in background.
+        let storage_handle = store_and_drop_matrix(l_common, dir_path, "L_common");
+        handles_out.push(tokio::spawn(async move {
+            // Only wait for CPU preprocessing to complete, not I/O.
+            if let Err(e) = storage_handle.wait_cpu_complete().await {
+                eprintln!("L_common CPU preprocessing failed: {e:?}");
+            }
+            // I/O completion handle is dropped here, allowing it to complete in background.
+        }));
 
         for (k, target_k) in target_tuple {
             info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
@@ -129,5 +137,7 @@ impl<M: PolyMatrix> PublicLut<M> {
                 &format!("L_{k}"),
             )));
         }
+
+        handles_out
     }
 }
