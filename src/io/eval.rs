@@ -375,10 +375,6 @@ where
                 (output_encoding_ints[0].pubkey.matrix.clone() -
                     M::unit_column_vector(&params, d + 1, d) *
                         output_encoding_ints[0].plaintext.clone().unwrap());
-            println!(
-                "Expected plaintext: {:?}",
-                output_encoding_ints[0].plaintext.as_ref().unwrap().coeffs()
-            );
             assert_eq!(output_encoding_ints[0].vector, expected);
         }
         if inputs[0] {

@@ -89,8 +89,6 @@ impl<P: Poly> PublicLut<P> {
             .into_par_iter()
             .map(|(x_k, (k, y_k))| {
                 info!("Processing k: {k}");
-                println!("Processing k: {k}, x_k: {:?}", x_k.coeffs());
-                println!("y_k: {:?}", y_k.coeffs());
                 let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
                 info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
                 let r_k_decomposed = r_k.decompose();
@@ -98,12 +96,12 @@ impl<P: Poly> PublicLut<P> {
                     &(gadget.clone() * y_k) -
                     a_z.clone() * r_k_decomposed;
                 info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
-                (r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
+                (k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
             })
             .collect::<Vec<_>>();
         info!("Preimage matrices computed for id: {id}");
         // [TODO] Use a channel within the above iterator to bound the memory usage.
-        for (k, (r_k, l_k)) in matrices.into_iter().enumerate() {
+        for (k, r_k, l_k) in matrices.into_iter() {
             handles_out.push(store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}")));
             handles_out.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{id}_{k}")));
         }
