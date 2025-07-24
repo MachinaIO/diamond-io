@@ -89,7 +89,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled t_bar");
     let minus_t_bar = -t_bar.entry(0, 0);
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar"));
+    store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar");
     // This plaintexts is (1, 0_L, t), total length is L + 2, packed_input_size - 1 is L
     let one = M::P::const_one(&params);
     let mut plaintexts = vec![one];
@@ -302,7 +302,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         pub_key_att_matrix.col_size()
     ));
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key"));
+    store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key");
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
 
     // Generate RLWE ciphertext for the hardcoded key
