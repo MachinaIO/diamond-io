@@ -5,7 +5,6 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
-    storage::store_and_drop_matrix_streaming,
     storage_optimized::store_matrix_optimized,
 };
 use rayon::prelude::*;

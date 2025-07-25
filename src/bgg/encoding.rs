@@ -203,16 +203,15 @@ where
         input: BggEncoding<M>,
         id: usize,
     ) -> BggEncoding<M> {
-        let z = &input.plaintext.clone().expect("the BGG encoding should revealed plaintext");
-        let (k, y_k) = plt.f[z].clone();
+        let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
+        let (k, y_k) =
+            plt.f.get(z).expect(&format!("{:?} is not exist in public lookup f", z.to_const_int()));
         info!("Performing public lookup, k={}", k);
         let d = input.pubkey.matrix.row_size() - 1;
         let hash_key = &self.hash_key;
         let a_lt = plt.derive_a_lt::<M, SH>(params, d, *hash_key, id);
         let pubkey = BggPublicKey::new(a_lt, true);
-
         let m = (d + 1) * params.modulus_digits();
-
         let r_k = timed_read(
             &format!("R_{id}_{k}"),
             || M::read_from_files(params, d + 1, m, &self.dir_path, &format!("R_{id}_{k}")),

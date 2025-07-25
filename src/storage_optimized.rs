@@ -25,8 +25,6 @@ pub struct StorageConfig {
     pub buffer_blocks: usize,
     /// Block size override (if None, uses default)
     pub block_size_override: Option<usize>,
-    /// Enable direct I/O (bypasses OS cache)
-    pub direct_io: bool,
     /// Maximum memory for buffers in bytes
     pub max_buffer_memory: usize,
 }
@@ -39,7 +37,6 @@ impl Default for StorageConfig {
             io_writers: 4,
             buffer_blocks: 100,
             block_size_override: Some(1000),
-            direct_io: true,
             max_buffer_memory: 4_000_000_000,
         }
     }
@@ -86,7 +83,6 @@ where
             Arc::clone(&blocks_written),
             Arc::clone(&buffer_memory),
             Arc::clone(&total_bytes),
-            config.direct_io,
         );
 
         // Perform parallel block serialization with round-robin distribution
@@ -124,7 +120,6 @@ fn spawn_io_writers_dedicated(
     blocks_written: Arc<AtomicUsize>,
     buffer_memory: Arc<AtomicUsize>,
     total_bytes: Arc<AtomicUsize>,
-    direct_io: bool,
 ) -> Vec<thread::JoinHandle<()>> {
     receivers
         .into_iter()
@@ -141,11 +136,7 @@ fn spawn_io_writers_dedicated(
                     let data_len = block.data.len();
 
                     // Write with optional direct I/O
-                    let write_result = if direct_io {
-                        write_direct_io(&block.path, &block.data)
-                    } else {
-                        std::fs::write(&block.path, &block.data)
-                    };
+                    let write_result = std::fs::write(&block.path, &block.data);
 
                     match write_result {
                         Ok(()) => {
@@ -287,114 +278,6 @@ fn parallel_serialize_matrix_distributed<M>(
             }
         });
     });
-}
-
-/// Write with direct I/O (bypasses OS cache)
-fn write_direct_io(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        use std::{io::Write, os::unix::fs::OpenOptionsExt};
-
-        // Use O_DIRECT flag to bypass page cache
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .custom_flags(libc::O_DIRECT)
-            .open(path)?;
-
-        // O_DIRECT requires aligned buffers and sizes
-        let aligned_data = align_buffer_for_direct_io(data);
-        file.write_all(&aligned_data)?;
-        file.sync_all()?; // Ensure data reaches disk
-        Ok(())
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        use std::{
-            io::Write,
-            os::unix::{fs::OpenOptionsExt, io::AsRawFd},
-        };
-
-        // macOS uses F_NOCACHE fcntl instead of O_DIRECT
-        let mut file =
-            std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(path)?;
-
-        // Set F_NOCACHE to bypass buffer cache
-        unsafe {
-            let fd = file.as_raw_fd();
-            libc::fcntl(fd, libc::F_NOCACHE, 1);
-        }
-
-        file.write_all(data)?;
-        file.sync_all()?; // Ensure data reaches disk
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::{io::Write, os::windows::fs::OpenOptionsExt};
-
-        // Windows uses FILE_FLAG_NO_BUFFERING
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .custom_flags(0x20000000) // FILE_FLAG_NO_BUFFERING
-            .open(path)?;
-
-        // Windows direct I/O requires sector-aligned buffers
-        let aligned_data = align_buffer_for_direct_io(data);
-        file.write_all(&aligned_data)?;
-        file.sync_all()?;
-        Ok(())
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    {
-        // Fallback for unsupported platforms
-        use std::io::Write;
-        let mut file = std::fs::File::create(path)?;
-        file.write_all(data)?;
-        file.sync_all()?;
-        Ok(())
-    }
-}
-
-/// Align buffer for direct I/O requirements
-#[cfg(target_os = "linux")]
-fn align_buffer_for_direct_io(data: &[u8]) -> Vec<u8> {
-    const ALIGNMENT: usize = 512; // Filesystem block size, not page size
-    let aligned_size = (data.len() + ALIGNMENT - 1) & !(ALIGNMENT - 1);
-
-    // Create aligned buffer using posix_memalign for proper memory alignment
-    let mut aligned_buffer = vec![0u8; aligned_size];
-
-    // Ensure the Vec is properly aligned by recreating it if necessary
-    if aligned_buffer.as_ptr() as usize % ALIGNMENT != 0 {
-        // Reallocate with proper alignment
-        let layout = std::alloc::Layout::from_size_align(aligned_size, ALIGNMENT)
-            .expect("Invalid layout for aligned buffer");
-
-        unsafe {
-            let ptr = std::alloc::alloc_zeroed(layout);
-            if ptr.is_null() {
-                std::alloc::handle_alloc_error(layout);
-            }
-
-            // Copy data to aligned buffer
-            std::ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
-
-            // Create Vec from aligned memory
-            aligned_buffer = Vec::from_raw_parts(ptr, aligned_size, aligned_size);
-        }
-    } else {
-        // Buffer is already aligned, just copy data
-        aligned_buffer[..data.len()].copy_from_slice(data);
-    }
-
-    aligned_buffer
 }
 
 /// Public API function that uses optimized storage with default config
