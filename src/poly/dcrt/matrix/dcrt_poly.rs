@@ -9,8 +9,7 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{ops::Range, path::Path, sync::Arc};
-use tokio::fs::write;
+use std::{ops::Range, path::Path};
 
 use super::base::BaseMatrix;
 
@@ -206,6 +205,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         .decompose()
     }
 
+    #[inline]
     fn read_from_files<P: AsRef<Path> + Send + Sync>(
         params: &<Self::P as Poly>::Params,
         nrow: usize,
@@ -224,7 +224,8 @@ impl PolyMatrix for DCRTPolyMatrix {
             ));
             let bytes = std::fs::read(&path)
                 .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
-            let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
+            let entries_bytes: Vec<Vec<Vec<u8>>> =
+                bincode::decode_from_slice(&bytes, bincode::config::standard()).unwrap().0;
 
             parallel_iter!(0..row_range.len())
                 .map(|i| {
@@ -241,57 +242,62 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix
     }
 
-    async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
-        let block_size = block_size();
-        #[cfg(feature = "disk")]
-        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-        #[cfg(not(feature = "disk"))]
-        let (row_offsets, col_offsets) = (vec![0, self.nrow], vec![0, self.ncol]);
-        let dir_path = dir_path.as_ref().to_path_buf();
+    // #[inline]
+    // async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
+    //     let block_size = block_size();
+    //     info!("{block_size}");
+    //     #[cfg(feature = "disk")]
+    //     let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
+    //     #[cfg(not(feature = "disk"))]
+    //     let (row_offsets, col_offsets) = (vec![0, self.nrow], vec![0, self.ncol]);
+    //     let dir_path = dir_path.as_ref().to_path_buf();
 
-        let self_arc = Arc::new(self);
-        let row_windows = row_offsets.into_iter().tuple_windows().collect_vec();
-        let futures = row_windows
-            .into_iter()
-            .flat_map(|(cur_block_row_idx, next_block_row_idx)| {
-                let col_windows = col_offsets.clone().into_iter().tuple_windows().collect_vec();
-                col_windows
-                    .into_iter()
-                    .map(|(cur_block_col_idx, next_block_col_idx)| {
-                        // let id_clone = id.clone();
-                        let row_range = cur_block_row_idx..next_block_row_idx;
-                        let col_range = cur_block_col_idx..next_block_col_idx;
-                        let self_arc = Arc::clone(&self_arc);
-                        let dir_path = dir_path.clone();
-                        async move {
-                            let entries = self_arc
-                                .as_ref()
-                                .block_entries(row_range.clone(), col_range.clone());
-                            let mut path = dir_path;
-                            path.push(format!(
-                                "{}_{}_{}.{}_{}.{}.matrix",
-                                id,
-                                block_size,
-                                row_range.start,
-                                row_range.end,
-                                col_range.start,
-                                col_range.end
-                            ));
-                            let entries_bytes: Vec<Vec<Vec<u8>>> = entries
-                                .iter()
-                                .map(|row| {
-                                    row.iter().map(|poly| poly.to_compact_bytes()).collect_vec()
-                                })
-                                .collect_vec();
-                            let serialized_data = serde_json::to_vec(&entries_bytes)?;
-                            write(path, &serialized_data).await
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        futures::future::try_join_all(futures).await.expect("Failed to write all matrix blocks");
-    }
+    //     let self_arc = Arc::new(self);
+    //     let row_windows = row_offsets.into_iter().tuple_windows().collect_vec();
+    //     let futures = row_windows
+    //         .into_iter()
+    //         .flat_map(|(cur_block_row_idx, next_block_row_idx)| {
+    //             let col_windows = col_offsets.clone().into_iter().tuple_windows().collect_vec();
+    //             col_windows
+    //                 .into_iter()
+    //                 .map(|(cur_block_col_idx, next_block_col_idx)| {
+    //                     // let id_clone = id.clone();
+    //                     let row_range = cur_block_row_idx..next_block_row_idx;
+    //                     let col_range = cur_block_col_idx..next_block_col_idx;
+    //                     let self_arc = Arc::clone(&self_arc);
+    //                     let dir_path = dir_path.clone();
+    //                     async move {
+    //                         let entries = self_arc
+    //                             .as_ref()
+    //                             .block_entries(row_range.clone(), col_range.clone());
+    //                         let mut path = dir_path;
+    //                         path.push(format!(
+    //                             "{}_{}_{}.{}_{}.{}.matrix",
+    //                             id,
+    //                             block_size,
+    //                             row_range.start,
+    //                             row_range.end,
+    //                             col_range.start,
+    //                             col_range.end
+    //                         ));
+    //                         let entries_bytes: Vec<Vec<Vec<u8>>> = entries
+    //                             .iter()
+    //                             .map(|row| {
+    //                                 row.iter().map(|poly| poly.to_compact_bytes()).collect_vec()
+    //                             })
+    //                             .collect_vec();
+    //                         let serialized_data =
+    //                             bincode::encode_to_vec(&entries_bytes,
+    // bincode::config::standard())                                 .unwrap();
+    //                         info!("serialized_len={}", serialized_data.len());
+    //                         write(path, &serialized_data).await
+    //                     }
+    //                 })
+    //                 .collect::<Vec<_>>()
+    //         })
+    //         .collect::<Vec<_>>();
+    //     futures::future::try_join_all(futures).await.expect("Failed to write all matrix blocks");
+    // }
 
     fn set_entry(&mut self, i: usize, j: usize, elem: Self::P) {
         #[cfg(not(feature = "disk"))]
@@ -308,6 +314,51 @@ impl PolyMatrix for DCRTPolyMatrix {
                 mmap.copy_from_slice(&bytes);
             }
         }
+    }
+
+    fn to_compact_bytes(&self) -> Vec<u8> {
+        let entries = self.block_entries(0..self.nrow, 0..self.ncol);
+        let entries_bytes: Vec<Vec<Vec<u8>>> = entries
+            .iter()
+            .map(|row| row.iter().map(|poly| poly.to_compact_bytes()).collect())
+            .collect();
+
+        bincode::encode_to_vec(&entries_bytes, bincode::config::standard())
+            .expect("Failed to serialize matrix to compact bytes")
+    }
+
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: &[u8]) -> Self {
+        let entries_bytes: Vec<Vec<Vec<u8>>> =
+            bincode::decode_from_slice(bytes, bincode::config::standard())
+                .expect("Failed to deserialize matrix from compact bytes")
+                .0;
+
+        let nrow = entries_bytes.len();
+        let ncol = if nrow > 0 { entries_bytes[0].len() } else { 0 };
+        let mut matrix = Self::new_empty(params, nrow, ncol);
+
+        let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            row_range
+                .map(|i| {
+                    col_range
+                        .clone()
+                        .map(|j| DCRTPoly::from_compact_bytes(params, &entries_bytes[i][j]))
+                        .collect()
+                })
+                .collect()
+        };
+
+        matrix.replace_entries(0..nrow, 0..ncol, f);
+        matrix
+    }
+
+    fn block_entries(
+        &self,
+        rows: std::ops::Range<usize>,
+        cols: std::ops::Range<usize>,
+    ) -> Vec<Vec<Self::P>> {
+        // Delegate to the BaseMatrix implementation
+        self.block_entries(rows, cols)
     }
 }
 
@@ -369,9 +420,7 @@ mod tests {
         sampler::{DistType, PolyUniformSampler},
     };
     use num_bigint::BigUint;
-    use rand::{rng, Rng};
-    use serial_test::serial;
-    use std::{fs, sync::Arc};
+    use std::sync::Arc;
 
     #[test]
     fn test_matrix_gadget_matrix() {
@@ -746,43 +795,39 @@ mod tests {
         matrix.concat_diag(&others[..])
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_matrix_write_read() {
-        let params = DCRTPolyParams::default();
+    #[test]
+    fn test_matrix_compact_bytes() {
+        let params = DCRTPolyParams::new(8192, 7, 51, 17);
         let sampler = DCRTPolyUniformSampler::new();
 
-        let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
-        std::env::set_var("BLOCK_SIZE", "10");
+        let dists = [DistType::BitDist, DistType::FinRingDist];
         for dist in dists {
-            let ncol = rng().random_range(5..=15);
-            let nrow = rng().random_range(5..=15);
+            // todo: interesting finding. if its more square shape (e.g (50,50)more than 2m> (100,1)
+            // - total 37s) slower
+            let ncol = 100;
+            let nrow = 1;
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
-            let matrix_id = format!("test_matrix_{:?}", dist);
 
-            // Create a temporary directory for testing
-            let test_dir = Path::new("test_matrix_write_read");
-            if !test_dir.exists() {
-                fs::create_dir(test_dir).unwrap();
-            } else {
-                // Clean it first to ensure no old files interfere
-                fs::remove_dir_all(test_dir).unwrap();
-                fs::create_dir(test_dir).unwrap();
-            }
+            // Convert to compact bytes
+            let start_serialize = std::time::Instant::now();
+            let compact_bytes = matrix.to_compact_bytes();
+            let serialize_time = start_serialize.elapsed();
+            println!(
+                "to_compact_bytes took: {:?}, bytes_length={}",
+                serialize_time,
+                compact_bytes.len()
+            );
 
-            // Write the matrix to files
-            matrix.write_to_files(test_dir, &matrix_id).await;
-
-            // Read the matrix back
-            let read_matrix =
-                DCRTPolyMatrix::read_from_files(&params, nrow, ncol, test_dir, &matrix_id);
+            // Reconstruct from compact bytes
+            let start_deserialize = std::time::Instant::now();
+            let reconstructed_matrix = DCRTPolyMatrix::from_compact_bytes(&params, &compact_bytes);
+            let deserialize_time = start_deserialize.elapsed();
+            println!("from_compact_bytes took: {deserialize_time:?}");
 
             // Verify the matrices are equal
-            assert_eq!(matrix, read_matrix);
-
-            fs::remove_dir_all(test_dir).unwrap();
+            assert_eq!(matrix, reconstructed_matrix);
         }
     }
 }

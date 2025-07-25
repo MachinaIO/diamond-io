@@ -1,5 +1,7 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
+#[cfg(feature = "debug")]
+use crate::storage::store_and_drop_poly;
 use crate::{
     bgg::{
         public_key::BggPubKeyPltEvaluator, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt,
@@ -13,17 +15,17 @@ use crate::{
     },
     poly::{
         enc::rlwe_encrypt,
+        polynomial::Poly,
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
-        Poly, PolyMatrix, PolyParams,
+        PolyMatrix, PolyParams,
     },
+    storage_optimized::store_matrix_optimized,
     utils::log_mem,
 };
-use futures::future::join_all;
 use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
-use tokio::runtime::Handle;
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
     obf_params: ObfuscationParams<M>,
@@ -43,7 +45,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     #[cfg(feature = "bgm")]
     player.play_music("bgm/obf_bgm1.mp3");
 
-    let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+    // let mut storage_handles: Vec<StorageHandle> = Vec::new();
     let dir_path = dir_path.as_ref().to_path_buf();
     if !dir_path.exists() {
         std::fs::create_dir_all(&dir_path).expect("Failed to create directory");
@@ -87,7 +89,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     log_mem("Sampled t_bar");
     let minus_t_bar = -t_bar.entry(0, 0);
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar"));
+    store_and_drop_poly(minus_t_bar.clone(), &dir_path, "minus_t_bar");
     // This plaintexts is (1, 0_L, t), total length is L + 2, packed_input_size - 1 is L
     let one = M::P::const_one(&params);
     let mut plaintexts = vec![one];
@@ -146,9 +148,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     );
     let p_init = s_b + p_init_error;
     log_mem(format!("Computed p_epsilon ({},{})", p_init.row_size(), p_init.col_size()));
-    handles.push(store_and_drop_matrix(p_init, &dir_path, "p_init"));
+    store_matrix_optimized(p_init, &dir_path, "p_init");
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_matrix(s_init, &dir_path, "s_init"));
+    store_matrix_optimized(s_init, &dir_path, "s_init");
     let identity_1_plus_packed_input_size =
         M::identity(params.as_ref(), 1 + packed_input_size, None);
     log_mem(format!(
@@ -191,7 +193,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     log_mem(format!("Computed u_0, .. u_{depth}"));
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_matrix(b_star_cur.clone(), &dir_path, "b_star_0"));
+    store_matrix_optimized(b_star_cur.clone(), &dir_path, "b_star_0");
 
     /*
     Trapdoor preimage generation for the input insertion step.
@@ -210,14 +212,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         ));
 
         #[cfg(feature = "debug")]
-        handles.push(store_and_drop_matrix(
-            b_star_level.clone(),
-            &dir_path,
-            &format!("b_star_{level}"),
-        ));
+        store_matrix_optimized(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
         for num in 0..level_size {
-            let mut handles_per_level: Vec<tokio::task::JoinHandle<()>> = Vec::new();
             #[cfg(feature = "bgm")]
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
@@ -227,11 +224,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
             #[cfg(feature = "debug")]
-            handles.push(store_and_drop_matrix(
-                s_i_num.clone(),
-                &dir_path,
-                &format!("s_{level}_{num}"),
-            ));
+            store_matrix_optimized(s_i_num.clone(), &dir_path, &format!("s_{level}_{num}"));
 
             log_mem(format!(
                 "Computed S ({},{}) (d+1)x(d+1)",
@@ -260,12 +253,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 k_preimage_num.row_size(),
                 k_preimage_num.col_size()
             ));
-            handles_per_level.push(store_and_drop_matrix(
-                k_preimage_num,
-                &dir_path,
-                &format!("k_preimage_{level}_{num}"),
-            ));
-            join_all(handles_per_level).await;
+            store_matrix_optimized(k_preimage_num, &dir_path, &format!("k_preimage_{level}_{num}"));
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
@@ -293,7 +281,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     let k_l_plus_one =
         sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_l_plus_one_target);
-    handles.push(store_and_drop_matrix(k_l_plus_one, &dir_path, "k_l_plus_one"));
+    store_matrix_optimized(k_l_plus_one, &dir_path, "k_l_plus_one");
 
     #[cfg(feature = "bgm")]
     {
@@ -311,7 +299,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         pub_key_att_matrix.col_size()
     ));
     #[cfg(feature = "debug")]
-    handles.push(store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key"));
+    store_and_drop_poly(hardcoded_key.clone(), &dir_path, "hardcoded_key");
     let hardcoded_key_matrix = M::from_poly_vec_row(&params, vec![hardcoded_key]);
 
     // Generate RLWE ciphertext for the hardcoded key
@@ -332,7 +320,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
-    handles.push(store_and_drop_matrix(b, &dir_path, "b"));
+    store_matrix_optimized(b, &dir_path, "b");
 
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_d+1
     // computing u_1_L' ⊗ A_att
@@ -356,8 +344,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_att,
     );
     log_mem("Sampled final_preimage_att");
-    handles.push(store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att"));
-    handles.push(store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att"));
+    store_matrix_optimized(final_preimage_att, &dir_path, "final_preimage_att");
+    store_matrix_optimized(pub_key_att_matrix, &dir_path, "pub_key_att");
 
     let b_l_plus_one = Arc::new(b_l_plus_one);
     let b_l_plus_one_trapdoor = Arc::new(b_l_plus_one_trapdoor);
@@ -394,11 +382,11 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         #[cfg(feature = "debug")]
         assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         #[cfg(feature = "debug")]
-        handles.push(store_and_drop_matrix(
+        store_matrix_optimized(
             eval_outputs_matrix.clone() + public_data.a_prf.clone(),
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
-        ));
+        );
         eval_outputs_matrix + public_data.a_prf
     };
     log_mem("Computed final_preimage_target_f");
@@ -410,50 +398,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_f,
     );
     log_mem("Sampled final_preimage_f");
-    handles.push(store_and_drop_matrix(final_preimage_f, &dir_path, "final_preimage_f"));
+    store_matrix_optimized(final_preimage_f, &dir_path, "final_preimage_f");
 
-    let store_hash_key = tokio::task::spawn_blocking(move || {
-        let path = dir_path.join("hash_key");
-        std::fs::write(&path, hash_key).expect("Failed to write hash_key file");
-        log_mem("Stored hash_key");
-    });
-    handles.push(store_hash_key);
-
-    join_all(handles).await;
-}
-
-pub fn store_and_drop_matrix<M: PolyMatrix + 'static>(
-    matrix: M,
-    dir_path: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir_path = dir_path.to_path_buf();
-    let id_str = id.to_string();
-
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id_str}"));
-        Handle::current().block_on(async {
-            matrix.write_to_files(&dir_path, &id_str).await;
-        });
-        drop(matrix);
-        log_mem(format!("Stored {id_str}"));
-    })
-}
-
-#[cfg(feature = "debug")]
-pub fn store_and_drop_poly<P: Poly + 'static>(
-    poly: P,
-    dir_path: &Path,
-    id: &str,
-) -> tokio::task::JoinHandle<()> {
-    let dir_path = dir_path.to_path_buf();
-    let id_str = id.to_string();
-    tokio::task::spawn_blocking(move || {
-        log_mem(format!("Storing {id_str}"));
-        Handle::current().block_on(async {
-            poly.write_to_file(&dir_path, &id_str).await;
-        });
-        drop(poly);
-        log_mem(format!("Stored {id_str}"));
-    })
+    let path = dir_path.join("hash_key");
+    std::fs::write(&path, hash_key).expect("Failed to write hash_key file");
+    log_mem("Stored hash_key");
 }

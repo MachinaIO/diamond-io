@@ -1,6 +1,6 @@
 use diamond_io::{
     bgg::{circuit::PolyCircuit, lut::public_lut::PublicLut},
-    poly::dcrt::{DCRTPoly, DCRTPolyMatrix},
+    poly::dcrt::DCRTPoly,
 };
 
 pub enum BenchCircuit {

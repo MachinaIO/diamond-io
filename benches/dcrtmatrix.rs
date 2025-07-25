@@ -29,7 +29,7 @@ fn bench_matrix_tensor(c: &mut Criterion) {
     let matrix_b = DCRTPolyMatrix::identity(&params, 3, None);
 
     c.bench_with_input(
-        BenchmarkId::new("Matrix Tensor", format!("{:?} ⊗ {:?}", shape_a, shape_b)),
+        BenchmarkId::new("Matrix Tensor", format!("{shape_a:?} ⊗ {shape_b:?}")),
         &(matrix_a, matrix_b),
         |b, (m_a, m_b)| {
             b.iter(|| {

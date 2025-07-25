@@ -1,15 +1,14 @@
 //! Public Lookup
 
 use crate::{
-    io::obf::store_and_drop_matrix,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
+    storage_optimized::store_matrix_optimized,
 };
 use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
-use tokio::task::JoinHandle;
 use tracing::info;
 
 /// Public Lookup Table
@@ -71,7 +70,6 @@ impl<P: Poly> PublicLut<P> {
         a_lt: &M,
         id: usize,
         dir_path: &Path,
-        handles_out: &mut Vec<JoinHandle<()>>,
     ) where
         M: PolyMatrix<P = P> + Send + 'static,
         SU: PolyUniformSampler<M = M> + Send + Sync,
@@ -102,8 +100,8 @@ impl<P: Poly> PublicLut<P> {
         info!("Preimage matrices computed for id: {id}");
         // [TODO] Use a channel within the above iterator to bound the memory usage.
         for (k, r_k, l_k) in matrices.into_iter() {
-            handles_out.push(store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}")));
-            handles_out.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{id}_{k}")));
+            store_matrix_optimized(r_k, dir_path, &format!("R_{id}_{k}"));
+            store_matrix_optimized(l_k, dir_path, &format!("L_{id}_{k}"));
         }
     }
 }

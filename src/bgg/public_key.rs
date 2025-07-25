@@ -7,7 +7,6 @@ use crate::{
     },
     utils::debug_mem,
 };
-use futures::future::join_all;
 use rayon::prelude::*;
 use std::{
     marker::PhantomData,
@@ -29,15 +28,6 @@ impl<M: PolyMatrix> BggPublicKey<M> {
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
         self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
-    }
-
-    /// Writes the public key with id to files under the given directory.
-    pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
-        &self,
-        dir_path: P,
-        id: &str,
-    ) {
-        self.matrix.write_to_files(dir_path, id).await;
     }
 
     /// Reads a public of given rows and cols with id from files under the given directory.
@@ -163,7 +153,6 @@ where
     ) -> BggPublicKey<M> {
         let d = input.matrix.row_size() - 1;
         let a_lt = plt.derive_a_lt::<M, SH>(params, d, self.hash_key, id);
-        let mut handle_outs = Vec::new();
         plt.preimage::<M, SU, ST>(
             params,
             &self.trap_sampler,
@@ -173,19 +162,7 @@ where
             &a_lt,
             id,
             &self.dir_path,
-            &mut handle_outs,
         );
-        // [TODO] Use channels
-        // Handle futures synchronously using spawn_blocking to avoid "runtime from within runtime"
-        // error
-        if !handle_outs.is_empty() {
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(join_all(handle_outs));
-            })
-            .join()
-            .unwrap();
-        }
         BggPublicKey { matrix: a_lt, reveal_plaintext: true }
     }
 }
