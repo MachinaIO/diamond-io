@@ -1,6 +1,9 @@
 use super::circuit::Evaluable;
 use crate::{
-    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    bgg::{
+        circuit::{GateId, PltEvaluator},
+        lut::public_lut::PublicLut,
+    },
     poly::{
         sampler::{PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix,
@@ -173,7 +176,7 @@ where
         params: &<BggPublicKey<M> as Evaluable>::Params,
         plt: &PublicLut<<BggPublicKey<M> as Evaluable>::P>,
         input: BggPublicKey<M>,
-        id: usize,
+        id: GateId,
     ) -> BggPublicKey<M> {
         let d = input.matrix.row_size() - 1;
         let a_lt = plt.derive_a_lt::<M, SH>(params, d, self.hash_key, id);
