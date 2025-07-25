@@ -6,6 +6,7 @@ use crate::{
         Poly, PolyMatrix, PolyParams,
     },
     storage::store_and_drop_matrix_streaming,
+    storage_optimized::store_matrix_optimized,
 };
 use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
@@ -100,8 +101,8 @@ impl<P: Poly> PublicLut<P> {
         info!("Preimage matrices computed for id: {id}");
         // [TODO] Use a channel within the above iterator to bound the memory usage.
         for (k, r_k, l_k) in matrices.into_iter() {
-            store_and_drop_matrix_streaming(r_k, dir_path, &format!("R_{id}_{k}"));
-            store_and_drop_matrix_streaming(l_k, dir_path, &format!("L_{id}_{k}"));
+            store_matrix_optimized(r_k, dir_path, &format!("R_{id}_{k}"));
+            store_matrix_optimized(l_k, dir_path, &format!("L_{id}_{k}"));
         }
     }
 }

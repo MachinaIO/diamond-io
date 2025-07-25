@@ -19,7 +19,7 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         PolyMatrix, PolyParams,
     },
-    storage::store_and_drop_matrix_streaming,
+    storage_optimized::store_matrix_optimized,
     utils::log_mem,
 };
 use itertools::Itertools;
@@ -148,9 +148,9 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     );
     let p_init = s_b + p_init_error;
     log_mem(format!("Computed p_epsilon ({},{})", p_init.row_size(), p_init.col_size()));
-    store_and_drop_matrix_streaming(p_init, &dir_path, "p_init");
+    store_matrix_optimized(p_init, &dir_path, "p_init");
     #[cfg(feature = "debug")]
-    store_and_drop_matrix_streaming(s_init, &dir_path, "s_init");
+    store_matrix_optimized(s_init, &dir_path, "s_init");
     let identity_1_plus_packed_input_size =
         M::identity(params.as_ref(), 1 + packed_input_size, None);
     log_mem(format!(
@@ -193,7 +193,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
 
     log_mem(format!("Computed u_0, .. u_{depth}"));
     #[cfg(feature = "debug")]
-    store_and_drop_matrix_streaming(b_star_cur.clone(), &dir_path, "b_star_0");
+    store_matrix_optimized(b_star_cur.clone(), &dir_path, "b_star_0");
 
     /*
     Trapdoor preimage generation for the input insertion step.
@@ -212,11 +212,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         ));
 
         #[cfg(feature = "debug")]
-        store_and_drop_matrix_streaming(
-            b_star_level.clone(),
-            &dir_path,
-            &format!("b_star_{level}"),
-        );
+        store_matrix_optimized(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
         for num in 0..level_size {
             #[cfg(feature = "bgm")]
@@ -228,11 +224,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
             let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
             #[cfg(feature = "debug")]
-            store_and_drop_matrix_streaming(
-                s_i_num.clone(),
-                &dir_path,
-                &format!("s_{level}_{num}"),
-            );
+            store_matrix_optimized(s_i_num.clone(), &dir_path, &format!("s_{level}_{num}"));
 
             log_mem(format!(
                 "Computed S ({},{}) (d+1)x(d+1)",
@@ -261,11 +253,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
                 k_preimage_num.row_size(),
                 k_preimage_num.col_size()
             ));
-            store_and_drop_matrix_streaming(
-                k_preimage_num,
-                &dir_path,
-                &format!("k_preimage_{level}_{num}"),
-            );
+            store_matrix_optimized(k_preimage_num, &dir_path, &format!("k_preimage_{level}_{num}"));
         }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
@@ -293,7 +281,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     };
     let k_l_plus_one =
         sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_l_plus_one_target);
-    store_and_drop_matrix_streaming(k_l_plus_one, &dir_path, "k_l_plus_one");
+    store_matrix_optimized(k_l_plus_one, &dir_path, "k_l_plus_one");
 
     #[cfg(feature = "bgm")]
     {
@@ -332,7 +320,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     let a_decomposed = a.entry(0, 0).decompose_base(params.as_ref());
     let b_decomposed = b.entry(0, 0).decompose_base(params.as_ref());
     log_mem("Decomposed RLWE ciphertext into {BaseDecompose(a), BaseDecompose(b)}");
-    store_and_drop_matrix_streaming(b, &dir_path, "b");
+    store_matrix_optimized(b, &dir_path, "b");
 
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_d+1
     // computing u_1_L' ⊗ A_att
@@ -356,8 +344,8 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_att,
     );
     log_mem("Sampled final_preimage_att");
-    store_and_drop_matrix_streaming(final_preimage_att, &dir_path, "final_preimage_att");
-    store_and_drop_matrix_streaming(pub_key_att_matrix, &dir_path, "pub_key_att");
+    store_matrix_optimized(final_preimage_att, &dir_path, "final_preimage_att");
+    store_matrix_optimized(pub_key_att_matrix, &dir_path, "pub_key_att");
 
     let b_l_plus_one = Arc::new(b_l_plus_one);
     let b_l_plus_one_trapdoor = Arc::new(b_l_plus_one_trapdoor);
@@ -394,7 +382,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         #[cfg(feature = "debug")]
         assert_eq!(eval_outputs_matrix.col_size(), packed_output_size);
         #[cfg(feature = "debug")]
-        store_and_drop_matrix_streaming(
+        store_matrix_optimized(
             eval_outputs_matrix.clone() + public_data.a_prf.clone(),
             &dir_path,
             "eval_outputs_matrix_plus_a_prf",
@@ -410,7 +398,7 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
         &final_preimage_target_f,
     );
     log_mem("Sampled final_preimage_f");
-    store_and_drop_matrix_streaming(final_preimage_f, &dir_path, "final_preimage_f");
+    store_matrix_optimized(final_preimage_f, &dir_path, "final_preimage_f");
 
     let path = dir_path.join("hash_key");
     std::fs::write(&path, hash_key).expect("Failed to write hash_key file");

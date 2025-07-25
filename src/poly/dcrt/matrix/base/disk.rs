@@ -686,6 +686,14 @@ pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec
     block_offsets_distinct_block_sizes(rows, cols, block_size, block_size)
 }
 
+pub fn block_offsets_with_size(
+    rows: Range<usize>, 
+    cols: Range<usize>, 
+    block_size: usize
+) -> (Vec<usize>, Vec<usize>) {
+    block_offsets_distinct_block_sizes(rows, cols, block_size, block_size)
+}
+
 pub fn block_offsets_distinct_block_sizes(
     rows: Range<usize>,
     cols: Range<usize>,
