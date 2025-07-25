@@ -203,8 +203,8 @@ where
         input: BggEncoding<M>,
         id: usize,
     ) -> BggEncoding<M> {
-        let z = &input.plaintext.clone().expect("the BGG encoding should revealed plaintext");
-        let (k, y_k) = plt.f[z].clone();
+        let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
+        let (k, y_k) = plt.f.get(&z).expect("no z exist for given f");
         info!("Performing public lookup, k={}", k);
         let d = input.pubkey.matrix.row_size() - 1;
         let hash_key = &self.hash_key;

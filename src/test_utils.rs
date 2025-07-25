@@ -199,7 +199,7 @@ pub async fn test_io_plt(
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
 
-    let (_, scale) = plt.f[&input_poly].clone();
+    let (_, scale) = plt.f.get(&input_poly).expect("x_k doesn't exist on the PLT");
     assert_eq!(output, (hardcoded_key * scale).to_bool_vec());
 }
 
