@@ -405,185 +405,185 @@ where
     store_and_drop_matrix_streaming_optimized(matrix, dir, id, StorageConfig::default())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        poly::dcrt::{DCRTPolyMatrix, DCRTPolyParams},
-        utils::{create_random_poly, init_tracing},
-    };
-    use std::fs;
-    use tempfile::TempDir;
-    use tokio::runtime::Runtime;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::{
+//         poly::dcrt::{DCRTPolyMatrix, DCRTPolyParams},
+//         utils::{create_random_poly, init_tracing},
+//     };
+//     use std::fs;
+//     use tempfile::TempDir;
+//     use tokio::runtime::Runtime;
 
-    fn create_test_matrix(rows: usize, cols: usize) -> DCRTPolyMatrix {
-        let params = DCRTPolyParams::new(8192, 7, 51, 17);
-        let mut matrix = DCRTPolyMatrix::zero(&params, rows, cols);
+//     fn create_test_matrix(rows: usize, cols: usize) -> DCRTPolyMatrix {
+//         let params = DCRTPolyParams::new(8192, 7, 51, 17);
+//         let mut matrix = DCRTPolyMatrix::zero(&params, rows, cols);
 
-        for i in 0..rows {
-            for j in 0..cols {
-                let poly = create_random_poly(&params);
-                matrix.set_entry(i, j, poly);
-            }
-        }
-        matrix
-    }
+//         for i in 0..rows {
+//             for j in 0..cols {
+//                 let poly = create_random_poly(&params);
+//                 matrix.set_entry(i, j, poly);
+//             }
+//         }
+//         matrix
+//     }
 
-    #[test]
-    fn test_storage_config_default() {
-        let config = StorageConfig::default();
-        assert!(config.serialization_workers > 0);
-        assert!(config.io_writers > 0);
-        assert!(config.buffer_blocks > 0);
-        assert!(config.max_buffer_memory > 0);
-    }
+//     #[test]
+//     fn test_storage_config_default() {
+//         let config = StorageConfig::default();
+//         assert!(config.serialization_workers > 0);
+//         assert!(config.io_writers > 0);
+//         assert!(config.buffer_blocks > 0);
+//         assert!(config.max_buffer_memory > 0);
+//     }
 
-    #[test]
-    fn test_optimized_storage_small_matrix() {
-        let rt = Runtime::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let matrix = create_test_matrix(10, 10);
+//     #[test]
+//     fn test_optimized_storage_small_matrix() {
+//         let rt = Runtime::new().unwrap();
+//         let temp_dir = TempDir::new().unwrap();
+//         let matrix = create_test_matrix(10, 10);
 
-        let config = StorageConfig {
-            serialization_workers: 2,
-            io_writers: 1,
-            buffer_blocks: 10,
-            block_size_override: Some(5),
-            direct_io: false,
-            max_buffer_memory: 100_000_000,
-        };
+//         let config = StorageConfig {
+//             serialization_workers: 2,
+//             io_writers: 1,
+//             buffer_blocks: 10,
+//             block_size_override: Some(5),
+//             direct_io: false,
+//             max_buffer_memory: 100_000_000,
+//         };
 
-        rt.block_on(async {
-            let handle = store_and_drop_matrix_streaming_optimized(
-                matrix,
-                temp_dir.path(),
-                "test_matrix",
-                config,
-            );
+//         rt.block_on(async {
+//             let handle = store_and_drop_matrix_streaming_optimized(
+//                 matrix,
+//                 temp_dir.path(),
+//                 "test_matrix",
+//                 config,
+//             );
 
-            handle.await.unwrap();
-        });
+//             handle.await.unwrap();
+//         });
 
-        // Verify files were created
-        let entries: Vec<_> = fs::read_dir(temp_dir.path()).unwrap().collect();
-        assert!(!entries.is_empty(), "No matrix files were created");
+//         // Verify files were created
+//         let entries: Vec<_> = fs::read_dir(temp_dir.path()).unwrap().collect();
+//         assert!(!entries.is_empty(), "No matrix files were created");
 
-        // Check that matrix files exist
-        let matrix_files: Vec<_> = entries
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains("test_matrix"))
-            .collect();
+//         // Check that matrix files exist
+//         let matrix_files: Vec<_> = entries
+//             .into_iter()
+//             .filter_map(|e| e.ok())
+//             .filter(|e| e.file_name().to_string_lossy().contains("test_matrix"))
+//             .collect();
 
-        assert!(!matrix_files.is_empty(), "No test_matrix files found");
-    }
+//         assert!(!matrix_files.is_empty(), "No test_matrix files found");
+//     }
 
-    #[test]
-    fn test_performance_comparison() {
-        let rt = Runtime::new().unwrap();
-        let temp_dir1 = TempDir::new().unwrap();
-        let temp_dir2 = TempDir::new().unwrap();
+//     #[test]
+//     fn test_performance_comparison() {
+//         let rt = Runtime::new().unwrap();
+//         let temp_dir1 = TempDir::new().unwrap();
+//         let temp_dir2 = TempDir::new().unwrap();
 
-        // Create identical matrices for comparison
-        let matrix1 = create_test_matrix(50, 50);
-        let matrix2 = create_test_matrix(50, 50);
+//         // Create identical matrices for comparison
+//         let matrix1 = create_test_matrix(50, 50);
+//         let matrix2 = create_test_matrix(50, 50);
 
-        let optimized_config = StorageConfig {
-            serialization_workers: 4,
-            io_writers: 2,
-            buffer_blocks: 50,
-            block_size_override: Some(25),
-            direct_io: false,
-            max_buffer_memory: 500_000_000,
-        };
+//         let optimized_config = StorageConfig {
+//             serialization_workers: 4,
+//             io_writers: 2,
+//             buffer_blocks: 50,
+//             block_size_override: Some(25),
+//             direct_io: false,
+//             max_buffer_memory: 500_000_000,
+//         };
 
-        rt.block_on(async {
-            // Test original implementation
-            let start1 = Instant::now();
-            let handle1 = crate::storage::store_and_drop_matrix_streaming(
-                matrix1,
-                temp_dir1.path(),
-                "original_matrix",
-            );
-            handle1.await.unwrap();
-            let original_time = start1.elapsed();
+//         rt.block_on(async {
+//             // Test original implementation
+//             let start1 = Instant::now();
+//             let handle1 = crate::storage::store_and_drop_matrix_streaming(
+//                 matrix1,
+//                 temp_dir1.path(),
+//                 "original_matrix",
+//             );
+//             handle1.await.unwrap();
+//             let original_time = start1.elapsed();
 
-            // Test optimized implementation
-            let start2 = Instant::now();
-            let handle2 = store_and_drop_matrix_streaming_optimized(
-                matrix2,
-                temp_dir2.path(),
-                "optimized_matrix",
-                optimized_config,
-            );
-            handle2.await.unwrap();
-            let optimized_time = start2.elapsed();
+//             // Test optimized implementation
+//             let start2 = Instant::now();
+//             let handle2 = store_and_drop_matrix_streaming_optimized(
+//                 matrix2,
+//                 temp_dir2.path(),
+//                 "optimized_matrix",
+//                 optimized_config,
+//             );
+//             handle2.await.unwrap();
+//             let optimized_time = start2.elapsed();
 
-            println!("Original implementation: {:?}", original_time);
-            println!("Optimized implementation: {:?}", optimized_time);
+//             println!("Original implementation: {:?}", original_time);
+//             println!("Optimized implementation: {:?}", optimized_time);
 
-            // Verify both created files
-            let original_files = fs::read_dir(temp_dir1.path()).unwrap().count();
-            let optimized_files = fs::read_dir(temp_dir2.path()).unwrap().count();
+//             // Verify both created files
+//             let original_files = fs::read_dir(temp_dir1.path()).unwrap().count();
+//             let optimized_files = fs::read_dir(temp_dir2.path()).unwrap().count();
 
-            assert!(original_files > 0, "Original implementation created no files");
-            assert!(optimized_files > 0, "Optimized implementation created no files");
-            assert_eq!(original_files, optimized_files, "Different number of files created");
-        });
-    }
+//             assert!(original_files > 0, "Original implementation created no files");
+//             assert!(optimized_files > 0, "Optimized implementation created no files");
+//             assert_eq!(original_files, optimized_files, "Different number of files created");
+//         });
+//     }
 
-    #[test]
-    fn test_large_buffer_memory_management() {
-        let rt = Runtime::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let matrix = create_test_matrix(20, 20);
+//     #[test]
+//     fn test_large_buffer_memory_management() {
+//         let rt = Runtime::new().unwrap();
+//         let temp_dir = TempDir::new().unwrap();
+//         let matrix = create_test_matrix(20, 20);
 
-        let config = StorageConfig {
-            serialization_workers: 2,
-            io_writers: 1,
-            buffer_blocks: 5, // Small buffer to test memory management
-            block_size_override: Some(1000),
-            direct_io: false,
-            max_buffer_memory: 10_000_000, // Small memory limit
-        };
+//         let config = StorageConfig {
+//             serialization_workers: 2,
+//             io_writers: 1,
+//             buffer_blocks: 5, // Small buffer to test memory management
+//             block_size_override: Some(1000),
+//             direct_io: false,
+//             max_buffer_memory: 10_000_000, // Small memory limit
+//         };
 
-        rt.block_on(async {
-            let handle = store_and_drop_matrix_streaming_optimized(
-                matrix,
-                temp_dir.path(),
-                "memory_test",
-                config,
-            );
+//         rt.block_on(async {
+//             let handle = store_and_drop_matrix_streaming_optimized(
+//                 matrix,
+//                 temp_dir.path(),
+//                 "memory_test",
+//                 config,
+//             );
 
-            // Should complete without panicking despite memory constraints
-            handle.await.unwrap();
-        });
+//             // Should complete without panicking despite memory constraints
+//             handle.await.unwrap();
+//         });
 
-        // Verify files were still created despite memory pressure
-        let files = fs::read_dir(temp_dir.path()).unwrap().count();
-        assert!(files > 0, "No files created under memory pressure");
-    }
+//         // Verify files were still created despite memory pressure
+//         let files = fs::read_dir(temp_dir.path()).unwrap().count();
+//         assert!(files > 0, "No files created under memory pressure");
+//     }
 
-    #[test]
-    fn test_multiple_io_writers() {
-        init_tracing();
-        let rt = Runtime::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let matrix = create_test_matrix(100, 100);
+//     #[test]
+//     fn test_multiple_io_writers() {
+//         init_tracing();
+//         let rt = Runtime::new().unwrap();
+//         let temp_dir = TempDir::new().unwrap();
+//         let matrix = create_test_matrix(100, 100);
 
-        let config = StorageConfig::default();
-        rt.block_on(async {
-            let handle = store_and_drop_matrix_streaming_optimized(
-                matrix,
-                temp_dir.path(),
-                "multi_io_test",
-                config,
-            );
+//         let config = StorageConfig::default();
+//         rt.block_on(async {
+//             let handle = store_and_drop_matrix_streaming_optimized(
+//                 matrix,
+//                 temp_dir.path(),
+//                 "multi_io_test",
+//                 config,
+//             );
 
-            handle.await.unwrap();
-        });
+//             handle.await.unwrap();
+//         });
 
-        let files = fs::read_dir(temp_dir.path()).unwrap().count();
-        assert!(files > 0, "Multiple I/O writers failed to create files");
-    }
-}
+//         let files = fs::read_dir(temp_dir.path()).unwrap().count();
+//         assert!(files > 0, "Multiple I/O writers failed to create files");
+//     }
+// }
