@@ -54,7 +54,7 @@ pub trait PltEvaluator<E: Evaluable>: Send + Sync {
 pub struct PolyPltEvaluator {}
 impl<P: Poly> PltEvaluator<P> for PolyPltEvaluator {
     fn public_lookup(&self, _: &P::Params, plt: &PublicLut<P>, input: P, _: usize) -> P {
-        plt.f[&input].1.clone()
+        plt.f.get(&input).expect("PolyPltEvaluator's public lookup cannot fetch y_k").1.clone()
     }
 }
 
