@@ -9,31 +9,21 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
-use tracing::info;
 pub use utils::*;
 
-use crate::{
-    bgg::lut::public_lut::PublicLut,
-    poly::{sampler::PolyTrapdoorSampler, Poly, PolyMatrix},
-    utils::debug_mem,
-};
+use crate::{bgg::lut::public_lut::PublicLut, poly::Poly, utils::debug_mem};
 #[derive(Debug, Clone, Default)]
-pub struct PolyCircuit<M: PolyMatrix> {
+pub struct PolyCircuit<P: Poly> {
     gates: BTreeMap<usize, PolyGate>,
-    sub_circuits: BTreeMap<usize, PolyCircuit<M>>,
+    sub_circuits: BTreeMap<usize, PolyCircuit<P>>,
     output_ids: Vec<usize>,
     num_input: usize,
-    pub lookups: HashMap<usize, Arc<Mutex<PublicLut<M>>>>,
+    pub lookups: HashMap<usize, Arc<PublicLut<P>>>,
 }
 
-impl<M> PartialEq for PolyCircuit<M>
-where
-    M: PolyMatrix,
-    PolyGate: PartialEq,
-{
+impl<P: Poly> PartialEq for PolyCircuit<P> {
     fn eq(&self, other: &Self) -> bool {
         self.gates == other.gates &&
             self.sub_circuits == other.sub_circuits &&
@@ -42,14 +32,9 @@ where
     }
 }
 
-impl<M> Eq for PolyCircuit<M>
-where
-    M: PolyMatrix,
-    PolyGate: Eq,
-{
-}
+impl<P: Poly> Eq for PolyCircuit<P> {}
 
-impl<M: PolyMatrix> PolyCircuit<M> {
+impl<P: Poly> PolyCircuit<P> {
     pub fn new() -> Self {
         Self {
             gates: BTreeMap::new(),
@@ -283,15 +268,16 @@ impl<M: PolyMatrix> PolyCircuit<M> {
     /// Evaluate the circuit using an iterative approach over a precomputed topological order.
     ///
     /// `helper_lookup` is P_{x_L}
-    pub fn eval<E>(
+    pub fn eval<E, PE>(
         &self,
         params: &E::Params,
         one: &E,
         inputs: &[E],
-        helper_lookup: Option<(E::Matrix, PathBuf, usize, usize)>,
+        plt_evaluator: Option<PE>,
     ) -> Vec<E>
     where
-        E: Evaluable<Matrix = M>,
+        E: Evaluable<P = P>,
+        PE: PltEvaluator<E>,
     {
         #[cfg(debug_assertions)]
         {
@@ -375,11 +361,12 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                             .get(&gate.input_gates[0])
                             .expect("wire missing for Public Lookup")
                             .clone();
-                        let lookup_arc =
-                            self.lookups.get(lookup_id).expect("lookup table missing").clone();
-                        let mut lookup = lookup_arc.lock().expect("mutex poisoned");
-                        let result =
-                            input.public_lookup(params, &mut *lookup, helper_lookup.clone());
+                        let lookup =
+                            self.lookups.get(lookup_id).expect("lookup table missing").as_ref();
+                        let result = plt_evaluator
+                            .as_ref()
+                            .expect("public lookup evaluator missing")
+                            .public_lookup(params, lookup, input, gate_id);
                         debug_mem("Public Lookup gate end");
                         result
                     }
@@ -399,39 +386,9 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         outputs
     }
 
-    pub fn preimage_sample_all_lookups<ST>(
-        &self,
-        params: &<M::P as Poly>::Params,
-        b_l: &M,
-        b_l_plus_one: &M,
-        trap_sampler: &ST,
-        b_l_trapdoor: &ST::Trapdoor,
-        b_l_plus_one_trapdoor: &ST::Trapdoor,
-        input_size: usize,
-        dir_path: &Path,
-    ) where
-        ST: PolyTrapdoorSampler<M = M> + Send + Sync,
-        M: PolyMatrix + Send + 'static,
-    {
-        for (id, plt_arc) in &self.lookups {
-            info!("id={id} plt preimage sampling");
-            let plt = plt_arc.lock().unwrap();
-            plt.preimage(
-                params,
-                b_l,
-                b_l_plus_one,
-                trap_sampler,
-                b_l_trapdoor,
-                b_l_plus_one_trapdoor,
-                input_size,
-                dir_path,
-            );
-        }
-    }
-
-    pub fn register_public_lookup(&mut self, public_lookup: PublicLut<M>) -> usize {
+    pub fn register_public_lookup(&mut self, public_lookup: PublicLut<P>) -> usize {
         let plt_id = self.lookups.len();
-        self.lookups.insert(plt_id, Arc::new(Mutex::new(public_lookup)));
+        self.lookups.insert(plt_id, Arc::new(public_lookup));
         plt_id
     }
 
@@ -472,7 +429,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
     fn inline_gate(
         &mut self,
         start_gate_id: usize,
-        sub_circuit: &PolyCircuit<M>,
+        sub_circuit: &PolyCircuit<P>,
         gate_map: &mut BTreeMap<usize, usize>,
     ) -> usize {
         let mut stack = Vec::new();
@@ -540,7 +497,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: poly1 + poly2
@@ -571,7 +528,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: poly1 - poly2
@@ -602,7 +559,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: poly1 * poly2
@@ -633,7 +590,12 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[dummy_input], None);
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[dummy_input],
+            None::<PolyPltEvaluator>,
+        );
 
         // Verify the result
         assert_eq!(result.len(), 1);
@@ -696,7 +658,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: (poly1 + poly2) - poly3
@@ -736,7 +698,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected results
@@ -793,7 +755,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone(), poly4.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: (((poly1 + poly2) * (poly3 * poly4)) + (poly1 - poly3))^2
@@ -819,7 +781,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
         let expected = poly1.clone() * poly2;
         assert_eq!(result.len(), 1);
@@ -834,7 +796,12 @@ mod tests {
         let not_result = circuit.not_gate(inputs[0]);
         circuit.output(vec![not_result]);
         let poly1 = create_bit_random_poly(&params);
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[poly1.clone()], None);
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[poly1.clone()],
+            None::<PolyPltEvaluator>,
+        );
         let expected = DCRTPoly::const_one(&params) - poly1.clone();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].coeffs(), expected.coeffs());
@@ -853,7 +820,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
         let expected = (poly1.clone() + poly2.clone()) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
@@ -873,7 +840,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
         let expected = DCRTPoly::const_one(&params) - (poly1 * poly2);
         assert_eq!(result.len(), 1);
@@ -893,7 +860,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
         let expected =
             DCRTPoly::const_one(&params) - ((poly1.clone() + poly2.clone()) - (poly1 * poly2));
@@ -914,7 +881,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
         let expected = (poly1.clone() + poly2.clone()) -
             (DCRTPoly::from_const(&params, &FinRingElem::new(2, params.modulus())) *
@@ -937,7 +904,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
         let expected = DCRTPoly::const_one(&params) -
             ((poly1.clone() + poly2.clone()) -
@@ -992,7 +959,8 @@ mod tests {
 
         // concatenate decomposed_c0 and decomposed_c1 and x
         let input = [a_bits, b_bits, vec![x.clone()]].concat();
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &input, None);
+        let result =
+            circuit.eval(&params, &DCRTPoly::const_one(&params), &input, None::<PolyPltEvaluator>);
 
         assert_eq!(result.len(), log_q * 2);
 
@@ -1060,7 +1028,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: (poly1 + poly2) - (poly1 * poly2)
@@ -1123,7 +1091,7 @@ mod tests {
             &params,
             &DCRTPoly::const_one(&params),
             &[poly1.clone(), poly2.clone(), poly3.clone()],
-            None,
+            None::<PolyPltEvaluator>,
         );
 
         // Expected result: ((poly1 * poly2) + poly3)^2
@@ -1149,7 +1117,12 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[dummy_input], None);
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[dummy_input],
+            None::<PolyPltEvaluator>,
+        );
 
         // Expected result: 0
         let expected = DCRTPoly::const_zero(&params);
@@ -1173,7 +1146,12 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[dummy_input], None);
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[dummy_input],
+            None::<PolyPltEvaluator>,
+        );
 
         // Expected result: 1
         let expected = DCRTPoly::const_one(&params);
@@ -1197,7 +1175,12 @@ mod tests {
 
         // Evaluate the circuit with any input (it won't be used)
         let dummy_input = create_random_poly(&params);
-        let result = circuit.eval(&params, &DCRTPoly::const_one(&params), &[dummy_input], None);
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[dummy_input],
+            None::<PolyPltEvaluator>,
+        );
 
         // Expected result: -1
         // We can compute -1 as 0 - 1

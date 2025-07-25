@@ -1,19 +1,16 @@
 use super::circuit::{Evaluable, PolyCircuit};
 use crate::{
-    bgg::lut::public_lut::PublicLut,
+    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
     impl_binop_with_refs,
-    poly::{dcrt::DCRTPolyMatrix, PolyMatrix},
+    poly::dcrt::DCRTPoly,
 };
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::One;
 use serde::{Deserialize, Serialize};
-use std::{
-    ops::{Add, Mul, Sub},
-    path::PathBuf,
-};
+use std::ops::{Add, Mul, Sub};
 
-impl<M: PolyMatrix> PolyCircuit<M> {
+impl PolyCircuit<DCRTPoly> {
     pub fn simulate_bgg_norm(
         &self,
         dim: u32,
@@ -21,7 +18,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
         packed_input_norms: Vec<BigUint>,
     ) -> NormBounds
     where
-        NormSimulator: Evaluable<Matrix = M>,
+        NormSimulator: Evaluable<P = DCRTPoly>,
     {
         let one = NormSimulator::new(MPolyCoeffs::one(), BigUint::one(), dim, base_bits);
         let inputs = packed_input_norms
@@ -30,7 +27,7 @@ impl<M: PolyMatrix> PolyCircuit<M> {
                 NormSimulator::new(MPolyCoeffs::one(), plaintext_norm, dim, base_bits)
             })
             .collect::<Vec<_>>();
-        let outputs = self.eval(&(), &one, &inputs, None);
+        let outputs = self.eval(&(), &one, &inputs, Some(NormPltEvaluator::new()));
         NormBounds::from_norm_simulators(&outputs)
     }
 }
@@ -102,7 +99,7 @@ impl_binop_with_refs!(NormSimulator => Mul::mul(self, rhs: &NormSimulator) -> No
 
 impl Evaluable for NormSimulator {
     type Params = ();
-    type Matrix = DCRTPolyMatrix;
+    type P = DCRTPoly;
 
     fn rotate(self, _: &Self::Params, _: usize) -> Self {
         self
@@ -115,21 +112,32 @@ impl Evaluable for NormSimulator {
         let plaintext_norm = &one.plaintext_norm * &BigUint::from(*digit_max);
         Self { h_norm, plaintext_norm, dim_sqrt: one.dim_sqrt, base: one.base }
     }
+}
 
+pub struct NormPltEvaluator {}
+
+impl PltEvaluator<NormSimulator> for NormPltEvaluator {
     fn public_lookup(
-        self,
-        _: &Self::Params,
-        plt: &mut PublicLut<Self::Matrix>,
-        _: Option<(Self::Matrix, PathBuf, usize, usize)>,
-    ) -> Self {
-        Self {
+        &self,
+        _: &(),
+        plt: &PublicLut<DCRTPoly>,
+        input: NormSimulator,
+        _: usize,
+    ) -> NormSimulator {
+        NormSimulator {
             // |c_z · r_k.decompose()| + c_lt_k
-            h_norm: self.h_norm.right_rotate(self.dim_sqrt as u64 * (self.base as u64 - 1)) +
+            h_norm: input.h_norm.right_rotate(input.dim_sqrt as u64 * (input.base as u64 - 1)) +
                 MPolyCoeffs::one(),
             plaintext_norm: plt.max_output_row().1.value().clone(),
-            dim_sqrt: self.dim_sqrt,
-            base: self.base,
+            dim_sqrt: input.dim_sqrt,
+            base: input.base,
         }
+    }
+}
+
+impl NormPltEvaluator {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -264,7 +272,7 @@ mod tests {
     #[test]
     fn test_simulate_bgg_norm() {
         // Create a simple circuit: (input1 + input2) * input3
-        let mut circuit: PolyCircuit<DCRTPolyMatrix> = PolyCircuit::new();
+        let mut circuit: PolyCircuit<DCRTPoly> = PolyCircuit::new();
         let inputs = circuit.input(3);
         let add_gate = circuit.add_gate(inputs[0], inputs[1]);
         let mul_gate = circuit.mul_gate(add_gate, inputs[2]);

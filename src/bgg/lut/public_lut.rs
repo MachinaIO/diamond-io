@@ -7,118 +7,101 @@ use crate::{
     },
     storage::store_and_drop_matrix_streaming,
 };
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
 use tracing::info;
 
-const TAG_R_K: &[u8] = b"TAG_R_K";
-const TAG_A_PLT: &[u8] = b"A_PLT:";
-
 /// Public Lookup Table
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PublicLut<M: PolyMatrix> {
-    // public matrix R_k that concated for all k
-    pub r_k_s: M,
-    // public matrix A_z
-    a_z: Option<M>,
-    pub d: usize,
-    /// m := (n+1)[logq]
-    m: usize,
-    /// mapping f: k => (x_k, y_k)
-    pub f: HashMap<usize, (M::P, M::P)>,
-    ///  Common public matrix A_LT: (n+1)xm
-    pub a_lt: M,
+#[derive(Debug, Clone, Default)]
+pub struct PublicLut<P: Poly> {
+    pub f: HashMap<P, (usize, P)>,
 }
 
-impl<M: PolyMatrix> PublicLut<M> {
-    pub fn new<SU: PolyUniformSampler<M = M>, SH: PolyHashSampler<[u8; 32], M = M>>(
-        params: &<M::P as Poly>::Params,
-        d: usize,
-        f: HashMap<usize, (M::P, M::P)>,
-        r_k_hashkey: [u8; 32],
-    ) -> Self {
-        let m = (1 + d) * params.modulus_digits();
-        let hash_sampler = SH::new();
-        let t = f.len();
-        // todo: R_k could be sampled from uniform if we decided to dump it in disk.
-        let r_k_s = hash_sampler.sample_hash(
-            params,
-            r_k_hashkey,
-            TAG_R_K,
-            d + 1,
-            m * t,
-            DistType::FinRingDist,
-        );
-
-        let a_lt = hash_sampler.sample_hash(
-            params,
-            r_k_hashkey,
-            TAG_A_PLT,
-            d + 1,
-            m,
-            DistType::FinRingDist,
-        );
-        info!("A_LT ({}, {})", a_lt.row_size(), a_lt.col_size());
-        Self { r_k_s, a_z: None, f, d, m, a_lt }
-    }
-
-    /// Insert A_z public matrix
-    pub fn insert_a_z(&mut self, a_z: &M) {
-        self.a_z = Some(a_z.clone())
+impl<P: Poly> PublicLut<P> {
+    pub fn new(f: HashMap<P, (usize, P)>) -> Self {
+        Self { f }
     }
 
     /// Find the row k with the maximum coefficient in the second M::P (y_k) of f HashMap
     /// Returns (k, max_coefficient)
-    pub fn max_output_row(&self) -> (usize, <M::P as Poly>::Elem) {
+    pub fn max_output_row(&self) -> (usize, <P as Poly>::Elem) {
         assert!(!self.f.is_empty(), "f must contain at least one element");
         self.f
             .iter()
-            .filter_map(|(&k, (_, y_k))| y_k.coeffs().iter().max().cloned().map(|coeff| (k, coeff)))
+            .filter_map(|(_, (k, y_k))| y_k.coeffs().iter().max().cloned().map(|coeff| (*k, coeff)))
             .max_by(|a, b| a.1.cmp(&b.1))
             .expect("no coefficients found in any y_k")
     }
 
-    /// Compute target, sample preimage and store it as file.
-    pub fn preimage<ST>(
+    pub fn derive_a_lt<M, SH>(
         &self,
         params: &<M::P as Poly>::Params,
-        b_l: &M,
-        b_l_plus_one: &M,
+        d: usize,
+        hash_key: [u8; 32],
+        id: usize,
+    ) -> M
+    where
+        M: PolyMatrix<P = P>,
+        SH: PolyHashSampler<[u8; 32], M = M>,
+    {
+        info!("Deriving A_LT for id: {id}");
+        let m = (d + 1) * params.modulus_digits();
+        let hash_sampler = SH::new();
+        let tag = format!("A_LT_{id}");
+        info!("Tag for A_LT: {tag}");
+        hash_sampler.sample_hash(
+            params,
+            hash_key,
+            tag.into_bytes(),
+            d + 1,
+            m,
+            DistType::FinRingDist,
+        )
+    }
+
+    /// Compute target, sample preimage and store it as file.
+    pub fn preimage<M, SU, ST>(
+        &self,
+        params: &<M::P as Poly>::Params,
         trap_sampler: &ST,
-        b_l_trapdoor: &ST::Trapdoor,
-        b_l_plus_one_trapdoor: &ST::Trapdoor,
-        input_size: usize,
+        pub_matrix: &M,
+        trapdoor: &ST::Trapdoor,
+        a_z: &M,
+        a_lt: &M,
+        id: usize,
         dir_path: &Path,
     ) where
+        M: PolyMatrix<P = P> + Send + 'static,
+        SU: PolyUniformSampler<M = M> + Send + Sync,
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
-        M: PolyMatrix + Send + 'static,
     {
-        let t = self.f.len();
-        let target_tuple: Vec<(usize, M)> = (0..t)
+        info!("Preimage for id: {id}");
+        let d = pub_matrix.row_size() - 1;
+        let m = (d + 1) * params.modulus_digits();
+        let uniform_sampler = SU::new();
+        let gadget = M::gadget_matrix(params, d + 1);
+        let matrices = self
+            .f
+            .iter()
+            .collect::<Vec<_>>()
             .into_par_iter()
-            .map(|k| {
-                let (x_k, y_k) = self.f.get(&k).expect("missing f(k)");
-                let r_k = self.r_k_s.slice_columns(k * self.m, (k + 1) * self.m);
-                // rhs  = A_LT - A_z·G⁻¹(R_k) + x_k·R_k - y_k·G
-                let rhs = self.a_lt.clone() + (r_k.clone() * x_k) -
-                    &(M::gadget_matrix(params, self.d + 1) * y_k) -
-                    self.a_z.clone().expect("A_z should be exist") * r_k.decompose();
-                (k, rhs)
+            .map(|(x_k, (k, y_k))| {
+                info!("Processing k: {k}");
+                let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
+                info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
+                let r_k_decomposed = r_k.decompose();
+                let target_k = (r_k.clone() * x_k) + a_lt -
+                    &(gadget.clone() * y_k) -
+                    a_z.clone() * r_k_decomposed;
+                info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
+                (k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
             })
-            .collect();
-
-        // first sample L_common
-        let id = M::identity(params, b_l_plus_one.row_size(), None);
-        let zeros = M::zero(params, (input_size - 1) * id.row_size(), id.col_size());
-        let tensor_lhs = id.concat_rows(&[&zeros]);
-        let l_common_target = tensor_lhs * b_l_plus_one;
-        let l_common = trap_sampler.preimage(params, b_l_trapdoor, b_l, &l_common_target);
-        store_and_drop_matrix_streaming(l_common, dir_path, "L_common");
-
-        for (k, target_k) in target_tuple {
-            info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
-            let l_k = trap_sampler.preimage(params, b_l_plus_one_trapdoor, b_l_plus_one, &target_k);
-            store_and_drop_matrix_streaming(l_k, dir_path, &format!("L_{k}"));
+            .collect::<Vec<_>>();
+        info!("Preimage matrices computed for id: {id}");
+        // [TODO] Use a channel within the above iterator to bound the memory usage.
+        for (k, r_k, l_k) in matrices.into_iter() {
+            store_and_drop_matrix_streaming(r_k, dir_path, &format!("R_{id}_{k}"));
+            store_and_drop_matrix_streaming(l_k, dir_path, &format!("L_{id}_{k}"));
         }
     }
 }

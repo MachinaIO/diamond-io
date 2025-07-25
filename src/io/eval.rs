@@ -4,7 +4,9 @@ use super::{params::ObfuscationParams, utils::build_poly_vec};
 #[cfg(feature = "debug")]
 use crate::parallel_iter;
 use crate::{
-    bgg::{sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt},
+    bgg::{
+        encoding::BggEncodingPltEvaluator, sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt,
+    },
     io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
     poly::{
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
@@ -23,7 +25,7 @@ pub fn evaluate<M, SH, ST, P>(
 ) -> Vec<bool>
 where
     M: PolyMatrix,
-    SH: PolyHashSampler<[u8; 32], M = M>,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
     ST: PolyTrapdoorSampler<M = M>,
     P: AsRef<Path>,
 {
@@ -200,6 +202,18 @@ where
 
         p_cur = p;
     }
+    let m_b_small = (d + 1) * (2 + log_base_q);
+    let k_plus_one = timed_read(
+        "k_l_plus_one",
+        || M::read_from_files(params.as_ref(), m_b, m_b_small, &dir_path, &format!("k_l_plus_one")),
+        &mut total_load,
+    );
+    let p_l_plus_one = p_cur.clone() * k_plus_one;
+    log_mem(format!(
+        "p_l_plus_one computed ({},{})",
+        p_l_plus_one.row_size(),
+        p_l_plus_one.col_size()
+    ));
 
     #[cfg(feature = "bgm")]
     {
@@ -227,7 +241,7 @@ where
         || {
             M::read_from_files(
                 &obf_params.params,
-                m_b,
+                m_b_small,
                 packed_output_size,
                 &dir_path,
                 "final_preimage_f",
@@ -236,8 +250,8 @@ where
         &mut total_load,
     );
     log_mem("final_preimage loaded");
-    // v := p * K_F
-    let final_v = p_cur.clone() * final_preimage_f;
+    // v := p_l_plus_one * K_F
+    let final_v = p_l_plus_one.clone() * final_preimage_f;
     log_mem("final_v computed");
 
     #[cfg(feature = "debug")]
@@ -325,11 +339,13 @@ where
             new_encodings.push(new_encode);
         }
     }
+    let bgg_encoding_plt_evaluator =
+        BggEncodingPltEvaluator::<M, SH>::new(hash_key, dir_path.clone(), p_l_plus_one);
     let output_encodings = final_circuit.eval(
         params.as_ref(),
         &new_encodings[0],
         &new_encodings[1..],
-        Some((p_cur, dir_path.clone(), m, m_b)),
+        Some(bgg_encoding_plt_evaluator),
     );
     log_mem("final_circuit evaluated");
     let output_encoding_ints = output_encodings

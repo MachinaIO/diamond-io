@@ -1,13 +1,13 @@
 use diamond_io::{
     bgg::{circuit::PolyCircuit, lut::public_lut::PublicLut},
-    poly::dcrt::DCRTPolyMatrix,
+    poly::dcrt::{DCRTPoly, DCRTPolyMatrix},
 };
 
 pub enum BenchCircuit {
-    AddMul(PolyCircuit<DCRTPolyMatrix>),
-    AddMulVerify(PolyCircuit<DCRTPolyMatrix>),
-    Plt(PolyCircuit<DCRTPolyMatrix>),
-    PltVerify(PolyCircuit<DCRTPolyMatrix>),
+    AddMul(PolyCircuit<DCRTPoly>),
+    AddMulVerify(PolyCircuit<DCRTPoly>),
+    Plt(PolyCircuit<DCRTPoly>),
+    PltVerify(PolyCircuit<DCRTPoly>),
 }
 
 impl BenchCircuit {
@@ -76,7 +76,7 @@ impl BenchCircuit {
         Self::AddMulVerify(public_circuit)
     }
 
-    pub fn new_plt(log_base_q: usize, lut: PublicLut<DCRTPolyMatrix>) -> Self {
+    pub fn new_plt(log_base_q: usize, lut: PublicLut<DCRTPoly>) -> Self {
         let mut public_circuit = PolyCircuit::new();
 
         // inputs: BaseDecompose(ct), eval_input
@@ -122,7 +122,7 @@ impl BenchCircuit {
         Self::PltVerify(public_circuit)
     }
 
-    pub fn as_poly_circuit(self) -> PolyCircuit<DCRTPolyMatrix> {
+    pub fn as_poly_circuit(self) -> PolyCircuit<DCRTPoly> {
         match self {
             BenchCircuit::AddMul(poly_circuit) => poly_circuit,
             BenchCircuit::AddMulVerify(poly_circuit) => poly_circuit,

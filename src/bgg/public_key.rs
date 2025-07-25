@@ -1,13 +1,18 @@
 use super::circuit::Evaluable;
 use crate::{
-    bgg::lut::public_lut::PublicLut,
-    poly::{Poly, PolyMatrix},
+    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    poly::{
+        sampler::{PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
+        Poly, PolyMatrix,
+    },
     utils::debug_mem,
 };
 use rayon::prelude::*;
 use std::{
+    marker::PhantomData,
     ops::{Add, Mul, Sub},
     path::PathBuf,
+    sync::Arc,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,15 +29,6 @@ impl<M: PolyMatrix> BggPublicKey<M> {
     pub fn concat_matrix(&self, others: &[Self]) -> M {
         self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
     }
-
-    // /// Writes the public key with id to files under the given directory.
-    // pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
-    //     &self,
-    //     dir_path: P,
-    //     id: &str,
-    // ) {
-    //     self.matrix.write_to_files(dir_path, id).await;
-    // }
 
     /// Reads a public of given rows and cols with id from files under the given directory.
     pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(
@@ -101,7 +97,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggPublicKey<M> {
 
 impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
     type Params = <M::P as Poly>::Params;
-    type Matrix = M;
+    type P = M::P;
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         debug_mem(format!("BGGPublicKey::rotate {:?}, {:?}", self.matrix.size(), shift));
@@ -121,60 +117,79 @@ impl<M: PolyMatrix> Evaluable for BggPublicKey<M> {
         debug_mem("BGGPublicKey::from_digits matrix multiplied");
         Self { matrix, reveal_plaintext: one.reveal_plaintext }
     }
+}
 
+#[derive(Debug)]
+pub struct BggPubKeyPltEvaluator<M, SH, SU, ST>
+where
+    M: PolyMatrix,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
+    SU: PolyUniformSampler<M = M> + Send + Sync,
+    ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+{
+    pub hash_key: [u8; 32],
+    pub trap_sampler: ST,
+    pub pub_matrix: Arc<M>,
+    pub trapdoor: Arc<ST::Trapdoor>,
+    pub dir_path: PathBuf,
+    _sh: PhantomData<SH>,
+    _su: PhantomData<SU>,
+    _st: PhantomData<ST>,
+}
+
+impl<M, SH, SU, ST> PltEvaluator<BggPublicKey<M>> for BggPubKeyPltEvaluator<M, SH, SU, ST>
+where
+    M: PolyMatrix + Send + 'static,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
+    SU: PolyUniformSampler<M = M> + Send + Sync,
+    ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+{
     fn public_lookup(
-        self,
-        _: &Self::Params,
-        plt: &mut PublicLut<Self::Matrix>,
-        _: Option<(Self::Matrix, PathBuf, usize, usize)>,
-    ) -> Self {
-        let a_z = self.matrix;
-        plt.insert_a_z(&a_z);
-        Self { matrix: plt.a_lt.clone(), reveal_plaintext: self.reveal_plaintext }
+        &self,
+        params: &<BggPublicKey<M> as Evaluable>::Params,
+        plt: &PublicLut<<BggPublicKey<M> as Evaluable>::P>,
+        input: BggPublicKey<M>,
+        id: usize,
+    ) -> BggPublicKey<M> {
+        let d = input.matrix.row_size() - 1;
+        let a_lt = plt.derive_a_lt::<M, SH>(params, d, self.hash_key, id);
+        plt.preimage::<M, SU, ST>(
+            params,
+            &self.trap_sampler,
+            &self.pub_matrix,
+            &self.trapdoor,
+            &input.matrix,
+            &a_lt,
+            id,
+            &self.dir_path,
+        );
+        BggPublicKey { matrix: a_lt, reveal_plaintext: true }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{
-        bgg::{circuit::PolyCircuit, sampler::BGGPublicKeySampler},
-        poly::dcrt::{params::DCRTPolyParams, DCRTPolyHashSampler},
-        test_utils::setup_constant_plt,
-    };
-    use keccak_asm::Keccak256;
-
-    #[test]
-    fn test_pubkey_plt() {
-        // Create parameters for testing
-        let params = DCRTPolyParams::default();
-
-        // Create a hash sampler and BGGPublicKeySampler to be reused
-        let key: [u8; 32] = rand::random();
-        let d = 3;
-        let bgg_sampler = BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create a simple circuit with an Add operation
-        let mut circuit = PolyCircuit::new();
-        let inputs = circuit.input(1);
-        let plt = setup_constant_plt(8, &params, d);
-        let a_lt = plt.a_lt.clone();
-        let plt_id = circuit.register_public_lookup(plt);
-        let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
-        circuit.output(vec![plt_gate]);
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 2];
-        let pubkeys = bgg_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        let pk_one = pubkeys[0].clone();
-        let pk1 = pubkeys[1].clone();
-        // Evaluate the circuit
-        let result = circuit.eval(&params, &pk_one, &[pk1], None);
-
-        // Verify the result
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].matrix, a_lt);
+impl<M, SH, SU, ST> BggPubKeyPltEvaluator<M, SH, SU, ST>
+where
+    M: PolyMatrix,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
+    SU: PolyUniformSampler<M = M> + Send + Sync,
+    ST: PolyTrapdoorSampler<M = M> + Send + Sync,
+{
+    pub fn new(
+        hash_key: [u8; 32],
+        trap_sampler: ST,
+        pub_matrix: Arc<M>,
+        trapdoor: Arc<ST::Trapdoor>,
+        dir_path: PathBuf,
+    ) -> Self {
+        Self {
+            hash_key,
+            trap_sampler,
+            pub_matrix,
+            trapdoor,
+            dir_path,
+            _sh: PhantomData,
+            _su: PhantomData,
+            _st: PhantomData,
+        }
     }
 }

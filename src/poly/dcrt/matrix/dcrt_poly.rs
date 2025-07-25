@@ -795,47 +795,6 @@ mod tests {
         matrix.concat_diag(&others[..])
     }
 
-    // #[tokio::test]
-    // #[serial]
-    // async fn test_matrix_write_read() {
-    //     init_tracing();
-    //     let params = DCRTPolyParams::default();
-    //     let sampler = DCRTPolyUniformSampler::new();
-
-    //     let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0
-    // }];     std::env::set_var("BLOCK_SIZE", "10");
-    //     for dist in dists {
-    //         let ncol = rng().random_range(5..=15);
-    //         let nrow = rng().random_range(5..=15);
-
-    //         // Create a random matrix
-    //         let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
-    //         let matrix_id = format!("test_matrix_{dist:?}");
-
-    //         // Create a temporary directory for testing
-    //         let test_dir = Path::new("test_matrix_write_read");
-    //         if !test_dir.exists() {
-    //             fs::create_dir(test_dir).unwrap();
-    //         } else {
-    //             // Clean it first to ensure no old files interfere
-    //             fs::remove_dir_all(test_dir).unwrap();
-    //             fs::create_dir(test_dir).unwrap();
-    //         }
-
-    //         // Write the matrix to files
-    //         matrix.write_to_files(test_dir, &matrix_id).await;
-
-    //         // Read the matrix back
-    //         let read_matrix =
-    //             DCRTPolyMatrix::read_from_files(&params, nrow, ncol, test_dir, &matrix_id);
-
-    //         // Verify the matrices are equal
-    //         assert_eq!(matrix, read_matrix);
-
-    //         fs::remove_dir_all(test_dir).unwrap();
-    //     }
-    // }
-
     #[test]
     fn test_matrix_compact_bytes() {
         let params = DCRTPolyParams::new(8192, 7, 51, 17);
