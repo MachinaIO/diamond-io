@@ -264,25 +264,46 @@ where
         let start = Instant::now();
         debug_mem(format!("Streaming storage started: {id}"));
 
-        // Bounded channel provides natural backpressure (limits peak memory)
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<(PathBuf, Vec<u8>)>(2);
+        // Use larger buffer to prevent serialization blocking on I/O
+        let buffer_size =
+            std::env::var("STORAGE_BUFFER_SIZE").ok().and_then(|s| s.parse().ok()).unwrap_or(20);
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<(PathBuf, Vec<u8>)>(buffer_size);
 
-        // Simple I/O thread - no async complexity needed
+        // Track buffer memory usage
+        let buffer_memory = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let buffer_memory_io = buffer_memory.clone();
+
+        // Simple I/O thread
         let io_handle = std::thread::spawn(move || {
             let mut blocks_written = 0;
+            let mut total_bytes_written = 0;
             for (path, data) in receiver {
+                let data_len = data.len();
                 if let Err(e) = std::fs::write(&path, &data) {
                     eprintln!("Failed to write {}: {}", path.display(), e);
                 } else {
                     blocks_written += 1;
-                    debug_mem(format!("Block {} written ({} bytes)", blocks_written, data.len()));
+                    total_bytes_written += data_len;
+                    // Subtract from buffer memory after write
+                    buffer_memory_io.fetch_sub(data_len, std::sync::atomic::Ordering::Relaxed);
+                    log_mem(format!(
+                        "Block {} written ({} bytes, {} MB total, buffer: {} MB)",
+                        blocks_written,
+                        data_len,
+                        total_bytes_written / 1_000_000,
+                        buffer_memory_io.load(std::sync::atomic::Ordering::Relaxed) / 1_000_000
+                    ));
                 }
             }
-            debug_mem(format!("I/O thread completed: {} blocks written", blocks_written));
+            log_mem(format!(
+                "I/O thread completed: {} blocks written, {} MB total",
+                blocks_written,
+                total_bytes_written / 1_000_000
+            ));
         });
 
-        // STREAMING: Process and write block-by-block
-        stream_matrix_blocks(&matrix, &dir, &id, sender);
+        // Process and write block-by-block
+        stream_matrix_blocks(&matrix, &dir, &id, sender, buffer_memory);
 
         io_handle.join().unwrap();
         drop(matrix);
@@ -298,6 +319,7 @@ fn stream_matrix_blocks<M>(
     dir: &Path,
     id: &str,
     sender: std::sync::mpsc::SyncSender<(PathBuf, Vec<u8>)>,
+    buffer_memory: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 ) where
     M: PolyMatrix,
 {
@@ -349,14 +371,26 @@ fn stream_matrix_blocks<M>(
             blocks_processed += 1;
             total_serialized_bytes += data.len();
 
+            let data_len = data.len();
             debug_mem(format!(
                 "Block {}/{} processed in {block_cpu_elapsed:?} ({} bytes)",
                 blocks_processed,
                 total_blocks * col_windows.len(),
-                data.len()
+                data_len
             ));
 
-            // Send to I/O (blocks if full - natural backpressure)
+            buffer_memory.fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
+            let current_buffer = buffer_memory.load(std::sync::atomic::Ordering::Relaxed);
+            if current_buffer > 100_000_000 {
+                // Warn if buffer > 100MB
+                log_mem(format!(
+                    "WARNING: Buffer memory high: {} MB (block {})",
+                    current_buffer / 1_000_000,
+                    blocks_processed
+                ));
+            }
+
+            // Send to I/O
             if sender.send((dir.join(filename), data)).is_err() {
                 eprintln!("I/O thread died, stopping processing");
                 break;
