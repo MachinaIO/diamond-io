@@ -23,8 +23,6 @@ pub struct StorageConfig {
     pub io_writers: usize,
     /// Buffer size in number of blocks (not fixed count)
     pub buffer_blocks: usize,
-    /// Block size override (if None, uses default)
-    pub block_size_override: Option<usize>,
     /// Maximum memory for buffers in bytes
     pub max_buffer_memory: usize,
 }
@@ -36,7 +34,6 @@ impl Default for StorageConfig {
             serialization_workers: num_cpus.saturating_sub(2).max(1),
             io_writers: 4,
             buffer_blocks: 100,
-            block_size_override: Some(1000),
             max_buffer_memory: 4_000_000_000,
         }
     }
@@ -184,7 +181,7 @@ fn parallel_serialize_matrix_distributed<M>(
 ) where
     M: PolyMatrix + Sync,
 {
-    let block_size_val = config.block_size_override.unwrap_or_else(block_size);
+    let block_size_val = block_size();
     let (nrow, ncol) = matrix.size();
 
     log_mem(format!(
