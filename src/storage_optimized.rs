@@ -365,11 +365,35 @@ fn write_direct_io(path: &Path, data: &[u8]) -> std::io::Result<()> {
 /// Align buffer for direct I/O requirements
 #[cfg(target_os = "linux")]
 fn align_buffer_for_direct_io(data: &[u8]) -> Vec<u8> {
-    const ALIGNMENT: usize = 4096; // Common page size
+    const ALIGNMENT: usize = 512; // Filesystem block size, not page size
     let aligned_size = (data.len() + ALIGNMENT - 1) & !(ALIGNMENT - 1);
 
+    // Create aligned buffer using posix_memalign for proper memory alignment
     let mut aligned_buffer = vec![0u8; aligned_size];
-    aligned_buffer[..data.len()].copy_from_slice(data);
+
+    // Ensure the Vec is properly aligned by recreating it if necessary
+    if aligned_buffer.as_ptr() as usize % ALIGNMENT != 0 {
+        // Reallocate with proper alignment
+        let layout = std::alloc::Layout::from_size_align(aligned_size, ALIGNMENT)
+            .expect("Invalid layout for aligned buffer");
+
+        unsafe {
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+
+            // Copy data to aligned buffer
+            std::ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+
+            // Create Vec from aligned memory
+            aligned_buffer = Vec::from_raw_parts(ptr, aligned_size, aligned_size);
+        }
+    } else {
+        // Buffer is already aligned, just copy data
+        aligned_buffer[..data.len()].copy_from_slice(data);
+    }
+
     aligned_buffer
 }
 
