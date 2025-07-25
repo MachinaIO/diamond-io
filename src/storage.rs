@@ -381,11 +381,11 @@ fn stream_matrix_blocks<M>(
 
             buffer_memory.fetch_add(data_len, std::sync::atomic::Ordering::Relaxed);
             let current_buffer = buffer_memory.load(std::sync::atomic::Ordering::Relaxed);
-            if current_buffer > 100_000_000 {
-                // Warn if buffer > 100MB
+            if current_buffer > 10_000_000_000 {
+                // Warn if buffer > 10GB
                 log_mem(format!(
-                    "WARNING: Buffer memory high: {} MB (block {})",
-                    current_buffer / 1_000_000,
+                    "WARNING: Buffer memory high: {} GB (block {})",
+                    current_buffer / 1_000_000_000,
                     blocks_processed
                 ));
             }
