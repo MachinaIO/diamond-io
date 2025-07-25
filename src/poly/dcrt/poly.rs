@@ -12,6 +12,7 @@ use openfhe::{
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
+    hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     str::FromStr,
     sync::Arc,
@@ -57,20 +58,6 @@ impl DCRTPoly {
 impl Poly for DCRTPoly {
     type Elem = FinRingElem;
     type Params = DCRTPolyParams;
-
-    fn modulus_switch(
-        &self,
-        params: &Self::Params,
-        new_modulus: <Self::Params as PolyParams>::Modulus,
-    ) -> Self {
-        debug_assert!(new_modulus < params.modulus());
-        let coeffs = self.coeffs();
-        let new_coeffs = coeffs
-            .par_iter()
-            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
-            .collect::<Vec<FinRingElem>>();
-        DCRTPoly::from_coeffs(params, &new_coeffs)
-    }
 
     fn coeffs(&self) -> Vec<Self::Elem> {
         let poly_encoding = self.ptr_poly.GetCoefficientsBytes();
@@ -336,6 +323,20 @@ impl Poly for DCRTPoly {
         sum as usize
     }
 
+    fn modulus_switch(
+        &self,
+        params: &Self::Params,
+        new_modulus: <Self::Params as PolyParams>::Modulus,
+    ) -> Self {
+        debug_assert!(new_modulus < params.modulus());
+        let coeffs = self.coeffs();
+        let new_coeffs = coeffs
+            .par_iter()
+            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
+            .collect::<Vec<FinRingElem>>();
+        DCRTPoly::from_coeffs(params, &new_coeffs)
+    }
+
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
         let coeffs: Vec<_> = coeffs
             .into_iter()
@@ -355,6 +356,18 @@ impl PartialEq for DCRTPoly {
 }
 
 impl Eq for DCRTPoly {}
+
+impl Hash for DCRTPoly {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        if self.ptr_poly.is_null() {
+            panic!("Cannot hash a null DCRTPoly pointer");
+        }
+        let coeffs = self.coeffs();
+        for coeff in coeffs {
+            coeff.value().hash(state);
+        }
+    }
+}
 
 impl_binop_with_refs!(DCRTPoly => Add::add(self, rhs: &DCRTPoly) -> DCRTPoly {
     DCRTPoly::new(ffi::DCRTPolyAdd(&rhs.ptr_poly, &self.ptr_poly))

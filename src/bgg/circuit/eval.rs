@@ -1,12 +1,11 @@
 use crate::{
     bgg::lut::public_lut::PublicLut,
-    poly::{dcrt::DCRTPolyMatrix, Poly, PolyElem, PolyMatrix, PolyParams},
+    poly::{Poly, PolyElem, PolyParams},
 };
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Sub},
-    path::PathBuf,
 };
 
 pub trait Evaluable:
@@ -22,21 +21,15 @@ pub trait Evaluable:
     + for<'a> Mul<&'a Self, Output = Self>
 {
     type Params: Debug + Clone + Send + Sync;
-    type Matrix: PolyMatrix;
+    type P: Poly;
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
-    fn public_lookup(
-        self,
-        params: &Self::Params,
-        plt: &mut PublicLut<Self::Matrix>,
-        helper: Option<(Self::Matrix, PathBuf, usize, usize)>,
-    ) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
     type Params = P::Params;
-    type Matrix = DCRTPolyMatrix;
+    type P = P;
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let mut coeffs = self.coeffs();
@@ -51,13 +44,22 @@ impl<P: Poly> Evaluable for P {
             .collect();
         Self::from_coeffs(params, &coeffs)
     }
+}
 
-    fn public_lookup(
-        self,
-        _: &Self::Params,
-        _: &mut PublicLut<Self::Matrix>,
-        _: Option<(Self::Matrix, PathBuf, usize, usize)>,
-    ) -> Self {
-        todo!("Poly haven't implemented public_lookup")
+pub trait PltEvaluator<E: Evaluable>: Send + Sync {
+    fn public_lookup(&self, params: &E::Params, plt: &PublicLut<E::P>, input: E, id: usize) -> E;
+}
+
+#[derive(Debug, Clone)]
+pub struct PolyPltEvaluator {}
+impl<P: Poly> PltEvaluator<P> for PolyPltEvaluator {
+    fn public_lookup(&self, _: &P::Params, plt: &PublicLut<P>, input: P, _: usize) -> P {
+        plt.f[&input].1.clone()
+    }
+}
+
+impl PolyPltEvaluator {
+    pub fn new() -> Self {
+        Self {}
     }
 }

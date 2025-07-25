@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::{
     fmt::Debug,
+    hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     path::Path,
 };
@@ -33,6 +34,7 @@ pub trait Poly:
     + Debug
     + PartialEq
     + Eq
+    + Hash
     + Add<Output = Self>
     + Sub<Output = Self>
     + Mul<Output = Self>
@@ -48,11 +50,6 @@ pub trait Poly:
 {
     type Elem: PolyElem;
     type Params: PolyParams<Modulus = <Self::Elem as PolyElem>::Modulus>;
-    fn modulus_switch(
-        &self,
-        params: &Self::Params,
-        new_modulus: <Self::Params as PolyParams>::Modulus,
-    ) -> Self;
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self;
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self;
     fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
@@ -108,6 +105,11 @@ pub trait Poly:
     fn to_bool_vec(&self) -> Vec<bool>;
     fn to_compact_bytes(&self) -> Vec<u8>;
     fn to_const_int(&self) -> usize;
+    fn modulus_switch(
+        &self,
+        params: &Self::Params,
+        new_modulus: <Self::Params as PolyParams>::Modulus,
+    ) -> Self;
 
     /// Reads a polynomial with id from files under the given directory.
     fn read_from_file<P: AsRef<Path> + Send + Sync>(

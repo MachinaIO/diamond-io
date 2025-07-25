@@ -1,10 +1,8 @@
 use circuit::BenchCircuit;
 use clap::{Parser, Subcommand, ValueEnum};
 use config::{RunBenchConfig, SimBenchNormConfig};
-#[cfg(feature = "disk")]
-use diamond_io::utils::calculate_tmp_size;
 use diamond_io::{
-    bgg::BggPublicKey,
+    bgg::{BggPublicKey, circuit::PolyPltEvaluator},
     io::{
         eval::evaluate,
         obf::obfuscate,
@@ -25,8 +23,6 @@ use diamond_io::{
 };
 use num_traits::identities::One;
 
-#[cfg(feature = "disk")]
-use diamond_io::utils::log_mem;
 use keccak_asm::Keccak256;
 use num_bigint::BigUint;
 use rand::Rng;
@@ -95,6 +91,9 @@ enum Commands {
 
         #[arg(long, requires_if("add_mul", "bench_type"))]
         mul_num: Option<usize>,
+
+        #[arg(long, requires_if("plt", "bench_type"))]
+        t_num: Option<usize>,
     },
     BuildCircuit {
         #[arg(short, long)]
@@ -144,7 +143,7 @@ async fn main() {
                 }
                 BenchType::Plt => {
                     let t_num = t_num.unwrap();
-                    let plt = setup_lsb_plt(t_num, &params, dio_config.d);
+                    let plt = setup_lsb_plt(t_num, &params);
                     (BenchCircuit::new_plt(log_base_q, plt.clone()).as_poly_circuit(), Some(plt))
                 }
             };
@@ -204,19 +203,20 @@ async fn main() {
                             &obf_params.params,
                             &DCRTPoly::const_one(&obf_params.params),
                             &[hardcoded_key, input_poly],
-                            None,
+                            None::<PolyPltEvaluator>,
                         )
                     }
                     BenchType::Plt => {
                         let k = input_poly.to_const_int();
                         let plt = plt.unwrap();
-                        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
+                        let (_, y_k) =
+                            plt.f[&DCRTPoly::from_const_int_lsb(&obf_params.params, k)].clone();
                         let verify_circuit = BenchCircuit::new_plt_verify().as_poly_circuit();
                         verify_circuit.eval(
                             &obf_params.params,
                             &DCRTPoly::const_one(&obf_params.params),
                             &[hardcoded_key, y_k.clone()],
-                            None,
+                            Some(PolyPltEvaluator::new()),
                         )
                     }
                 };
@@ -237,7 +237,7 @@ async fn main() {
                 }
             }
         }
-        Commands::SimBenchNorm { config, out_path, add_num, mul_num, bench_type } => {
+        Commands::SimBenchNorm { config, out_path, add_num, mul_num, t_num, bench_type } => {
             let dio_config: SimBenchNormConfig =
                 serde_json::from_reader(fs::File::open(&config).unwrap()).unwrap();
             let log_n = dio_config.log_ring_dim;
@@ -257,8 +257,8 @@ async fn main() {
                     BenchCircuit::new_add_mul(add_num, mul_num, log_base_q).as_poly_circuit()
                 }
                 BenchType::Plt => {
-                    // To simulate the norm, value T(=table row size) is not relevant
-                    let plt = setup_lsb_plt(0, &params, dio_config.d);
+                    let t_num = t_num.unwrap();
+                    let plt = setup_lsb_plt(t_num, &params);
                     BenchCircuit::new_plt(log_base_q, plt.clone()).as_poly_circuit()
                 }
             };

@@ -1,16 +1,18 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::{
-    bgg::lut::public_lut::PublicLut,
-    poly::{Poly, PolyMatrix, PolyParams},
+    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    poly::{sampler::PolyHashSampler, Poly, PolyMatrix, PolyParams},
     utils::timed_read,
 };
 use rayon::prelude::*;
 use std::{
+    fmt::Debug,
+    marker::PhantomData,
     ops::{Add, Mul, Sub},
     path::PathBuf,
     time::Duration,
 };
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct BggEncoding<M: PolyMatrix> {
@@ -157,7 +159,7 @@ impl<M: PolyMatrix> Mul<&Self> for BggEncoding<M> {
 
 impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
     type Params = <M::P as Poly>::Params;
-    type Matrix = M;
+    type P = M::P;
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self {
         let rotate_poly = <M::P>::const_rotate_poly(params, shift);
@@ -175,42 +177,73 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
         Self { vector, pubkey, plaintext }
     }
+}
 
+#[derive(Debug, Clone)]
+pub struct BggEncodingPltEvaluator<M, SH>
+where
+    M: PolyMatrix,
+    SH: PolyHashSampler<[u8; 32], M = M>,
+{
+    pub hash_key: [u8; 32],
+    pub dir_path: PathBuf,
+    pub p: M,
+    _marker: PhantomData<SH>,
+}
+
+impl<M, SH> PltEvaluator<BggEncoding<M>> for BggEncodingPltEvaluator<M, SH>
+where
+    M: PolyMatrix,
+    SH: PolyHashSampler<[u8; 32], M = M> + Send + Sync,
+{
     fn public_lookup(
-        self,
-        params: &Self::Params,
-        plt: &mut PublicLut<M>,
-        helper_lookup: Option<(M, PathBuf, usize, usize)>,
-    ) -> Self {
-        let c_z = &self.plaintext.clone().expect("the BGG encoding should revealed plaintext");
-        let k = c_z.to_const_int();
+        &self,
+        params: &<BggEncoding<M> as Evaluable>::Params,
+        plt: &PublicLut<<BggEncoding<M> as Evaluable>::P>,
+        input: BggEncoding<M>,
+        id: usize,
+    ) -> BggEncoding<M> {
+        let z = &input.plaintext.clone().expect("the BGG encoding should revealed plaintext");
+        let (k, y_k) = plt.f[z].clone();
         info!("Performing public lookup, k={}", k);
-        let m_a = (plt.d + 1) * (params.modulus_digits() + 2);
+        let d = input.pubkey.matrix.row_size() - 1;
+        let hash_key = &self.hash_key;
+        let a_lt = plt.derive_a_lt::<M, SH>(params, d, *hash_key, id);
+        let pubkey = BggPublicKey::new(a_lt, true);
 
-        let (p_x_l, dir_path, m, m_b) = helper_lookup.expect("BGG encoding's helper needed");
-        if let Some((_, y_k)) = plt.f.get(&k) {
-            // todo: R_k should be passed to evaluator via disk or hash sampler.
-            // todo: Furthermore, everthing in plt we have to assume evaluator could able to
-            // construct this.
-            let r_k = plt.r_k_s.slice_columns(k * m, (k + 1) * m);
-            let l_common: M = timed_read(
-                "L_common",
-                || M::read_from_files(params, m_b, m_a, &dir_path, "L_common"),
-                &mut Duration::default(),
-            );
-            let l_k = timed_read(
-                &format!("L_{k}"),
-                || M::read_from_files(params, m_a, m, &dir_path, &format!("L_{k}")),
-                &mut Duration::default(),
-            );
-            let c_lt_k = p_x_l * l_common * l_k;
-            let pubkey = BggPublicKey::new(plt.a_lt.clone(), self.pubkey.reveal_plaintext);
-            let vector = self.vector * &r_k.decompose() + c_lt_k;
-            Self { vector, pubkey, plaintext: Some(y_k.clone()) }
-        } else {
-            warn!("Public lookup: no row for index k = {}", k);
-            self
-        }
+        let m = (d + 1) * params.modulus_digits();
+
+        let r_k = timed_read(
+            &format!("R_{id}_{k}"),
+            || M::read_from_files(params, d + 1, m, &self.dir_path, &format!("R_{id}_{k}")),
+            &mut Duration::default(),
+        );
+        let l_k = timed_read(
+            &format!("L_{id}_{k}"),
+            || {
+                M::read_from_files(
+                    params,
+                    (d + 1) * (params.modulus_digits() + 2),
+                    m,
+                    &self.dir_path,
+                    &format!("L_{id}_{k}"),
+                )
+            },
+            &mut Duration::default(),
+        );
+        let c_lt_k = self.p.clone() * l_k;
+        let vector = input.vector * &r_k.decompose() + c_lt_k;
+        BggEncoding::new(vector, pubkey, Some(y_k.clone()))
+    }
+}
+
+impl<M, SH> BggEncodingPltEvaluator<M, SH>
+where
+    M: PolyMatrix,
+    SH: PolyHashSampler<[u8; 32], M = M>,
+{
+    pub fn new(hash_key: [u8; 32], dir_path: PathBuf, p: M) -> Self {
+        Self { hash_key, dir_path, p, _marker: PhantomData }
     }
 }
 
@@ -219,9 +252,11 @@ mod tests {
     use crate::{
         bgg::{
             circuit::PolyCircuit,
+            encoding::BggEncodingPltEvaluator,
+            public_key::BggPubKeyPltEvaluator,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
             utils::random_bgg_encodings,
-            BggEncoding, BggPublicKey,
+            BggEncoding,
         },
         poly::{
             dcrt::{
@@ -236,138 +271,15 @@ mod tests {
         test_utils::setup_constant_plt,
         utils::{create_bit_random_poly, create_random_poly, init_tracing},
     };
-    use futures::future::join_all;
     use keccak_asm::Keccak256;
     use rand::Rng;
     use serial_test::serial;
-    use std::{fs, path::Path};
+    use std::{fs, path::Path, sync::Arc};
     use tempfile::tempdir;
     use tokio;
     use tracing::info;
 
     const SIGMA: f64 = 4.578;
-
-    fn p_vector_for_inputs(
-        b_l: &DCRTPolyMatrix,
-        plaintexts: Vec<DCRTPoly>,
-        params: &DCRTPolyParams,
-        p_sigma: f64,
-        s_x_l: &DCRTPolyMatrix,
-    ) -> DCRTPolyMatrix {
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-        // let t_bar = uniform_sampler.sample_uniform(&params, 1, 1, DistType::BitDist);
-        let one = DCRTPoly::const_one(params);
-        let mut extended_plaintexts = vec![one];
-        extended_plaintexts.extend(plaintexts);
-        let p_x_l_error = uniform_sampler.sample_uniform(
-            params,
-            1,
-            b_l.ncol,
-            DistType::GaussDist { sigma: p_sigma },
-        );
-        let encoded_bits = DCRTPolyMatrix::from_poly_vec_row(params, extended_plaintexts);
-        let s_connect = encoded_bits.tensor(s_x_l);
-        let s_b = s_connect * b_l;
-        s_b + p_x_l_error
-    }
-
-    #[tokio::test]
-    #[ignore = "file cannot be read"]
-    async fn test_encoding_plt_for_dio() {
-        init_tracing();
-
-        let tmp_dir = tempdir().unwrap().into_path();
-
-        /* Setup */
-        let params = DCRTPolyParams::default();
-        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
-
-        /* Obfuscation Step */
-        let key: [u8; 32] = rand::random();
-        let d = 1;
-        let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-        let input_size = 1;
-        let uni = DCRTPolyUniformSampler::new();
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-        let (b_l_trapdoor, b_l) = trapdoor_sampler.trapdoor(&params, (d + 1) * (1 + input_size));
-        let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
-        info!("b_l ({},{})", b_l.row_size(), b_l.col_size());
-        let m = (1 + d) * params.modulus_digits();
-        let m_b = (1 + input_size) * (d + 1) * (2 + params.modulus_digits());
-        /* BGG+ encoding setup */
-        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-        // in reality there should be input insertion step that updates the secret s_init to
-        let s_x_l = {
-            let minus_one_poly = DCRTPoly::const_minus_one(&params);
-            let mut secrets = secrets.to_vec();
-            secrets.push(minus_one_poly);
-            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
-        };
-        info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-        let plt = setup_constant_plt(8, &params, d);
-        let a_lt = plt.clone().a_lt;
-
-        // Create a simple circuit with an plt operation
-        let mut circuit = PolyCircuit::new();
-        {
-            let inputs = circuit.input(1);
-            let plt_id = circuit.register_public_lookup(plt.clone());
-            let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
-            circuit.output(vec![plt_gate]);
-        }
-
-        // Create random public keys
-        let reveal_plaintexts = [true; 2];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-        assert_eq!(pubkeys.len(), 2);
-        let _ = circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], None);
-        // after update the target matrix above while evaluation, now can sample preimage L_k
-        circuit.preimage_sample_all_lookups(
-            &params,
-            &b_l,
-            &b_l_plus_one,
-            &trapdoor_sampler,
-            &b_l_trapdoor,
-            &b_l_plus_one_trapdoor,
-            input_size + 1,
-            &tmp_dir,
-            &mut handles,
-        );
-        join_all(handles).await;
-
-        // Create secret and plaintexts
-        let k = 2;
-        let plaintexts = vec![DCRTPoly::const_int(&params, k)];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
-        let enc_one = encodings[0].clone();
-        let enc1 = encodings[1].clone();
-
-        assert_eq!(*enc1.plaintext.as_ref().unwrap(), plaintexts[0]);
-
-        // Evaluate the circuit
-        let p_x_l = p_vector_for_inputs(&b_l, plaintexts, &params, 0.0, &s_x_l);
-        let result = circuit.eval(&params, &enc_one, &[enc1], Some((p_x_l, tmp_dir, m, m_b)));
-        let (_, y_k) = plt.f.get(&k).expect("fetch x_k and y_k");
-        let expected_encodings = bgg_encoding_sampler.sample(
-            &params,
-            &[BggPublicKey::new(a_lt.clone(), true), BggPublicKey::new(a_lt.clone(), true)],
-            &[y_k.clone()],
-        );
-        let expected_enc1 = expected_encodings[1].clone();
-
-        // Verify the result
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].vector, expected_enc1.vector);
-        assert_eq!(result[0].pubkey.matrix, a_lt.clone());
-        assert_eq!(*result[0].plaintext.as_ref().unwrap(), y_k.clone());
-    }
 
     #[test]
     fn test_encoding_add() {
@@ -387,7 +299,12 @@ mod tests {
         circuit.output(vec![add_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one.clone(), &[enc1.clone(), enc2.clone()], None);
+        let result = circuit.eval(
+            &params,
+            &enc_one.clone(),
+            &[enc1.clone(), enc2.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
 
         // Expected result
         let expected = enc1.clone() + enc2.clone();
@@ -417,7 +334,12 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()], None);
+        let result = circuit.eval(
+            &params,
+            &enc_one,
+            &[enc1.clone(), enc2.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
 
         // Expected result
         let expected = enc1.clone() - enc2.clone();
@@ -447,7 +369,12 @@ mod tests {
         circuit.output(vec![mul_gate]);
 
         // Evaluate the circuit
-        let result = circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()], None);
+        let result = circuit.eval(
+            &params,
+            &enc_one,
+            &[enc1.clone(), enc2.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
@@ -487,8 +414,12 @@ mod tests {
         circuit.output(vec![sub_gate]);
 
         // Evaluate the circuit
-        let result =
-            circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()], None);
+        let result = circuit.eval(
+            &params,
+            &enc_one,
+            &[enc1.clone(), enc2.clone(), enc3.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
 
         // Expected result: ((enc1 + enc2)^2) - enc3
         let expected =
@@ -545,7 +476,7 @@ mod tests {
             &params,
             &enc_one,
             &[enc1.clone(), enc2.clone(), enc3.clone(), enc4.clone()],
-            None,
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
         );
 
         // Expected result: (((enc1 + enc2) * (enc3 * enc4)) + (enc1 - enc3)) * scalar
@@ -609,7 +540,12 @@ mod tests {
         main_circuit.output(vec![final_gate]);
 
         // Evaluate the main circuit
-        let result = main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone()], None);
+        let result = main_circuit.eval(
+            &params,
+            &enc_one,
+            &[enc1.clone(), enc2.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
 
         // Expected result: (enc1 + enc2) - (enc1 * enc2)
         let expected = (enc1.clone() + enc2.clone()) - (enc1.clone() * enc2.clone());
@@ -672,8 +608,12 @@ mod tests {
         main_circuit.output(vec![scalar_mul_gate]);
 
         // Evaluate the main circuit
-        let result =
-            main_circuit.eval(&params, &enc_one, &[enc1.clone(), enc2.clone(), enc3.clone()], None);
+        let result = main_circuit.eval(
+            &params,
+            &enc_one,
+            &[enc1.clone(), enc2.clone(), enc3.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
 
         // Expected result: ((enc1 * enc2) + enc3)^2
         let expected = ((enc1.clone() * enc2.clone()) + enc3.clone()) *
@@ -684,6 +624,105 @@ mod tests {
         assert_eq!(result[0].vector, expected.vector);
         assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
         assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
+
+    #[tokio::test]
+    #[ignore = "file cannot be read"]
+    async fn test_encoding_plt_for_dio() {
+        init_tracing();
+
+        let tmp_dir = tempdir().unwrap().path().to_path_buf();
+
+        /* Setup */
+        let params = DCRTPolyParams::default();
+        let trapdoor_sampler = DCRTPolyTrapdoorSampler::new(&params, SIGMA);
+
+        /* Obfuscation Step */
+        let key: [u8; 32] = rand::random();
+        let d = 1;
+        let uni = DCRTPolyUniformSampler::new();
+        let bgg_pubkey_sampler =
+            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
+        let uniform_sampler = DCRTPolyUniformSampler::new();
+        let (b_l_plus_one_trapdoor, b_l_plus_one) = trapdoor_sampler.trapdoor(&params, d + 1);
+        info!("b_l_plus_one ({},{})", b_l_plus_one.row_size(), b_l_plus_one.col_size());
+        /* BGG+ encoding setup */
+        let secrets = uni.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+        // in reality there should be input insertion step that updates the secret s_init to
+        let s_x_l = {
+            let minus_one_poly = DCRTPoly::const_minus_one(&params);
+            let mut secrets = secrets.to_vec();
+            secrets.push(minus_one_poly);
+            DCRTPolyMatrix::from_poly_vec_row(&params, secrets)
+        };
+        info!("s_x_L ({},{})", s_x_l.row_size(), s_x_l.col_size());
+        let p = s_x_l.clone() * &b_l_plus_one;
+        let tag: u64 = rand::random();
+        let tag_bytes = tag.to_le_bytes();
+        let plt = setup_constant_plt(8, &params);
+        // let a_lt = plt.clone().a_lt;
+
+        // Create a simple circuit with an plt operation
+        let mut circuit = PolyCircuit::new();
+        {
+            let inputs = circuit.input(1);
+            let plt_id = circuit.register_public_lookup(plt.clone());
+            let plt_gate = circuit.public_lookup_gate(inputs[0], plt_id);
+            circuit.output(vec![plt_gate]);
+        }
+
+        // Create random public keys
+        let reveal_plaintexts = [true; 2];
+        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
+        assert_eq!(pubkeys.len(), 2);
+        let pubkey_plt_evaluator = BggPubKeyPltEvaluator::<
+            DCRTPolyMatrix,
+            DCRTPolyHashSampler<Keccak256>,
+            DCRTPolyUniformSampler,
+            DCRTPolyTrapdoorSampler,
+        >::new(
+            key,
+            trapdoor_sampler,
+            Arc::new(b_l_plus_one),
+            Arc::new(b_l_plus_one_trapdoor),
+            tmp_dir.clone(),
+        );
+
+        let expected_pubkey_output =
+            &circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], Some(pubkey_plt_evaluator))
+                [0];
+
+        // Create secret and plaintexts
+        let k = 2;
+        let plaintexts = vec![DCRTPoly::const_int(&params, k)];
+
+        // Create encoding sampler and encodings
+        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
+        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+
+        assert_eq!(*enc1.plaintext.as_ref().unwrap(), plaintexts[0]);
+
+        // Evaluate the circuit
+        let bgg_encoding_plt_evaluator = BggEncodingPltEvaluator::<
+            DCRTPolyMatrix,
+            DCRTPolyHashSampler<Keccak256>,
+        >::new(key, tmp_dir.clone(), p);
+        let result = circuit.eval(&params, &enc_one, &[enc1], Some(bgg_encoding_plt_evaluator));
+        let (_, y_k) = plt.f[&plaintexts[0]].clone();
+        let expected_encodings = bgg_encoding_sampler.sample(
+            &params,
+            &[pubkeys[0].clone(), expected_pubkey_output.clone()],
+            &[y_k.clone()],
+        );
+        let expected_enc1 = expected_encodings[1].clone();
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vector, expected_enc1.vector);
+        assert_eq!(result[0].pubkey.matrix, expected_enc1.pubkey.matrix);
+        assert_eq!(*result[0].plaintext.as_ref().unwrap(), y_k.clone());
     }
 
     #[tokio::test]
