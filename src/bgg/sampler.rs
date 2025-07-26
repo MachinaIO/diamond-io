@@ -1,6 +1,5 @@
 use super::{BggEncoding, BggPublicKey};
 use crate::{
-    bgg::crt::CRTBggEncoding,
     parallel_iter,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyUniformSampler},
@@ -10,7 +9,6 @@ use crate::{
 };
 use rayon::prelude::*;
 use std::marker::PhantomData;
-use tracing::info;
 
 /// A sampler of a public key A in the BGG+ RLWE encoding scheme
 #[derive(Clone)]
@@ -292,7 +290,7 @@ mod tests {
         poly::dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyUniformSampler,
         },
-        utils::{create_bit_random_poly, create_random_poly, init_tracing},
+        utils::{create_bit_random_poly, create_random_poly},
     };
     use keccak_asm::Keccak256;
 

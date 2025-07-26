@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DCRTPoly {
     ptr_poly: Arc<UniquePtr<DCRTPolyCxx>>,
 }
@@ -52,6 +52,12 @@ impl DCRTPoly {
             params.crt_bits(),
             &value,
         ))
+    }
+}
+
+impl Debug for DCRTPoly {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DCRTPoly").field("coefficients", &self.coeffs()).finish()
     }
 }
 
