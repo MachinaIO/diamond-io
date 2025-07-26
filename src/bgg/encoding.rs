@@ -1,6 +1,9 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::{
-    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    bgg::{
+        circuit::{GateId, PltEvaluator},
+        lut::public_lut::PublicLut,
+    },
     poly::{sampler::PolyHashSampler, Poly, PolyMatrix, PolyParams},
     utils::timed_read,
 };
@@ -201,7 +204,7 @@ where
         params: &<BggEncoding<M> as Evaluable>::Params,
         plt: &PublicLut<<BggEncoding<M> as Evaluable>::P>,
         input: BggEncoding<M>,
-        id: usize,
+        id: GateId,
     ) -> BggEncoding<M> {
         let z = &input.plaintext.clone().expect("the BGG encoding should revealed plaintext");
         let (k, y_k) = plt.f[z].clone();

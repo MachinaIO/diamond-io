@@ -1,6 +1,9 @@
 use super::circuit::{Evaluable, PolyCircuit};
 use crate::{
-    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    bgg::{
+        circuit::{GateId, PltEvaluator},
+        lut::public_lut::PublicLut,
+    },
     impl_binop_with_refs,
     poly::dcrt::DCRTPoly,
 };
@@ -122,7 +125,7 @@ impl PltEvaluator<NormSimulator> for NormPltEvaluator {
         _: &(),
         plt: &PublicLut<DCRTPoly>,
         input: NormSimulator,
-        _: usize,
+        _: GateId,
     ) -> NormSimulator {
         NormSimulator {
             // |c_z · r_k.decompose()| + c_lt_k

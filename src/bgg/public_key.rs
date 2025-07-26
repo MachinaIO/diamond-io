@@ -1,6 +1,9 @@
 use super::circuit::Evaluable;
 use crate::{
-    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    bgg::{
+        circuit::{GateId, PltEvaluator},
+        lut::public_lut::PublicLut,
+    },
     poly::{
         sampler::{PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix,
@@ -29,6 +32,20 @@ impl<M: PolyMatrix> BggPublicKey<M> {
 
     pub fn concat_matrix(&self, others: &[Self]) -> M {
         self.matrix.concat_columns(&others.par_iter().map(|x| &x.matrix).collect::<Vec<_>>()[..])
+    }
+
+    /// Return a new public‑key whose matrix is the column slice
+    /// `[start, end)` of the current matrix.
+    pub fn column_slice(&self, start: usize, end: usize) -> Self {
+        assert!(start < end, "column_slice: start must be < end");
+        assert!(
+            end <= self.matrix.col_size(),
+            "column_slice: end ({end}) exceeds matrix col_size ({})",
+            self.matrix.col_size()
+        );
+
+        let sliced = self.matrix.slice_columns(start, end);
+        Self { matrix: sliced, reveal_plaintext: self.reveal_plaintext }
     }
 
     /// Writes the public key with id to files under the given directory.
@@ -159,7 +176,7 @@ where
         params: &<BggPublicKey<M> as Evaluable>::Params,
         plt: &PublicLut<<BggPublicKey<M> as Evaluable>::P>,
         input: BggPublicKey<M>,
-        id: usize,
+        id: GateId,
     ) -> BggPublicKey<M> {
         let d = input.matrix.row_size() - 1;
         let a_lt = plt.derive_a_lt::<M, SH>(params, d, self.hash_key, id);

@@ -1,4 +1,4 @@
-use crate::poly::Poly;
+use crate::{bgg::circuit::GateId, poly::Poly};
 
 use super::{PolyCircuit, PolyGateType};
 use serde::{Deserialize, Serialize};
@@ -32,16 +32,16 @@ impl SerializablePolyGateType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SerializablePolyGate {
-    pub gate_id: usize,
+    pub gate_id: GateId,
     pub gate_type: SerializablePolyGateType,
-    pub input_gates: Vec<usize>,
+    pub input_gates: Vec<GateId>,
 }
 
 impl SerializablePolyGate {
     pub fn new(
-        gate_id: usize,
+        gate_id: GateId,
         gate_type: SerializablePolyGateType,
-        input_gates: Vec<usize>,
+        input_gates: Vec<GateId>,
     ) -> Self {
         Self { gate_id, gate_type, input_gates }
     }
@@ -49,17 +49,17 @@ impl SerializablePolyGate {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SerializablePolyCircuit {
-    gates: BTreeMap<usize, SerializablePolyGate>,
+    gates: BTreeMap<GateId, SerializablePolyGate>,
     sub_circuits: BTreeMap<usize, Self>,
-    output_ids: Vec<usize>,
+    output_ids: Vec<GateId>,
     num_input: usize,
 }
 
 impl SerializablePolyCircuit {
     pub fn new(
-        gates: BTreeMap<usize, SerializablePolyGate>,
+        gates: BTreeMap<GateId, SerializablePolyGate>,
         sub_circuits: BTreeMap<usize, Self>,
-        output_ids: Vec<usize>,
+        output_ids: Vec<GateId>,
         num_input: usize,
     ) -> Self {
         Self { gates, sub_circuits, output_ids, num_input }
@@ -114,7 +114,7 @@ impl SerializablePolyCircuit {
         // Process gates in ascending order of their usize keys
         let mut gate_idx = 0;
         while gate_idx < self.gates.len() {
-            let serializable_gate = &self.gates[&gate_idx];
+            let serializable_gate = &self.gates[&GateId(gate_idx)];
             match &serializable_gate.gate_type {
                 SerializablePolyGateType::Input => {
                     gate_idx += 1;
