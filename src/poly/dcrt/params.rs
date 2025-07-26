@@ -218,7 +218,8 @@ mod tests {
         let crt_depth = 4;
         let crt_bits = 51;
         let base_bits = 1;
-        let _p = DCRTPolyParams::new(ring_dimension, crt_depth, crt_bits, base_bits); // This should
-                                                                                      // panic
+        let _p = DCRTPolyParams::new(ring_dimension, crt_depth, crt_bits, base_bits);
+        // This should
+        // panic
     }
 }
