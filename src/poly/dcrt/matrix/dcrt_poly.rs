@@ -222,17 +222,24 @@ impl PolyMatrix for DCRTPolyMatrix {
                 "{}_{}_{}.{}_{}.{}.matrix",
                 id, block_size, row_range.start, row_range.end, col_range.start, col_range.end
             ));
-            let bytes = std::fs::read(&path)
+            let file = std::fs::File::open(&path)
                 .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
-            let entries_bytes: Vec<Vec<Vec<u8>>> =
-                bincode::decode_from_slice(&bytes, bincode::config::standard()).unwrap().0;
+            let mut reader = std::io::BufReader::new(file);
+            // Stream decode directly into flat Vec to avoid triple nesting
+            let entries_flat: Vec<Vec<u8>> = bincode::decode_from_std_read::<Vec<Vec<u8>>, _, _>(
+                &mut reader,
+                bincode::config::standard(),
+            )
+            .unwrap();
+            let cols = col_range.len();
 
+            // Keep parallel processing but with flat indexing
             parallel_iter!(0..row_range.len())
                 .map(|i| {
-                    parallel_iter!(0..col_range.len())
+                    parallel_iter!(0..cols)
                         .map(|j| {
-                            let entry_bytes = &entries_bytes[i][j];
-                            DCRTPoly::from_compact_bytes(params, entry_bytes)
+                            let flat_idx = i * cols + j;
+                            DCRTPoly::from_compact_bytes(params, &entries_flat[flat_idx])
                         })
                         .collect::<Vec<_>>()
                 })

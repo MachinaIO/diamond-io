@@ -24,7 +24,10 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
-use rayon::{iter::ParallelIterator, slice::ParallelSlice};
+use rayon::{
+    iter::{IntoParallelIterator, ParallelIterator},
+    slice::ParallelSlice,
+};
 use std::{path::Path, sync::Arc};
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
@@ -220,7 +223,8 @@ where
         #[cfg(feature = "debug")]
         store_and_drop_matrix(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
-        for num in 0..level_size {
+        let u_nums_level = &u_nums[level - 1];
+        (0..level_size).into_par_iter().for_each(|num| {
             #[cfg(feature = "bgm")]
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
@@ -237,7 +241,7 @@ where
                 s_i_num.row_size(),
                 s_i_num.col_size()
             ));
-            let u = &u_nums[level - 1][num];
+            let u = &u_nums_level[num];
             log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
             let u_tensor_s = u.tensor(&s_i_num);
             let k_target_error = sampler_uniform.sample_uniform(
@@ -260,7 +264,7 @@ where
                 k_preimage_num.col_size()
             ));
             store_and_drop_matrix(k_preimage_num, &dir_path, &format!("k_preimage_{level}_{num}"));
-        }
+        });
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
         b_star_cur = b_star_level;
