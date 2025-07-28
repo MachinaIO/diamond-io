@@ -78,7 +78,7 @@ pub async fn test_io_common(
     let mut rng = rand::rng();
     let hardcoded_key = sampler_uniform.sample_poly(&params, &DistType::BitDist);
 
-    obfuscate::<
+    let _ = obfuscate::<
         DCRTPolyMatrix,
         DCRTPolyUniformSampler,
         DCRTPolyHashSampler<Keccak256>,
@@ -86,7 +86,8 @@ pub async fn test_io_common(
         _,
         _,
     >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
-    .await;
+    .await
+    .expect("obfuscation fail");
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
 
@@ -180,7 +181,8 @@ pub async fn test_io_plt(
         _,
         _,
     >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
-    .await;
+    .await
+    .expect("obfuscation fail");
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
 
