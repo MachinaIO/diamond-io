@@ -9,12 +9,12 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{ops::Range, path::Path};
+use std::{io::Read, ops::Range, path::Path, sync::Arc};
 
 use super::base::BaseMatrix;
 
 #[cfg(feature = "disk")]
-use super::base::disk::{block_offsets, map_file_mut};
+use super::base::disk::map_file_mut;
 
 impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -215,31 +215,41 @@ impl PolyMatrix for DCRTPolyMatrix {
     ) -> Self {
         let block_size = block_size();
         let mut matrix = Self::new_empty(params, nrow, ncol);
+        let dir_path = Arc::new(dir_path.as_ref().to_path_buf());
+        let params_arc = Arc::new(params.clone());
 
         let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-            let mut path = dir_path.as_ref().to_path_buf();
+            let mut path = (*dir_path).clone();
             path.push(format!(
                 "{}_{}_{}.{}_{}.{}.matrix",
                 id, block_size, row_range.start, row_range.end, col_range.start, col_range.end
             ));
-            let file = std::fs::File::open(&path)
-                .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
-            let mut reader = std::io::BufReader::new(file);
-            // Stream decode directly into flat Vec to avoid triple nesting
-            let entries_flat: Vec<Vec<u8>> = bincode::decode_from_std_read::<Vec<Vec<u8>>, _, _>(
-                &mut reader,
-                bincode::config::standard(),
-            )
-            .unwrap();
-            let cols = col_range.len();
 
-            // Keep parallel processing but with flat indexing
-            parallel_iter!(0..row_range.len())
-                .map(|i| {
-                    parallel_iter!(0..cols)
-                        .map(|j| {
-                            let flat_idx = i * cols + j;
-                            DCRTPoly::from_compact_bytes(params, &entries_flat[flat_idx])
+            let mut file = std::fs::File::open(&path)
+                .unwrap_or_else(|_| panic!("Failed to open matrix file {path:?}"));
+            let file_size = file.metadata().unwrap().len() as usize;
+            let mut buffer = Vec::with_capacity(file_size);
+            file.read_to_end(&mut buffer)
+                .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
+
+            let entries_bytes: Vec<Vec<Vec<u8>>> =
+                bincode::decode_from_slice(&buffer, bincode::config::standard()).unwrap().0;
+
+            let chunk_size = crate::utils::chunk_size_for(row_range.len());
+            entries_bytes
+                .into_par_iter()
+                .enumerate()
+                .chunks(chunk_size)
+                .flat_map(|chunk| {
+                    chunk
+                        .into_iter()
+                        .map(|(_, row_bytes)| {
+                            row_bytes
+                                .into_par_iter()
+                                .map(|entry_bytes| {
+                                    DCRTPoly::from_compact_bytes(&params_arc, &entry_bytes)
+                                })
+                                .collect::<Vec<_>>()
                         })
                         .collect::<Vec<_>>()
                 })
@@ -248,63 +258,6 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix.replace_entries(0..nrow, 0..ncol, f);
         matrix
     }
-
-    // #[inline]
-    // async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
-    //     let block_size = block_size();
-    //     info!("{block_size}");
-    //     #[cfg(feature = "disk")]
-    //     let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-    //     #[cfg(not(feature = "disk"))]
-    //     let (row_offsets, col_offsets) = (vec![0, self.nrow], vec![0, self.ncol]);
-    //     let dir_path = dir_path.as_ref().to_path_buf();
-
-    //     let self_arc = Arc::new(self);
-    //     let row_windows = row_offsets.into_iter().tuple_windows().collect_vec();
-    //     let futures = row_windows
-    //         .into_iter()
-    //         .flat_map(|(cur_block_row_idx, next_block_row_idx)| {
-    //             let col_windows = col_offsets.clone().into_iter().tuple_windows().collect_vec();
-    //             col_windows
-    //                 .into_iter()
-    //                 .map(|(cur_block_col_idx, next_block_col_idx)| {
-    //                     // let id_clone = id.clone();
-    //                     let row_range = cur_block_row_idx..next_block_row_idx;
-    //                     let col_range = cur_block_col_idx..next_block_col_idx;
-    //                     let self_arc = Arc::clone(&self_arc);
-    //                     let dir_path = dir_path.clone();
-    //                     async move {
-    //                         let entries = self_arc
-    //                             .as_ref()
-    //                             .block_entries(row_range.clone(), col_range.clone());
-    //                         let mut path = dir_path;
-    //                         path.push(format!(
-    //                             "{}_{}_{}.{}_{}.{}.matrix",
-    //                             id,
-    //                             block_size,
-    //                             row_range.start,
-    //                             row_range.end,
-    //                             col_range.start,
-    //                             col_range.end
-    //                         ));
-    //                         let entries_bytes: Vec<Vec<Vec<u8>>> = entries
-    //                             .iter()
-    //                             .map(|row| {
-    //                                 row.iter().map(|poly| poly.to_compact_bytes()).collect_vec()
-    //                             })
-    //                             .collect_vec();
-    //                         let serialized_data =
-    //                             bincode::encode_to_vec(&entries_bytes,
-    // bincode::config::standard())                                 .unwrap();
-    //                         info!("serialized_len={}", serialized_data.len());
-    //                         write(path, &serialized_data).await
-    //                     }
-    //                 })
-    //                 .collect::<Vec<_>>()
-    //         })
-    //         .collect::<Vec<_>>();
-    //     futures::future::try_join_all(futures).await.expect("Failed to write all matrix blocks");
-    // }
 
     fn set_entry(&mut self, i: usize, j: usize, elem: Self::P) {
         #[cfg(not(feature = "disk"))]
