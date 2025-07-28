@@ -24,8 +24,9 @@ pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
     /// Returns the integer `n` that specifies the size of the polynomial ring used in this
     /// polynomial. Specifically, this is the degree parameter for the ring `Z_q[x]/(x^n - 1)`.
     fn ring_dimension(&self) -> u32;
-    /// Given the parameter, return the crt decomposed modulus as array.
-    fn to_crt(&self) -> Vec<Self::Modulus>;
+    /// Given the parameter, return the crt decomposed moduli as array along with the bit size and
+    /// depth of these moduli.
+    fn to_crt(&self) -> (Vec<u64>, usize, usize);
 }
 
 pub trait Poly:

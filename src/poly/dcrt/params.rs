@@ -56,11 +56,12 @@ impl PolyParams for DCRTPolyParams {
         self.crt_bits.div_ceil(self.base_bits as usize) * self.crt_depth
     }
 
-    fn to_crt(&self) -> Vec<Arc<BigUint>> {
-        ffi::GenCRTBasis(self.ring_dimension, self.crt_depth, self.crt_bits)
+    fn to_crt(&self) -> (Vec<u64>, usize, usize) {
+        let moduli = ffi::GenCRTBasis(self.ring_dimension, self.crt_depth, self.crt_bits)
             .into_iter()
-            .map(|m| Arc::new(BigUint::from_str_radix(&m, 10).expect("invalid CRT modulus")))
-            .collect()
+            .map(|m| u64::from_str_radix(&m, 10).expect("invalid CRT modulus string"))
+            .collect();
+        (moduli, self.crt_bits, self.crt_depth)
     }
 }
 
@@ -106,21 +107,17 @@ mod tests {
         let base_bits = 1;
 
         let params = DCRTPolyParams::new(ring_dimension, crt_depth, crt_bits, base_bits);
-        let crt = params.to_crt();
+        let (crt, bits, depth) = params.to_crt();
         assert_eq!(crt.len(), crt_depth, "unexpected number of CRT primes");
+        assert_eq!(bits, crt_bits, "unexpected crt bits size");
+        assert_eq!(depth, crt_depth, "unexpected crt depth");
 
         for (i, q) in crt.iter().enumerate() {
-            assert_eq!(
-                q.bits() as usize,
-                crt_bits,
-                "q[{}] has bit‑length {}, expected {}",
-                i,
-                q.bits(),
-                crt_bits
-            );
+            assert!(*q < (1 << crt_bits), "q[{i}] is larger than {crt_bits} bits",);
         }
 
-        let product: BigUint = crt.iter().fold(BigUint::from(1u32), |acc, q| acc * &**q);
+        let product: BigUint =
+            crt.iter().fold(BigUint::from(1u32), |acc, q| acc * BigUint::from(*q));
         assert_eq!(product, *params.modulus(), "product of q_i should equal Q");
     }
 

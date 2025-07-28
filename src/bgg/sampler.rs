@@ -70,43 +70,43 @@ where
             .collect()
     }
 
-    /// Sample a public key matrix for crt
-    /// # Arguments
-    /// * `tag`: The tag to sample the public key matrix
-    /// * `reveal_plaintexts`: A vector of booleans indicating whether the plaintexts associated to
-    ///   the public keys should be revealed
-    /// # Returns
-    /// A vector of public key matrices
-    pub fn sample_crt(
-        &self,
-        params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
-        tag: &[u8],
-        reveal_plaintexts: &[bool],
-    ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
-        let sampler = S::new();
-        let log_base_q = params.modulus_digits();
-        let q_crt_len = params.to_crt().len();
-        let secret_vec_size = self.d + 1;
-        let columns = secret_vec_size * log_base_q * q_crt_len;
-        let packed_input_size = reveal_plaintexts.len();
-        let all_matrix = sampler.sample_hash(
-            params,
-            self.hash_key,
-            tag,
-            secret_vec_size,
-            columns * packed_input_size,
-            DistType::FinRingDist,
-        );
-        parallel_iter!(0..packed_input_size)
-            .map(|idx| {
-                let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
-                BggPublicKey::new(
-                    all_matrix.slice_columns(columns * idx, columns * (idx + 1)),
-                    reveal_plaintext,
-                )
-            })
-            .collect()
-    }
+    // /// Sample a public key matrix for crt
+    // /// # Arguments
+    // /// * `tag`: The tag to sample the public key matrix
+    // /// * `reveal_plaintexts`: A vector of booleans indicating whether the plaintexts associated
+    // to ///   the public keys should be revealed
+    // /// # Returns
+    // /// A vector of public key matrices
+    // pub fn sample_crt(
+    //     &self,
+    //     params: &<<<S as PolyHashSampler<K>>::M as PolyMatrix>::P as Poly>::Params,
+    //     tag: &[u8],
+    //     reveal_plaintexts: &[bool],
+    // ) -> Vec<BggPublicKey<<S as PolyHashSampler<K>>::M>> {
+    //     let sampler = S::new();
+    //     let log_base_q = params.modulus_digits();
+    //     let q_crt_len = params.to_crt().len();
+    //     let secret_vec_size = self.d + 1;
+    //     let columns = secret_vec_size * log_base_q * q_crt_len;
+    //     let packed_input_size = reveal_plaintexts.len();
+    //     let all_matrix = sampler.sample_hash(
+    //         params,
+    //         self.hash_key,
+    //         tag,
+    //         secret_vec_size,
+    //         columns * packed_input_size,
+    //         DistType::FinRingDist,
+    //     );
+    //     parallel_iter!(0..packed_input_size)
+    //         .map(|idx| {
+    //             let reveal_plaintext = if idx == 0 { true } else { reveal_plaintexts[idx - 1] };
+    //             BggPublicKey::new(
+    //                 all_matrix.slice_columns(columns * idx, columns * (idx + 1)),
+    //                 reveal_plaintext,
+    //             )
+    //         })
+    //         .collect()
+    // }
 }
 
 /// A sampler of an encoding in the BGG+ RLWE encoding scheme
