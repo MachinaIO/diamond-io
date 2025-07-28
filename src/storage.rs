@@ -405,10 +405,275 @@ fn stream_matrix_blocks<M>(
     ));
 }
 
+/// Read a matrix that was split into blocks back into a single matrix.
+pub fn read_matrix_from_blocks<M>(
+    params: &<M::P as Poly>::Params,
+    nrow: usize,
+    ncol: usize,
+    dir: &Path,
+    id: &str,
+) -> M
+where
+    M: PolyMatrix,
+{
+    let start = Instant::now();
+    debug_mem(format!("Reading matrix from blocks: {id}"));
+    let matrix = M::read_from_files(params, nrow, ncol, dir, id);
+
+    let elapsed = start.elapsed();
+    log_mem(format!("Matrix read completed: {id} in {elapsed:?}"));
+
+    matrix
+}
+
+/// Read matrix metadata to determine dimensions from block files.
+pub fn read_matrix_metadata(dir: &Path, id: &str) -> Result<(usize, usize), std::io::Error> {
+    use std::fs;
+
+    let block_size_val = block_size();
+
+    // Find all files matching the pattern
+    let pattern = format!("{}_{}_{}", id, block_size_val, "");
+    let mut max_row = 0;
+    let mut max_col = 0;
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let filename = entry.file_name();
+        let filename_str = filename.to_string_lossy();
+
+        if filename_str.starts_with(&pattern) && filename_str.ends_with(".matrix") {
+            // Parse the filename to extract ranges
+            // Format: id_blocksize_rowstart.rowend_colstart.colend.matrix
+            // First split by underscore to get [id, blocksize, ranges...]
+            let parts: Vec<&str> = filename_str.split('_').collect();
+            if parts.len() >= 3 {
+                // The range part is everything after id_blocksize_
+                let range_part = &filename_str[pattern.len()..];
+
+                // Now we have something like "0.10_0.15.matrix"
+                // Split by underscore to get row and column parts
+                let range_parts: Vec<&str> =
+                    range_part.trim_end_matches(".matrix").split('_').collect();
+
+                if range_parts.len() >= 2 {
+                    // Extract row end from "0.10"
+                    if let Some(row_end) = range_parts[0].split('.').nth(1) {
+                        if let Ok(row) = row_end.parse::<usize>() {
+                            max_row = max_row.max(row);
+                        }
+                    }
+
+                    // Extract col end from "0.15"
+                    if let Some(col_end) = range_parts[1].split('.').nth(1) {
+                        if let Ok(col) = col_end.parse::<usize>() {
+                            max_col = max_col.max(col);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if max_row == 0 || max_col == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("No matrix blocks found for id: {}", id),
+        ));
+    }
+
+    Ok((max_row, max_col))
+}
+
+pub fn read_matrix_streaming<M, F>(
+    params: &<M::P as Poly>::Params,
+    nrow: usize,
+    ncol: usize,
+    dir: &Path,
+    id: &str,
+    mut process_block: F,
+) -> Result<(), std::io::Error>
+where
+    M: PolyMatrix,
+    F: FnMut(usize, usize, Vec<Vec<M::P>>),
+{
+    let block_size_val = block_size();
+
+    #[cfg(feature = "disk")]
+    let (row_offsets, col_offsets) = {
+        use crate::poly::dcrt::matrix::base::disk::block_offsets;
+        block_offsets(0..nrow, 0..ncol)
+    };
+    #[cfg(not(feature = "disk"))]
+    let (row_offsets, col_offsets) = (vec![0, nrow], vec![0, ncol]);
+
+    use itertools::Itertools;
+    let row_windows: Vec<_> = row_offsets.into_iter().tuple_windows().collect();
+
+    for (row_idx, (cur_block_row_idx, next_block_row_idx)) in row_windows.iter().enumerate() {
+        let col_windows: Vec<_> = col_offsets.clone().into_iter().tuple_windows().collect();
+
+        for (col_idx, (cur_block_col_idx, next_block_col_idx)) in col_windows.iter().enumerate() {
+            let row_range = *cur_block_row_idx..*next_block_row_idx;
+            let col_range = *cur_block_col_idx..*next_block_col_idx;
+
+            let filename = format!(
+                "{}_{}_{}.{}_{}.{}.matrix",
+                id, block_size_val, row_range.start, row_range.end, col_range.start, col_range.end
+            );
+
+            let path = dir.join(&filename);
+            let bytes = std::fs::read(&path)?;
+
+            let entries_bytes: Vec<Vec<Vec<u8>>> =
+                bincode::decode_from_slice(&bytes, bincode::config::standard())
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+                    .0;
+
+            // Deserialize the block
+            let block_entries: Vec<Vec<M::P>> = entries_bytes
+                .par_iter()
+                .map(|row| {
+                    row.par_iter()
+                        .map(|entry_bytes| M::P::from_compact_bytes(params, entry_bytes))
+                        .collect()
+                })
+                .collect();
+
+            // Process this block
+            process_block(row_idx, col_idx, block_entries);
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(feature = "debug")]
 pub fn store_and_drop_poly<P: Poly>(poly: P, dir: &Path, id: &str) {
     log_mem(format!("Storing {id}"));
     poly.write_to_file(dir, id);
     drop(poly);
     log_mem(format!("Stored {id}"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::poly::{
+        dcrt::{DCRTPoly, DCRTPolyMatrix, DCRTPolyParams},
+        Poly,
+    };
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_matrix_write_read_roundtrip() {
+        // Create test parameters
+        let params = DCRTPolyParams::new(4, 2, 17, 1);
+
+        // Create a small test matrix
+        let nrow = 4;
+        let ncol = 4;
+        let mut matrix = DCRTPolyMatrix::zero(&params, nrow, ncol);
+
+        // Fill with test data
+        for i in 0..nrow {
+            for j in 0..ncol {
+                let poly = DCRTPoly::const_int(&params, i * ncol + j);
+                matrix.set_entry(i, j, poly);
+            }
+        }
+
+        // Create temp directory
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+        let matrix_id = "test_matrix";
+
+        // Write matrix using streaming storage
+        let write_handle = store_and_drop_matrix_streaming(matrix.clone(), dir_path, matrix_id);
+        write_handle.await.unwrap();
+
+        // Read matrix back
+        let read_matrix =
+            read_matrix_from_blocks::<DCRTPolyMatrix>(&params, nrow, ncol, dir_path, matrix_id);
+
+        assert_eq!(matrix, read_matrix);
+    }
+
+    #[tokio::test]
+    async fn test_matrix_metadata_read() {
+        // Create test parameters
+        let params = DCRTPolyParams::new(4, 2, 17, 1);
+
+        // Create test matrix with known dimensions
+        let nrow = 10;
+        let ncol = 15;
+        let matrix = DCRTPolyMatrix::zero(&params, nrow, ncol);
+
+        // Create temp directory
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+        let matrix_id = "test_metadata";
+
+        // Write matrix
+        let write_handle = store_and_drop_matrix_streaming(matrix, dir_path, matrix_id);
+        write_handle.await.unwrap();
+
+        // Read metadata
+        let (read_nrow, read_ncol) = read_matrix_metadata(dir_path, matrix_id).unwrap();
+
+        // Verify dimensions
+        assert_eq!(read_nrow, nrow);
+        assert_eq!(read_ncol, ncol);
+    }
+
+    #[tokio::test]
+    async fn test_matrix_streaming_read() {
+        // Create test parameters
+        let params = DCRTPolyParams::new(4, 2, 17, 1);
+
+        // Create larger test matrix to ensure multiple blocks
+        let nrow = 168;
+        let ncol = 168;
+        let mut matrix = DCRTPolyMatrix::zero(&params, nrow, ncol);
+
+        // Fill with test data
+        for i in 0..nrow {
+            for j in 0..ncol {
+                let poly = DCRTPoly::const_int(&params, i * ncol + j);
+                matrix.set_entry(i, j, poly);
+            }
+        }
+
+        // Create temp directory
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+        let matrix_id = "test_streaming";
+
+        // Write matrix
+        let write_handle = store_and_drop_matrix_streaming(matrix.clone(), dir_path, matrix_id);
+        write_handle.await.unwrap();
+
+        // Read matrix using streaming
+        let mut block_count = 0;
+        let mut total_elements = 0;
+
+        read_matrix_streaming::<DCRTPolyMatrix, _>(
+            &params,
+            nrow,
+            ncol,
+            dir_path,
+            matrix_id,
+            |_row_idx, _col_idx, block| {
+                block_count += 1;
+                for row in &block {
+                    total_elements += row.len();
+                }
+            },
+        )
+        .unwrap();
+
+        // Verify we read all blocks and elements
+        assert!(block_count > 0);
+        assert_eq!(total_elements, nrow * ncol);
+    }
 }

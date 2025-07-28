@@ -12,6 +12,7 @@ use crate::{
         sampler::{PolyHashSampler, PolyTrapdoorSampler},
         Poly, PolyMatrix, PolyParams,
     },
+    storage::read_matrix_from_blocks,
     utils::{log_mem, timed_read},
 };
 use itertools::Itertools;
@@ -66,7 +67,7 @@ where
     let packed_output_size = public_data.packed_output_size;
     let mut p_cur = timed_read(
         "p_cur",
-        || M::read_from_files(&obf_params.params, 1, m_b, &dir_path, "p_init"),
+        || read_matrix_from_blocks::<M>(&obf_params.params, 1, m_b, &dir_path, "p_init"),
         &mut total_load,
     );
     log_mem(format!("p_init ({},{}) loaded", p_cur.row_size(), p_cur.col_size()));
@@ -84,7 +85,7 @@ where
     #[cfg(feature = "debug")]
     let s_init = timed_read(
         "s_init",
-        || M::read_from_files(&obf_params.params, 1, d + 1, &dir_path, "s_init"),
+        || read_matrix_from_blocks::<M>(&obf_params.params, 1, d + 1, &dir_path, "s_init"),
         &mut total_load,
     );
     #[cfg(feature = "debug")]
@@ -107,7 +108,7 @@ where
             let b_star = timed_read(
                 "b_star",
                 || {
-                    M::read_from_files(
+                    read_matrix_from_blocks::<M>(
                         params.as_ref(),
                         (1 + packed_input_size) * (d + 1),
                         m_b,
@@ -158,7 +159,7 @@ where
         let k = timed_read(
             "k",
             || {
-                M::read_from_files(
+                read_matrix_from_blocks::<M>(
                     params.as_ref(),
                     m_b,
                     m_b,
@@ -177,7 +178,7 @@ where
             let s_matrix = timed_read(
                 "s",
                 || {
-                    M::read_from_files(
+                    read_matrix_from_blocks::<M>(
                         params.as_ref(),
                         d + 1,
                         d + 1,
@@ -207,7 +208,15 @@ where
     let m_b_small = (d + 1) * (2 + log_base_q);
     let k_plus_one = timed_read(
         "k_l_plus_one",
-        || M::read_from_files(params.as_ref(), m_b, m_b_small, &dir_path, &format!("k_l_plus_one")),
+        || {
+            read_matrix_from_blocks::<M>(
+                params.as_ref(),
+                m_b,
+                m_b_small,
+                &dir_path,
+                &format!("k_l_plus_one"),
+            )
+        },
         &mut total_load,
     );
     let p_l_plus_one = p_cur.clone() * k_plus_one;
@@ -224,7 +233,7 @@ where
 
     let b = timed_read(
         "b",
-        || M::read_from_files(&obf_params.params, 1, 1, &dir_path, "b"),
+        || read_matrix_from_blocks::<M>(&obf_params.params, 1, 1, &dir_path, "b"),
         &mut total_load,
     );
     log_mem("b loaded");
@@ -241,7 +250,7 @@ where
     let final_preimage_f = timed_read(
         "final_preimage_f",
         || {
-            M::read_from_files(
+            read_matrix_from_blocks::<M>(
                 &obf_params.params,
                 m_b_small,
                 packed_output_size,
@@ -261,7 +270,7 @@ where
         let eval_outputs_matrix_plus_a_prf = timed_read(
             "eval_outputs_matrix_plus_a_prf",
             || {
-                M::read_from_files(
+                read_matrix_from_blocks::<M>(
                     &obf_params.params,
                     d + 1,
                     packed_output_size,
@@ -278,7 +287,7 @@ where
     let final_preimage_att = timed_read(
         "final_preimage_att",
         || {
-            M::read_from_files(
+            read_matrix_from_blocks::<M>(
                 &obf_params.params,
                 m_b,
                 (1 + packed_input_size) * (d + 1) * log_base_q,
