@@ -162,7 +162,7 @@ async fn main() {
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
             let hardcoded_key = sampler_uniform.sample_poly(&obf_params.params, &DistType::BitDist);
-            obfuscate::<
+            let _ = obfuscate::<
                 DCRTPolyMatrix,
                 DCRTPolyUniformSampler,
                 DCRTPolyHashSampler<Keccak256>,

@@ -5,7 +5,7 @@ use crate::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
-    storage_optimized::store_matrix_optimized,
+    storage::store_and_drop_matrix,
 };
 use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
@@ -98,10 +98,9 @@ impl<P: Poly> PublicLut<P> {
             })
             .collect::<Vec<_>>();
         info!("Preimage matrices computed for id: {id}");
-        // [TODO] Use a channel within the above iterator to bound the memory usage.
         for (k, r_k, l_k) in matrices.into_iter() {
-            store_matrix_optimized(r_k, dir_path, &format!("R_{id}_{k}"));
-            store_matrix_optimized(l_k, dir_path, &format!("L_{id}_{k}"));
+            store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}"));
+            store_and_drop_matrix(l_k, dir_path, &format!("L_{id}_{k}"));
         }
     }
 }
