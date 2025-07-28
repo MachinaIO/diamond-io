@@ -96,9 +96,12 @@ pub async fn obfuscate<M, SU, SH, ST, R, P>(
     plaintexts.extend((0..packed_input_size - 1).map(|_| M::P::const_zero(&params)).collect_vec());
     plaintexts.push(minus_t_bar);
 
-    let mut reveal_plaintexts = vec![true; plaintexts.len()];
-    // We reveal FHE secret key, only in the debug mode
-    reveal_plaintexts[packed_input_size - 1] = cfg!(feature = "debug");
+    let reveal_plaintexts = {
+        let mut reveals = vec![true; packed_input_size + 1];
+        // Only reveal FHE secret key in debug mode.
+        reveals[packed_input_size] = cfg!(feature = "debug");
+        reveals
+    };
     let s_init = {
         let minus_one_poly = <SU::M as PolyMatrix>::P::const_minus_one(&params);
         let mut secrets = s_bars.to_vec();

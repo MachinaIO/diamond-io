@@ -204,6 +204,7 @@ where
         id: usize,
     ) -> BggEncoding<M> {
         let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
+        info!("public lookup length is {}", plt.f.len());
         let (k, y_k) =
             plt.f.get(z).expect(&format!("{:?} is not exist in public lookup f", z.to_const_int()));
         info!("Performing public lookup, k={}", k);

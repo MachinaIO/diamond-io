@@ -71,10 +71,12 @@ where
     );
     log_mem(format!("p_init ({},{}) loaded", p_cur.row_size(), p_cur.col_size()));
 
-    #[cfg(feature = "debug")]
-    let reveal_plaintexts = [vec![true; packed_input_size], vec![true; 1]].concat();
-    #[cfg(not(feature = "debug"))]
-    let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
+    let reveal_plaintexts = {
+        let mut reveals = vec![true; packed_input_size + 1];
+        // Only reveal FHE secret key in debug mode.
+        reveals[packed_input_size] = cfg!(feature = "debug");
+        reveals
+    };
     let params = Arc::new(obf_params.params.clone());
     let level_width = obf_params.level_width;
     assert!(inputs.len() % level_width == 0);
