@@ -224,7 +224,7 @@ where
         store_and_drop_matrix(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
         let u_nums_level = &u_nums[level - 1];
-        (0..level_size).into_par_iter().for_each(|num| {
+        let results: Vec<_> = (0..level_size).into_par_iter().map(|num| {
             #[cfg(feature = "bgm")]
             {
                 player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
@@ -232,9 +232,6 @@ where
 
             let s_i_bar = sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
             let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
-
-            #[cfg(feature = "debug")]
-            store_and_drop_matrix(s_i_num.clone(), &dir_path, &format!("s_{level}_{num}"));
 
             log_mem(format!(
                 "Computed S ({},{}) (d+1)x(d+1)",
@@ -263,8 +260,17 @@ where
                 k_preimage_num.row_size(),
                 k_preimage_num.col_size()
             ));
+            
+            (num, s_i_num, k_preimage_num)
+        }).collect();
+
+        // Store matrices sequentially to avoid Tokio context issues
+        for (num, s_i_num, k_preimage_num) in results {
+            #[cfg(feature = "debug")]
+            store_and_drop_matrix(s_i_num, &dir_path, &format!("s_{level}_{num}"));
+            
             store_and_drop_matrix(k_preimage_num, &dir_path, &format!("k_preimage_{level}_{num}"));
-        });
+        }
 
         b_star_trapdoor_cur = b_star_trapdoor_level;
         b_star_cur = b_star_level;
