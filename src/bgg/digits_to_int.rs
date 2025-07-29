@@ -60,14 +60,12 @@ mod tests {
         },
         poly::{
             dcrt::{
-                element::FinRingElem,
                 matrix::DCRTPolyMatrix,
                 params::DCRTPolyParams,
                 poly::DCRTPoly,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
             },
             sampler::PolyUniformSampler,
-            PolyElem,
         },
         utils::{create_bit_random_poly, create_random_poly},
     };
@@ -94,16 +92,14 @@ mod tests {
         let params = DCRTPolyParams::default();
 
         // Create digit polynomials with known values
-        let digit_polys =
-            DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), 13))
-                .decompose_base(&params);
+        let digit_polys = DCRTPoly::from_usize_to_constant(&params, 13).decompose_base(&params);
 
         // Compute the integer representation
         let result = DCRTPoly::digits_to_int(&digit_polys, &params);
 
         // Expected result: 1 + 2 + 0 + 8 = 11
         // In polynomial form, this is a constant polynomial with value 11
-        let expected = DCRTPoly::from_const(&params, &FinRingElem::new(13u32, params.modulus()));
+        let expected = DCRTPoly::from_usize_to_constant(&params, 13);
         assert_eq!(result, expected, "digits_to_int result does not match expected value 13");
     }
 
@@ -170,7 +166,7 @@ mod tests {
 
         // Create secret and plaintexts (digit polynomials)
         let secrets = vec![create_bit_random_poly(&params); d];
-        let int_poly = DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), 13));
+        let int_poly = DCRTPoly::from_usize_to_constant(&params, 13);
         let plaintexts = int_poly.decompose_base(&params);
 
         // Create encoding sampler and encodings

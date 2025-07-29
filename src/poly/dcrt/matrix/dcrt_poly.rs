@@ -389,11 +389,10 @@ mod tests {
 
         // Create a simple 2x8 matrix with some non-zero values
         let mut matrix_vec = Vec::with_capacity(2);
-        let value = FinRingElem::new(5u32, params.modulus());
-
+        let value = 5;
         // Create first row
         let mut row1 = Vec::with_capacity(8);
-        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 1..8 {
             row1.push(DCRTPoly::const_zero(&params));
         }
@@ -401,7 +400,7 @@ mod tests {
         // Create second row
         let mut row2 = Vec::with_capacity(8);
         row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::from_const(&params, &value));
+        row2.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 2..8 {
             row2.push(DCRTPoly::const_zero(&params));
         }
@@ -434,11 +433,11 @@ mod tests {
 
         // Create a simple 2x8 matrix with some non-zero values
         let mut matrix_vec = Vec::with_capacity(2);
-        let value = FinRingElem::new(5u32, params.modulus());
+        let value = 5;
 
         // Create first row
         let mut row1 = Vec::with_capacity(8);
-        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 1..8 {
             row1.push(DCRTPoly::const_zero(&params));
         }
@@ -446,7 +445,7 @@ mod tests {
         // Create second row
         let mut row2 = Vec::with_capacity(8);
         row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::from_const(&params, &value));
+        row2.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 2..8 {
             row2.push(DCRTPoly::const_zero(&params));
         }
@@ -481,16 +480,16 @@ mod tests {
         let identity = DCRTPolyMatrix::identity(&params, 2, None);
 
         // Test matrix creation and equality
-        let value = FinRingElem::new(5u32, params.modulus());
+        let value = 5;
 
         // Create a 2x2 matrix with values at (0,0) and (1,1)
         let matrix_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
-            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_const(&params, &value)],
+            vec![DCRTPoly::from_usize_to_constant(&params, value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_usize_to_constant(&params, value)],
         ];
 
         let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
-        assert_eq!(matrix1.entry(0, 0).coeffs()[0], value);
+        assert_eq!(matrix1.entry(0, 0).coeffs()[0].value(), &BigUint::from(value));
         let matrix2 = matrix1.clone();
         assert_eq!(matrix1, matrix2);
 
@@ -507,8 +506,8 @@ mod tests {
         let prod = matrix1 * &identity;
         assert_eq!(prod.size(), (2, 2));
         // Check that the product has the same values as the original matrix
-        assert_eq!(prod.entry(0, 0).coeffs()[0], value);
-        assert_eq!(prod.entry(1, 1).coeffs()[0], value);
+        assert_eq!(prod.entry(0, 0).coeffs()[0].value(), &BigUint::from(value));
+        assert_eq!(prod.entry(1, 1).coeffs()[0].value(), &BigUint::from(value));
     }
 
     #[test]
@@ -518,7 +517,7 @@ mod tests {
 
         // Create first matrix with value at (0,0)
         let matrix1_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::from_elem_to_constant(&params, &value), DCRTPoly::const_zero(&params)],
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
         ];
 
@@ -527,7 +526,7 @@ mod tests {
         // Create second matrix with value at (1,1)
         let matrix2_vec = vec![
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
-            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_const(&params, &value)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_elem_to_constant(&params, &value)],
         ];
 
         let matrix2 = DCRTPolyMatrix::from_poly_vec(&params, matrix2_vec);
@@ -561,7 +560,7 @@ mod tests {
 
         // Create first matrix with value at (0,0)
         let matrix1_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::from_elem_to_constant(&params, &value), DCRTPoly::const_zero(&params)],
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
         ];
 
@@ -569,7 +568,7 @@ mod tests {
 
         // Create second matrix with value at (0,0)
         let matrix2_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::from_elem_to_constant(&params, &value), DCRTPoly::const_zero(&params)],
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
         ];
 
@@ -594,8 +593,14 @@ mod tests {
         let value11 = FinRingElem::new(1990091289902891278121564387120912660u128, params.modulus());
 
         let matrix_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value00), DCRTPoly::from_const(&params, &value01)],
-            vec![DCRTPoly::from_const(&params, &value10), DCRTPoly::from_const(&params, &value11)],
+            vec![
+                DCRTPoly::from_elem_to_constant(&params, &value00),
+                DCRTPoly::from_elem_to_constant(&params, &value01),
+            ],
+            vec![
+                DCRTPoly::from_elem_to_constant(&params, &value10),
+                DCRTPoly::from_elem_to_constant(&params, &value11),
+            ],
         ];
 
         let matrix = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
@@ -612,12 +617,12 @@ mod tests {
 
         let expected_vec = vec![
             vec![
-                DCRTPoly::from_const(&params, &new_value00),
-                DCRTPoly::from_const(&params, &new_value01),
+                DCRTPoly::from_elem_to_constant(&params, &new_value00),
+                DCRTPoly::from_elem_to_constant(&params, &new_value01),
             ],
             vec![
-                DCRTPoly::from_const(&params, &new_value10),
-                DCRTPoly::from_const(&params, &new_value11),
+                DCRTPoly::from_elem_to_constant(&params, &new_value10),
+                DCRTPoly::from_elem_to_constant(&params, &new_value11),
             ],
         ];
 

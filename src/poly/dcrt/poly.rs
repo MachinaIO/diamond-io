@@ -59,6 +59,7 @@ impl DCRTPoly {
         ))
     }
 
+    #[inline]
     fn poly_gen_from_const(params: &DCRTPolyParams, value: String) -> Self {
         DCRTPoly::new(ffi::DCRTPolyGenFromConst(
             params.ring_dimension(),
@@ -73,6 +74,7 @@ impl Poly for DCRTPoly {
     type Elem = FinRingElem;
     type Params = DCRTPolyParams;
 
+    #[inline]
     fn coeffs(&self) -> Vec<Self::Elem> {
         let poly_encoding = self.ptr_poly.GetCoefficientsBytes();
         let parsed_values = parse_coefficients_bytes(&poly_encoding);
@@ -81,6 +83,7 @@ impl Poly for DCRTPoly {
         parallel_iter!(coeffs).map(|s| FinRingElem::new(s, Arc::new(modulus.clone()))).collect()
     }
 
+    #[inline]
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
         let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
         for coeff in coeffs {
@@ -90,16 +93,11 @@ impl Poly for DCRTPoly {
         Self::poly_gen_from_vec(params, coeffs_cxx)
     }
 
-    fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self {
-        Self::poly_gen_from_const(params, constant.value().to_string())
-    }
-
     fn from_decomposed(params: &DCRTPolyParams, decomposed: &[Self]) -> Self {
         let mut reconstructed = Self::const_zero(params);
         for (i, bit_poly) in decomposed.iter().enumerate() {
             let power_of_two = BigUint::from(2u32).pow(i as u32);
-            let const_poly_power_of_two =
-                Self::from_const(params, &FinRingElem::new(power_of_two, params.modulus()));
+            let const_poly_power_of_two = Self::from_biguint_to_constant(params, power_of_two);
             reconstructed += bit_poly * &const_poly_power_of_two;
         }
         reconstructed
@@ -169,6 +167,10 @@ impl Poly for DCRTPoly {
     fn const_max(params: &Self::Params) -> Self {
         let coeffs = vec![FinRingElem::max_q(&params.modulus()); params.ring_dimension() as usize];
         Self::from_coeffs(params, &coeffs)
+    }
+
+    fn from_elem_to_constant(params: &Self::Params, elem: &Self::Elem) -> Self {
+        Self::poly_gen_from_const(params, elem.value().to_string())
     }
 
     /// from `BigUint` to `DCRTPoly` type and generate constant polynomial.
@@ -549,7 +551,7 @@ mod tests {
         assert_eq!(poly_mul_assign, product, "*= result should match separate *");
 
         // 9. Test from_const / const_zero / const_one
-        let const_poly = DCRTPoly::from_const(&params, &FinRingElem::new(123, q.clone()));
+        let const_poly = DCRTPoly::from_usize_to_constant(&params, 123);
         assert_eq!(
             const_poly,
             DCRTPoly::from_coeffs(&params, &[FinRingElem::new(123, q.clone()); 1]),

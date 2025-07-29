@@ -4,10 +4,10 @@ use crate::{
     poly::{
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler, FinRingElem,
+            DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyUniformSampler},
-        Poly, PolyElem, PolyParams,
+        Poly, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing, log_mem},
 };
@@ -105,9 +105,7 @@ pub async fn test_io_common(
     let eval_time = start_time.elapsed();
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
-
-    let input_poly =
-        DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
+    let input_poly = DCRTPoly::from_usize_to_constant(&params, bool_in as usize);
     assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
 }
 
