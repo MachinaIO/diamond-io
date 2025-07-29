@@ -138,24 +138,26 @@ where
     let (mut b_star_trapdoor_cur, mut b_star_cur) =
         sampler_trapdoor.trapdoor(&params, (1 + packed_input_size) * (d + 1));
     log_mem(format!(
-        "b star epsilon ({},{}) (d+1)xm_B and trapdoor epsilon sampled",
+        "b star epsilon ({},{}) (d+1)L'xm_B and trapdoor epsilon sampled",
         b_star_cur.row_size(),
         b_star_cur.col_size()
     ));
 
     // Compute p_init
-    let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
-    log_mem(format!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size()));
-    let s_connect = encoded_bits.tensor(&s_init);
-    log_mem(format!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size()));
-    let s_b = s_connect * &b_star_cur;
-    let p_init_error = sampler_uniform.sample_uniform(
-        &params,
-        1,
-        m_b,
-        DistType::GaussDist { sigma: obf_params.p_sigma },
-    );
-    let p_init = s_b + p_init_error;
+    let p_init = {
+        let encoded_bits = M::from_poly_vec_row(&params, plaintexts);
+        log_mem(format!("encoded_bits ({},{})", encoded_bits.row_size(), encoded_bits.col_size()));
+        let s_connect = encoded_bits.tensor(&s_init);
+        log_mem(format!("s_connect ({},{})", s_connect.row_size(), s_connect.col_size()));
+        let s_b = s_connect * &b_star_cur;
+        let p_init_error = sampler_uniform.sample_uniform(
+            &params,
+            1,
+            m_b,
+            DistType::GaussDist { sigma: obf_params.p_sigma },
+        );
+        s_b + p_init_error
+    };
     log_mem(format!("Computed p_epsilon ({},{})", p_init.row_size(), p_init.col_size()));
     store_and_drop_matrix(p_init, &dir_path, "p_init");
     #[cfg(feature = "debug")]
@@ -305,14 +307,15 @@ where
 
     // Sample input dependent random matrix B_*
     let (b_l_plus_one_trapdoor, b_l_plus_one) = sampler_trapdoor.trapdoor(&params, d + 1);
-    let k_l_plus_one_target = {
-        let id = M::identity(&params, d + 1, None);
-        let zeros = M::zero(&params, packed_input_size * id.row_size(), id.col_size());
-        let tensor_lhs = id.concat_rows(&[&zeros]);
-        tensor_lhs * &b_l_plus_one
+    let k_l_plus_one = {
+        let k_l_plus_one_target = {
+            let id = M::identity(&params, d + 1, None);
+            let zeros = M::zero(&params, packed_input_size * id.row_size(), id.col_size());
+            let tensor_lhs = id.concat_rows(&[&zeros]);
+            tensor_lhs * &b_l_plus_one
+        };
+        sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_l_plus_one_target)
     };
-    let k_l_plus_one =
-        sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_l_plus_one_target);
     store_and_drop_matrix(k_l_plus_one, &dir_path, "k_l_plus_one");
 
     #[cfg(feature = "bgm")]
@@ -356,25 +359,28 @@ where
 
     // P_att := u_1_L' ⊗ A_att - I_L' ⊗ G_d+1
     // computing u_1_L' ⊗ A_att
-    let params = &params;
-    let zeros = M::zero(
-        params.as_ref(),
-        packed_input_size * pub_key_att_matrix.row_size(),
-        pub_key_att_matrix.col_size(),
-    );
-    let k_lhs = pub_key_att_matrix.concat_rows(&[&zeros]);
+    let k_lhs = {
+        let zeros = M::zero(
+            &params,
+            packed_input_size * pub_key_att_matrix.row_size(),
+            pub_key_att_matrix.col_size(),
+        );
+        pub_key_att_matrix.concat_rows(&[&zeros])
+    };
 
     // computing I_L' ⊗ G_d+1
-    let gadget = M::gadget_matrix(params, d + 1);
-    let other_blocks: Vec<&M> = std::iter::repeat_n(&gadget, packed_input_size).collect();
-    let k_rhs = gadget.concat_diag(&other_blocks);
-    let final_preimage_target_att = k_lhs - k_rhs;
-    let final_preimage_att = sampler_trapdoor.preimage(
-        params,
-        &b_star_trapdoor_cur,
-        &b_star_cur,
-        &final_preimage_target_att,
-    );
+    let final_preimage_att = {
+        let gadget = M::gadget_matrix(&params, d + 1);
+        let other_blocks: Vec<&M> = std::iter::repeat_n(&gadget, packed_input_size).collect();
+        let k_rhs = gadget.concat_diag(&other_blocks);
+        let final_preimage_target_att = k_lhs - k_rhs;
+        sampler_trapdoor.preimage(
+            &params,
+            &b_star_trapdoor_cur,
+            &b_star_cur,
+            &final_preimage_target_att,
+        )
+    };
     log_mem("Sampled final_preimage_att");
     store_and_drop_matrix(final_preimage_att, &dir_path, "final_preimage_att");
     store_and_drop_matrix(pub_key_att_matrix, &dir_path, "pub_key_att");
@@ -408,7 +414,7 @@ where
 
         let output_ints = eval_outputs
             .par_chunks(log_base_q)
-            .map(|digits| BggPublicKey::digits_to_int(digits, params))
+            .map(|digits| BggPublicKey::digits_to_int(digits, &params))
             .collect::<Vec<_>>();
         let eval_outputs_matrix = output_ints[0].concat_matrix(&output_ints[1..]);
         #[cfg(feature = "debug")]
@@ -424,7 +430,7 @@ where
     log_mem("Computed final_preimage_target_f");
 
     let final_preimage_f = sampler_trapdoor.preimage(
-        params,
+        &params,
         &b_l_plus_one_trapdoor,
         &b_l_plus_one,
         &final_preimage_target_f,

@@ -6,10 +6,10 @@ use crate::{
         Poly, PolyMatrix, PolyParams,
     },
     storage::store_and_drop_matrix,
+    utils::log_mem,
 };
 use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
-use tracing::info;
 
 /// Public Lookup Table
 #[derive(Debug, Clone, Default)]
@@ -44,11 +44,11 @@ impl<P: Poly> PublicLut<P> {
         M: PolyMatrix<P = P>,
         SH: PolyHashSampler<[u8; 32], M = M>,
     {
-        info!("Deriving A_LT for id: {id}");
+        log_mem(format!("Deriving A_LT for id: {id}"));
         let m = (d + 1) * params.modulus_digits();
         let hash_sampler = SH::new();
         let tag = format!("A_LT_{id}");
-        info!("Tag for A_LT: {tag}");
+        log_mem(format!("Tag for A_LT: {tag}"));
         hash_sampler.sample_hash(
             params,
             hash_key,
@@ -75,7 +75,6 @@ impl<P: Poly> PublicLut<P> {
         SU: PolyUniformSampler<M = M> + Send + Sync,
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     {
-        info!("Preimage for id: {id}");
         let d = pub_matrix.row_size() - 1;
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();
@@ -86,18 +85,15 @@ impl<P: Poly> PublicLut<P> {
             .collect::<Vec<_>>()
             .into_par_iter()
             .map(|(x_k, (k, y_k))| {
-                info!("Processing k: {k}");
                 let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
-                info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
                 let r_k_decomposed = r_k.decompose();
                 let target_k = (r_k.clone() * x_k) + a_lt -
                     &(gadget.clone() * y_k) -
                     a_z.clone() * r_k_decomposed;
-                info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
                 (k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
             })
             .collect::<Vec<_>>();
-        info!("Preimage matrices computed for id: {id}");
+        log_mem(format!("Preimage matrices computed for id: {id}"));
         for (k, r_k, l_k) in matrices.into_iter() {
             store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}"));
             store_and_drop_matrix(l_k, dir_path, &format!("L_{id}_{k}"));
