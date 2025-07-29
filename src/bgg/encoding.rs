@@ -34,24 +34,6 @@ impl<M: PolyMatrix> BggEncoding<M> {
         self.vector.concat_columns(&others.par_iter().map(|x| &x.vector).collect::<Vec<_>>()[..])
     }
 
-    // /// Writes the encoding with id to files under the given directory.
-    // pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
-    //     &self,
-    //     dir_path: P,
-    //     id: &str,
-    // ) {
-    //     // Write the vector
-    //     self.vector.write_to_files(&dir_path, &format!("{id}_vector")).await;
-
-    //     // Write the pubkey
-    //     self.pubkey.write_to_files(&dir_path, &format!("{id}_pubkey")).await;
-
-    //     // Write the plaintext component if it exists
-    //     if let Some(plaintext) = &self.plaintext {
-    //         plaintext.write_to_file(&dir_path, &format!("{id}_plaintext")).await;
-    //     }
-    // }
-
     /// Reads an encoding with id from files under the given directory.
     pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(
         params: &<M::P as Poly>::Params,
@@ -205,11 +187,6 @@ where
     ) -> BggEncoding<M> {
         let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
         info!("public lookup length is {}", plt.f.len());
-        info!("All keys in plt.f:");
-        for (key, _) in plt.f.iter() {
-            info!("  Key: {:?}, coeffs: {:?}", key.to_const_int(), key.coeffs_digits());
-        }
-        info!("Lookup key z: {:?}, coeffs: {:?}", z.to_const_int(), z.coeffs_digits());
         let (k, y_k) = plt
             .f
             .get(z)
