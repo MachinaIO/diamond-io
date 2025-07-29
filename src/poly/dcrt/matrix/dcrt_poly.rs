@@ -746,15 +746,15 @@ mod tests {
 
     #[test]
     fn test_matrix_compact_bytes() {
-        let params = DCRTPolyParams::new(8192, 7, 51, 17);
+        let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
         let dists = [DistType::BitDist, DistType::FinRingDist];
         for dist in dists {
             // todo: interesting finding. if its more square shape (e.g (50,50)more than 2m> (100,1)
             // - total 37s) slower
-            let ncol = 100;
-            let nrow = 1;
+            let ncol = 15;
+            let nrow = 15;
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
