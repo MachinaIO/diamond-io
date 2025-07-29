@@ -79,17 +79,21 @@ impl<P: Poly> PublicLut<P> {
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();
         let gadget = M::gadget_matrix(params, d + 1);
-        let matrices = self
-            .f
-            .iter()
-            .collect::<Vec<_>>()
-            .into_par_iter()
-            .map(|(x_k, (k, y_k))| {
-                let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
-                let target_k = (r_k.clone() * x_k) + a_lt -
-                    &(gadget.clone() * y_k) -
-                    (a_z.clone() * r_k.decompose());
-                (k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
+        let items: Vec<_> = self.f.iter().collect();
+        let matrices = items
+            .par_chunks(8)
+            .flat_map(|batch| {
+                batch
+                    .iter()
+                    .map(|(x_k, (k, y_k))| {
+                        let r_k =
+                            uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
+                        let target_k = (r_k.clone() * (*x_k).clone()) + a_lt -
+                            &(gadget.clone() * (*y_k).clone()) -
+                            (a_z.clone() * r_k.decompose());
+                        (*k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
         log_mem(format!("Preimage matrices computed for id: {id}"));
