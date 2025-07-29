@@ -274,7 +274,7 @@ where
                 }
                 #[cfg(not(feature = "debug"))]
                 {
-                    (num, None, k_preimage_num)
+                    (num, None::<M>, k_preimage_num)
                 }
             })
             .collect();
