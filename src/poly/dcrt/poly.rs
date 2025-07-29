@@ -198,6 +198,7 @@ impl Poly for DCRTPoly {
     /// `int` is limited as u64 or u32.
     fn from_usize_to_lsb(params: &Self::Params, int: usize) -> Self {
         let n = params.ring_dimension() as usize;
+        debug_assert!(int < (1 << n), "Input exceeds representable range for ring dimension");
         let q = params.modulus();
         let one = FinRingElem::one(&q);
         let zero = FinRingElem::zero(&q);
@@ -362,7 +363,7 @@ impl Poly for DCRTPoly {
             if i >= usize::BITS as usize {
                 break;
             }
-            sum += (1usize << i) * (c as usize);
+            sum = sum.saturating_add((1usize << i).saturating_mul(c as usize));
         }
         sum
     }
