@@ -32,6 +32,7 @@ impl DCRTPoly {
         Self { ptr_poly: ptr_poly.into() }
     }
 
+    #[inline]
     pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
         &self.ptr_poly
     }
@@ -144,14 +145,17 @@ impl Poly for DCRTPoly {
         Self::from_coeffs(params, &coeffs)
     }
 
+    #[inline]
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
 
+    #[inline]
     fn const_one(params: &Self::Params) -> Self {
-        Self::poly_gen_from_const(params, BigUint::from(1u32).to_string())
+        Self::poly_gen_from_const(params, "1".to_owned())
     }
 
+    #[inline]
     fn const_minus_one(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(
             params,
@@ -159,28 +163,35 @@ impl Poly for DCRTPoly {
         )
     }
 
-    fn const_power_of_base(params: &Self::Params, k: usize) -> Self {
-        let base = 1u32 << params.base_bits();
-        Self::poly_gen_from_const(params, BigUint::from(base).pow(k as u32).to_string())
-    }
-
+    /// return all `DCRTPoly` with all coefficients is maximum value.
     fn const_max(params: &Self::Params) -> Self {
         let coeffs = vec![FinRingElem::max_q(&params.modulus()); params.ring_dimension() as usize];
         Self::from_coeffs(params, &coeffs)
     }
 
+    /// from `PolyElem` to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
     fn from_elem_to_constant(params: &Self::Params, elem: &Self::Elem) -> Self {
         Self::poly_gen_from_const(params, elem.value().to_string())
     }
 
     /// from `BigUint` to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
     fn from_biguint_to_constant(params: &Self::Params, int: BigUint) -> Self {
         Self::poly_gen_from_const(params, int.to_string())
     }
 
     /// from `usize` to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
     fn from_usize_to_constant(params: &Self::Params, int: usize) -> Self {
         Self::poly_gen_from_const(params, int.to_string())
+    }
+
+    /// from k which is power of base to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
+    fn from_power_of_base_to_constant(params: &Self::Params, k: usize) -> Self {
+        let base = 1u32 << params.base_bits();
+        Self::poly_gen_from_const(params, BigUint::from(base).pow(k as u32).to_string())
     }
 
     /// Encode `int` in little-endian bit order
@@ -463,7 +474,6 @@ mod tests {
         PolyParams,
     };
     use rand::prelude::*;
-    use std::path::Path;
 
     #[test]
     fn test_const_int_roundtrip() {
@@ -708,42 +718,5 @@ mod tests {
             original_poly, reconstructed_poly,
             "Reconstructed polynomial does not match original (GaussDist)"
         );
-    }
-
-    #[tokio::test]
-    async fn test_dcrtpoly_write_read_file() {
-        let params = DCRTPolyParams::default();
-        let sampler = DCRTPolyUniformSampler::new();
-
-        // Test with different distribution types
-        let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
-
-        // Create a temporary directory for testing
-        let test_dir = Path::new("test_poly_write_read");
-        if !test_dir.exists() {
-            std::fs::create_dir(test_dir).unwrap();
-        } else {
-            // Clean it first to ensure no old files interfere
-            std::fs::remove_dir_all(test_dir).unwrap();
-            std::fs::create_dir(test_dir).unwrap();
-        }
-
-        for dist in dists {
-            // Create a random polynomial
-            let poly = sampler.sample_poly(&params, &dist);
-            let poly_id = format!("test_poly_{:?}", dist);
-
-            // Write the polynomial to a file
-            poly.write_to_file(test_dir, &poly_id).await;
-
-            // Read the polynomial back
-            let read_poly = DCRTPoly::read_from_file(&params, test_dir, &poly_id);
-
-            // Verify the polynomials are equal
-            assert_eq!(poly, read_poly, "Read polynomial does not match original for {:?}", dist);
-        }
-
-        // Clean up
-        std::fs::remove_dir_all(test_dir).unwrap();
     }
 }

@@ -18,14 +18,14 @@ pub trait DigitsToInt<P: Poly>: Evaluable {
 
 impl<P: Poly> DigitsToInt<P> for P {
     fn power_of_base(&self, params: &P::Params, k: usize) -> Self {
-        let power_of_base = P::const_power_of_base(params, k);
+        let power_of_base = P::from_power_of_base_to_constant(params, k);
         self.clone() * power_of_base
     }
 }
 
 impl<M: PolyMatrix> DigitsToInt<M::P> for BggPublicKey<M> {
     fn power_of_base(&self, params: &<M::P as crate::poly::Poly>::Params, k: usize) -> Self {
-        let scalar = M::P::const_power_of_base(params, k);
+        let scalar = M::P::from_power_of_base_to_constant(params, k);
         // d+1
         let d1 = self.matrix.row_size();
         let unit_vector = M::unit_column_vector(params, d1, d1 - 1);
@@ -38,7 +38,7 @@ impl<M: PolyMatrix> DigitsToInt<M::P> for BggPublicKey<M> {
 
 impl<M: PolyMatrix> DigitsToInt<M::P> for BggEncoding<M> {
     fn power_of_base(&self, params: &<M::P as crate::poly::Poly>::Params, k: usize) -> Self {
-        let scalar = M::P::const_power_of_base(params, k);
+        let scalar = M::P::from_power_of_base_to_constant(params, k);
         // d+1
         let d1 = self.pubkey.matrix.row_size();
         let unit_vector = M::unit_column_vector(params, d1, d1 - 1);

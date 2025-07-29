@@ -81,7 +81,7 @@ pub trait Poly:
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
-    fn const_power_of_base(params: &Self::Params, k: usize) -> Self;
+    fn from_power_of_base_to_constant(params: &Self::Params, k: usize) -> Self;
     fn from_elem_to_constant(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_biguint_to_constant(params: &Self::Params, int: BigUint) -> Self;
     fn from_usize_to_constant(params: &Self::Params, int: usize) -> Self;
