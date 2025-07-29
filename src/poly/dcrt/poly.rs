@@ -145,8 +145,15 @@ impl Poly for DCRTPoly {
         let one = FinRingElem::one(&q);
         let zero = FinRingElem::zero(&q);
 
-        let coeffs: Vec<FinRingElem> =
-            (0..n).map(|i| if (int >> i) & 1 == 1 { one.clone() } else { zero.clone() }).collect();
+        let coeffs: Vec<FinRingElem> = (0..n)
+            .map(|i| {
+                if i < usize::BITS as usize && (int >> i) & 1 == 1 {
+                    one.clone()
+                } else {
+                    zero.clone()
+                }
+            })
+            .collect();
 
         Self::from_coeffs(params, &coeffs)
     }
@@ -271,11 +278,14 @@ impl Poly for DCRTPoly {
     }
 
     fn to_const_int(&self) -> usize {
-        let mut sum = 0;
+        let mut sum = 0usize;
         for (i, c) in self.coeffs_digits().into_iter().enumerate() {
-            sum += 2_u32.pow(i as u32) * c;
+            if i >= usize::BITS as usize {
+                break;
+            }
+            sum += (1usize << i) * (c as usize);
         }
-        sum as usize
+        sum
     }
 
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
