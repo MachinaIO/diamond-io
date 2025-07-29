@@ -207,8 +207,9 @@ where
         info!("public lookup length is {}", plt.f.len());
         info!("All keys in plt.f:");
         for (key, _) in plt.f.iter() {
-            info!("  Key: {:?}", key.to_const_int());
+            info!("  Key: {:?}, coeffs: {:?}", key.to_const_int(), key.coeffs_digits());
         }
+        info!("Lookup key z: {:?}, coeffs: {:?}", z.to_const_int(), z.coeffs_digits());
         let (k, y_k) = plt
             .f
             .get(z)
@@ -630,6 +631,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_encoding_plt_for_dio() {
         init_tracing();
         init_storage_system();

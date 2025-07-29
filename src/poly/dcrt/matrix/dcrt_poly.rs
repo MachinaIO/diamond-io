@@ -9,7 +9,7 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{io::Read, ops::Range, path::Path, sync::Arc};
+use std::{io::Read, ops::Range, path::Path};
 
 use super::base::BaseMatrix;
 
@@ -215,41 +215,26 @@ impl PolyMatrix for DCRTPolyMatrix {
     ) -> Self {
         let block_size = block_size();
         let mut matrix = Self::new_empty(params, nrow, ncol);
-        let dir_path = Arc::new(dir_path.as_ref().to_path_buf());
-        let params_arc = Arc::new(params.clone());
-
         let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-            let mut path = (*dir_path).clone();
+            let mut path = dir_path.as_ref().to_path_buf();
             path.push(format!(
                 "{}_{}_{}.{}_{}.{}.matrix",
                 id, block_size, row_range.start, row_range.end, col_range.start, col_range.end
             ));
-
             let mut file = std::fs::File::open(&path)
                 .unwrap_or_else(|_| panic!("Failed to open matrix file {path:?}"));
             let file_size = file.metadata().unwrap().len() as usize;
             let mut buffer = Vec::with_capacity(file_size);
             file.read_to_end(&mut buffer)
                 .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
-
             let entries_bytes: Vec<Vec<Vec<u8>>> =
                 bincode::decode_from_slice(&buffer, bincode::config::standard()).unwrap().0;
-
-            let chunk_size = crate::utils::chunk_size_for(row_range.len());
-            entries_bytes
-                .into_par_iter()
-                .enumerate()
-                .chunks(chunk_size)
-                .flat_map(|chunk| {
-                    chunk
-                        .into_iter()
-                        .map(|(_, row_bytes)| {
-                            row_bytes
-                                .into_par_iter()
-                                .map(|entry_bytes| {
-                                    DCRTPoly::from_compact_bytes(&params_arc, &entry_bytes)
-                                })
-                                .collect::<Vec<_>>()
+            parallel_iter!(0..row_range.len())
+                .map(|i| {
+                    parallel_iter!(0..col_range.len())
+                        .map(|j| {
+                            let entry_bytes = &entries_bytes[i][j];
+                            DCRTPoly::from_compact_bytes(params, entry_bytes)
                         })
                         .collect::<Vec<_>>()
                 })
@@ -258,7 +243,6 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix.replace_entries(0..nrow, 0..ncol, f);
         matrix
     }
-
     fn set_entry(&mut self, i: usize, j: usize, elem: Self::P) {
         #[cfg(not(feature = "disk"))]
         {

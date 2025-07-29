@@ -56,7 +56,6 @@ where
         hash_key.copy_from_slice(&bytes);
         hash_key
     };
-    log_mem("hash_key loaded");
 
     let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
     let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);

@@ -119,12 +119,6 @@ pub trait PolyMatrix:
         dir_path: P,
         id: &str,
     ) -> Self;
-    // /// Writes a matrix with id to files under the given directory.
-    // fn write_to_files<P: AsRef<Path> + Send + Sync>(
-    //     &self,
-    //     dir_path: P,
-    //     id: &str,
-    // ) -> impl std::future::Future<Output = ()> + Send;
     /// Extract block entries for parallel processing (used by storage service)
     fn block_entries(
         &self,
