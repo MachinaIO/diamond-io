@@ -282,9 +282,9 @@ where
             .collect();
 
         // Store matrices sequentially to avoid Tokio context issues.
-        for (num, s_i_num_opt, k_preimage_num) in k_preimages {
+        for (num, _s_i_num_opt, k_preimage_num) in k_preimages {
             #[cfg(feature = "debug")]
-            if let Some(s_i_num) = s_i_num_opt {
+            if let Some(s_i_num) = _s_i_num_opt {
                 store_and_drop_matrix(s_i_num, &dir_path, &format!("s_{level}_{num}"));
             }
             store_and_drop_matrix(k_preimage_num, &dir_path, &format!("k_preimage_{level}_{num}"));
