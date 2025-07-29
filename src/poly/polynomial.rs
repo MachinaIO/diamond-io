@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use num_bigint::BigUint;
 use std::{
     fmt::Debug,
     hash::Hash,
@@ -49,7 +50,6 @@ pub trait Poly:
     type Params: PolyParams<Modulus = <Self::Elem as PolyElem>::Modulus>;
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self;
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self;
-    fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_decomposed(params: &Self::Params, decomposed: &[Self]) -> Self;
     fn from_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
         let log_q_bytes = params.modulus_bits().div_ceil(8);
@@ -80,9 +80,11 @@ pub trait Poly:
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
-    fn const_power_of_base(params: &Self::Params, k: usize) -> Self;
-    fn const_int(params: &Self::Params, int: usize) -> Self;
-    fn from_const_int_lsb(params: &Self::Params, int: usize) -> Self;
+    fn from_power_of_base_to_constant(params: &Self::Params, k: usize) -> Self;
+    fn from_elem_to_constant(params: &Self::Params, constant: &Self::Elem) -> Self;
+    fn from_biguint_to_constant(params: &Self::Params, int: BigUint) -> Self;
+    fn from_usize_to_constant(params: &Self::Params, int: usize) -> Self;
+    fn from_usize_to_lsb(params: &Self::Params, int: usize) -> Self;
     fn const_rotate_poly(params: &Self::Params, shift: usize) -> Self {
         let zero = Self::const_zero(params);
         let mut coeffs = zero.coeffs();

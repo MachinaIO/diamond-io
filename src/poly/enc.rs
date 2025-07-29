@@ -24,7 +24,8 @@ where
     let e = sampler_uniform.sample_uniform(params, 1, 1, DistType::GaussDist { sigma });
 
     // Use provided scale or calculate half of q
-    let scale = M::P::from_const(params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
+    let scale =
+        M::P::from_elem_to_constant(params, &<M::P as Poly>::Elem::half_q(&params.modulus()));
 
     // Compute RLWE encryption: t * a + e + m * scale
     t.clone() * a + e + &(m.clone() * &scale)

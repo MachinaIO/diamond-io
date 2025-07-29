@@ -678,7 +678,7 @@ mod tests {
 
         // Create secret and plaintexts
         let k = 2;
-        let plaintexts = vec![DCRTPoly::const_int(&params, k)];
+        let plaintexts = vec![DCRTPoly::from_usize_to_constant(&params, k)];
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
