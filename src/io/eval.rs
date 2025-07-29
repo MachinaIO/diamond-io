@@ -207,7 +207,7 @@ where
     let m_b_small = (d + 1) * (2 + log_base_q);
     let k_plus_one = timed_read(
         "k_l_plus_one",
-        || M::read_from_files(params.as_ref(), m_b, m_b_small, &dir_path, &format!("k_l_plus_one")),
+        || M::read_from_files(params.as_ref(), m_b, m_b_small, &dir_path, "k_l_plus_one"),
         &mut total_load,
     );
     let p_l_plus_one = p_cur.clone() * k_plus_one;

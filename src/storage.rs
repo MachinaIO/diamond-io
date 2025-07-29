@@ -39,7 +39,7 @@ pub async fn wait_for_all_writes() -> Result<(), Box<dyn std::error::Error + Sen
 
     for handle in handles_vec {
         if let Err(e) = handle.await {
-            eprintln!("Write task failed: {}", e);
+            eprintln!("Write task failed: {e}");
         }
     }
 

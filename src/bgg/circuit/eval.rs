@@ -58,6 +58,12 @@ impl<P: Poly> PltEvaluator<P> for PolyPltEvaluator {
     }
 }
 
+impl Default for PolyPltEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolyPltEvaluator {
     pub fn new() -> Self {
         Self {}

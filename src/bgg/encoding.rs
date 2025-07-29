@@ -209,8 +209,10 @@ where
         for (key, _) in plt.f.iter() {
             info!("  Key: {:?}", key.to_const_int());
         }
-        let (k, y_k) =
-            plt.f.get(z).expect(&format!("{:?} is not exist in public lookup f", z.to_const_int()));
+        let (k, y_k) = plt
+            .f
+            .get(z)
+            .unwrap_or_else(|| panic!("{:?} is not exist in public lookup f", z.to_const_int()));
         info!("Performing public lookup, k={}", k);
         let d = input.pubkey.matrix.row_size() - 1;
         let hash_key = &self.hash_key;
