@@ -171,12 +171,19 @@ impl Poly for DCRTPoly {
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn const_int(params: &Self::Params, int: usize) -> Self {
-        Self::poly_gen_from_const(params, BigUint::from(int).to_string())
+    /// from `BigUint` to `DCRTPoly` type and generate constant polynomial.
+    fn from_biguint_to_constant(params: &Self::Params, int: BigUint) -> Self {
+        Self::poly_gen_from_const(params, int.to_string())
+    }
+
+    /// from `usize` to `DCRTPoly` type and generate constant polynomial.
+    fn from_usize_to_constant(params: &Self::Params, int: usize) -> Self {
+        Self::poly_gen_from_const(params, int.to_string())
     }
 
     /// Encode `int` in little-endian bit order
-    fn from_const_int_lsb(params: &Self::Params, int: usize) -> Self {
+    /// `int` is limited as u64 or u32.
+    fn from_usize_to_lsb(params: &Self::Params, int: usize) -> Self {
         let n = params.ring_dimension() as usize;
         let q = params.modulus();
         let one = FinRingElem::one(&q);
@@ -463,8 +470,8 @@ mod tests {
 
         for _ in 0..10 {
             let value = rng.random_range(0..(2_i32.pow(params.ring_dimension() - 1) as usize));
-            let lsb_poly = DCRTPoly::from_const_int_lsb(&params, value);
-            let poly = DCRTPoly::const_int(&params, value);
+            let lsb_poly = DCRTPoly::from_usize_to_lsb(&params, value);
+            let poly = DCRTPoly::from_usize_to_constant(&params, value);
             let back = poly.to_const_int();
             let back_from_lsb = lsb_poly.to_const_int();
             assert_eq!(value, back);

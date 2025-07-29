@@ -210,8 +210,8 @@ fn setup_lsb_constant_binary_plt(t_n: usize, params: &DCRTPolyParams) -> PublicL
     for k in 0..t_n {
         let r_val: usize = rng.random_range(0..2 as usize);
         f.insert(
-            DCRTPoly::from_const_int_lsb(&params, k),
-            (k, DCRTPoly::const_int(&params, r_val)),
+            DCRTPoly::from_usize_to_lsb(&params, k),
+            (k, DCRTPoly::from_usize_to_constant(&params, r_val)),
         );
     }
 
@@ -224,8 +224,8 @@ pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly>
     for k in 0..t_n {
         let r_val: usize = t_n - k;
         f.insert(
-            DCRTPoly::from_const_int_lsb(&params, k),
-            (k, DCRTPoly::from_const_int_lsb(&params, r_val)),
+            DCRTPoly::from_usize_to_lsb(&params, k),
+            (k, DCRTPoly::from_usize_to_lsb(&params, r_val)),
         );
     }
 
@@ -238,7 +238,10 @@ pub fn setup_constant_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRT
     let mut rng = rng();
     for k in 0..t_n {
         let r_val: usize = rng.random_range(0..t_n as usize);
-        f.insert(DCRTPoly::const_int(&params, k), (k, DCRTPoly::const_int(&params, r_val)));
+        f.insert(
+            DCRTPoly::from_usize_to_constant(&params, k),
+            (k, DCRTPoly::from_usize_to_constant(&params, r_val)),
+        );
     }
 
     let plt = PublicLut::<DCRTPoly>::new(f);
