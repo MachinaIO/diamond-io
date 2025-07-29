@@ -1,6 +1,6 @@
 use crate::{
     poly::{Poly, PolyMatrix},
-    utils::{block_size, debug_mem, log_mem},
+    utils::{block_size, log_mem},
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -9,7 +9,6 @@ use std::{
     time::Instant,
 };
 use tokio::task::JoinHandle;
-use tracing::info;
 
 #[derive(Debug)]
 pub struct SerializedMatrix {
@@ -54,12 +53,9 @@ where
 {
     let start = Instant::now();
     let block_size_val = block_size();
-    debug_mem(format!("CPU preprocessing started: {id}"));
-
     let (nrow, ncol) = matrix.size();
     let row_range = 0..nrow;
     let col_range = 0..ncol;
-
     let entries = matrix.block_entries(row_range.clone(), col_range.clone());
     let entries_bytes: Vec<Vec<Vec<u8>>> = entries
         .par_iter()
@@ -67,16 +63,12 @@ where
         .collect();
     let data = bincode::encode_to_vec(&entries_bytes, bincode::config::standard())
         .expect("Failed to serialize matrix");
-
     let filename = format!(
         "{}_{}_{}.{}_{}.{}.matrix",
         id, block_size_val, row_range.start, row_range.end, col_range.start, col_range.end
     );
-
     let elapsed = start.elapsed();
-    info!("Serialized matrix {} len {} bytes in {elapsed:?}", id, data.len());
-    log_mem(format!("CPU preprocessing completed: {id} ({} bytes)", data.len()));
-
+    log_mem(format!("Serialized matrix {} len {} bytes in {elapsed:?}", id, data.len()));
     SerializedMatrix { id: id.to_string(), filename, data }
 }
 
@@ -89,9 +81,6 @@ where
     let id = id.to_owned();
 
     let serialized_matrix = preprocess_matrix_for_storage(matrix, &id);
-    log_mem(format!("Matrix {id} dropped after preprocessing"));
-
-    // Spawn async I/O task - non-blocking
     let write_handle = tokio::spawn(async move {
         let path = dir.join(&serialized_matrix.filename);
 

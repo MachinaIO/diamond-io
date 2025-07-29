@@ -224,51 +224,67 @@ where
         store_and_drop_matrix(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
         let u_nums_level = &u_nums[level - 1];
-        let results: Vec<_> = (0..level_size).into_par_iter().map(|num| {
-            #[cfg(feature = "bgm")]
-            {
-                player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
-            }
+        // Compute each levels in parallel
+        let k_preimages: Vec<_> = (0..level_size)
+            .into_par_iter()
+            .map(|num| {
+                #[cfg(feature = "bgm")]
+                {
+                    player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
+                }
 
-            let s_i_bar = sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
-            let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
+                let s_i_bar = sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
+                let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
-            log_mem(format!(
-                "Computed S ({},{}) (d+1)x(d+1)",
-                s_i_num.row_size(),
-                s_i_num.col_size()
-            ));
-            let u = &u_nums_level[num];
-            log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
-            let u_tensor_s = u.tensor(&s_i_num);
-            let k_target_error = sampler_uniform.sample_uniform(
-                &params,
-                (1 + packed_input_size) * (d + 1),
-                m_b,
-                DistType::GaussDist { sigma: obf_params.p_sigma },
-            );
-            log_mem(format!(
-                "Computed U ⊗ S ({},{})",
-                u_tensor_s.row_size(),
-                u_tensor_s.col_size()
-            ));
-            let k_target = (u_tensor_s * &b_star_level) + k_target_error;
-            let k_preimage_num =
-                sampler_trapdoor.preimage(&params, &b_star_trapdoor_cur, &b_star_cur, &k_target);
-            log_mem(format!(
-                "Computed k_preimage_num ({},{})",
-                k_preimage_num.row_size(),
-                k_preimage_num.col_size()
-            ));
-            
-            (num, s_i_num, k_preimage_num)
-        }).collect();
+                log_mem(format!(
+                    "Computed S ({},{}) (d+1)x(d+1)",
+                    s_i_num.row_size(),
+                    s_i_num.col_size()
+                ));
+                let u = &u_nums_level[num];
+                log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
+                let u_tensor_s = u.tensor(&s_i_num);
+                let k_target_error = sampler_uniform.sample_uniform(
+                    &params,
+                    (1 + packed_input_size) * (d + 1),
+                    m_b,
+                    DistType::GaussDist { sigma: obf_params.p_sigma },
+                );
+                log_mem(format!(
+                    "Computed U ⊗ S ({},{})",
+                    u_tensor_s.row_size(),
+                    u_tensor_s.col_size()
+                ));
+                let k_target = (u_tensor_s * &b_star_level) + k_target_error;
+                let k_preimage_num = sampler_trapdoor.preimage(
+                    &params,
+                    &b_star_trapdoor_cur,
+                    &b_star_cur,
+                    &k_target,
+                );
+                log_mem(format!(
+                    "Computed k_preimage_num ({},{})",
+                    k_preimage_num.row_size(),
+                    k_preimage_num.col_size()
+                ));
 
-        // Store matrices sequentially to avoid Tokio context issues
-        for (num, s_i_num, k_preimage_num) in results {
+                #[cfg(feature = "debug")]
+                {
+                    (num, Some(s_i_num), k_preimage_num)
+                }
+                #[cfg(not(feature = "debug"))]
+                {
+                    (num, None, k_preimage_num)
+                }
+            })
+            .collect();
+
+        // Store matrices sequentially to avoid Tokio context issues.
+        for (num, s_i_num_opt, k_preimage_num) in k_preimages {
             #[cfg(feature = "debug")]
-            store_and_drop_matrix(s_i_num, &dir_path, &format!("s_{level}_{num}"));
-            
+            if let Some(s_i_num) = s_i_num_opt {
+                store_and_drop_matrix(s_i_num, &dir_path, &format!("s_{level}_{num}"));
+            }
             store_and_drop_matrix(k_preimage_num, &dir_path, &format!("k_preimage_{level}_{num}"));
         }
 

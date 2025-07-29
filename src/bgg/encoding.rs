@@ -205,6 +205,10 @@ where
     ) -> BggEncoding<M> {
         let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
         info!("public lookup length is {}", plt.f.len());
+        info!("All keys in plt.f:");
+        for (key, _) in plt.f.iter() {
+            info!("  Key: {:?}", key.to_const_int());
+        }
         let (k, y_k) =
             plt.f.get(z).expect(&format!("{:?} is not exist in public lookup f", z.to_const_int()));
         info!("Performing public lookup, k={}", k);
@@ -266,6 +270,7 @@ mod tests {
             sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
             Poly, PolyMatrix,
         },
+        storage::{init_storage_system, wait_for_all_writes},
         test_utils::setup_constant_plt,
         utils::init_tracing,
     };
@@ -623,11 +628,12 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "file cannot be read"]
     async fn test_encoding_plt_for_dio() {
         init_tracing();
+        init_storage_system();
 
-        let tmp_dir = tempdir().unwrap().path().to_path_buf();
+        let tmp_dir = tempdir().unwrap();
+        let tmp_dir_path = tmp_dir.path().to_path_buf();
 
         /* Setup */
         let params = DCRTPolyParams::default();
@@ -656,7 +662,6 @@ mod tests {
         let tag: u64 = rand::random();
         let tag_bytes = tag.to_le_bytes();
         let plt = setup_constant_plt(8, &params);
-        // let a_lt = plt.clone().a_lt;
 
         // Create a simple circuit with an plt operation
         let mut circuit = PolyCircuit::new();
@@ -668,7 +673,7 @@ mod tests {
         }
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true, false];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         assert_eq!(pubkeys.len(), 2);
         let pubkey_plt_evaluator = BggPubKeyPltEvaluator::<
@@ -681,12 +686,14 @@ mod tests {
             trapdoor_sampler,
             Arc::new(b_l_plus_one),
             Arc::new(b_l_plus_one_trapdoor),
-            tmp_dir.clone(),
+            tmp_dir_path.clone(),
         );
 
         let expected_pubkey_output =
             &circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], Some(pubkey_plt_evaluator))
                 [0];
+
+        wait_for_all_writes().await.unwrap();
 
         // Create secret and plaintexts
         let k = 2;
@@ -704,7 +711,7 @@ mod tests {
         let bgg_encoding_plt_evaluator = BggEncodingPltEvaluator::<
             DCRTPolyMatrix,
             DCRTPolyHashSampler<Keccak256>,
-        >::new(key, tmp_dir.clone(), p);
+        >::new(key, tmp_dir_path.clone(), p);
         let result = circuit.eval(&params, &enc_one, &[enc1], Some(bgg_encoding_plt_evaluator));
         let (_, y_k) = plt.f[&plaintexts[0]].clone();
         let expected_encodings = bgg_encoding_sampler.sample(
