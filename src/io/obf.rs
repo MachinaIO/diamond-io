@@ -24,10 +24,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{Rng, RngCore};
-use rayon::{
-    iter::{IntoParallelIterator, ParallelIterator},
-    slice::ParallelSlice,
-};
+use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};
 
 pub async fn obfuscate<M, SU, SH, ST, R, P>(
@@ -226,58 +223,69 @@ where
         store_and_drop_matrix(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
         let u_nums_level = &u_nums[level - 1];
-        // Compute each levels in parallel
+        // Compute each levels in parallel with batching of 4
+        let batch_size = 4;
         let k_preimages: Vec<_> = (0..level_size)
-            .into_par_iter()
-            .map(|num| {
-                #[cfg(feature = "bgm")]
-                {
-                    player.play_music(format!("bgm/obf_bgm{}.mp3", (2 * level + num) % 3 + 2));
-                }
+            .collect::<Vec<_>>()
+            .par_chunks(batch_size)
+            .flat_map(|batch| {
+                batch
+                    .iter()
+                    .map(|&num| {
+                        #[cfg(feature = "bgm")]
+                        {
+                            player.play_music(format!(
+                                "bgm/obf_bgm{}.mp3",
+                                (2 * level + num) % 3 + 2
+                            ));
+                        }
 
-                let s_i_bar = sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
-                let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
+                        let s_i_bar =
+                            sampler_uniform.sample_uniform(&params, d, d, DistType::BitDist);
+                        let s_i_num = s_i_bar.concat_diag(&[&one_identity]);
 
-                log_mem(format!(
-                    "Computed S ({},{}) (d+1)x(d+1)",
-                    s_i_num.row_size(),
-                    s_i_num.col_size()
-                ));
-                let u = &u_nums_level[num];
-                log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
-                let u_tensor_s = u.tensor(&s_i_num);
-                let k_target_error = sampler_uniform.sample_uniform(
-                    &params,
-                    (1 + packed_input_size) * (d + 1),
-                    m_b,
-                    DistType::GaussDist { sigma: obf_params.p_sigma },
-                );
-                log_mem(format!(
-                    "Computed U ⊗ S ({},{})",
-                    u_tensor_s.row_size(),
-                    u_tensor_s.col_size()
-                ));
-                let k_target = (u_tensor_s * &b_star_level) + k_target_error;
-                let k_preimage_num = sampler_trapdoor.preimage(
-                    &params,
-                    &b_star_trapdoor_cur,
-                    &b_star_cur,
-                    &k_target,
-                );
-                log_mem(format!(
-                    "Computed k_preimage_num ({},{})",
-                    k_preimage_num.row_size(),
-                    k_preimage_num.col_size()
-                ));
+                        log_mem(format!(
+                            "Computed S ({},{}) (d+1)x(d+1)",
+                            s_i_num.row_size(),
+                            s_i_num.col_size()
+                        ));
+                        let u = &u_nums_level[num];
+                        log_mem(format!("Get U ({},{}) L'xL'", u.row_size(), u.col_size()));
+                        let u_tensor_s = u.tensor(&s_i_num);
+                        let k_target_error = sampler_uniform.sample_uniform(
+                            &params,
+                            (1 + packed_input_size) * (d + 1),
+                            m_b,
+                            DistType::GaussDist { sigma: obf_params.p_sigma },
+                        );
+                        log_mem(format!(
+                            "Computed U ⊗ S ({},{})",
+                            u_tensor_s.row_size(),
+                            u_tensor_s.col_size()
+                        ));
+                        let k_target = (u_tensor_s * &b_star_level) + k_target_error;
+                        let k_preimage_num = sampler_trapdoor.preimage(
+                            &params,
+                            &b_star_trapdoor_cur,
+                            &b_star_cur,
+                            &k_target,
+                        );
+                        log_mem(format!(
+                            "Computed k_preimage_num ({},{})",
+                            k_preimage_num.row_size(),
+                            k_preimage_num.col_size()
+                        ));
 
-                #[cfg(feature = "debug")]
-                {
-                    (num, Some(s_i_num), k_preimage_num)
-                }
-                #[cfg(not(feature = "debug"))]
-                {
-                    (num, None::<M>, k_preimage_num)
-                }
+                        #[cfg(feature = "debug")]
+                        {
+                            (num, Some(s_i_num), k_preimage_num)
+                        }
+                        #[cfg(not(feature = "debug"))]
+                        {
+                            (num, None::<M>, k_preimage_num)
+                        }
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
 
