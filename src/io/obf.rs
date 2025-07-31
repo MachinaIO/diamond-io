@@ -223,8 +223,9 @@ where
         store_and_drop_matrix(b_star_level.clone(), &dir_path, &format!("b_star_{level}"));
 
         let u_nums_level = &u_nums[level - 1];
-        // Compute each levels in parallel with batching of 4
-        let batch_size = 4;
+        // Compute each levels in parallel with batching
+        let batch_size =
+            std::env::var("K_BATCH_SIZE").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(4);
         let k_preimages: Vec<_> = (0..level_size)
             .collect::<Vec<_>>()
             .par_chunks(batch_size)
