@@ -45,9 +45,9 @@ impl<P: Poly> BigUintPolyContext<P> {
         let mut f = HashMap::with_capacity(nrows);
         let mut g = HashMap::with_capacity(nrows);
         for k in 0..nrows {
-            let input = P::const_int(params, k);
-            let output_f = P::const_int(params, k % base);
-            let output_g = P::const_int(params, k / base);
+            let input = P::from_usize_to_constant(params, k);
+            let output_f = P::from_usize_to_constant(params, k % base);
+            let output_g = P::from_usize_to_constant(params, k / base);
             f.insert(input.clone(), (k, output_f));
             g.insert(input, (k, output_g));
         }
@@ -265,7 +265,7 @@ mod tests {
 
         for _ in 0..limb_len {
             let limb_value = remaining_value % base;
-            limbs.push(DCRTPoly::const_int(&params, limb_value as usize));
+            limbs.push(DCRTPoly::from_usize_to_constant(&params, limb_value as usize));
             remaining_value /= base;
         }
 
@@ -626,8 +626,8 @@ mod tests {
 
         let a = create_test_biguint_from_value(ctx.clone(), &params, 100);
         let b_limbs = vec![
-            DCRTPoly::const_int(&params, 50 % (1u32 << ctx.limb_bit_size) as usize),
-            DCRTPoly::const_int(&params, 50 / (1u32 << ctx.limb_bit_size) as usize),
+            DCRTPoly::from_usize_to_constant(&params, 50 % (1u32 << ctx.limb_bit_size) as usize),
+            DCRTPoly::from_usize_to_constant(&params, 50 / (1u32 << ctx.limb_bit_size) as usize),
         ];
         let plt_evaluator = PolyPltEvaluator::new();
         let eval_result = circuit.eval(
@@ -669,8 +669,8 @@ mod tests {
 
         let a = create_test_biguint_from_value(ctx.clone(), &params, 100);
         let b_limbs = vec![
-            DCRTPoly::const_int(&params, 50 % (1u32 << ctx.limb_bit_size) as usize),
-            DCRTPoly::const_int(&params, 50 / (1u32 << ctx.limb_bit_size) as usize),
+            DCRTPoly::from_usize_to_constant(&params, 50 % (1u32 << ctx.limb_bit_size) as usize),
+            DCRTPoly::from_usize_to_constant(&params, 50 / (1u32 << ctx.limb_bit_size) as usize),
         ];
         let plt_evaluator = PolyPltEvaluator::new();
         let eval_result = circuit.eval(
@@ -746,7 +746,7 @@ mod tests {
 
         let a = create_test_biguint_from_value(ctx.clone(), &params, 123);
         let b = create_test_biguint_from_value(ctx.clone(), &params, 456);
-        let selector_value = vec![DCRTPoly::const_int(&params, 1)]; // selector = 1, should return 'a'
+        let selector_value = vec![DCRTPoly::from_usize_to_constant(&params, 1)]; // selector = 1, should return 'a'
         let plt_evaluator = PolyPltEvaluator::new();
         let eval_result = circuit.eval(
             &params,
@@ -788,7 +788,7 @@ mod tests {
 
         let a = create_test_biguint_from_value(ctx.clone(), &params, 123);
         let b = create_test_biguint_from_value(ctx.clone(), &params, 456);
-        let selector_value = vec![DCRTPoly::const_int(&params, 0)]; // selector = 0, should return 'b'
+        let selector_value = vec![DCRTPoly::from_usize_to_constant(&params, 0)]; // selector = 0, should return 'b'
         let plt_evaluator = PolyPltEvaluator::new();
         let eval_result = circuit.eval(
             &params,

@@ -502,30 +502,6 @@ impl<T: MatrixElem> Neg for BaseMatrix<T> {
     }
 }
 
-#[cfg(feature = "disk")]
-fn map_file(file: &File, offset: usize, len: usize) -> Mmap {
-    unsafe {
-        MmapOptions::new()
-            .offset(offset as u64)
-            .len(len)
-            .populate()
-            .map(file)
-            .expect("failed to map file")
-    }
-}
-
-#[cfg(feature = "disk")]
-unsafe fn map_file_mut(file: &File, offset: usize, len: usize) -> MmapMut {
-    unsafe {
-        MmapOptions::new()
-            .offset(offset as u64)
-            .len(len)
-            .populate()
-            .map_mut(file)
-            .expect("failed to map file")
-    }
-}
-
 pub fn block_offsets(rows: Range<usize>, cols: Range<usize>) -> (Vec<usize>, Vec<usize>) {
     let block_size = block_size();
     block_offsets_distinct_block_sizes(rows, cols, block_size, block_size)

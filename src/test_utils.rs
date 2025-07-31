@@ -4,10 +4,10 @@ use crate::{
     poly::{
         dcrt::{
             DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler, FinRingElem,
+            DCRTPolyUniformSampler,
         },
         sampler::{DistType, PolyUniformSampler},
-        Poly, PolyElem, PolyParams,
+        Poly, PolyParams,
     },
     utils::{calculate_directory_size, init_tracing, log_mem},
 };
@@ -86,7 +86,8 @@ pub async fn test_io_common(
         _,
         _,
     >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
-    .await;
+    .await
+    .expect("obfuscation fail");
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
 
@@ -105,9 +106,7 @@ pub async fn test_io_common(
     let eval_time = start_time.elapsed();
     info!("Time for evaluation: {:?}", eval_time);
     info!("Total time: {:?}", obfuscation_time + eval_time);
-
-    let input_poly =
-        DCRTPoly::from_const(&params, &FinRingElem::constant(&params.modulus(), bool_in as u64));
+    let input_poly = DCRTPoly::from_usize_to_constant(&params, bool_in as usize);
     assert_eq!(output, (hardcoded_key * input_poly).to_bool_vec());
 }
 
@@ -180,7 +179,8 @@ pub async fn test_io_plt(
         _,
         _,
     >(obf_params.clone(), hardcoded_key.clone(), &mut rng, &dir_path)
-    .await;
+    .await
+    .expect("obfuscation fail");
     let obfuscation_time = start_time.elapsed();
     info!("Time to obfuscate: {:?}", obfuscation_time);
 
@@ -210,13 +210,12 @@ fn setup_lsb_constant_binary_plt(t_n: usize, params: &DCRTPolyParams) -> PublicL
     for k in 0..t_n {
         let r_val: usize = rng.random_range(0..2 as usize);
         f.insert(
-            DCRTPoly::from_const_int_lsb(&params, k),
-            (k, DCRTPoly::const_int(&params, r_val)),
+            DCRTPoly::from_usize_to_lsb(&params, k),
+            (k, DCRTPoly::from_usize_to_constant(&params, r_val)),
         );
     }
 
-    let plt = PublicLut::<DCRTPoly>::new(f);
-    plt
+    PublicLut::<DCRTPoly>::new(f)
 }
 
 pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly> {
@@ -224,13 +223,12 @@ pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly>
     for k in 0..t_n {
         let r_val: usize = t_n - k;
         f.insert(
-            DCRTPoly::from_const_int_lsb(&params, k),
-            (k, DCRTPoly::from_const_int_lsb(&params, r_val)),
+            DCRTPoly::from_usize_to_lsb(&params, k),
+            (k, DCRTPoly::from_usize_to_lsb(&params, r_val)),
         );
     }
 
-    let plt = PublicLut::<DCRTPoly>::new(f);
-    plt
+    PublicLut::<DCRTPoly>::new(f)
 }
 
 pub fn setup_constant_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly> {
@@ -238,9 +236,11 @@ pub fn setup_constant_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRT
     let mut rng = rng();
     for k in 0..t_n {
         let r_val: usize = rng.random_range(0..t_n as usize);
-        f.insert(DCRTPoly::const_int(&params, k), (k, DCRTPoly::const_int(&params, r_val)));
+        f.insert(
+            DCRTPoly::from_usize_to_constant(&params, k),
+            (k, DCRTPoly::from_usize_to_constant(&params, r_val)),
+        );
     }
 
-    let plt = PublicLut::<DCRTPoly>::new(f);
-    plt
+    PublicLut::<DCRTPoly>::new(f)
 }

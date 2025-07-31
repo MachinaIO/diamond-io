@@ -6,7 +6,6 @@ use std::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     path::Path,
 };
-use tokio;
 
 use super::element::PolyElem;
 
@@ -54,7 +53,6 @@ pub trait Poly:
     type Params: PolyParams<Modulus = <Self::Elem as PolyElem>::Modulus>;
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self;
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self;
-    fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self;
     fn from_decomposed(params: &Self::Params, decomposed: &[Self]) -> Self;
     fn from_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
         let log_q_bytes = params.modulus_bits().div_ceil(8);
@@ -86,9 +84,11 @@ pub trait Poly:
     fn const_zero(params: &Self::Params) -> Self;
     fn const_one(params: &Self::Params) -> Self;
     fn const_minus_one(params: &Self::Params) -> Self;
-    fn const_power_of_base(params: &Self::Params, k: usize) -> Self;
-    fn const_int(params: &Self::Params, int: usize) -> Self;
-    fn from_const_int_lsb(params: &Self::Params, int: usize) -> Self;
+    fn from_power_of_base_to_constant(params: &Self::Params, k: usize) -> Self;
+    fn from_elem_to_constant(params: &Self::Params, constant: &Self::Elem) -> Self;
+    fn from_biguint_to_constant(params: &Self::Params, int: BigUint) -> Self;
+    fn from_usize_to_constant(params: &Self::Params, int: usize) -> Self;
+    fn from_usize_to_lsb(params: &Self::Params, int: usize) -> Self;
     fn const_rotate_poly(params: &Self::Params, shift: usize) -> Self {
         let zero = Self::const_zero(params);
         let mut coeffs = zero.coeffs();
@@ -115,34 +115,26 @@ pub trait Poly:
     ) -> Self;
 
     /// Reads a polynomial with id from files under the given directory.
+    /// Uses synchronous `std::fs::read` since polynomial files are typically ~0.4MB,
+    /// making async overhead unnecessary.
     fn read_from_file<P: AsRef<Path> + Send + Sync>(
         params: &Self::Params,
         dir_path: P,
         id: &str,
     ) -> Self {
-        let mut path = dir_path.as_ref().to_path_buf();
-        path.push(format!("{id}.poly"));
-
+        let path = dir_path.as_ref().join(format!("{id}.poly"));
         let bytes = std::fs::read(&path)
             .unwrap_or_else(|_| panic!("Failed to read polynomial file {path:?}"));
-
         Self::from_compact_bytes(params, &bytes)
     }
 
     /// Writes a polynomial with id to files under the given directory.
-    fn write_to_file<P: AsRef<Path> + Send + Sync>(
-        &self,
-        dir_path: P,
-        id: &str,
-    ) -> impl std::future::Future<Output = ()> + Send {
-        let mut path: std::path::PathBuf = dir_path.as_ref().to_path_buf();
-        path.push(format!("{id}.poly"));
-
+    /// It's using `std::fs::write` because expected polynomial size is in secure parameter case
+    /// ~0.4MB size.
+    fn write_to_file<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
+        let path = dir_path.as_ref().join(format!("{id}.poly"));
         let bytes = self.to_compact_bytes();
-        async move {
-            tokio::fs::write(&path, &bytes)
-                .await
-                .unwrap_or_else(|_| panic!("Failed to write polynomial file {path:?}"));
-        }
+        std::fs::write(&path, &bytes)
+            .unwrap_or_else(|_| panic!("Failed to write polynomial file {path:?}"));
     }
 }

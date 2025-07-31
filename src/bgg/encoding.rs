@@ -37,24 +37,6 @@ impl<M: PolyMatrix> BggEncoding<M> {
         self.vector.concat_columns(&others.par_iter().map(|x| &x.vector).collect::<Vec<_>>()[..])
     }
 
-    /// Writes the encoding with id to files under the given directory.
-    pub async fn write_to_files<P: AsRef<std::path::Path> + Send + Sync>(
-        &self,
-        dir_path: P,
-        id: &str,
-    ) {
-        // Write the vector
-        self.vector.write_to_files(&dir_path, &format!("{id}_vector")).await;
-
-        // Write the pubkey
-        self.pubkey.write_to_files(&dir_path, &format!("{id}_pubkey")).await;
-
-        // Write the plaintext component if it exists
-        if let Some(plaintext) = &self.plaintext {
-            plaintext.write_to_file(&dir_path, &format!("{id}_plaintext")).await;
-        }
-    }
-
     /// Reads an encoding with id from files under the given directory.
     pub fn read_from_files<P: AsRef<std::path::Path> + Send + Sync>(
         params: &<M::P as Poly>::Params,
@@ -220,15 +202,16 @@ where
     ) -> BggEncoding<M> {
         let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
         info!("public lookup length is {}", plt.f.len());
-        let (k, y_k) = plt.f.get(&z).expect("no z exist for given f");
+        let (k, y_k) = plt
+            .f
+            .get(z)
+            .unwrap_or_else(|| panic!("{:?} is not exist in public lookup f", z.to_const_int()));
         info!("Performing public lookup, k={}", k);
         let d = input.pubkey.matrix.row_size() - 1;
         let hash_key = &self.hash_key;
         let a_lt = plt.derive_a_lt::<M, SH>(params, d, *hash_key, id);
         let pubkey = BggPublicKey::new(a_lt, true);
-
         let m = (d + 1) * params.modulus_digits();
-
         let r_k = timed_read(
             &format!("R_{id}_{k}"),
             || M::read_from_files(params, d + 1, m, &self.dir_path, &format!("R_{id}_{k}")),
@@ -272,20 +255,19 @@ mod tests {
             public_key::BggPubKeyPltEvaluator,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
             utils::random_bgg_encodings,
-            BggEncoding,
         },
         poly::{
             dcrt::{
-                matrix::base::BaseMatrix,
                 params::DCRTPolyParams,
                 sampler::{hash::DCRTPolyHashSampler, uniform::DCRTPolyUniformSampler},
                 DCRTPoly, DCRTPolyMatrix, DCRTPolyTrapdoorSampler,
             },
             sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
-            Poly, PolyMatrix, PolyParams,
+            Poly, PolyMatrix,
         },
+        storage::{init_storage_system, wait_for_all_writes},
         test_utils::setup_constant_plt,
-        utils::{create_bit_random_poly, create_random_poly, init_tracing},
+        utils::init_tracing,
     };
     use keccak_asm::Keccak256;
     use num_bigint::BigUint;
@@ -685,11 +667,13 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "file cannot be read"]
+    #[ignore]
     async fn test_encoding_plt_for_dio() {
         init_tracing();
+        init_storage_system();
 
-        let tmp_dir = tempdir().unwrap().path().to_path_buf();
+        let tmp_dir = tempdir().unwrap();
+        let tmp_dir_path = tmp_dir.path().to_path_buf();
 
         /* Setup */
         let params = DCRTPolyParams::default();
@@ -718,7 +702,6 @@ mod tests {
         let tag: u64 = rand::random();
         let tag_bytes = tag.to_le_bytes();
         let plt = setup_constant_plt(8, &params);
-        // let a_lt = plt.clone().a_lt;
 
         // Create a simple circuit with an plt operation
         let mut circuit = PolyCircuit::new();
@@ -730,7 +713,7 @@ mod tests {
         }
 
         // Create random public keys
-        let reveal_plaintexts = [true; 2];
+        let reveal_plaintexts = [true, false];
         let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
         assert_eq!(pubkeys.len(), 2);
         let pubkey_plt_evaluator = BggPubKeyPltEvaluator::<
@@ -743,16 +726,18 @@ mod tests {
             trapdoor_sampler,
             Arc::new(b_l_plus_one),
             Arc::new(b_l_plus_one_trapdoor),
-            tmp_dir.clone(),
+            tmp_dir_path.clone(),
         );
 
         let expected_pubkey_output =
             &circuit.eval(&params, &pubkeys[0], &[pubkeys[1].clone()], Some(pubkey_plt_evaluator))
                 [0];
 
+        wait_for_all_writes().await.unwrap();
+
         // Create secret and plaintexts
         let k = 2;
-        let plaintexts = vec![DCRTPoly::const_int(&params, k)];
+        let plaintexts = vec![DCRTPoly::from_usize_to_constant(&params, k)];
 
         // Create encoding sampler and encodings
         let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
@@ -766,7 +751,7 @@ mod tests {
         let bgg_encoding_plt_evaluator = BggEncodingPltEvaluator::<
             DCRTPolyMatrix,
             DCRTPolyHashSampler<Keccak256>,
-        >::new(key, tmp_dir.clone(), p);
+        >::new(key, tmp_dir_path.clone(), p);
         let result = circuit.eval(&params, &enc_one, &[enc1], Some(bgg_encoding_plt_evaluator));
         let (_, y_k) = plt.f[&plaintexts[0]].clone();
         let expected_encodings = bgg_encoding_sampler.sample(
@@ -781,87 +766,5 @@ mod tests {
         assert_eq!(result[0].vector, expected_enc1.vector);
         assert_eq!(result[0].pubkey.matrix, expected_enc1.pubkey.matrix);
         assert_eq!(*result[0].plaintext.as_ref().unwrap(), y_k.clone());
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_encoding_write_read() {
-        // Create parameters for testing
-        let params = DCRTPolyParams::default();
-
-        // Create samplers
-        let key: [u8; 32] = rand::random();
-        // let hash_sampler = Arc::new(DCRTPolyHashSampler::<Keccak256>::new(key));
-        let d = 3;
-        let d1 = d + 1;
-        let bgg_pubkey_sampler =
-            BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(key, d);
-        let uniform_sampler = DCRTPolyUniformSampler::new();
-        let log_base_q = params.modulus_digits();
-
-        // Generate random tag for sampling
-        let tag: u64 = rand::random();
-        let tag_bytes = tag.to_le_bytes();
-
-        // Create random public keys with different reveal_plaintext flags
-        let mut rng = rand::rng();
-        let reveal_plaintexts = [
-            rng.random::<bool>(),
-            rng.random::<bool>(),
-            rng.random::<bool>(),
-            rng.random::<bool>(),
-            rng.random::<bool>(),
-        ];
-        let pubkeys = bgg_pubkey_sampler.sample(&params, &tag_bytes, &reveal_plaintexts);
-
-        // Create secret and plaintexts
-        let secrets = vec![create_bit_random_poly(&params); d];
-        let plaintexts = vec![
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-            create_random_poly(&params),
-        ];
-
-        // Create encoding sampler and encodings
-        let bgg_encoding_sampler = BGGEncodingSampler::new(&params, &secrets, uniform_sampler, 0.0);
-        let encodings = bgg_encoding_sampler.sample(&params, &pubkeys, &plaintexts);
-
-        // Create a temporary directory for testing
-        let test_dir = Path::new("test_encoding_write_read");
-        if !test_dir.exists() {
-            fs::create_dir(test_dir).unwrap();
-        } else {
-            // Clean it first to ensure no old files interfere
-            fs::remove_dir_all(test_dir).unwrap();
-            fs::create_dir(test_dir).unwrap();
-        }
-
-        for (idx, encoding) in encodings.iter().enumerate() {
-            // Write the encoding to files
-            let id = format!("test_encoding_{}", idx);
-            encoding.write_to_files(test_dir, &id).await;
-
-            // Read the encoding from files and verify it matches the original
-            if idx == 0 || (idx > 0 && reveal_plaintexts[idx - 1]) {
-                // first encoding (for one) is always true
-                let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
-                    BggEncoding::read_from_files(&params, d1, log_base_q, test_dir, &id, true);
-                assert_eq!(read_enc.vector, encoding.vector);
-                assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
-                assert_eq!(
-                    read_enc.plaintext.as_ref().unwrap(),
-                    encoding.plaintext.as_ref().unwrap()
-                );
-            } else {
-                let read_enc: BggEncoding<BaseMatrix<DCRTPoly>> =
-                    BggEncoding::read_from_files(&params, d1, log_base_q, test_dir, &id, false);
-                assert_eq!(read_enc.vector, encoding.vector);
-                assert_eq!(read_enc.pubkey.matrix, encoding.pubkey.matrix);
-                assert!(read_enc.plaintext.is_none());
-            }
-        }
-        // Clean up the test directory
-        std::fs::remove_dir_all(test_dir).unwrap();
     }
 }

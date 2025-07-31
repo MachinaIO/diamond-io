@@ -2,16 +2,15 @@
 
 use crate::{
     bgg::circuit::GateId,
-    io::obf::store_and_drop_matrix,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
+    storage::store_and_drop_matrix,
+    utils::log_mem,
 };
 use rayon::prelude::*;
 use std::{collections::HashMap, path::Path};
-use tokio::task::JoinHandle;
-use tracing::info;
 
 /// Public Lookup Table
 #[derive(Debug, Clone, Default)]
@@ -46,11 +45,11 @@ impl<P: Poly> PublicLut<P> {
         M: PolyMatrix<P = P>,
         SH: PolyHashSampler<[u8; 32], M = M>,
     {
-        info!("Deriving A_LT for id: {id}");
+        log_mem(format!("Deriving A_LT for id: {id}"));
         let m = (d + 1) * params.modulus_digits();
         let hash_sampler = SH::new();
         let tag = format!("A_LT_{id}");
-        info!("Tag for A_LT: {tag}");
+        log_mem(format!("Tag for A_LT: {tag}"));
         hash_sampler.sample_hash(
             params,
             hash_key,
@@ -72,39 +71,36 @@ impl<P: Poly> PublicLut<P> {
         a_lt: &M,
         id: GateId,
         dir_path: &Path,
-        handles_out: &mut Vec<JoinHandle<()>>,
     ) where
         M: PolyMatrix<P = P> + Send + 'static,
         SU: PolyUniformSampler<M = M> + Send + Sync,
         ST: PolyTrapdoorSampler<M = M> + Send + Sync,
     {
-        info!("Preimage for id: {id}");
         let d = pub_matrix.row_size() - 1;
         let m = (d + 1) * params.modulus_digits();
         let uniform_sampler = SU::new();
         let gadget = M::gadget_matrix(params, d + 1);
-        let matrices = self
-            .f
-            .iter()
-            .collect::<Vec<_>>()
-            .into_par_iter()
-            .map(|(x_k, (k, y_k))| {
-                info!("Processing k: {k}");
-                let r_k = uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
-                info!("Sampled r_k ({}, {})", r_k.row_size(), r_k.col_size());
-                let r_k_decomposed = r_k.decompose();
-                let target_k = (r_k.clone() * x_k) + a_lt -
-                    &(gadget.clone() * y_k) -
-                    a_z.clone() * r_k_decomposed;
-                info!("target_k ({}, {})", target_k.row_size(), target_k.col_size());
-                (k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
+        let items: Vec<_> = self.f.iter().collect();
+        let matrices = items
+            .par_chunks(8)
+            .flat_map(|batch| {
+                batch
+                    .iter()
+                    .map(|(x_k, (k, y_k))| {
+                        let r_k =
+                            uniform_sampler.sample_uniform(params, d + 1, m, DistType::FinRingDist);
+                        let target_k = (r_k.clone() * (*x_k).clone()) + a_lt -
+                            &(gadget.clone() * (*y_k).clone()) -
+                            (a_z.clone() * r_k.decompose());
+                        (*k, r_k, trap_sampler.preimage(params, trapdoor, pub_matrix, &target_k))
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        info!("Preimage matrices computed for id: {id}");
-        // [TODO] Use a channel within the above iterator to bound the memory usage.
+        log_mem(format!("Preimage matrices computed for id: {id}"));
         for (k, r_k, l_k) in matrices.into_iter() {
-            handles_out.push(store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}")));
-            handles_out.push(store_and_drop_matrix(l_k, dir_path, &format!("L_{id}_{k}")));
+            store_and_drop_matrix(r_k, dir_path, &format!("R_{id}_{k}"));
+            store_and_drop_matrix(l_k, dir_path, &format!("L_{id}_{k}"));
         }
     }
 }

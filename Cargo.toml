@@ -42,6 +42,7 @@ rand_distr = "0.5.1"
 dashmap = "6.1.0"
 keccak-asm = { version = "0.1.4" }
 walkdir = "2"
+bincode = "2.0.1"
 
 [dev-dependencies]
 proptest = "1.0.0"

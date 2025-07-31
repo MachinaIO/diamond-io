@@ -162,7 +162,7 @@ async fn main() {
             let sampler_uniform = DCRTPolyUniformSampler::new();
             let mut rng = rand::rng();
             let hardcoded_key = sampler_uniform.sample_poly(&obf_params.params, &DistType::BitDist);
-            obfuscate::<
+            let _ = obfuscate::<
                 DCRTPolyMatrix,
                 DCRTPolyUniformSampler,
                 DCRTPolyHashSampler<Keccak256>,
@@ -230,8 +230,9 @@ async fn main() {
                 */
                 let half_q = FinRingElem::half_q(&obf_params.params.modulus());
                 for e in eval {
-                    let expected_output = (DCRTPoly::from_const(&obf_params.params, &half_q) * e)
-                        .extract_bits_with_threshold(&obf_params.params);
+                    let expected_output =
+                        (DCRTPoly::from_elem_to_constant(&obf_params.params, &half_q) * e)
+                            .extract_bits_with_threshold(&obf_params.params);
                     assert_eq!(output, expected_output);
                 }
             }

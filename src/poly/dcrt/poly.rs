@@ -2,8 +2,10 @@ use super::{element::FinRingElem, params::DCRTPolyParams};
 use crate::{
     impl_binop_with_refs, parallel_iter,
     poly::{element::PolyElem, Poly, PolyParams},
+    utils::chunk_size_for,
 };
 use num_bigint::BigUint;
+use num_traits::Zero;
 use openfhe::{
     cxx::UniquePtr,
     ffi::{self, DCRTPoly as DCRTPolyCxx},
@@ -14,7 +16,6 @@ use std::{
     fmt::Debug,
     hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -32,6 +33,7 @@ impl DCRTPoly {
         Self { ptr_poly: ptr_poly.into() }
     }
 
+    #[inline]
     pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
         &self.ptr_poly
     }
@@ -45,6 +47,7 @@ impl DCRTPoly {
         ))
     }
 
+    #[inline]
     fn poly_gen_from_const(params: &DCRTPolyParams, value: String) -> Self {
         DCRTPoly::new(ffi::DCRTPolyGenFromConst(
             params.ring_dimension(),
@@ -65,6 +68,7 @@ impl Poly for DCRTPoly {
     type Elem = FinRingElem;
     type Params = DCRTPolyParams;
 
+    #[inline]
     fn coeffs(&self) -> Vec<Self::Elem> {
         let poly_encoding = self.ptr_poly.GetCoefficientsBytes();
         let parsed_values = parse_coefficients_bytes(&poly_encoding);
@@ -73,69 +77,27 @@ impl Poly for DCRTPoly {
         parallel_iter!(coeffs).map(|s| FinRingElem::new(s, Arc::new(modulus.clone()))).collect()
     }
 
+    #[inline]
     fn from_coeffs(params: &Self::Params, coeffs: &[Self::Elem]) -> Self {
-        let mut coeffs_cxx = Vec::with_capacity(coeffs.len());
-        for coeff in coeffs {
-            debug_assert_eq!(coeff.modulus(), params.modulus().as_ref());
-            coeffs_cxx.push(coeff.value().to_string());
-        }
-        Self::poly_gen_from_vec(params, coeffs_cxx)
-    }
+        let new_coeffs = coeffs
+            .par_iter()
+            .map(|coeff| {
+                debug_assert_eq!(coeff.modulus(), params.modulus().as_ref());
+                coeff.value().to_string()
+            })
+            .collect::<Vec<String>>();
 
-    fn from_const(params: &Self::Params, constant: &Self::Elem) -> Self {
-        Self::poly_gen_from_const(params, constant.value().to_string())
+        Self::poly_gen_from_vec(params, new_coeffs)
     }
 
     fn from_decomposed(params: &DCRTPolyParams, decomposed: &[Self]) -> Self {
         let mut reconstructed = Self::const_zero(params);
         for (i, bit_poly) in decomposed.iter().enumerate() {
             let power_of_two = BigUint::from(2u32).pow(i as u32);
-            let const_poly_power_of_two =
-                Self::from_const(params, &FinRingElem::new(power_of_two, params.modulus()));
+            let const_poly_power_of_two = Self::from_biguint_to_constant(params, power_of_two);
             reconstructed += bit_poly * &const_poly_power_of_two;
         }
         reconstructed
-    }
-
-    /// Create a polynomial from a compact byte representation based on `to_compact_bytes` encoding
-    fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
-        let ring_dimension = params.ring_dimension() as usize;
-        let modulus = params.modulus();
-
-        // First four bytes contain the maximum byte size per coefficient
-        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-
-        // Next ceil(n/8) bytes contain the bit vector indicating if coefficients are negative
-        let bit_vector_byte_size = ring_dimension.div_ceil(8);
-        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
-
-        // Remaining bytes contain coefficient values
-        let coeffs: Vec<FinRingElem> = parallel_iter!(0..ring_dimension)
-            .map(|i| {
-                let start = 4 + bit_vector_byte_size + (i * max_byte_size);
-                let end = start + max_byte_size;
-                let value_bytes = &bytes[start..end];
-
-                let value = BigUint::from_bytes_le(value_bytes);
-
-                let byte_idx = i / 8;
-                let bit_idx = i % 8;
-                let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
-
-                // Convert back from centered representation
-                let final_value = if is_negative {
-                    // If negative flag is set, compute q - value
-                    modulus.as_ref() - &value
-                } else {
-                    // Otherwise, use value as is
-                    value
-                };
-
-                FinRingElem::new(final_value, modulus.clone())
-            })
-            .collect();
-
-        Self::from_coeffs(params, &coeffs)
     }
 
     fn from_biguints(params: &Self::Params, coeffs: &[BigUint]) -> Self {
@@ -148,10 +110,12 @@ impl Poly for DCRTPoly {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
 
+    #[inline]
     fn const_one(params: &Self::Params) -> Self {
-        Self::poly_gen_from_const(params, BigUint::from(1u32).to_string())
+        Self::poly_gen_from_const(params, "1".to_owned())
     }
 
+    #[inline]
     fn const_minus_one(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(
             params,
@@ -159,29 +123,55 @@ impl Poly for DCRTPoly {
         )
     }
 
-    fn const_power_of_base(params: &Self::Params, k: usize) -> Self {
-        let base = 1u32 << params.base_bits();
-        Self::poly_gen_from_const(params, BigUint::from(base).pow(k as u32).to_string())
-    }
-
+    /// return all `DCRTPoly` with all coefficients is maximum value.
     fn const_max(params: &Self::Params) -> Self {
         let coeffs = vec![FinRingElem::max_q(&params.modulus()); params.ring_dimension() as usize];
         Self::from_coeffs(params, &coeffs)
     }
 
-    fn const_int(params: &Self::Params, int: usize) -> Self {
-        Self::poly_gen_from_const(params, BigUint::from(int).to_string())
+    /// from `PolyElem` to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
+    fn from_elem_to_constant(params: &Self::Params, elem: &Self::Elem) -> Self {
+        Self::poly_gen_from_const(params, elem.value().to_string())
+    }
+
+    /// from `BigUint` to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
+    fn from_biguint_to_constant(params: &Self::Params, int: BigUint) -> Self {
+        Self::poly_gen_from_const(params, int.to_string())
+    }
+
+    /// from `usize` to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
+    fn from_usize_to_constant(params: &Self::Params, int: usize) -> Self {
+        Self::poly_gen_from_const(params, int.to_string())
+    }
+
+    /// from k which is power of base to `DCRTPoly` type and generate constant polynomial.
+    #[inline]
+    fn from_power_of_base_to_constant(params: &Self::Params, k: usize) -> Self {
+        let base = 1u32 << params.base_bits();
+        Self::poly_gen_from_const(params, BigUint::from(base).pow(k as u32).to_string())
     }
 
     /// Encode `int` in little-endian bit order
-    fn from_const_int_lsb(params: &Self::Params, int: usize) -> Self {
+    /// `int` is limited as u64 or u32.
+    fn from_usize_to_lsb(params: &Self::Params, int: usize) -> Self {
         let n = params.ring_dimension() as usize;
+        debug_assert!(int < (1 << n), "Input exceeds representable range for ring dimension");
         let q = params.modulus();
         let one = FinRingElem::one(&q);
         let zero = FinRingElem::zero(&q);
 
-        let coeffs: Vec<FinRingElem> =
-            (0..n).map(|i| if (int >> i) & 1 == 1 { one.clone() } else { zero.clone() }).collect();
+        let coeffs: Vec<FinRingElem> = (0..n)
+            .map(|i| {
+                if i < usize::BITS as usize && (int >> i) & 1 == 1 {
+                    one.clone()
+                } else {
+                    zero.clone()
+                }
+            })
+            .collect();
 
         Self::from_coeffs(params, &coeffs)
     }
@@ -233,6 +223,30 @@ impl Poly for DCRTPoly {
             .collect()
     }
 
+    /// Create a polynomial from a compact byte representation based on `to_compact_bytes` encoding
+    fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self {
+        let ring_dimension = params.ring_dimension() as usize;
+        let modulus = params.modulus();
+
+        // Parse header.
+        let max_byte_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+        let bit_vector_byte_size = ring_dimension.div_ceil(8);
+        let bit_vector = &bytes[4..4 + bit_vector_byte_size];
+        let coeffs_base_offset = 4 + bit_vector_byte_size;
+
+        let coeffs: Vec<FinRingElem> = reconstruct_coeffs_chunked(
+            bytes,
+            ring_dimension,
+            max_byte_size,
+            bit_vector,
+            coeffs_base_offset,
+            &modulus,
+            chunk_size_for(ring_dimension),
+        );
+
+        Self::from_coeffs(params, &coeffs)
+    }
+
     /// Convert the polynomial to a compact byte representation
     /// The returned bytes vector is encoded as follows:
     /// 1. The first four bytes contain the `max_byte_size`, namely the maximum byte size of any
@@ -241,60 +255,12 @@ impl Poly for DCRTPoly {
     ///    corresponding coefficient is negative (> `q_half`) and `n` is the ring dimension
     /// 3. The remaining `n * max_byte_size` contain the coefficient values
     fn to_compact_bytes(&self) -> Vec<u8> {
-        let modulus = self.ptr_poly.GetModulus();
-        let modulus_big: BigUint = BigUint::from_str(&modulus).unwrap();
-        let q_half = &modulus_big / 2u8;
-
         let coeffs = self.coeffs();
         let ring_dimension = coeffs.len();
+        let processed_coeffs: Vec<(bool, Vec<u8>)> =
+            process_coeffs_chunked(&coeffs, chunk_size_for(ring_dimension));
 
-        // Create a bit vector of `ceil(n/8)` bytes to store flags for negative coefficients
-        let bit_vector_byte_size = ring_dimension.div_ceil(8);
-        let mut bit_vector = vec![0u8; bit_vector_byte_size];
-
-        let mut max_byte_size = 0;
-        let mut processed_values = Vec::with_capacity(ring_dimension);
-
-        // First pass: Process coefficients, fill up `bit_vector`` and calculate `max_byte_size`
-        for (i, coeff) in coeffs.iter().enumerate() {
-            // Center coefficients around 0
-            let value = if coeff.value() > &q_half {
-                let byte_idx = i / 8; // Determines which byte in the bit vector the flag for the i-th coeffs belongs to
-                let bit_idx = i % 8; // Determines the bit position within that byte
-                bit_vector[byte_idx] |= 1 << bit_idx; // Set flag for negative coefficient
-                &modulus_big - coeff.value() // Convert to absolute value: q - coeff.value
-            } else if coeff.value() == &BigUint::ZERO {
-                BigUint::ZERO
-            } else {
-                coeff.value().clone()
-            };
-
-            processed_values.push(value.clone());
-
-            let value_bytes = value.to_bytes_le();
-            max_byte_size = std::cmp::max(max_byte_size, value_bytes.len());
-        }
-
-        let total_byte_size = 4 + bit_vector_byte_size + (ring_dimension * max_byte_size);
-        let mut result = vec![0u8; total_byte_size];
-
-        // Store max_byte_size in the first four bytes (little-endian)
-        let max_byte_size_bytes = (max_byte_size as u32).to_le_bytes();
-        result[0..4].copy_from_slice(&max_byte_size_bytes);
-
-        // Store bit vector in the next `ceil(n/8)` bytes
-        result[4..4 + bit_vector_byte_size].copy_from_slice(&bit_vector);
-
-        // Second pass: Store preprocessed coefficient values s.t. each coefficient is
-        // `max_byte_size` bytes long
-        for (i, value) in processed_values.iter().enumerate() {
-            let value_bytes = value.to_bytes_le();
-            let start_pos = 4 + bit_vector_byte_size + (i * max_byte_size);
-
-            result[start_pos..start_pos + value_bytes.len()].copy_from_slice(&value_bytes);
-        }
-
-        result
+        build_compact_bytes(processed_coeffs, ring_dimension)
     }
 
     /// Recover bits from a polynomial using decision thresholds q/4 and 3q/4
@@ -328,11 +294,14 @@ impl Poly for DCRTPoly {
     }
 
     fn to_const_int(&self) -> usize {
-        let mut sum = 0;
+        let mut sum = 0usize;
         for (i, c) in self.coeffs_digits().into_iter().enumerate() {
-            sum += 2_u32.pow(i as u32) * c;
+            if i >= usize::BITS as usize {
+                break;
+            }
+            sum = sum.saturating_add((1usize << i).saturating_mul(c as usize));
         }
-        sum as usize
+        sum
     }
 
     fn modulus_switch(
@@ -350,11 +319,9 @@ impl Poly for DCRTPoly {
     }
 
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
-        let coeffs: Vec<_> = coeffs
-            .into_iter()
-            .map(|i| FinRingElem::constant(&params.modulus(), *i as u64))
-            .collect();
-        DCRTPoly::from_coeffs(&params, &coeffs)
+        let coeffs: Vec<_> =
+            coeffs.iter().map(|i| FinRingElem::constant(&params.modulus(), *i as u64)).collect();
+        DCRTPoly::from_coeffs(params, &coeffs)
     }
 }
 
@@ -447,6 +414,133 @@ impl SubAssign<&DCRTPoly> for DCRTPoly {
     }
 }
 
+// ==== Compact bytes for poly utils ====
+
+fn build_compact_bytes(processed_coeffs: Vec<(bool, Vec<u8>)>, ring_dimension: usize) -> Vec<u8> {
+    let bit_vector_byte_size = ring_dimension.div_ceil(8);
+    let mut bit_vector = vec![0u8; bit_vector_byte_size];
+    let mut max_byte_size = 1;
+
+    // First pass: build bit vector and find max_byte_size.
+    for (i, (is_negative, value_bytes)) in processed_coeffs.iter().enumerate() {
+        if *is_negative {
+            let byte_idx = i / 8;
+            let bit_idx = i % 8;
+            bit_vector[byte_idx] |= 1 << bit_idx;
+        }
+        max_byte_size = std::cmp::max(max_byte_size, value_bytes.len());
+    }
+
+    let total_byte_size = 4 + bit_vector_byte_size + (ring_dimension * max_byte_size);
+    let mut result = vec![0u8; total_byte_size];
+
+    // Write header.
+    result[0..4].copy_from_slice(&(max_byte_size as u32).to_le_bytes());
+    result[4..4 + bit_vector_byte_size].copy_from_slice(&bit_vector);
+
+    // Write coefficient values.
+    let coeffs_base_offset = 4 + bit_vector_byte_size;
+    for (i, (_, value_bytes)) in processed_coeffs.iter().enumerate() {
+        if !value_bytes.is_empty() {
+            let start_pos = coeffs_base_offset + (i * max_byte_size);
+            result[start_pos..start_pos + value_bytes.len()].copy_from_slice(value_bytes);
+        }
+    }
+
+    result
+}
+
+fn reconstruct_coeffs_chunked(
+    bytes: &[u8],
+    ring_dimension: usize,
+    max_byte_size: usize,
+    bit_vector: &[u8],
+    coeffs_base_offset: usize,
+    modulus: &std::sync::Arc<BigUint>,
+    chunk_size: usize,
+) -> Vec<FinRingElem> {
+    (0..ring_dimension)
+        .into_par_iter()
+        .chunks(chunk_size)
+        .flat_map(|chunk| {
+            chunk
+                .into_iter()
+                .map(|i| {
+                    reconstruct_single_coeff(
+                        i,
+                        bytes,
+                        max_byte_size,
+                        bit_vector,
+                        coeffs_base_offset,
+                        modulus,
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+#[inline(always)]
+fn reconstruct_single_coeff(
+    i: usize,
+    bytes: &[u8],
+    max_byte_size: usize,
+    bit_vector: &[u8],
+    coeffs_base_offset: usize,
+    modulus: &std::sync::Arc<BigUint>,
+) -> FinRingElem {
+    let start = coeffs_base_offset + (i * max_byte_size);
+
+    // Find actual length by trimming trailing zeros.
+    let mut value_len = max_byte_size;
+    let value_bytes = &bytes[start..start + max_byte_size];
+    while value_len > 0 && value_bytes[value_len - 1] == 0 {
+        value_len -= 1;
+    }
+
+    // Only parse non-zero bytes.
+    let value = if value_len == 0 {
+        BigUint::ZERO
+    } else {
+        BigUint::from_bytes_le(&value_bytes[..value_len])
+    };
+
+    let byte_idx = i / 8;
+    let bit_idx = i % 8;
+    let is_negative = (bit_vector[byte_idx] & (1 << bit_idx)) != 0;
+
+    // Convert back from centered representation.
+    let final_value =
+        if is_negative && !value.is_zero() { modulus.as_ref() - &value } else { value };
+
+    FinRingElem::new(final_value, modulus.clone())
+}
+
+fn process_coeffs_chunked(coeffs: &[FinRingElem], chunk_size: usize) -> Vec<(bool, Vec<u8>)> {
+    coeffs
+        .par_chunks(chunk_size)
+        .flat_map(|chunk| chunk.iter().map(process_single_coeff).collect::<Vec<_>>())
+        .collect()
+}
+
+#[inline(always)]
+fn process_single_coeff(coeff: &FinRingElem) -> (bool, Vec<u8>) {
+    let coeff_val = coeff.value();
+    let modulus_big = coeff.modulus();
+    let q_half = modulus_big >> 1;
+
+    if coeff_val > &q_half {
+        let centered_value = coeff.modulus() - coeff_val;
+        let value_bytes =
+            if centered_value.is_zero() { Vec::new() } else { centered_value.to_bytes_le() };
+        (true, value_bytes)
+    } else if coeff_val.is_zero() {
+        (false, Vec::new())
+    } else {
+        (false, coeff_val.to_bytes_le())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -456,7 +550,6 @@ mod tests {
         PolyParams,
     };
     use rand::prelude::*;
-    use std::path::Path;
 
     #[test]
     fn test_const_int_roundtrip() {
@@ -465,8 +558,8 @@ mod tests {
 
         for _ in 0..10 {
             let value = rng.random_range(0..(2_i32.pow(params.ring_dimension() - 1) as usize));
-            let lsb_poly = DCRTPoly::from_const_int_lsb(&params, value);
-            let poly = DCRTPoly::const_int(&params, value);
+            let lsb_poly = DCRTPoly::from_usize_to_lsb(&params, value);
+            let poly = DCRTPoly::from_usize_to_constant(&params, value);
             let back = poly.to_const_int();
             let back_from_lsb = lsb_poly.to_const_int();
             assert_eq!(value, back);
@@ -544,7 +637,7 @@ mod tests {
         assert_eq!(poly_mul_assign, product, "*= result should match separate *");
 
         // 9. Test from_const / const_zero / const_one
-        let const_poly = DCRTPoly::from_const(&params, &FinRingElem::new(123, q.clone()));
+        let const_poly = DCRTPoly::from_usize_to_constant(&params, 123);
         assert_eq!(
             const_poly,
             DCRTPoly::from_coeffs(&params, &[FinRingElem::new(123, q.clone()); 1]),
@@ -701,42 +794,5 @@ mod tests {
             original_poly, reconstructed_poly,
             "Reconstructed polynomial does not match original (GaussDist)"
         );
-    }
-
-    #[tokio::test]
-    async fn test_dcrtpoly_write_read_file() {
-        let params = DCRTPolyParams::default();
-        let sampler = DCRTPolyUniformSampler::new();
-
-        // Test with different distribution types
-        let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
-
-        // Create a temporary directory for testing
-        let test_dir = Path::new("test_poly_write_read");
-        if !test_dir.exists() {
-            std::fs::create_dir(test_dir).unwrap();
-        } else {
-            // Clean it first to ensure no old files interfere
-            std::fs::remove_dir_all(test_dir).unwrap();
-            std::fs::create_dir(test_dir).unwrap();
-        }
-
-        for dist in dists {
-            // Create a random polynomial
-            let poly = sampler.sample_poly(&params, &dist);
-            let poly_id = format!("test_poly_{:?}", dist);
-
-            // Write the polynomial to a file
-            poly.write_to_file(test_dir, &poly_id).await;
-
-            // Read the polynomial back
-            let read_poly = DCRTPoly::read_from_file(&params, test_dir, &poly_id);
-
-            // Verify the polynomials are equal
-            assert_eq!(poly, read_poly, "Read polynomial does not match original for {:?}", dist);
-        }
-
-        // Clean up
-        std::fs::remove_dir_all(test_dir).unwrap();
     }
 }

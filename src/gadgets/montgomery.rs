@@ -307,7 +307,7 @@ mod tests {
         let base = 1u64 << LIMB_BIT_SIZE;
         for _ in 0..NUM_LIMBS {
             let limb_value = remaining_value % base;
-            limbs.push(DCRTPoly::const_int(params, limb_value as usize));
+            limbs.push(DCRTPoly::from_usize_to_constant(params, limb_value as usize));
             remaining_value /= base;
         }
         limbs

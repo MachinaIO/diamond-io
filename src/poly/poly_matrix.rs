@@ -25,6 +25,8 @@ pub trait PolyMatrix:
 {
     type P: Poly;
 
+    fn to_compact_bytes(&self) -> Vec<u8>;
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: &[u8]) -> Self;
     fn from_poly_vec(params: &<Self::P as Poly>::Params, vec: Vec<Vec<Self::P>>) -> Self;
     /// Creates a row vector (1 x n matrix) from a vector of n DCRTPoly elements.
     fn from_poly_vec_row(params: &<Self::P as Poly>::Params, vec: Vec<Self::P>) -> Self {
@@ -117,10 +119,10 @@ pub trait PolyMatrix:
         dir_path: P,
         id: &str,
     ) -> Self;
-    /// Writes a matrix with id to files under the given directory.
-    fn write_to_files<P: AsRef<Path> + Send + Sync>(
+    /// Extract block entries for parallel processing (used by storage service)
+    fn block_entries(
         &self,
-        dir_path: P,
-        id: &str,
-    ) -> impl std::future::Future<Output = ()> + Send;
+        rows: std::ops::Range<usize>,
+        cols: std::ops::Range<usize>,
+    ) -> Vec<Vec<Self::P>>;
 }

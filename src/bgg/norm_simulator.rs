@@ -151,6 +151,12 @@ impl PltEvaluator<NormSimulator> for NormPltEvaluator {
     }
 }
 
+impl Default for NormPltEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NormPltEvaluator {
     pub fn new() -> Self {
         Self {}

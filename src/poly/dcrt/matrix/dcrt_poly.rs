@@ -9,13 +9,12 @@ use crate::{
 use itertools::Itertools;
 use openfhe::ffi::{DCRTPolyGadgetVector, MatrixGen, SetMatrixElement};
 use rayon::prelude::*;
-use std::{ops::Range, path::Path, sync::Arc};
-use tokio::fs::write;
+use std::{io::Read, ops::Range, path::Path};
 
 use super::base::BaseMatrix;
 
 #[cfg(feature = "disk")]
-use super::base::disk::{block_offsets, map_file_mut};
+use super::base::disk::map_file_mut;
 
 impl MatrixParams for DCRTPolyParams {
     fn entry_size(&self) -> usize {
@@ -206,6 +205,7 @@ impl PolyMatrix for DCRTPolyMatrix {
         .decompose()
     }
 
+    #[inline]
     fn read_from_files<P: AsRef<Path> + Send + Sync>(
         params: &<Self::P as Poly>::Params,
         nrow: usize,
@@ -215,17 +215,20 @@ impl PolyMatrix for DCRTPolyMatrix {
     ) -> Self {
         let block_size = block_size();
         let mut matrix = Self::new_empty(params, nrow, ncol);
-
         let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
             let mut path = dir_path.as_ref().to_path_buf();
             path.push(format!(
                 "{}_{}_{}.{}_{}.{}.matrix",
                 id, block_size, row_range.start, row_range.end, col_range.start, col_range.end
             ));
-            let bytes = std::fs::read(&path)
+            let mut file = std::fs::File::open(&path)
+                .unwrap_or_else(|_| panic!("Failed to open matrix file {path:?}"));
+            let file_size = file.metadata().unwrap().len() as usize;
+            let mut buffer = Vec::with_capacity(file_size);
+            file.read_to_end(&mut buffer)
                 .unwrap_or_else(|_| panic!("Failed to read matrix file {path:?}"));
-            let entries_bytes: Vec<Vec<Vec<u8>>> = serde_json::from_slice(&bytes).unwrap();
-
+            let entries_bytes: Vec<Vec<Vec<u8>>> =
+                bincode::decode_from_slice(&buffer, bincode::config::standard()).unwrap().0;
             parallel_iter!(0..row_range.len())
                 .map(|i| {
                     parallel_iter!(0..col_range.len())
@@ -240,59 +243,6 @@ impl PolyMatrix for DCRTPolyMatrix {
         matrix.replace_entries(0..nrow, 0..ncol, f);
         matrix
     }
-
-    async fn write_to_files<P: AsRef<Path> + Send + Sync>(&self, dir_path: P, id: &str) {
-        let block_size = block_size();
-        #[cfg(feature = "disk")]
-        let (row_offsets, col_offsets) = block_offsets(0..self.nrow, 0..self.ncol);
-        #[cfg(not(feature = "disk"))]
-        let (row_offsets, col_offsets) = (vec![0, self.nrow], vec![0, self.ncol]);
-        let dir_path = dir_path.as_ref().to_path_buf();
-
-        let self_arc = Arc::new(self);
-        let row_windows = row_offsets.into_iter().tuple_windows().collect_vec();
-        let futures = row_windows
-            .into_iter()
-            .flat_map(|(cur_block_row_idx, next_block_row_idx)| {
-                let col_windows = col_offsets.clone().into_iter().tuple_windows().collect_vec();
-                col_windows
-                    .into_iter()
-                    .map(|(cur_block_col_idx, next_block_col_idx)| {
-                        // let id_clone = id.clone();
-                        let row_range = cur_block_row_idx..next_block_row_idx;
-                        let col_range = cur_block_col_idx..next_block_col_idx;
-                        let self_arc = Arc::clone(&self_arc);
-                        let dir_path = dir_path.clone();
-                        async move {
-                            let entries = self_arc
-                                .as_ref()
-                                .block_entries(row_range.clone(), col_range.clone());
-                            let mut path = dir_path;
-                            path.push(format!(
-                                "{}_{}_{}.{}_{}.{}.matrix",
-                                id,
-                                block_size,
-                                row_range.start,
-                                row_range.end,
-                                col_range.start,
-                                col_range.end
-                            ));
-                            let entries_bytes: Vec<Vec<Vec<u8>>> = entries
-                                .iter()
-                                .map(|row| {
-                                    row.iter().map(|poly| poly.to_compact_bytes()).collect_vec()
-                                })
-                                .collect_vec();
-                            let serialized_data = serde_json::to_vec(&entries_bytes)?;
-                            write(path, &serialized_data).await
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        futures::future::try_join_all(futures).await.expect("Failed to write all matrix blocks");
-    }
-
     fn set_entry(&mut self, i: usize, j: usize, elem: Self::P) {
         #[cfg(not(feature = "disk"))]
         {
@@ -308,6 +258,51 @@ impl PolyMatrix for DCRTPolyMatrix {
                 mmap.copy_from_slice(&bytes);
             }
         }
+    }
+
+    fn to_compact_bytes(&self) -> Vec<u8> {
+        let entries = self.block_entries(0..self.nrow, 0..self.ncol);
+        let entries_bytes: Vec<Vec<Vec<u8>>> = entries
+            .iter()
+            .map(|row| row.iter().map(|poly| poly.to_compact_bytes()).collect())
+            .collect();
+
+        bincode::encode_to_vec(&entries_bytes, bincode::config::standard())
+            .expect("Failed to serialize matrix to compact bytes")
+    }
+
+    fn from_compact_bytes(params: &<Self::P as Poly>::Params, bytes: &[u8]) -> Self {
+        let entries_bytes: Vec<Vec<Vec<u8>>> =
+            bincode::decode_from_slice(bytes, bincode::config::standard())
+                .expect("Failed to deserialize matrix from compact bytes")
+                .0;
+
+        let nrow = entries_bytes.len();
+        let ncol = if nrow > 0 { entries_bytes[0].len() } else { 0 };
+        let mut matrix = Self::new_empty(params, nrow, ncol);
+
+        let f = |row_range: Range<usize>, col_range: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+            row_range
+                .map(|i| {
+                    col_range
+                        .clone()
+                        .map(|j| DCRTPoly::from_compact_bytes(params, &entries_bytes[i][j]))
+                        .collect()
+                })
+                .collect()
+        };
+
+        matrix.replace_entries(0..nrow, 0..ncol, f);
+        matrix
+    }
+
+    fn block_entries(
+        &self,
+        rows: std::ops::Range<usize>,
+        cols: std::ops::Range<usize>,
+    ) -> Vec<Vec<Self::P>> {
+        // Delegate to the BaseMatrix implementation
+        self.block_entries(rows, cols)
     }
 }
 
@@ -369,9 +364,7 @@ mod tests {
         sampler::{DistType, PolyUniformSampler},
     };
     use num_bigint::BigUint;
-    use rand::{rng, Rng};
-    use serial_test::serial;
-    use std::{fs, sync::Arc};
+    use std::sync::Arc;
 
     #[test]
     fn test_matrix_gadget_matrix() {
@@ -389,11 +382,10 @@ mod tests {
 
         // Create a simple 2x8 matrix with some non-zero values
         let mut matrix_vec = Vec::with_capacity(2);
-        let value = FinRingElem::new(5u32, params.modulus());
-
+        let value = 5;
         // Create first row
         let mut row1 = Vec::with_capacity(8);
-        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 1..8 {
             row1.push(DCRTPoly::const_zero(&params));
         }
@@ -401,7 +393,7 @@ mod tests {
         // Create second row
         let mut row2 = Vec::with_capacity(8);
         row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::from_const(&params, &value));
+        row2.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 2..8 {
             row2.push(DCRTPoly::const_zero(&params));
         }
@@ -434,11 +426,11 @@ mod tests {
 
         // Create a simple 2x8 matrix with some non-zero values
         let mut matrix_vec = Vec::with_capacity(2);
-        let value = FinRingElem::new(5u32, params.modulus());
+        let value = 5;
 
         // Create first row
         let mut row1 = Vec::with_capacity(8);
-        row1.push(DCRTPoly::from_const(&params, &value));
+        row1.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 1..8 {
             row1.push(DCRTPoly::const_zero(&params));
         }
@@ -446,7 +438,7 @@ mod tests {
         // Create second row
         let mut row2 = Vec::with_capacity(8);
         row2.push(DCRTPoly::const_zero(&params));
-        row2.push(DCRTPoly::from_const(&params, &value));
+        row2.push(DCRTPoly::from_usize_to_constant(&params, value));
         for _ in 2..8 {
             row2.push(DCRTPoly::const_zero(&params));
         }
@@ -481,16 +473,16 @@ mod tests {
         let identity = DCRTPolyMatrix::identity(&params, 2, None);
 
         // Test matrix creation and equality
-        let value = FinRingElem::new(5u32, params.modulus());
+        let value = 5;
 
         // Create a 2x2 matrix with values at (0,0) and (1,1)
         let matrix_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
-            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_const(&params, &value)],
+            vec![DCRTPoly::from_usize_to_constant(&params, value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_usize_to_constant(&params, value)],
         ];
 
         let matrix1 = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
-        assert_eq!(matrix1.entry(0, 0).coeffs()[0], value);
+        assert_eq!(matrix1.entry(0, 0).coeffs()[0].value(), &BigUint::from(value));
         let matrix2 = matrix1.clone();
         assert_eq!(matrix1, matrix2);
 
@@ -507,8 +499,8 @@ mod tests {
         let prod = matrix1 * &identity;
         assert_eq!(prod.size(), (2, 2));
         // Check that the product has the same values as the original matrix
-        assert_eq!(prod.entry(0, 0).coeffs()[0], value);
-        assert_eq!(prod.entry(1, 1).coeffs()[0], value);
+        assert_eq!(prod.entry(0, 0).coeffs()[0].value(), &BigUint::from(value));
+        assert_eq!(prod.entry(1, 1).coeffs()[0].value(), &BigUint::from(value));
     }
 
     #[test]
@@ -518,7 +510,7 @@ mod tests {
 
         // Create first matrix with value at (0,0)
         let matrix1_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::from_elem_to_constant(&params, &value), DCRTPoly::const_zero(&params)],
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
         ];
 
@@ -527,7 +519,7 @@ mod tests {
         // Create second matrix with value at (1,1)
         let matrix2_vec = vec![
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
-            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_const(&params, &value)],
+            vec![DCRTPoly::const_zero(&params), DCRTPoly::from_elem_to_constant(&params, &value)],
         ];
 
         let matrix2 = DCRTPolyMatrix::from_poly_vec(&params, matrix2_vec);
@@ -561,7 +553,7 @@ mod tests {
 
         // Create first matrix with value at (0,0)
         let matrix1_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::from_elem_to_constant(&params, &value), DCRTPoly::const_zero(&params)],
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
         ];
 
@@ -569,7 +561,7 @@ mod tests {
 
         // Create second matrix with value at (0,0)
         let matrix2_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value), DCRTPoly::const_zero(&params)],
+            vec![DCRTPoly::from_elem_to_constant(&params, &value), DCRTPoly::const_zero(&params)],
             vec![DCRTPoly::const_zero(&params), DCRTPoly::const_zero(&params)],
         ];
 
@@ -594,8 +586,14 @@ mod tests {
         let value11 = FinRingElem::new(1990091289902891278121564387120912660u128, params.modulus());
 
         let matrix_vec = vec![
-            vec![DCRTPoly::from_const(&params, &value00), DCRTPoly::from_const(&params, &value01)],
-            vec![DCRTPoly::from_const(&params, &value10), DCRTPoly::from_const(&params, &value11)],
+            vec![
+                DCRTPoly::from_elem_to_constant(&params, &value00),
+                DCRTPoly::from_elem_to_constant(&params, &value01),
+            ],
+            vec![
+                DCRTPoly::from_elem_to_constant(&params, &value10),
+                DCRTPoly::from_elem_to_constant(&params, &value11),
+            ],
         ];
 
         let matrix = DCRTPolyMatrix::from_poly_vec(&params, matrix_vec);
@@ -612,12 +610,12 @@ mod tests {
 
         let expected_vec = vec![
             vec![
-                DCRTPoly::from_const(&params, &new_value00),
-                DCRTPoly::from_const(&params, &new_value01),
+                DCRTPoly::from_elem_to_constant(&params, &new_value00),
+                DCRTPoly::from_elem_to_constant(&params, &new_value01),
             ],
             vec![
-                DCRTPoly::from_const(&params, &new_value10),
-                DCRTPoly::from_const(&params, &new_value11),
+                DCRTPoly::from_elem_to_constant(&params, &new_value10),
+                DCRTPoly::from_elem_to_constant(&params, &new_value11),
             ],
         ];
 
@@ -746,43 +744,39 @@ mod tests {
         matrix.concat_diag(&others[..])
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_matrix_write_read() {
+    #[test]
+    fn test_matrix_compact_bytes() {
         let params = DCRTPolyParams::default();
         let sampler = DCRTPolyUniformSampler::new();
 
-        let dists = [DistType::BitDist, DistType::FinRingDist, DistType::GaussDist { sigma: 3.0 }];
-        std::env::set_var("BLOCK_SIZE", "10");
+        let dists = [DistType::BitDist, DistType::FinRingDist];
         for dist in dists {
-            let ncol = rng().random_range(5..=15);
-            let nrow = rng().random_range(5..=15);
+            // todo: interesting finding. if its more square shape (e.g (50,50)more than 2m> (100,1)
+            // - total 37s) slower
+            let ncol = 15;
+            let nrow = 15;
 
             // Create a random matrix
             let matrix = sampler.sample_uniform(&params, nrow, ncol, dist);
-            let matrix_id = format!("test_matrix_{:?}", dist);
 
-            // Create a temporary directory for testing
-            let test_dir = Path::new("test_matrix_write_read");
-            if !test_dir.exists() {
-                fs::create_dir(test_dir).unwrap();
-            } else {
-                // Clean it first to ensure no old files interfere
-                fs::remove_dir_all(test_dir).unwrap();
-                fs::create_dir(test_dir).unwrap();
-            }
+            // Convert to compact bytes
+            let start_serialize = std::time::Instant::now();
+            let compact_bytes = matrix.to_compact_bytes();
+            let serialize_time = start_serialize.elapsed();
+            println!(
+                "to_compact_bytes took: {:?}, bytes_length={}",
+                serialize_time,
+                compact_bytes.len()
+            );
 
-            // Write the matrix to files
-            matrix.write_to_files(test_dir, &matrix_id).await;
-
-            // Read the matrix back
-            let read_matrix =
-                DCRTPolyMatrix::read_from_files(&params, nrow, ncol, test_dir, &matrix_id);
+            // Reconstruct from compact bytes
+            let start_deserialize = std::time::Instant::now();
+            let reconstructed_matrix = DCRTPolyMatrix::from_compact_bytes(&params, &compact_bytes);
+            let deserialize_time = start_deserialize.elapsed();
+            println!("from_compact_bytes took: {deserialize_time:?}");
 
             // Verify the matrices are equal
-            assert_eq!(matrix, read_matrix);
-
-            fs::remove_dir_all(test_dir).unwrap();
+            assert_eq!(matrix, reconstructed_matrix);
         }
     }
 }
