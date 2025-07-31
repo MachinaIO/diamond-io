@@ -28,6 +28,8 @@ impl<P: Poly> PartialEq for MontgomeryContext<P> {
     }
 }
 
+impl<P: Poly> Eq for MontgomeryContext<P> {}
+
 impl<P: Poly> MontgomeryContext<P> {
     pub fn setup(
         circuit: &mut PolyCircuit<P>,
@@ -115,28 +117,17 @@ impl<P: Poly> MontgomeryContext<P> {
 
 #[derive(Debug, Clone)]
 pub struct MontgomeryPoly<P: Poly> {
-    pub ctx: MontgomeryContext<P>,
+    pub ctx: Arc<MontgomeryContext<P>>,
     pub value: BigUintPoly<P>,
 }
 
 impl<P: Poly> MontgomeryPoly<P> {
-    pub fn new(
-        circuit: &mut PolyCircuit<P>,
-        ctx: MontgomeryContext<P>,
-        value: BigUintPoly<P>,
-    ) -> Self {
-        debug_assert_eq!(value.limbs.len(), ctx.num_limbs, "Value limbs do not match context");
-        let r2ed = value.mul(&ctx.const_r2, circuit, None);
-        let reduced = montogomery_reduce(&ctx, circuit, &r2ed);
-        Self { ctx, value: reduced }
-    }
-
     /// Convert a regular integer (< N) to Montgomery representation
     /// Computes REDC((a mod N)(R^2 mod N)) = a*R mod N
     /// where R = 2^(limb_bit_size * num_limbs)
     pub fn from_regular(
         circuit: &mut PolyCircuit<P>,
-        ctx: MontgomeryContext<P>,
+        ctx: Arc<MontgomeryContext<P>>,
         value: BigUintPoly<P>,
     ) -> Self {
         debug_assert_eq!(value.limbs.len(), ctx.num_limbs, "Value limbs do not match context");
@@ -300,13 +291,13 @@ mod tests {
     fn create_test_context(
         circuit: &mut PolyCircuit<DCRTPoly>,
         num_input_values: usize,
-    ) -> (Vec<GateId>, DCRTPolyParams, MontgomeryContext<DCRTPoly>) {
+    ) -> (Vec<GateId>, DCRTPolyParams, Arc<MontgomeryContext<DCRTPoly>>) {
         let params = DCRTPolyParams::default();
         // Create inputs first before Montgomery context
         let inputs = circuit.input(num_input_values * NUM_LIMBS);
         // Use a small modulus for testing: N = 17 (prime number)
         let n = 17u64;
-        let ctx = MontgomeryContext::setup(circuit, &params, LIMB_BIT_SIZE, NUM_LIMBS, n);
+        let ctx = Arc::new(MontgomeryContext::setup(circuit, &params, LIMB_BIT_SIZE, NUM_LIMBS, n));
         (inputs, params, ctx)
     }
 

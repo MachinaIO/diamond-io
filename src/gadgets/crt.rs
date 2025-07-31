@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use crate::{
-    bgg::circuit::{GateId, PolyCircuit},
-    gadgets::montgomery::MontgomeryContext,
+    bgg::circuit::PolyCircuit,
+    gadgets::montgomery::{MontgomeryContext, MontgomeryPoly},
     poly::{Poly, PolyParams},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrtContext<P: Poly> {
     pub mont_ctxes: Vec<MontgomeryContext<P>>,
     // pub reconstruct_coeffs: Vec<GateId>,
@@ -12,7 +14,7 @@ pub struct CrtContext<P: Poly> {
 
 impl<P: Poly> CrtContext<P> {
     pub fn setup(circuit: &mut PolyCircuit<P>, params: &P::Params, limb_bit_size: usize) -> Self {
-        let (moduli, crt_bits, crt_depth) = params.to_crt();
+        let (moduli, crt_bits, _crt_depth) = params.to_crt();
         let num_limbs = crt_bits.div_ceil(limb_bit_size);
         let mont_ctxes = moduli
             .iter()
@@ -55,6 +57,38 @@ impl<P: Poly> CrtContext<P> {
         // }
 
         Self { mont_ctxes }
+    }
+}
+
+pub struct CrtPoly<P: Poly> {
+    pub ctx: Arc<CrtContext<P>>,
+    pub slots: Vec<MontgomeryPoly<P>>,
+}
+
+impl<P: Poly> CrtPoly<P> {
+    pub fn new(ctx: Arc<CrtContext<P>>, slots: Vec<MontgomeryPoly<P>>) -> Self {
+        Self { ctx, slots }
+    }
+
+    pub fn add(&self, other: &Self, circuit: &mut PolyCircuit<P>) -> Self {
+        debug_assert_eq!(self.ctx, other.ctx);
+        let new_slots =
+            self.slots.iter().zip(other.slots.iter()).map(|(a, b)| a.add(b, circuit)).collect();
+        Self::new(self.ctx.clone(), new_slots)
+    }
+
+    pub fn sub(&self, other: &Self, circuit: &mut PolyCircuit<P>) -> Self {
+        debug_assert_eq!(self.ctx, other.ctx);
+        let new_slots =
+            self.slots.iter().zip(other.slots.iter()).map(|(a, b)| a.sub(b, circuit)).collect();
+        Self::new(self.ctx.clone(), new_slots)
+    }
+
+    pub fn mul(&self, other: &Self, circuit: &mut PolyCircuit<P>) -> Self {
+        debug_assert_eq!(self.ctx, other.ctx);
+        let new_slots =
+            self.slots.iter().zip(other.slots.iter()).map(|(a, b)| a.mul(b, circuit)).collect();
+        Self::new(self.ctx.clone(), new_slots)
     }
 }
 
