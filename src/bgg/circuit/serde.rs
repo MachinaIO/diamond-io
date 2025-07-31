@@ -1,6 +1,6 @@
-use crate::{bgg::circuit::GateId, poly::Poly};
-
 use super::{PolyCircuit, PolyGateType};
+use crate::{bgg::circuit::GateId, poly::Poly};
+use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::BTreeMap;
@@ -12,6 +12,7 @@ pub enum SerializablePolyGateType {
     Add,
     Sub,
     Mul,
+    LargeScalarMul { scalar: Vec<BigUint> },
     Rotate { shift: usize },
     Call { circuit_id: usize, num_input: usize, output_id: usize },
     PubLut { lookup_id: usize },
@@ -21,7 +22,9 @@ impl SerializablePolyGateType {
     pub fn num_input(&self) -> usize {
         match self {
             SerializablePolyGateType::Input | SerializablePolyGateType::Const { .. } => 0,
-            SerializablePolyGateType::Rotate { .. } | SerializablePolyGateType::PubLut { .. } => 1,
+            SerializablePolyGateType::Rotate { .. } |
+            SerializablePolyGateType::LargeScalarMul { .. } |
+            SerializablePolyGateType::PubLut { .. } => 1,
             SerializablePolyGateType::Add |
             SerializablePolyGateType::Sub |
             SerializablePolyGateType::Mul => 2,
@@ -76,6 +79,9 @@ impl SerializablePolyCircuit {
                 PolyGateType::Add => SerializablePolyGateType::Add,
                 PolyGateType::Sub => SerializablePolyGateType::Sub,
                 PolyGateType::Mul => SerializablePolyGateType::Mul,
+                PolyGateType::LargeScalarMul { scalar } => {
+                    SerializablePolyGateType::LargeScalarMul { scalar: scalar.to_vec() }
+                }
                 PolyGateType::Rotate { shift } => {
                     SerializablePolyGateType::Rotate { shift: *shift }
                 }
@@ -142,6 +148,10 @@ impl SerializablePolyCircuit {
                         serializable_gate.input_gates[0],
                         serializable_gate.input_gates[1],
                     );
+                    gate_idx += 1;
+                }
+                SerializablePolyGateType::LargeScalarMul { scalar } => {
+                    circuit.large_scalar_mul(serializable_gate.input_gates[0], scalar.to_vec());
                     gate_idx += 1;
                 }
                 SerializablePolyGateType::Rotate { shift } => {

@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use num_bigint::BigUint;
 use std::{
     fmt::Debug,
     hash::Hash,
@@ -66,6 +67,7 @@ pub trait Poly:
         Self::from_coeffs(params, &coeffs)
     }
     fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self;
+    fn from_biguints(params: &Self::Params, coeffs: &[BigUint]) -> Self;
     fn coeffs(&self) -> Vec<Self::Elem>;
     fn coeffs_digits(&self) -> Vec<u32> {
         self.coeffs()

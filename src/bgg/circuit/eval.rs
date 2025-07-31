@@ -2,6 +2,7 @@ use crate::{
     bgg::{circuit::GateId, lut::public_lut::PublicLut},
     poly::{Poly, PolyElem, PolyParams},
 };
+use num_bigint::BigUint;
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
@@ -25,6 +26,7 @@ pub trait Evaluable:
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
+    fn large_scalar_mul(&self, params: &Self::Params, scalar: &[BigUint]) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
@@ -43,6 +45,11 @@ impl<P: Poly> Evaluable for P {
             .map(|&digit| <P::Elem as PolyElem>::constant(&params.modulus(), digit as u64))
             .collect();
         Self::from_coeffs(params, &coeffs)
+    }
+
+    fn large_scalar_mul(&self, params: &Self::Params, scalar: &[BigUint]) -> Self {
+        let scalar = P::from_biguints(params, scalar);
+        self.clone() * scalar
     }
 }
 

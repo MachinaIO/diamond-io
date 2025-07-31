@@ -138,6 +138,12 @@ impl Poly for DCRTPoly {
         Self::from_coeffs(params, &coeffs)
     }
 
+    fn from_biguints(params: &Self::Params, coeffs: &[BigUint]) -> Self {
+        let fin_ring_coeffs: Vec<FinRingElem> =
+            coeffs.iter().map(|coeff| FinRingElem::new(coeff.clone(), params.modulus())).collect();
+        Self::from_coeffs(params, &fin_ring_coeffs)
+    }
+
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }

@@ -5,6 +5,7 @@ pub mod utils;
 use dashmap::DashMap;
 pub use eval::*;
 pub use gate::{GateId, PolyGate, PolyGateType};
+use num_bigint::BigUint;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -180,6 +181,10 @@ impl<P: Poly> PolyCircuit<P> {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Mul)
     }
 
+    pub fn large_scalar_mul(&mut self, input: GateId, scalar: Vec<BigUint>) -> GateId {
+        self.new_gate_generic(vec![input], PolyGateType::LargeScalarMul { scalar })
+    }
+
     pub fn rotate_gate(&mut self, input: GateId, shift: usize) -> GateId {
         self.new_gate_generic(vec![input], PolyGateType::Rotate { shift })
     }
@@ -352,6 +357,15 @@ impl<P: Poly> PolyCircuit<P> {
                             wires.get(&gate.input_gates[1]).expect("wire missing for Mul").clone();
                         let result = left * right;
                         debug_mem("Mul gate end");
+                        result
+                    }
+                    PolyGateType::LargeScalarMul { scalar } => {
+                        let input = wires
+                            .get(&gate.input_gates[0])
+                            .expect("wire missing for LargeScalarMul")
+                            .clone();
+                        let result = input.large_scalar_mul(&params, &scalar);
+                        debug_mem("Large scalar mul gate end");
                         result
                     }
                     PolyGateType::Rotate { shift } => {
@@ -644,6 +658,41 @@ mod tests {
                 i
             );
         }
+    }
+
+    #[test]
+    fn test_large_scalar_mul_gate() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a circuit with a large_scalar_mul operation
+        let mut circuit = PolyCircuit::new();
+        let input_gate = circuit.input(1)[0];
+
+        // Create scalar values for multiplication
+        let scalar = vec![BigUint::from(5u32), BigUint::from(10u32), BigUint::from(3u32)];
+
+        let scalar_mul_gate = circuit.large_scalar_mul(input_gate, scalar.clone());
+        circuit.output(vec![scalar_mul_gate]);
+
+        // Create input polynomial
+        let input_poly = create_random_poly(&params);
+
+        // Evaluate the circuit
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[input_poly.clone()],
+            None::<PolyPltEvaluator>,
+        );
+
+        // Expected result: input multiplied by scalar
+        let scalar = DCRTPoly::from_biguints(&params, &scalar);
+        let expected = &input_poly * &scalar;
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
     }
 
     #[test]

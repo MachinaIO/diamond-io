@@ -1,3 +1,4 @@
+use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 #[derive(
@@ -31,6 +32,7 @@ pub enum PolyGateType {
     Add,
     Sub,
     Mul,
+    LargeScalarMul { scalar: Vec<BigUint> },
     Rotate { shift: usize },
     Call { circuit_id: usize, num_input: usize, output_id: usize },
     PubLut { lookup_id: usize },
@@ -40,7 +42,9 @@ impl PolyGateType {
     pub fn num_input(&self) -> usize {
         match self {
             PolyGateType::Input | PolyGateType::Const { .. } => 0,
-            PolyGateType::Rotate { .. } | PolyGateType::PubLut { .. } => 1,
+            PolyGateType::Rotate { .. } |
+            PolyGateType::LargeScalarMul { .. } |
+            PolyGateType::PubLut { .. } => 1,
             PolyGateType::Add | PolyGateType::Sub | PolyGateType::Mul => 2,
             PolyGateType::Call { num_input, .. } => *num_input,
         }
