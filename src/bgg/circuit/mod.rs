@@ -4,7 +4,8 @@ pub mod serde;
 pub mod utils;
 use dashmap::DashMap;
 pub use eval::*;
-pub use gate::{PolyGate, PolyGateType};
+pub use gate::{GateId, PolyGate, PolyGateType};
+use num_bigint::BigUint;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -14,11 +15,13 @@ use std::{
 pub use utils::*;
 
 use crate::{bgg::lut::public_lut::PublicLut, poly::Poly, utils::debug_mem};
+
 #[derive(Debug, Clone, Default)]
 pub struct PolyCircuit<P: Poly> {
-    gates: BTreeMap<usize, PolyGate>,
+    gates: BTreeMap<GateId, PolyGate>,
+    print_value: BTreeMap<GateId, String>,
     sub_circuits: BTreeMap<usize, PolyCircuit<P>>,
-    output_ids: Vec<usize>,
+    output_ids: Vec<GateId>,
     num_input: usize,
     pub lookups: HashMap<usize, Arc<PublicLut<P>>>,
 }
@@ -26,6 +29,7 @@ pub struct PolyCircuit<P: Poly> {
 impl<P: Poly> PartialEq for PolyCircuit<P> {
     fn eq(&self, other: &Self) -> bool {
         self.gates == other.gates &&
+            self.print_value == other.print_value &&
             self.sub_circuits == other.sub_circuits &&
             self.output_ids == other.output_ids &&
             self.num_input == other.num_input
@@ -38,6 +42,7 @@ impl<P: Poly> PolyCircuit<P> {
     pub fn new() -> Self {
         Self {
             gates: BTreeMap::new(),
+            print_value: BTreeMap::new(),
             sub_circuits: BTreeMap::new(),
             output_ids: vec![],
             num_input: 0,
@@ -78,20 +83,20 @@ impl<P: Poly> PolyCircuit<P> {
             sub.count_helper(counts);
         }
     }
-    pub fn input(&mut self, num_input: usize) -> Vec<usize> {
+    pub fn input(&mut self, num_input: usize) -> Vec<GateId> {
         #[cfg(debug_assertions)]
         assert_eq!(self.num_input, 0);
-        self.gates.insert(0, PolyGate::new(0, PolyGateType::Input, vec![])); // input gate at index 0 reserved for constant 1 polynomial
+        self.gates.insert(GateId(0), PolyGate::new(GateId(0), PolyGateType::Input, vec![])); // input gate at index 0 reserved for constant 1 polynomial
         let mut input_gates = Vec::with_capacity(num_input);
         for idx in 1..(num_input + 1) {
-            self.gates.insert(idx, PolyGate::new(idx, PolyGateType::Input, vec![]));
-            input_gates.push(idx);
+            self.gates.insert(GateId(idx), PolyGate::new(GateId(idx), PolyGateType::Input, vec![]));
+            input_gates.push(GateId(idx));
         }
         self.num_input = num_input;
         input_gates
     }
 
-    pub fn output(&mut self, outputs: Vec<usize>) {
+    pub fn output(&mut self, outputs: Vec<GateId>) {
         #[cfg(debug_assertions)]
         assert_eq!(self.output_ids.len(), 0);
 
@@ -100,21 +105,21 @@ impl<P: Poly> PolyCircuit<P> {
         }
     }
 
-    pub fn const_zero_gate(&mut self) -> usize {
-        self.not_gate(0)
+    pub fn const_zero_gate(&mut self) -> GateId {
+        self.not_gate(GateId(0)) // 0 is the input gate for constant 1 polynomial
     }
 
     /// index 0 have value 1
-    pub fn const_one_gate(&mut self) -> usize {
-        0
+    pub fn const_one_gate(&mut self) -> GateId {
+        GateId(0)
     }
 
-    pub fn const_minus_one_gate(&mut self) -> usize {
+    pub fn const_minus_one_gate(&mut self) -> GateId {
         let zero = self.const_zero_gate();
-        self.sub_gate(zero, 0)
+        self.sub_gate(zero, GateId(0))
     }
 
-    pub fn and_gate(&mut self, left: usize, right: usize) -> usize {
+    pub fn and_gate(&mut self, left: GateId, right: GateId) -> GateId {
         self.mul_gate(left, right)
     }
 
@@ -122,11 +127,11 @@ impl<P: Poly> PolyCircuit<P> {
     /// This operation assumes that `x` is restricted to binary values (0 or 1),
     /// meaning it should only be used with polynomials sampled from a bit distribution.
     /// The computation is achieved by subtracting `x` from 1 (i.e., `0 - x + 1`).
-    pub fn not_gate(&mut self, input: usize) -> usize {
-        self.sub_gate(0, input)
+    pub fn not_gate(&mut self, input: GateId) -> GateId {
+        self.sub_gate(GateId(0), input)
     }
 
-    pub fn or_gate(&mut self, left: usize, right: usize) -> usize {
+    pub fn or_gate(&mut self, left: GateId, right: GateId) -> GateId {
         let add = self.add_gate(left, right);
         let mul = self.mul_gate(left, right);
         self.sub_gate(add, mul) // A + B - A*B
@@ -135,7 +140,7 @@ impl<P: Poly> PolyCircuit<P> {
     /// Computes the NAND gate as `NOT(AND(left, right))`.
     /// This operation follows the same restriction as the NOT gate:
     /// `left` and `right` must be bit distribution (0 or 1)
-    pub fn nand_gate(&mut self, left: usize, right: usize) -> usize {
+    pub fn nand_gate(&mut self, left: GateId, right: GateId) -> GateId {
         let and_result = self.and_gate(left, right);
         self.not_gate(and_result) // NOT AND
     }
@@ -143,13 +148,13 @@ impl<P: Poly> PolyCircuit<P> {
     /// Computes the NOR gate as `NOT(OR(left, right))`.
     /// This operation follows the same restriction as the NOT gate:
     /// `left` and `right` must be bit distribution (0 or 1)
-    pub fn nor_gate(&mut self, left: usize, right: usize) -> usize {
+    pub fn nor_gate(&mut self, left: GateId, right: GateId) -> GateId {
         let or_result = self.or_gate(left, right);
         self.not_gate(or_result) // NOT OR
     }
 
-    pub fn xor_gate(&mut self, left: usize, right: usize) -> usize {
-        let two = self.add_gate(0, 0);
+    pub fn xor_gate(&mut self, left: GateId, right: GateId) -> GateId {
+        let two = self.add_gate(GateId(0), GateId(0)); // constant 2
         let mul = self.mul_gate(left, right);
         let two_mul = self.mul_gate(two, mul);
         let add = self.add_gate(left, right);
@@ -159,36 +164,44 @@ impl<P: Poly> PolyCircuit<P> {
     /// Computes the XNOR gate as `NOT(XOR(left, right))`.
     /// This operation follows the same restriction as the NOT gate:
     /// `left` and `right` must be bit distribution (0 or 1)
-    pub fn xnor_gate(&mut self, left: usize, right: usize) -> usize {
+    pub fn xnor_gate(&mut self, left: GateId, right: GateId) -> GateId {
         let xor_result = self.xor_gate(left, right);
         self.not_gate(xor_result) // NOT XOR
     }
 
-    pub fn add_gate(&mut self, left_input: usize, right_input: usize) -> usize {
+    pub fn add_gate(&mut self, left_input: GateId, right_input: GateId) -> GateId {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Add)
     }
 
-    pub fn sub_gate(&mut self, left_input: usize, right_input: usize) -> usize {
+    pub fn sub_gate(&mut self, left_input: GateId, right_input: GateId) -> GateId {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Sub)
     }
 
-    pub fn mul_gate(&mut self, left_input: usize, right_input: usize) -> usize {
+    pub fn mul_gate(&mut self, left_input: GateId, right_input: GateId) -> GateId {
         self.new_gate_generic(vec![left_input, right_input], PolyGateType::Mul)
     }
 
-    pub fn rotate_gate(&mut self, input: usize, shift: usize) -> usize {
+    pub fn large_scalar_mul(&mut self, input: GateId, scalar: Vec<BigUint>) -> GateId {
+        self.new_gate_generic(vec![input], PolyGateType::LargeScalarMul { scalar })
+    }
+
+    pub fn rotate_gate(&mut self, input: GateId, shift: usize) -> GateId {
         self.new_gate_generic(vec![input], PolyGateType::Rotate { shift })
     }
 
-    pub fn const_digits_poly(&mut self, digits: &[u32]) -> usize {
+    pub fn const_digits_poly(&mut self, digits: &[u32]) -> GateId {
         self.new_gate_generic(vec![], PolyGateType::Const { digits: digits.to_vec() })
     }
 
-    pub fn public_lookup_gate(&mut self, input: usize, lookup_id: usize) -> usize {
+    pub fn public_lookup_gate(&mut self, input: GateId, lookup_id: usize) -> GateId {
         self.new_gate_generic(vec![input], PolyGateType::PubLut { lookup_id })
     }
 
-    fn new_gate_generic(&mut self, inputs: Vec<usize>, gate_type: PolyGateType) -> usize {
+    pub fn print(&mut self, gate_id: GateId, prefix: String) {
+        self.print_value.insert(gate_id, prefix);
+    }
+
+    fn new_gate_generic(&mut self, inputs: Vec<GateId>, gate_type: PolyGateType) -> GateId {
         #[cfg(debug_assertions)]
         {
             assert_ne!(self.num_input, 0);
@@ -198,14 +211,14 @@ impl<P: Poly> PolyCircuit<P> {
                 assert!(self.gates.contains_key(gate_id));
             }
         }
-        let gate_id = self.gates.len();
+        let gate_id = GateId(self.gates.len());
         self.gates.insert(gate_id, PolyGate::new(gate_id, gate_type, inputs));
         gate_id
     }
 
     /// Computes a topological order (as a vector of gate IDs) for all gates that
     /// are needed to evaluate the outputs. This is done via a DFS from each output gate.
-    fn topological_order(&self) -> Vec<usize> {
+    fn topological_order(&self) -> Vec<GateId> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
         let mut stack = Vec::new();
@@ -235,11 +248,11 @@ impl<P: Poly> PolyCircuit<P> {
     /// Computes a levelized grouping of gate ids.
     /// Input wires (keys 0..=num_input) are assigned level 0.
     /// Each non‐input gate's level is defined as max(levels of its inputs) + 1.
-    fn compute_levels(&self) -> Vec<Vec<usize>> {
-        let mut gate_levels: HashMap<usize, usize> = HashMap::new();
-        let mut levels: Vec<Vec<usize>> = vec![vec![]];
+    fn compute_levels(&self) -> Vec<Vec<GateId>> {
+        let mut gate_levels: HashMap<GateId, usize> = HashMap::new();
+        let mut levels: Vec<Vec<GateId>> = vec![vec![]];
         for i in 0..=self.num_input {
-            gate_levels.insert(i, 0);
+            gate_levels.insert(GateId(i), 0);
         }
         let orders = self.topological_order();
         for gate_id in orders.into_iter() {
@@ -290,9 +303,13 @@ impl<P: Poly> PolyCircuit<P> {
         debug_mem(format!("Levels: {levels:?}"));
         debug_mem("Levels are computed");
 
-        wires.insert(0, one.clone());
+        wires.insert(GateId(0), one.clone());
         for (idx, input) in inputs.iter().enumerate() {
-            wires.insert(idx + 1, input.clone());
+            let id = GateId(idx + 1);
+            wires.insert(id, input.clone());
+            if let Some(prefix) = self.print_value.get(&id) {
+                println!("[{prefix}] Gate ID {id}, {:?}", input);
+            }
         }
         debug_mem("Input wires are set");
 
@@ -342,6 +359,15 @@ impl<P: Poly> PolyCircuit<P> {
                         debug_mem("Mul gate end");
                         result
                     }
+                    PolyGateType::LargeScalarMul { scalar } => {
+                        let input = wires
+                            .get(&gate.input_gates[0])
+                            .expect("wire missing for LargeScalarMul")
+                            .clone();
+                        let result = input.large_scalar_mul(&params, &scalar);
+                        debug_mem("Large scalar mul gate end");
+                        result
+                    }
                     PolyGateType::Rotate { shift } => {
                         debug_mem("Rotate gate start");
                         let input = wires
@@ -371,6 +397,9 @@ impl<P: Poly> PolyCircuit<P> {
                         result
                     }
                 };
+                if let Some(prefix) = self.print_value.get(&gate_id) {
+                    println!("[{prefix}] Gate ID {gate_id}, {:?}", result);
+                }
                 wires.insert(gate_id, result);
                 debug_mem(format!("Gate id {gate_id} finished"));
             });
@@ -400,19 +429,19 @@ impl<P: Poly> PolyCircuit<P> {
 
     /// Inlines the subcircuit operations directly into the main circuit instead of using call
     /// gates.
-    pub fn call_sub_circuit(&mut self, circuit_id: usize, inputs: &[usize]) -> Vec<usize> {
+    pub fn call_sub_circuit(&mut self, circuit_id: usize, inputs: &[GateId]) -> Vec<GateId> {
         #[cfg(debug_assertions)]
         {
             let sub_circuit = &self.sub_circuits[&circuit_id];
             assert_eq!(inputs.len(), sub_circuit.num_input());
         }
-        let mut gate_map: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut gate_map: BTreeMap<GateId, GateId> = BTreeMap::new();
         let sub_circuit = self.sub_circuits.get(&circuit_id).unwrap().clone();
         for i in 0..=sub_circuit.num_input {
             if i == 0 {
-                gate_map.insert(i, 0);
+                gate_map.insert(GateId(i), GateId(0));
             } else if i <= inputs.len() {
-                gate_map.insert(i, inputs[i - 1]);
+                gate_map.insert(GateId(i), inputs[i - 1]);
             }
         }
 
@@ -428,10 +457,10 @@ impl<P: Poly> PolyCircuit<P> {
     /// Returns the ID of the corresponding gate in the main circuit.
     fn inline_gate(
         &mut self,
-        start_gate_id: usize,
+        start_gate_id: GateId,
         sub_circuit: &PolyCircuit<P>,
-        gate_map: &mut BTreeMap<usize, usize>,
-    ) -> usize {
+        gate_map: &mut BTreeMap<GateId, GateId>,
+    ) -> GateId {
         let mut stack = Vec::new();
         stack.push(start_gate_id);
 
@@ -449,7 +478,7 @@ impl<P: Poly> PolyCircuit<P> {
                 }
             }
             if all_inputs_inlined {
-                let main_inputs: Vec<usize> =
+                let main_inputs: Vec<GateId> =
                     gate.input_gates.iter().map(|input_id| gate_map[input_id]).collect();
                 let main_gate_id = self.new_gate_generic(main_inputs, gate.gate_type.clone());
                 gate_map.insert(current_gate_id, main_gate_id);
@@ -629,6 +658,41 @@ mod tests {
                 i
             );
         }
+    }
+
+    #[test]
+    fn test_large_scalar_mul_gate() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+
+        // Create a circuit with a large_scalar_mul operation
+        let mut circuit = PolyCircuit::new();
+        let input_gate = circuit.input(1)[0];
+
+        // Create scalar values for multiplication
+        let scalar = vec![BigUint::from(5u32), BigUint::from(10u32), BigUint::from(3u32)];
+
+        let scalar_mul_gate = circuit.large_scalar_mul(input_gate, scalar.clone());
+        circuit.output(vec![scalar_mul_gate]);
+
+        // Create input polynomial
+        let input_poly = create_random_poly(&params);
+
+        // Evaluate the circuit
+        let result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &[input_poly.clone()],
+            None::<PolyPltEvaluator>,
+        );
+
+        // Expected result: input multiplied by scalar
+        let scalar = DCRTPoly::from_biguints(&params, &scalar);
+        let expected = &input_poly * &scalar;
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], expected);
     }
 
     #[test]

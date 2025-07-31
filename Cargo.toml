@@ -20,7 +20,7 @@ cpu = []
 tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros"] }
 futures = "0.3"
 libc = { version = "0.2", optional = true }
-openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "exp/reimpl_trapdoor" }
+openfhe = { git = "https://github.com/MachinaIO/openfhe-rs.git", branch = "feat-crt-param" }
 digest = "0.10"
 num-bigint = { version = "0.4", features = ["serde"] }
 num-traits = "0.2"

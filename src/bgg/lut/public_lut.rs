@@ -1,6 +1,7 @@
 //! Public Lookup
 
 use crate::{
+    bgg::circuit::GateId,
     poly::{
         sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
@@ -38,7 +39,7 @@ impl<P: Poly> PublicLut<P> {
         params: &<M::P as Poly>::Params,
         d: usize,
         hash_key: [u8; 32],
-        id: usize,
+        id: GateId,
     ) -> M
     where
         M: PolyMatrix<P = P>,
@@ -68,7 +69,7 @@ impl<P: Poly> PublicLut<P> {
         trapdoor: &ST::Trapdoor,
         a_z: &M,
         a_lt: &M,
-        id: usize,
+        id: GateId,
         dir_path: &Path,
     ) where
         M: PolyMatrix<P = P> + Send + 'static,
