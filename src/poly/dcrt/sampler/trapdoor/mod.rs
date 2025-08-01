@@ -91,6 +91,7 @@ impl DCRTTrapdoor {
         };
         log_mem("p2z_vec generated");
         // create a matrix of d*k x padded_ncol ring elements in coefficient representation
+        // todo: this function takes 2m time on real param
         let p2 = split_int64_mat_to_elems(&p2z_vec, params);
         // parallel_iter!(0..padded_ncol)
         //     .map(|i| split_int64_vec_to_elems(&p2z_vec.slice(0, n * dk, i, i + 1), params))
@@ -163,7 +164,6 @@ fn sample_p1_for_pert_mat(
                     let end_col = min((j + 1) * ncol_per_thread, ncol);
                     let tp2_cols =
                         ExtractMatrixCols(&Arc::clone(&tp2_arc).as_ref().inner, start_col, end_col);
-                    log_mem("extracting rows from tp2");
                     let cpp_matrix = SampleP1ForPertMat(
                         &Arc::clone(&a_mat_arc).as_ref().inner,
                         &Arc::clone(&b_mat_arc).as_ref().inner,
@@ -177,7 +177,6 @@ fn sample_p1_for_pert_mat(
                         s,
                         dgg_stddev,
                     );
-                    log_mem("SampleP1ForPertSquareMat called");
                     DCRTPolyMatrix::from_cpp_matrix_ptr(params, &CppMatrix::new(params, cpp_matrix))
                 })
                 .collect::<Vec<_>>();

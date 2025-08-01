@@ -70,43 +70,44 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let n = params.ring_dimension() as usize;
         let k = params.modulus_digits();
-        
-        // Compute parameters.
-        let (s, dgg_large_mean, dgg_large_std, dgg_large_table, peikert) = timed("Compute DGG parameters", || {
-            let s = SPECTRAL_CONSTANT *
-                (self.base as f64 + 1.0) *
-                SIGMA *
-                SIGMA *
-                (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
-            let dgg_large_std = (s * s - self.c * self.c).sqrt();
-            let peikert = dgg_large_std < KARNEY_THRESHOLD;
-            let (dgg_large_mean, dgg_large_table) = if dgg_large_std > KARNEY_THRESHOLD {
-                (None, None)
-            } else {
-                let acc: f64 = 5e-32;
-                let m = (-2.0 * acc.ln()).sqrt();
-                let fin = (dgg_large_std * m).ceil() as usize;
 
-                let mut m_vals = Vec::with_capacity(fin);
-                let variance = 2.0 * dgg_large_std * dgg_large_std;
-                let mut cusum = 0.0f64;
-                for i in 1..=fin {
-                    cusum += (-(i as f64 * i as f64) / variance).exp();
-                    m_vals.push(cusum);
-                }
-                let m_a = 1.0 / (2.0 * cusum + 1.0);
-                for i in 0..fin {
-                    m_vals[i] *= m_a;
-                }
-                (Some(m_a), Some(m_vals))
-            };
-            (s, dgg_large_mean, dgg_large_std, dgg_large_table, peikert)
-        });
-        
+        // Compute parameters.
+        let (s, dgg_large_mean, dgg_large_std, dgg_large_table, peikert) =
+            timed("Compute DGG parameters", || {
+                let s = SPECTRAL_CONSTANT *
+                    (self.base as f64 + 1.0) *
+                    SIGMA *
+                    SIGMA *
+                    (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
+                let dgg_large_std = (s * s - self.c * self.c).sqrt();
+                let peikert = dgg_large_std < KARNEY_THRESHOLD;
+                let (dgg_large_mean, dgg_large_table) = if dgg_large_std > KARNEY_THRESHOLD {
+                    (None, None)
+                } else {
+                    let acc: f64 = 5e-32;
+                    let m = (-2.0 * acc.ln()).sqrt();
+                    let fin = (dgg_large_std * m).ceil() as usize;
+
+                    let mut m_vals = Vec::with_capacity(fin);
+                    let variance = 2.0 * dgg_large_std * dgg_large_std;
+                    let mut cusum = 0.0f64;
+                    for i in 1..=fin {
+                        cusum += (-(i as f64 * i as f64) / variance).exp();
+                        m_vals.push(cusum);
+                    }
+                    let m_a = 1.0 / (2.0 * cusum + 1.0);
+                    for i in 0..fin {
+                        m_vals[i] *= m_a;
+                    }
+                    (Some(m_a), Some(m_vals))
+                };
+                (s, dgg_large_mean, dgg_large_std, dgg_large_table, peikert)
+            });
+
         let dgg_large_params =
             (dgg_large_mean, dgg_large_std, dgg_large_table.as_ref().map(|v| &v[..]));
         log_mem("preimage parameters computed");
-        
+
         // Sample perturbation matrix.
         let p_hat = timed("Sample perturbation matrix (p_hat)", || {
             trapdoor.sample_pert_square_mat(
@@ -119,20 +120,21 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             )
         });
         log_mem("p_hat generated");
-        
+
         // Compute perturbed syndrome.
-        let perturbed_syndrome = timed("Compute perturbed syndrome", || {
-            target - &(public_matrix * &p_hat)
-        });
+        let perturbed_syndrome =
+            timed("Compute perturbed syndrome", || target - &(public_matrix * &p_hat));
         log_mem("perturbed_syndrome generated");
-        
+
         // Generate z_hat_mat.
+        // todo: this generating z_hat_mat also takes like 2m+
         let mut z_hat_mat = DCRTPolyMatrix::zero(params, d * k, target_cols);
         timed("Generate z_hat_mat (decomposition)", || {
             let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
                 let nrow = row_offsets.len();
                 let ncol = col_offsets.len();
-                let perturbed_syndromes = perturbed_syndrome.block_entries(row_offsets, col_offsets);
+                let perturbed_syndromes =
+                    perturbed_syndrome.block_entries(row_offsets, col_offsets);
                 let decomposed_results = parallel_iter!(0..nrow)
                     .map(|i| {
                         let row_results: Vec<_> = parallel_iter!(0..ncol)
@@ -164,19 +166,15 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
             z_hat_mat.replace_entries_with_expand(0..d, 0..target_cols, k, 1, f);
         });
         log_mem("z_hat_mat generated");
-        
+
         // Compute r * z_hat.
-        let r_z_hat = timed("Compute r * z_hat", || {
-            &trapdoor.r * &z_hat_mat
-        });
+        let r_z_hat = timed("Compute r * z_hat", || &trapdoor.r * &z_hat_mat);
         debug_mem("r_z_hat generated");
-        
+
         // Compute e * z_hat.
-        let e_z_hat = timed("Compute e * z_hat", || {
-            &trapdoor.e * &z_hat_mat
-        });
+        let e_z_hat = timed("Compute e * z_hat", || &trapdoor.e * &z_hat_mat);
         debug_mem("e_z_hat generated");
-        
+
         // Construct final z_hat.
         timed("Construct final z_hat", || {
             let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
@@ -216,17 +214,30 @@ pub(crate) fn gauss_samp_gq_arb_base(
     let depth = params.crt_depth();
     let k_res_bits = params.crt_bits();
     let k_res_digits = params.modulus_digits() / depth;
-    let result = DCRTGaussSampGqArbBase(
-        syndrome.get_poly(),
-        c,
-        n,
-        depth,
-        k_res_bits,
-        k_res_digits,
-        base as i64,
-        sigma,
-        tower_idx,
+
+    // Time and log the DCRTGaussSampGqArbBase function call.
+    let result = timed(
+        &format!(
+            "DCRTGaussSampGqArbBase (tower_idx: {}, n: {}, k_res_digits: {})",
+            tower_idx, n, k_res_digits
+        ),
+        || {
+            let res = DCRTGaussSampGqArbBase(
+                syndrome.get_poly(),
+                c,
+                n,
+                depth,
+                k_res_bits,
+                k_res_digits,
+                base as i64,
+                sigma,
+                tower_idx,
+            );
+            log_mem(&format!("DCRTGaussSampGqArbBase completed for tower_idx: {}", tower_idx));
+            res
+        },
     );
+
     debug_assert_eq!(result.len(), n as usize * k_res_digits);
     // let mut matrix = I64Matrix::new_empty(&I64MatrixParams, k_res, n as usize);
     parallel_iter!(0..k_res_digits)
