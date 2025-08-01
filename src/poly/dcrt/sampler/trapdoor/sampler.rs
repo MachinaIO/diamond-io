@@ -110,7 +110,7 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
         );
         log_mem("p_hat generated");
         let perturbed_syndrome = target - &(public_matrix * &p_hat);
-        debug_mem("perturbed_syndrome generated");
+        log_mem("perturbed_syndrome generated");
         let mut z_hat_mat = DCRTPolyMatrix::zero(params, d * k, target_cols);
         let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
             let nrow = row_offsets.len();
