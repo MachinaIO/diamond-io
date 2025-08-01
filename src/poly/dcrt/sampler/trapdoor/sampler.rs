@@ -214,30 +214,17 @@ pub(crate) fn gauss_samp_gq_arb_base(
     let depth = params.crt_depth();
     let k_res_bits = params.crt_bits();
     let k_res_digits = params.modulus_digits() / depth;
-
-    // Time and log the DCRTGaussSampGqArbBase function call.
-    let result = timed(
-        &format!(
-            "DCRTGaussSampGqArbBase (tower_idx: {}, n: {}, k_res_digits: {})",
-            tower_idx, n, k_res_digits
-        ),
-        || {
-            let res = DCRTGaussSampGqArbBase(
-                syndrome.get_poly(),
-                c,
-                n,
-                depth,
-                k_res_bits,
-                k_res_digits,
-                base as i64,
-                sigma,
-                tower_idx,
-            );
-            log_mem(&format!("DCRTGaussSampGqArbBase completed for tower_idx: {}", tower_idx));
-            res
-        },
+    let result = DCRTGaussSampGqArbBase(
+        syndrome.get_poly(),
+        c,
+        n,
+        depth,
+        k_res_bits,
+        k_res_digits,
+        base as i64,
+        sigma,
+        tower_idx,
     );
-
     debug_assert_eq!(result.len(), n as usize * k_res_digits);
     // let mut matrix = I64Matrix::new_empty(&I64MatrixParams, k_res, n as usize);
     parallel_iter!(0..k_res_digits)
