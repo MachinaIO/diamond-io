@@ -152,6 +152,15 @@ pub fn timed_read<T, F: FnOnce() -> T>(label: &str, f: F, total: &mut Duration) 
     res
 }
 
+/// Execute a function and log the elapsed time.
+pub fn timed<T, F: FnOnce() -> T>(label: &str, f: F) -> T {
+    let start = Instant::now();
+    let res = f();
+    let elapsed = start.elapsed();
+    info!("{} completed in {:?}", label, elapsed);
+    res
+}
+
 pub fn init_tracing() {
     tracing_subscriber::fmt::init();
 }

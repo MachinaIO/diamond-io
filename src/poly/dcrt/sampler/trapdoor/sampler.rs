@@ -9,7 +9,7 @@ use crate::{
         sampler::{DistType, PolyTrapdoorSampler, PolyUniformSampler},
         Poly, PolyMatrix, PolyParams,
     },
-    utils::{debug_mem, log_mem},
+    utils::{debug_mem, log_mem, timed},
 };
 use openfhe::ffi::DCRTGaussSampGqArbBase;
 use rayon::iter::ParallelIterator;
@@ -70,91 +70,121 @@ impl PolyTrapdoorSampler for DCRTPolyTrapdoorSampler {
 
         let n = params.ring_dimension() as usize;
         let k = params.modulus_digits();
-        let s = SPECTRAL_CONSTANT *
-            (self.base as f64 + 1.0) *
-            SIGMA *
-            SIGMA *
-            (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
-        let dgg_large_std = (s * s - self.c * self.c).sqrt();
-        let peikert = dgg_large_std < KARNEY_THRESHOLD;
-        let (dgg_large_mean, dgg_large_table) = if dgg_large_std > KARNEY_THRESHOLD {
-            (None, None)
-        } else {
-            let acc: f64 = 5e-32;
-            let m = (-2.0 * acc.ln()).sqrt();
-            let fin = (dgg_large_std * m).ceil() as usize;
+        
+        // Compute parameters.
+        let (s, dgg_large_mean, dgg_large_std, dgg_large_table, peikert) = timed("Compute DGG parameters", || {
+            let s = SPECTRAL_CONSTANT *
+                (self.base as f64 + 1.0) *
+                SIGMA *
+                SIGMA *
+                (((d * n * k) as f64).sqrt() + ((2 * n) as f64).sqrt() + 4.7);
+            let dgg_large_std = (s * s - self.c * self.c).sqrt();
+            let peikert = dgg_large_std < KARNEY_THRESHOLD;
+            let (dgg_large_mean, dgg_large_table) = if dgg_large_std > KARNEY_THRESHOLD {
+                (None, None)
+            } else {
+                let acc: f64 = 5e-32;
+                let m = (-2.0 * acc.ln()).sqrt();
+                let fin = (dgg_large_std * m).ceil() as usize;
 
-            let mut m_vals = Vec::with_capacity(fin);
-            let variance = 2.0 * dgg_large_std * dgg_large_std;
-            let mut cusum = 0.0f64;
-            for i in 1..=fin {
-                cusum += (-(i as f64 * i as f64) / variance).exp();
-                m_vals.push(cusum);
-            }
-            let m_a = 1.0 / (2.0 * cusum + 1.0);
-            for i in 0..fin {
-                m_vals[i] *= m_a;
-            }
-            (Some(m_a), Some(m_vals))
-        };
+                let mut m_vals = Vec::with_capacity(fin);
+                let variance = 2.0 * dgg_large_std * dgg_large_std;
+                let mut cusum = 0.0f64;
+                for i in 1..=fin {
+                    cusum += (-(i as f64 * i as f64) / variance).exp();
+                    m_vals.push(cusum);
+                }
+                let m_a = 1.0 / (2.0 * cusum + 1.0);
+                for i in 0..fin {
+                    m_vals[i] *= m_a;
+                }
+                (Some(m_a), Some(m_vals))
+            };
+            (s, dgg_large_mean, dgg_large_std, dgg_large_table, peikert)
+        });
+        
         let dgg_large_params =
             (dgg_large_mean, dgg_large_std, dgg_large_table.as_ref().map(|v| &v[..]));
         log_mem("preimage parameters computed");
-        let p_hat = trapdoor.sample_pert_square_mat(
-            s,
-            self.c,
-            self.sigma,
-            dgg_large_params,
-            peikert,
-            target_cols,
-        );
+        
+        // Sample perturbation matrix.
+        let p_hat = timed("Sample perturbation matrix (p_hat)", || {
+            trapdoor.sample_pert_square_mat(
+                s,
+                self.c,
+                self.sigma,
+                dgg_large_params,
+                peikert,
+                target_cols,
+            )
+        });
         log_mem("p_hat generated");
-        let perturbed_syndrome = target - &(public_matrix * &p_hat);
+        
+        // Compute perturbed syndrome.
+        let perturbed_syndrome = timed("Compute perturbed syndrome", || {
+            target - &(public_matrix * &p_hat)
+        });
         log_mem("perturbed_syndrome generated");
+        
+        // Generate z_hat_mat.
         let mut z_hat_mat = DCRTPolyMatrix::zero(params, d * k, target_cols);
-        let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
-            let nrow = row_offsets.len();
-            let ncol = col_offsets.len();
-            let perturbed_syndromes = perturbed_syndrome.block_entries(row_offsets, col_offsets);
-            let decomposed_results = parallel_iter!(0..nrow)
-                .map(|i| {
-                    let row_results: Vec<_> = parallel_iter!(0..ncol)
-                        .map(|j| {
-                            let decomposed = decompose_dcrt_gadget(
-                                &perturbed_syndromes[i][j],
-                                self.c,
-                                params,
-                                self.base,
-                                self.sigma,
-                            );
-                            (i, j, decomposed)
-                        })
-                        .collect();
-                    row_results
-                })
-                .flatten()
-                .collect::<Vec<_>>();
+        timed("Generate z_hat_mat (decomposition)", || {
+            let f = |row_offsets: Range<usize>, col_offsets: Range<usize>| -> Vec<Vec<DCRTPoly>> {
+                let nrow = row_offsets.len();
+                let ncol = col_offsets.len();
+                let perturbed_syndromes = perturbed_syndrome.block_entries(row_offsets, col_offsets);
+                let decomposed_results = parallel_iter!(0..nrow)
+                    .map(|i| {
+                        let row_results: Vec<_> = parallel_iter!(0..ncol)
+                            .map(|j| {
+                                let decomposed = decompose_dcrt_gadget(
+                                    &perturbed_syndromes[i][j],
+                                    self.c,
+                                    params,
+                                    self.base,
+                                    self.sigma,
+                                );
+                                (i, j, decomposed)
+                            })
+                            .collect();
+                        row_results
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>();
 
-            let mut block_matrix = vec![vec![DCRTPoly::const_zero(params); ncol]; k * nrow];
-            for (i, j, decomposed) in decomposed_results {
-                debug_assert_eq!(decomposed[0].len(), 1);
-                for (decomposed_idx, vec) in decomposed.iter().enumerate() {
-                    block_matrix[i * k + decomposed_idx][j] = vec[0].clone();
+                let mut block_matrix = vec![vec![DCRTPoly::const_zero(params); ncol]; k * nrow];
+                for (i, j, decomposed) in decomposed_results {
+                    debug_assert_eq!(decomposed[0].len(), 1);
+                    for (decomposed_idx, vec) in decomposed.iter().enumerate() {
+                        block_matrix[i * k + decomposed_idx][j] = vec[0].clone();
+                    }
                 }
-            }
-            block_matrix
-        };
-        z_hat_mat.replace_entries_with_expand(0..d, 0..target_cols, k, 1, f);
+                block_matrix
+            };
+            z_hat_mat.replace_entries_with_expand(0..d, 0..target_cols, k, 1, f);
+        });
         log_mem("z_hat_mat generated");
-        let r_z_hat = &trapdoor.r * &z_hat_mat;
+        
+        // Compute r * z_hat.
+        let r_z_hat = timed("Compute r * z_hat", || {
+            &trapdoor.r * &z_hat_mat
+        });
         debug_mem("r_z_hat generated");
-        let e_z_hat = &trapdoor.e * &z_hat_mat;
+        
+        // Compute e * z_hat.
+        let e_z_hat = timed("Compute e * z_hat", || {
+            &trapdoor.e * &z_hat_mat
+        });
         debug_mem("e_z_hat generated");
-        let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
-            .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
-        let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
-        log_mem("z_hat generated");
-        z_hat_former.concat_rows(&[&z_hat_latter])
+        
+        // Construct final z_hat.
+        timed("Construct final z_hat", || {
+            let z_hat_former = (p_hat.slice_rows(0, d) + r_z_hat)
+                .concat_rows(&[&(p_hat.slice_rows(d, 2 * d) + e_z_hat)]);
+            let z_hat_latter = p_hat.slice_rows(2 * d, d * (k + 2)) + z_hat_mat;
+            log_mem("z_hat generated");
+            z_hat_former.concat_rows(&[&z_hat_latter])
+        })
     }
 }
 
