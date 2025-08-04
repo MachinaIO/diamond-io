@@ -1,7 +1,8 @@
 use crate::{
-    bgg::lut::public_lut::PublicLut,
+    bgg::{circuit::GateId, lut::public_lut::PublicLut},
     poly::{Poly, PolyElem, PolyParams},
 };
+use num_bigint::BigUint;
 use rayon::prelude::*;
 use std::{
     fmt::Debug,
@@ -25,6 +26,7 @@ pub trait Evaluable:
 
     fn rotate(self, params: &Self::Params, shift: usize) -> Self;
     fn from_digits(params: &Self::Params, one: &Self, digits: &[u32]) -> Self;
+    fn large_scalar_mul(&self, params: &Self::Params, scalar: &[BigUint]) -> Self;
 }
 
 impl<P: Poly> Evaluable for P {
@@ -44,16 +46,21 @@ impl<P: Poly> Evaluable for P {
             .collect();
         Self::from_coeffs(params, &coeffs)
     }
+
+    fn large_scalar_mul(&self, params: &Self::Params, scalar: &[BigUint]) -> Self {
+        let scalar = P::from_biguints(params, scalar);
+        self.clone() * scalar
+    }
 }
 
 pub trait PltEvaluator<E: Evaluable>: Send + Sync {
-    fn public_lookup(&self, params: &E::Params, plt: &PublicLut<E::P>, input: E, id: usize) -> E;
+    fn public_lookup(&self, params: &E::Params, plt: &PublicLut<E::P>, input: E, id: GateId) -> E;
 }
 
 #[derive(Debug, Clone)]
 pub struct PolyPltEvaluator {}
 impl<P: Poly> PltEvaluator<P> for PolyPltEvaluator {
-    fn public_lookup(&self, _: &P::Params, plt: &PublicLut<P>, input: P, _: usize) -> P {
+    fn public_lookup(&self, _: &P::Params, plt: &PublicLut<P>, input: P, _: GateId) -> P {
         plt.f.get(&input).expect("PolyPltEvaluator's public lookup cannot fetch y_k").1.clone()
     }
 }

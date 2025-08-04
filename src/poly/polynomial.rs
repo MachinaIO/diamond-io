@@ -5,12 +5,13 @@ use std::{
     hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     path::Path,
+    sync::Arc,
 };
 
 use super::element::PolyElem;
 
 pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
-    type Modulus: Debug + Clone;
+    type Modulus: Debug + Clone + Into<Arc<BigUint>>;
     /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n -
     /// 1)`.
     fn modulus(&self) -> Self::Modulus;
@@ -24,6 +25,9 @@ pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
     /// Returns the integer `n` that specifies the size of the polynomial ring used in this
     /// polynomial. Specifically, this is the degree parameter for the ring `Z_q[x]/(x^n - 1)`.
     fn ring_dimension(&self) -> u32;
+    /// Given the parameter, return the crt decomposed moduli as array along with the bit size and
+    /// depth of these moduli.
+    fn to_crt(&self) -> (Vec<u64>, usize, usize);
 }
 
 pub trait Poly:
@@ -62,6 +66,7 @@ pub trait Poly:
         Self::from_coeffs(params, &coeffs)
     }
     fn from_compact_bytes(params: &Self::Params, bytes: &[u8]) -> Self;
+    fn from_biguints(params: &Self::Params, coeffs: &[BigUint]) -> Self;
     fn coeffs(&self) -> Vec<Self::Elem>;
     fn coeffs_digits(&self) -> Vec<u32> {
         self.coeffs()
@@ -104,6 +109,11 @@ pub trait Poly:
     fn to_bool_vec(&self) -> Vec<bool>;
     fn to_compact_bytes(&self) -> Vec<u8>;
     fn to_const_int(&self) -> usize;
+    fn modulus_switch(
+        &self,
+        params: &Self::Params,
+        new_modulus: <Self::Params as PolyParams>::Modulus,
+    ) -> Self;
 
     /// Reads a polynomial with id from files under the given directory.
     /// Uses synchronous `std::fs::read` since polynomial files are typically ~0.4MB,

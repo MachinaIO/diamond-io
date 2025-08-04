@@ -1,6 +1,9 @@
 use super::{circuit::Evaluable, BggPublicKey};
 use crate::{
-    bgg::{circuit::PltEvaluator, lut::public_lut::PublicLut},
+    bgg::{
+        circuit::{GateId, PltEvaluator},
+        lut::public_lut::PublicLut,
+    },
     poly::{sampler::PolyHashSampler, Poly, PolyMatrix, PolyParams},
     utils::timed_read,
 };
@@ -159,6 +162,18 @@ impl<M: PolyMatrix> Evaluable for BggEncoding<M> {
         let plaintext = one.plaintext.clone().map(|plaintext| plaintext * const_poly);
         Self { vector, pubkey, plaintext }
     }
+
+    fn large_scalar_mul(&self, params: &Self::Params, scalar: &[num_bigint::BigUint]) -> Self {
+        let scalar = Self::P::from_biguints(params, scalar);
+        let row_size = self.pubkey.matrix.row_size();
+        let scalar_gadget = M::gadget_matrix(params, row_size) * &scalar;
+        let decomposed = scalar_gadget.decompose();
+        let vector = self.vector.clone() * &decomposed;
+        let pubkey_matrix = self.pubkey.matrix.clone() * &decomposed;
+        let pubkey = BggPublicKey::new(pubkey_matrix, self.pubkey.reveal_plaintext);
+        let plaintext = self.plaintext.clone().map(|p| p * scalar);
+        Self { vector, pubkey, plaintext }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -183,7 +198,7 @@ where
         params: &<BggEncoding<M> as Evaluable>::Params,
         plt: &PublicLut<<BggEncoding<M> as Evaluable>::P>,
         input: BggEncoding<M>,
-        id: usize,
+        id: GateId,
     ) -> BggEncoding<M> {
         let z = &input.plaintext.expect("the BGG encoding should revealed plaintext");
         info!("public lookup length is {}", plt.f.len());
@@ -235,7 +250,7 @@ where
 mod tests {
     use crate::{
         bgg::{
-            circuit::PolyCircuit,
+            circuit::{Evaluable, PolyCircuit},
             encoding::BggEncodingPltEvaluator,
             public_key::BggPubKeyPltEvaluator,
             sampler::{BGGEncodingSampler, BGGPublicKeySampler},
@@ -255,7 +270,10 @@ mod tests {
         utils::init_tracing,
     };
     use keccak_asm::Keccak256;
-    use std::sync::Arc;
+    use num_bigint::BigUint;
+    use rand::Rng;
+    use serial_test::serial;
+    use std::{fs, path::Path, sync::Arc};
     use tempfile::tempdir;
     use tokio;
     use tracing::info;
@@ -359,6 +377,47 @@ mod tests {
 
         // Expected result
         let expected = enc1.clone() * enc2.clone();
+
+        // Verify the result
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vector, expected.vector);
+        assert_eq!(result[0].pubkey.matrix, expected.pubkey.matrix);
+        assert_eq!(result[0].plaintext.as_ref().unwrap(), expected.plaintext.as_ref().unwrap());
+    }
+
+    #[test]
+    fn test_encoding_large_scalar_mul() {
+        // Create parameters for testing
+        let params = DCRTPolyParams::default();
+        let d = 3;
+        let input_size = 1;
+        let encodings = random_bgg_encodings(input_size, d, &params);
+        let enc_one = encodings[0].clone();
+        let enc1 = encodings[1].clone();
+
+        // Create a simple circuit with a Mul operation
+        let mut circuit = PolyCircuit::new();
+        let inputs = circuit.input(1);
+        // Create scalar values for multiplication
+        let scalar = vec![
+            BigUint::from(2u32),
+            BigUint::from(7u32),
+            BigUint::from(4u32),
+            BigUint::from(1u32),
+        ];
+        let mul_gate = circuit.large_scalar_mul(inputs[0], scalar.clone());
+        circuit.output(vec![mul_gate]);
+
+        // Evaluate the circuit
+        let result = circuit.eval(
+            &params,
+            &enc_one,
+            &[enc1.clone()],
+            None::<BggEncodingPltEvaluator<DCRTPolyMatrix, DCRTPolyHashSampler<Keccak256>>>,
+        );
+
+        // Expected result
+        let expected = enc1.large_scalar_mul(&params, &scalar);
 
         // Verify the result
         assert_eq!(result.len(), 1);

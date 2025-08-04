@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DCRTPoly {
     ptr_poly: Arc<UniquePtr<DCRTPolyCxx>>,
 }
@@ -36,20 +36,6 @@ impl DCRTPoly {
     #[inline]
     pub fn get_poly(&self) -> &UniquePtr<DCRTPolyCxx> {
         &self.ptr_poly
-    }
-
-    pub fn modulus_switch(
-        &self,
-        params: &DCRTPolyParams,
-        new_modulus: <DCRTPolyParams as PolyParams>::Modulus,
-    ) -> Self {
-        debug_assert!(new_modulus < params.modulus());
-        let coeffs = self.coeffs();
-        let new_coeffs = coeffs
-            .par_iter()
-            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
-            .collect::<Vec<FinRingElem>>();
-        DCRTPoly::from_coeffs(params, &new_coeffs)
     }
 
     fn poly_gen_from_vec(params: &DCRTPolyParams, values: Vec<String>) -> Self {
@@ -69,6 +55,12 @@ impl DCRTPoly {
             params.crt_bits(),
             &value,
         ))
+    }
+}
+
+impl Debug for DCRTPoly {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DCRTPoly").field("coefficients", &self.coeffs()).finish()
     }
 }
 
@@ -108,7 +100,12 @@ impl Poly for DCRTPoly {
         reconstructed
     }
 
-    #[inline]
+    fn from_biguints(params: &Self::Params, coeffs: &[BigUint]) -> Self {
+        let fin_ring_coeffs: Vec<FinRingElem> =
+            coeffs.iter().map(|coeff| FinRingElem::new(coeff.clone(), params.modulus())).collect();
+        Self::from_coeffs(params, &fin_ring_coeffs)
+    }
+
     fn const_zero(params: &Self::Params) -> Self {
         Self::poly_gen_from_const(params, BigUint::ZERO.to_string())
     }
@@ -305,6 +302,20 @@ impl Poly for DCRTPoly {
             sum = sum.saturating_add((1usize << i).saturating_mul(c as usize));
         }
         sum
+    }
+
+    fn modulus_switch(
+        &self,
+        params: &Self::Params,
+        new_modulus: <Self::Params as PolyParams>::Modulus,
+    ) -> Self {
+        debug_assert!(new_modulus < params.modulus());
+        let coeffs = self.coeffs();
+        let new_coeffs = coeffs
+            .par_iter()
+            .map(|coeff| coeff.modulus_switch(new_modulus.clone()))
+            .collect::<Vec<FinRingElem>>();
+        DCRTPoly::from_coeffs(params, &new_coeffs)
     }
 
     fn from_bool_vec(params: &Self::Params, coeffs: &[bool]) -> Self {
