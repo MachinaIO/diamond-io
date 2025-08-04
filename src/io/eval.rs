@@ -1,20 +1,18 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
 use super::{params::ObfuscationParams, utils::build_poly_vec};
+use crate::io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData};
+use itertools::Itertools;
 #[cfg(feature = "debug")]
-use crate::parallel_iter;
-use crate::{
-    bgg::{
-        encoding::BggEncodingPltEvaluator, sampler::BGGPublicKeySampler, BggEncoding, DigitsToInt,
-    },
-    io::utils::{build_final_digits_circuit, sample_public_key_by_id, PublicSampledData},
-    poly::{
-        sampler::{PolyHashSampler, PolyTrapdoorSampler},
-        Poly, PolyMatrix, PolyParams,
-    },
+use mxx::parallel_iter;
+use mxx::{
+    bgg::{digits_to_int::DigitsToInt, encoding::BggEncoding, sampler::BGGPublicKeySampler},
+    circuit::bgg_encoding::BggEncodingPltEvaluator,
+    matrix::PolyMatrix,
+    poly::{Poly, PolyParams},
+    sampler::{PolyHashSampler, PolyTrapdoorSampler},
     utils::{log_mem, timed_read},
 };
-use itertools::Itertools;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -90,6 +88,8 @@ where
     let minus_t_bar = timed_read(
         "minus_t_bar",
         || {
+            use mxx::poly::Poly;
+
             <<M as PolyMatrix>::P as Poly>::read_from_file(
                 &obf_params.params,
                 &dir_path,
@@ -363,6 +363,8 @@ where
         let hardcoded_key = timed_read(
             "hardcoded_key",
             || {
+                use mxx::poly::Poly;
+
                 <<M as PolyMatrix>::P as Poly>::read_from_file(
                     &obf_params.params,
                     &dir_path,

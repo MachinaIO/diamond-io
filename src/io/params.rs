@@ -1,6 +1,7 @@
-use crate::{
-    bgg::circuit::PolyCircuit,
-    poly::{Poly, PolyMatrix, PolyParams},
+use mxx::{
+    circuit::PolyCircuit,
+    matrix::PolyMatrix,
+    poly::{Poly, PolyParams},
 };
 
 #[derive(Debug, Clone)]

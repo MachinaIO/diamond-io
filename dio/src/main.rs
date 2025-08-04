@@ -2,24 +2,29 @@ use circuit::BenchCircuit;
 use clap::{Parser, Subcommand, ValueEnum};
 use config::{RunBenchConfig, SimBenchNormConfig};
 use diamond_io::{
-    bgg::{BggPublicKey, circuit::PolyPltEvaluator},
     io::{
         eval::evaluate,
         obf::obfuscate,
         params::ObfuscationParams,
         utils::{PublicSampledData, build_final_digits_circuit},
     },
-    poly::{
-        Poly, PolyElem, PolyMatrix, PolyParams,
-        dcrt::{
-            DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler, FinRingElem,
-        },
-        enc::rlwe_encrypt,
-        sampler::{DistType, PolyUniformSampler},
-    },
     test_utils::setup_lsb_plt,
     utils::{calculate_directory_size, init_tracing},
+};
+use mxx::{
+    bgg::public_key::BggPublicKey,
+    circuit::poly::PolyPltEvaluator,
+    element::{PolyElem, finite_ring::FinRingElem},
+    matrix::{PolyMatrix, dcrt_poly::DCRTPolyMatrix},
+    poly::{
+        Poly, PolyParams,
+        dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
+    },
+    rlwe_enc::rlwe_encrypt,
+    sampler::{
+        DistType, PolyUniformSampler, hash::DCRTPolyHashSampler, trapdoor::DCRTPolyTrapdoorSampler,
+        uniform::DCRTPolyUniformSampler,
+    },
 };
 use num_traits::identities::One;
 

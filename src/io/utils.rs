@@ -1,12 +1,14 @@
-use crate::{
-    bgg::{
-        circuit::{build_composite_circuit_from_public_and_fhe_dec, Evaluable, PolyCircuit},
-        sampler::*,
-        BggPublicKey,
-    },
-    poly::{element::PolyElem, sampler::*, Poly, PolyMatrix, PolyParams},
-};
 use std::marker::PhantomData;
+
+use crate::io::composite_circuit::build_composite_circuit_from_public_and_fhe_dec;
+use mxx::{
+    bgg::{public_key::BggPublicKey, sampler::BGGPublicKeySampler},
+    circuit::{Evaluable, PolyCircuit},
+    element::PolyElem,
+    matrix::PolyMatrix,
+    poly::{Poly, PolyParams},
+    sampler::{DistType, PolyHashSampler},
+};
 
 use super::params::ObfuscationParams;
 
@@ -197,18 +199,20 @@ pub fn build_poly_vec<M: PolyMatrix>(
 
 #[cfg(test)]
 mod test {
+    use mxx::{
+        bgg::digits_to_int::DigitsToInt,
+        circuit::poly::PolyPltEvaluator,
+        poly::{
+            dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
+            PolyParams,
+        },
+        rlwe_enc::rlwe_encrypt,
+        sampler::{uniform::DCRTPolyUniformSampler, PolyUniformSampler},
+    };
     use num_bigint::BigUint;
     use num_traits::One;
 
     use super::*;
-    use crate::{
-        bgg::{circuit::PolyPltEvaluator, DigitsToInt},
-        poly::{
-            dcrt::{DCRTPoly, DCRTPolyParams, DCRTPolyUniformSampler},
-            enc::rlwe_encrypt,
-            sampler::DistType,
-        },
-    };
 
     #[test]
     fn test_build_final_step_circuit() {

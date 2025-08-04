@@ -1,6 +1,4 @@
-use crate::bgg::circuit::Evaluable;
-
-use super::PolyCircuit;
+use mxx::circuit::{Evaluable, PolyCircuit};
 
 /// Build a circuit that is a composition of two sub-circuits:
 /// 1. A public circuit that it is assumed to return one or more ciphertexts where each ciphertext
@@ -42,16 +40,18 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        bgg::{circuit::PolyPltEvaluator, DigitsToInt},
+    use mxx::{
+        bgg::digits_to_int::DigitsToInt,
+        circuit::poly::PolyPltEvaluator,
         poly::{
-            dcrt::{params::DCRTPolyParams, poly::DCRTPoly, DCRTPolyUniformSampler},
-            enc::rlwe_encrypt,
-            sampler::{DistType, PolyUniformSampler},
+            dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
             Poly, PolyParams,
         },
+        rlwe_enc::rlwe_encrypt,
+        sampler::{uniform::DCRTPolyUniformSampler, DistType, PolyUniformSampler},
     };
+
+    use super::*;
 
     #[test]
     fn test_build_composite_circuit_from_public_and_fhe_dec() {

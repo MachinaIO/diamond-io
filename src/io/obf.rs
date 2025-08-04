@@ -1,28 +1,24 @@
 #[cfg(feature = "bgm")]
 use super::bgm::Player;
+use crate::io::{
+    params::ObfuscationParams,
+    utils::{
+        build_final_digits_circuit, build_u_mask_multi, sample_public_key_by_id, PublicSampledData,
+    },
+};
+use itertools::Itertools;
 #[cfg(feature = "debug")]
-use crate::storage::store_and_drop_poly;
-use crate::{
-    bgg::{
-        public_key::BggPubKeyPltEvaluator, sampler::BGGPublicKeySampler, BggPublicKey, DigitsToInt,
-    },
-    io::{
-        params::ObfuscationParams,
-        utils::{
-            build_final_digits_circuit, build_u_mask_multi, sample_public_key_by_id,
-            PublicSampledData,
-        },
-    },
-    poly::{
-        enc::rlwe_encrypt,
-        polynomial::Poly,
-        sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
-        PolyMatrix, PolyParams,
-    },
+use mxx::storage::store_and_drop_poly;
+use mxx::{
+    bgg::{digits_to_int::DigitsToInt, public_key::BggPublicKey, sampler::BGGPublicKeySampler},
+    circuit::bgg_public_key::BggPubKeyPltEvaluator,
+    matrix::PolyMatrix,
+    poly::{Poly, PolyParams},
+    rlwe_enc::rlwe_encrypt,
+    sampler::{DistType, PolyHashSampler, PolyTrapdoorSampler, PolyUniformSampler},
     storage::{init_storage_system, store_and_drop_matrix, wait_for_all_writes},
     utils::log_mem,
 };
-use itertools::Itertools;
 use rand::{Rng, RngCore};
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use std::{path::Path, sync::Arc};

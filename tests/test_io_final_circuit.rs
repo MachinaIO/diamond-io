@@ -1,21 +1,20 @@
-use diamond_io::{
-    bgg::{
-        circuit::PolyCircuit, public_key::BggPubKeyPltEvaluator, sampler::BGGPublicKeySampler,
-        BggPublicKey, DigitsToInt,
-    },
-    io::utils::build_final_digits_circuit,
+use diamond_io::{io::utils::build_final_digits_circuit, utils::init_tracing};
+use keccak_asm::Keccak256;
+use mxx::{
+    bgg::{digits_to_int::DigitsToInt, public_key::BggPublicKey, sampler::BGGPublicKeySampler},
+    circuit::{bgg_public_key::BggPubKeyPltEvaluator, PolyCircuit},
+    matrix::dcrt_poly::DCRTPolyMatrix,
     poly::{
-        dcrt::{
-            DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler,
-        },
-        enc::rlwe_encrypt,
-        sampler::{DistType, PolyHashSampler, PolyUniformSampler},
+        dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
         Poly, PolyParams,
     },
-    utils::{init_tracing, log_mem},
+    rlwe_enc::rlwe_encrypt,
+    sampler::{
+        hash::DCRTPolyHashSampler, trapdoor::DCRTPolyTrapdoorSampler,
+        uniform::DCRTPolyUniformSampler, DistType, PolyHashSampler, PolyUniformSampler,
+    },
+    utils::log_mem,
 };
-use keccak_asm::Keccak256;
 use rand::Rng;
 use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 

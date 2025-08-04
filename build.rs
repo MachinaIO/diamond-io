@@ -44,11 +44,11 @@ fn main() {
         for (file_name, url) in bgm_files {
             let bgm_file = bgm_dir.join(file_name);
             if !bgm_file.exists() {
-                println!("Downloading {}", file_name);
+                println!("Downloading {file_name}");
                 let response = reqwest::blocking::get(url).expect("Failed to download file");
                 let content = response.bytes().expect("Failed to read response");
                 fs::write(bgm_file, content).expect("Failed to write file");
-                println!("Downloaded {}", file_name);
+                println!("Downloaded {file_name}");
             }
         }
     }

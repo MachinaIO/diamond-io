@@ -1,7 +1,4 @@
-use diamond_io::{
-    bgg::{circuit::PolyCircuit, lut::public_lut::PublicLut},
-    poly::dcrt::DCRTPoly,
-};
+use mxx::{circuit::PolyCircuit, lookup::public_lookup::PublicLut, poly::dcrt::poly::DCRTPoly};
 
 pub enum BenchCircuit {
     AddMul(PolyCircuit<DCRTPoly>),

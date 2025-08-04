@@ -1,17 +1,22 @@
 use crate::{
-    bgg::{circuit::PolyCircuit, lut::public_lut::PublicLut},
     io::{eval::evaluate, obf::obfuscate, params::ObfuscationParams},
-    poly::{
-        dcrt::{
-            DCRTPoly, DCRTPolyHashSampler, DCRTPolyMatrix, DCRTPolyParams, DCRTPolyTrapdoorSampler,
-            DCRTPolyUniformSampler,
-        },
-        sampler::{DistType, PolyUniformSampler},
-        Poly, PolyParams,
-    },
-    utils::{calculate_directory_size, init_tracing, log_mem},
+    utils::{calculate_directory_size, init_tracing},
 };
 use keccak_asm::Keccak256;
+use mxx::{
+    circuit::PolyCircuit,
+    lookup::public_lookup::PublicLut,
+    matrix::dcrt_poly::DCRTPolyMatrix,
+    poly::{
+        dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
+        Poly, PolyParams,
+    },
+    sampler::{
+        hash::DCRTPolyHashSampler, trapdoor::DCRTPolyTrapdoorSampler,
+        uniform::DCRTPolyUniformSampler, DistType, PolyUniformSampler,
+    },
+    utils::log_mem,
+};
 use num_bigint::BigUint;
 use num_traits::Num;
 use rand::{rng, Rng};
@@ -208,10 +213,10 @@ fn setup_lsb_constant_binary_plt(t_n: usize, params: &DCRTPolyParams) -> PublicL
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
-        let r_val: usize = rng.random_range(0..2 as usize);
+        let r_val: usize = rng.random_range(0..2_usize);
         f.insert(
-            DCRTPoly::from_usize_to_lsb(&params, k),
-            (k, DCRTPoly::from_usize_to_constant(&params, r_val)),
+            DCRTPoly::from_usize_to_lsb(params, k),
+            (k, DCRTPoly::from_usize_to_constant(params, r_val)),
         );
     }
 
@@ -223,8 +228,8 @@ pub fn setup_lsb_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRTPoly>
     for k in 0..t_n {
         let r_val: usize = t_n - k;
         f.insert(
-            DCRTPoly::from_usize_to_lsb(&params, k),
-            (k, DCRTPoly::from_usize_to_lsb(&params, r_val)),
+            DCRTPoly::from_usize_to_lsb(params, k),
+            (k, DCRTPoly::from_usize_to_lsb(params, r_val)),
         );
     }
 
@@ -235,10 +240,10 @@ pub fn setup_constant_plt(t_n: usize, params: &DCRTPolyParams) -> PublicLut<DCRT
     let mut f = HashMap::new();
     let mut rng = rng();
     for k in 0..t_n {
-        let r_val: usize = rng.random_range(0..t_n as usize);
+        let r_val: usize = rng.random_range(0..t_n);
         f.insert(
-            DCRTPoly::from_usize_to_constant(&params, k),
-            (k, DCRTPoly::from_usize_to_constant(&params, r_val)),
+            DCRTPoly::from_usize_to_constant(params, k),
+            (k, DCRTPoly::from_usize_to_constant(params, r_val)),
         );
     }
 

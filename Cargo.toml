@@ -17,6 +17,7 @@ disk = ["libc", "memmap2"]
 cpu = []
 
 [dependencies]
+mxx = { path = "../mxx" }
 tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros"] }
 futures = "0.3"
 libc = { version = "0.2", optional = true }
@@ -70,12 +71,3 @@ codegen-units = 16
 inherits = "release"
 debug = "full"
 strip = "none"
-
-
-[[bench]]
-name = "dcrtpoly"
-harness = false
-
-[[bench]]
-name = "dcrtmatrix"
-harness = false
