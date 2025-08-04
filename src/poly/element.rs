@@ -1,6 +1,8 @@
+use num_bigint::BigUint;
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    sync::Arc,
 };
 
 pub trait PolyElem:
@@ -22,7 +24,7 @@ pub trait PolyElem:
     + for<'a> Sub<&'a Self, Output = Self>
     + for<'a> Mul<&'a Self, Output = Self>
 {
-    type Modulus: Debug + Clone;
+    type Modulus: Debug + Clone + Into<Arc<BigUint>>;
     fn zero(modulus: &Self::Modulus) -> Self;
     fn one(modulus: &Self::Modulus) -> Self;
     fn minus_one(modulus: &Self::Modulus) -> Self;

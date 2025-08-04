@@ -5,6 +5,7 @@ use crate::{
     },
     poly::Poly,
 };
+use num_bigint::BigUint;
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,6 +228,26 @@ impl<P: Poly> BigUintPoly<P> {
             limbs.push(cmuxed);
         }
         Self { ctx: self.ctx.clone(), limbs, _p: PhantomData }
+    }
+
+    // return a gate id of an integeter corresponding to the big-integer representation of `limbs`.
+    // namely, `out = limbs[0] + 2^{limb_bit_size} * limbs[1] + ... + 2^{limb_bit_size * (k-1)} *
+    // limbs[k-1]`
+    pub fn finalize(&self, circuit: &mut PolyCircuit<P>) -> GateId {
+        debug_assert!(!self.limbs.is_empty(), "limbs should not be empty");
+
+        let mut result = self.limbs[0];
+
+        for i in 1..self.limbs.len() {
+            // Create BigUint for 2^{limb_bit_size * i}
+            let power_exponent = self.ctx.limb_bit_size * i;
+            let power_of_two = BigUint::from(1u32) << power_exponent;
+
+            let weighted_limb = circuit.large_scalar_mul(self.limbs[i], vec![power_of_two]);
+            result = circuit.add_gate(result, weighted_limb);
+        }
+
+        result
     }
 }
 
@@ -814,5 +835,44 @@ mod tests {
             let coeffs = eval_result[i].coeffs();
             assert_eq!(*coeffs[0].value(), expected_limbs[i].into());
         }
+    }
+
+    #[test]
+    fn test_biguint_finalize() {
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let (inputs, params, ctx) = create_test_context(&mut circuit, LIMB_LEN);
+        let big_a = BigUintPoly::<DCRTPoly>::new(ctx.clone(), inputs[0..LIMB_LEN].to_vec());
+        let finalized = big_a.finalize(&mut circuit);
+        circuit.output(vec![finalized]);
+
+        let test_value = 12345u32;
+        let a = create_test_biguint_from_value(ctx.clone(), &params, test_value);
+        let plt_evaluator = PolyPltEvaluator::new();
+        let eval_result =
+            circuit.eval(&params, &DCRTPoly::const_one(&params), &a, Some(plt_evaluator));
+
+        assert_eq!(eval_result.len(), 1);
+        let coeffs = eval_result[0].coeffs();
+        assert_eq!(*coeffs[0].value(), test_value.into());
+    }
+
+    #[test]
+    fn test_biguint_finalize_large_value() {
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let (inputs, params, ctx) = create_test_context(&mut circuit, LIMB_LEN);
+        let big_a = BigUintPoly::<DCRTPoly>::new(ctx.clone(), inputs[0..LIMB_LEN].to_vec());
+        let finalized = big_a.finalize(&mut circuit);
+        circuit.output(vec![finalized]);
+
+        // Use a value that spans multiple limbs (2^20 - 1 = 1048575)
+        let test_value = 1048575u32;
+        let a = create_test_biguint_from_value(ctx.clone(), &params, test_value);
+        let plt_evaluator = PolyPltEvaluator::new();
+        let eval_result =
+            circuit.eval(&params, &DCRTPoly::const_one(&params), &a, Some(plt_evaluator));
+
+        assert_eq!(eval_result.len(), 1);
+        let coeffs = eval_result[0].coeffs();
+        assert_eq!(*coeffs[0].value(), test_value.into());
     }
 }

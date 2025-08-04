@@ -5,12 +5,13 @@ use std::{
     hash::Hash,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     path::Path,
+    sync::Arc,
 };
 
 use super::element::PolyElem;
 
 pub trait PolyParams: Clone + Debug + PartialEq + Eq + Send + Sync {
-    type Modulus: Debug + Clone;
+    type Modulus: Debug + Clone + Into<Arc<BigUint>>;
     /// Returns the modulus value `q` used for polynomial coefficients in the ring `Z_q[x]/(x^n -
     /// 1)`.
     fn modulus(&self) -> Self::Modulus;

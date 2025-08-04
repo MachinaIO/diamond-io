@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use num_bigint::BigUint;
+
 use crate::{
-    bgg::circuit::PolyCircuit,
+    bgg::circuit::{GateId, PolyCircuit},
     gadgets::montgomery::{MontgomeryContext, MontgomeryPoly},
     poly::{Poly, PolyParams},
 };
@@ -9,6 +11,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrtContext<P: Poly> {
     pub mont_ctxes: Vec<MontgomeryContext<P>>,
+    pub q_over_qis: Vec<BigUint>,
     // pub reconstruct_coeffs: Vec<GateId>,
 }
 
@@ -22,6 +25,10 @@ impl<P: Poly> CrtContext<P> {
                 MontgomeryContext::setup(circuit, params, limb_bit_size, num_limbs, *modulus)
             })
             .collect();
+
+        let total_modulus: Arc<BigUint> = params.modulus().into();
+        let q_over_qis =
+            moduli.iter().map(|modulus| total_modulus.as_ref() / BigUint::from(*modulus)).collect();
 
         // // Compute CRT reconstruction constants: \tilde{q_i} * q_i^*
         // // where \tilde{q_i} = q / q_i and q_i^* = (\tilde{q_i})^{-1} mod q_i
@@ -56,7 +63,7 @@ impl<P: Poly> CrtContext<P> {
         //     reconstruct_coeffs.push(coeff_gate);
         // }
 
-        Self { mont_ctxes }
+        Self { mont_ctxes, q_over_qis }
     }
 }
 
@@ -90,6 +97,15 @@ impl<P: Poly> CrtPoly<P> {
             self.slots.iter().zip(other.slots.iter()).map(|(a, b)| a.mul(b, circuit)).collect();
         Self::new(self.ctx.clone(), new_slots)
     }
+
+    pub fn finalize(&self, circuit: &mut PolyCircuit<P>) -> Vec<GateId> {
+        let mut outputs = vec![];
+        for (q_over_qi, mont_poly) in self.ctx.q_over_qis.iter().zip(self.slots.iter()) {
+            let finalized = mont_poly.finalize(circuit);
+            outputs.push(circuit.large_scalar_mul(finalized, vec![q_over_qi.clone()]));
+        }
+        outputs
+    }
 }
 
 // Extended Euclidean algorithm to compute modular inverse
@@ -117,3 +133,366 @@ impl<P: Poly> CrtPoly<P> {
 
 //     x1 as u64
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        bgg::circuit::{eval::PolyPltEvaluator, PolyCircuit},
+        gadgets::montgomery::MontgomeryPoly,
+        poly::dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
+    };
+    use std::sync::Arc;
+
+    const LIMB_BIT_SIZE: usize = 5;
+
+    fn create_test_context(
+        circuit: &mut PolyCircuit<DCRTPoly>,
+        num_values: usize,
+    ) -> (Vec<GateId>, DCRTPolyParams, Arc<CrtContext<DCRTPoly>>) {
+        let params = DCRTPolyParams::default();
+
+        // First, determine how many limbs we need per CRT slot by creating a temporary context
+        let (moduli, crt_bits, _) = params.to_crt();
+        let num_limbs_per_slot = crt_bits.div_ceil(LIMB_BIT_SIZE);
+        let total_limbs = num_limbs_per_slot * moduli.len() * num_values;
+
+        let inputs = circuit.input(total_limbs);
+        let ctx = Arc::new(CrtContext::setup(circuit, &params, LIMB_BIT_SIZE));
+        (inputs, params, ctx)
+    }
+
+    fn create_test_value_from_u64(params: &DCRTPolyParams, value: u64) -> Vec<DCRTPoly> {
+        let mut limbs = Vec::new();
+        let mut remaining_value = value;
+        let base = 1u64 << LIMB_BIT_SIZE;
+
+        // Create enough limbs for the largest modulus context
+        let (_, crt_bits, _crt_depth) = params.to_crt();
+        let num_limbs = crt_bits.div_ceil(LIMB_BIT_SIZE);
+
+        for _ in 0..num_limbs {
+            let limb_value = remaining_value % base;
+            limbs.push(DCRTPoly::from_usize_to_constant(params, limb_value as usize));
+            remaining_value /= base;
+        }
+        limbs
+    }
+
+    // #[test]
+    // fn test_crt_poly_add() {
+    //     let mut circuit = PolyCircuit::<DCRTPoly>::new();
+    //     let (inputs, params, crt_ctx) = create_test_context(&mut circuit, 2); // 2 values (a and
+    // b)
+
+    //     // Create two CrtPoly values from inputs
+    //     let mut slots_a = Vec::new();
+    //     let mut slots_b = Vec::new();
+    //     let mut input_offset = 0;
+    //     let (_, crt_bits, _) = params.to_crt();
+    //     let num_limbs_per_slot = crt_bits.div_ceil(LIMB_BIT_SIZE);
+
+    //     for mont_ctx in &crt_ctx.mont_ctxes {
+    //         // Create BigUintPoly from input gates for value A
+    //         let big_uint_a = crate::gadgets::big_uint::BigUintPoly::new(
+    //             mont_ctx.big_uint_ctx.clone(),
+    //             inputs[input_offset..input_offset + num_limbs_per_slot].to_vec(),
+    //         );
+    //         input_offset += num_limbs_per_slot;
+
+    //         // Create BigUintPoly from input gates for value B
+    //         let big_uint_b = crate::gadgets::big_uint::BigUintPoly::new(
+    //             mont_ctx.big_uint_ctx.clone(),
+    //             inputs[input_offset..input_offset + num_limbs_per_slot].to_vec(),
+    //         );
+    //         input_offset += num_limbs_per_slot;
+
+    //         // Convert to Montgomery form
+    //         let mont_a =
+    //             MontgomeryPoly::from_regular(&mut circuit, Arc::new(mont_ctx.clone()),
+    // big_uint_a);         let mont_b =
+    //             MontgomeryPoly::from_regular(&mut circuit, Arc::new(mont_ctx.clone()),
+    // big_uint_b);
+
+    //         slots_a.push(mont_a);
+    //         slots_b.push(mont_b);
+    //     }
+
+    //     let crt_poly_a = CrtPoly::new(crt_ctx.clone(), slots_a);
+    //     let crt_poly_b = CrtPoly::new(crt_ctx.clone(), slots_b);
+
+    //     // Perform addition
+    //     let crt_sum = crt_poly_a.add(&crt_poly_b, &mut circuit);
+
+    //     // Finalize to get output
+    //     let outputs = crt_sum.finalize(&mut circuit);
+    //     circuit.output(outputs);
+
+    //     // Prepare test values - different values for each CRT slot
+    //     let values_a = vec![3, 7, 11, 2]; // Different values for each CRT slot
+    //     let values_b = vec![5, 2, 4, 9]; // Different values for each CRT slot
+
+    //     let mut input_values = Vec::new();
+    //     let (_, crt_bits, _) = params.to_crt();
+    //     let num_limbs_per_slot = crt_bits.div_ceil(LIMB_BIT_SIZE);
+
+    //     for (i, _mont_ctx) in crt_ctx.mont_ctxes.iter().enumerate() {
+    //         let val_a = values_a[i % values_a.len()];
+    //         let val_b = values_b[i % values_b.len()];
+
+    //         // Create limb values for each slot
+    //         input_values
+    //             .extend(create_test_value_from_u64(&params,
+    // val_a)[0..num_limbs_per_slot].to_vec());         input_values
+    //             .extend(create_test_value_from_u64(&params,
+    // val_b)[0..num_limbs_per_slot].to_vec());     }
+
+    //     // Evaluate the circuit
+    //     let plt_evaluator = PolyPltEvaluator::new();
+    //     let eval_result = circuit.eval(
+    //         &params,
+    //         &DCRTPoly::const_one(&params),
+    //         &input_values,
+    //         Some(plt_evaluator),
+    //     );
+
+    //     // Verify the results
+    //     assert_eq!(eval_result.len(), crt_ctx.mont_ctxes.len());
+
+    //     for (i, result_poly) in eval_result.iter().enumerate() {
+    //         let coeffs = result_poly.coeffs();
+
+    //         // Verify it's a constant polynomial (only first coefficient is non-zero)
+    //         for j in 1..coeffs.len() {
+    //             assert_eq!(*coeffs[j].value(), BigUint::from(0u32));
+    //         }
+
+    //         // Calculate expected value: (q/q_i) * ((sum of values in this slot) mod q_i)
+    //         let val_a = values_a[i % values_a.len()];
+    //         let val_b = values_b[i % values_b.len()];
+    //         let expected_slot_sum = val_a + val_b;
+
+    //         // Get the CRT modulus for this slot from params
+    //         let (moduli, _, _) = params.to_crt();
+    //         let q_i = BigUint::from(moduli[i]);
+    //         let expected_slot_sum_mod = BigUint::from(expected_slot_sum) % &q_i;
+    //         let expected_value = &crt_ctx.q_over_qis[i] * expected_slot_sum_mod;
+
+    //         assert_eq!(*coeffs[0].value(), expected_value);
+    //     }
+    // }
+
+    // #[test]
+    // fn test_crt_poly_add_with_zero() {
+    //     let mut circuit = PolyCircuit::<DCRTPoly>::new();
+    //     let (inputs, params, crt_ctx) = create_test_context(&mut circuit, 2); // 2 values (a and
+    // b)
+
+    //     // Create two CrtPoly values from inputs
+    //     let mut slots_a = Vec::new();
+    //     let mut slots_b = Vec::new();
+    //     let mut input_offset = 0;
+    //     let (_, crt_bits, _) = params.to_crt();
+    //     let num_limbs_per_slot = crt_bits.div_ceil(LIMB_BIT_SIZE);
+
+    //     for mont_ctx in &crt_ctx.mont_ctxes {
+    //         // Create BigUintPoly from input gates for value A
+    //         let big_uint_a = crate::gadgets::big_uint::BigUintPoly::new(
+    //             mont_ctx.big_uint_ctx.clone(),
+    //             inputs[input_offset..input_offset + num_limbs_per_slot].to_vec(),
+    //         );
+    //         input_offset += num_limbs_per_slot;
+
+    //         // Create BigUintPoly from input gates for value B
+    //         let big_uint_b = crate::gadgets::big_uint::BigUintPoly::new(
+    //             mont_ctx.big_uint_ctx.clone(),
+    //             inputs[input_offset..input_offset + num_limbs_per_slot].to_vec(),
+    //         );
+    //         input_offset += num_limbs_per_slot;
+
+    //         // Convert to Montgomery form
+    //         let mont_a =
+    //             MontgomeryPoly::from_regular(&mut circuit, Arc::new(mont_ctx.clone()),
+    // big_uint_a);         let mont_b =
+    //             MontgomeryPoly::from_regular(&mut circuit, Arc::new(mont_ctx.clone()),
+    // big_uint_b);
+
+    //         slots_a.push(mont_a);
+    //         slots_b.push(mont_b);
+    //     }
+
+    //     let crt_poly_a = CrtPoly::new(crt_ctx.clone(), slots_a);
+    //     let crt_poly_b = CrtPoly::new(crt_ctx.clone(), slots_b);
+
+    //     // Perform addition
+    //     let crt_sum = crt_poly_a.add(&crt_poly_b, &mut circuit);
+
+    //     // Finalize to get output
+    //     let outputs = crt_sum.finalize(&mut circuit);
+    //     circuit.output(outputs);
+
+    //     // Prepare test values - different values, some zero
+    //     let values_a = vec![0, 13, 0, 8]; // Mix of zero and non-zero values
+    //     let values_b = vec![7, 0, 15, 0]; // Different pattern of zeros
+
+    //     let mut input_values = Vec::new();
+    //     let (_, crt_bits, _) = params.to_crt();
+    //     let num_limbs_per_slot = crt_bits.div_ceil(LIMB_BIT_SIZE);
+
+    //     for (i, _mont_ctx) in crt_ctx.mont_ctxes.iter().enumerate() {
+    //         let val_a = values_a[i % values_a.len()];
+    //         let val_b = values_b[i % values_b.len()];
+
+    //         // Create limb values for each slot
+    //         input_values
+    //             .extend(create_test_value_from_u64(&params,
+    // val_a)[0..num_limbs_per_slot].to_vec());         input_values
+    //             .extend(create_test_value_from_u64(&params,
+    // val_b)[0..num_limbs_per_slot].to_vec());     }
+
+    //     // Evaluate the circuit
+    //     let plt_evaluator = PolyPltEvaluator::new();
+    //     let eval_result = circuit.eval(
+    //         &params,
+    //         &DCRTPoly::const_one(&params),
+    //         &input_values,
+    //         Some(plt_evaluator),
+    //     );
+
+    //     // Verify the results
+    //     assert_eq!(eval_result.len(), crt_ctx.mont_ctxes.len());
+
+    //     for (i, result_poly) in eval_result.iter().enumerate() {
+    //         let coeffs = result_poly.coeffs();
+
+    //         // Verify it's a constant polynomial (only first coefficient is non-zero)
+    //         for j in 1..coeffs.len() {
+    //             assert_eq!(*coeffs[j].value(), BigUint::from(0u32));
+    //         }
+
+    //         // Calculate expected value: (q/q_i) * ((sum of values in this slot) mod q_i)
+    //         let val_a = values_a[i % values_a.len()];
+    //         let val_b = values_b[i % values_b.len()];
+    //         let expected_slot_sum = val_a + val_b;
+
+    //         // Get the CRT modulus for this slot from params
+    //         let (moduli, _, _) = params.to_crt();
+    //         let q_i = BigUint::from(moduli[i]);
+    //         let expected_slot_sum_mod = BigUint::from(expected_slot_sum) % &q_i;
+    //         let expected_value = &crt_ctx.q_over_qis[i] * expected_slot_sum_mod;
+
+    //         assert_eq!(*coeffs[0].value(), expected_value);
+    //     }
+    // }
+
+    #[test]
+    fn test_crt_poly_add_large_values() {
+        let mut circuit = PolyCircuit::<DCRTPoly>::new();
+        let (inputs, params, crt_ctx) = create_test_context(&mut circuit, 2); // 2 values (a and b)
+
+        // Create two CrtPoly values from inputs
+        let mut slots_a = Vec::new();
+        let mut slots_b = Vec::new();
+        let mut input_offset = 0;
+        let (moduli, crt_bits, _) = params.to_crt();
+        let num_limbs_per_slot = crt_bits.div_ceil(LIMB_BIT_SIZE);
+
+        for mont_ctx in &crt_ctx.mont_ctxes {
+            // Create BigUintPoly from input gates for value A
+            let big_uint_a = crate::gadgets::big_uint::BigUintPoly::new(
+                mont_ctx.big_uint_ctx.clone(),
+                inputs[input_offset..input_offset + num_limbs_per_slot].to_vec(),
+            );
+            input_offset += num_limbs_per_slot;
+
+            // Create BigUintPoly from input gates for value B
+            let big_uint_b = crate::gadgets::big_uint::BigUintPoly::new(
+                mont_ctx.big_uint_ctx.clone(),
+                inputs[input_offset..input_offset + num_limbs_per_slot].to_vec(),
+            );
+            input_offset += num_limbs_per_slot;
+
+            // Convert to Montgomery form
+            let mont_a =
+                MontgomeryPoly::from_regular(&mut circuit, Arc::new(mont_ctx.clone()), big_uint_a);
+            let mont_b =
+                MontgomeryPoly::from_regular(&mut circuit, Arc::new(mont_ctx.clone()), big_uint_b);
+
+            slots_a.push(mont_a);
+            slots_b.push(mont_b);
+        }
+
+        let crt_poly_a = CrtPoly::new(crt_ctx.clone(), slots_a);
+        let crt_poly_b = CrtPoly::new(crt_ctx.clone(), slots_b);
+
+        // Perform addition
+        let crt_sum = crt_poly_a.add(&crt_poly_b, &mut circuit);
+
+        // Finalize to get output
+        let outputs = crt_sum.finalize(&mut circuit);
+        circuit.output(outputs);
+
+        // Generate random values less than each CRT slot's modulus q_i
+        use rand::Rng;
+        let mut rng = rand::rng();
+        let mut values_a = Vec::new();
+        let mut values_b = Vec::new();
+
+        for &q_i in moduli.iter() {
+            // Sample random values less than q_i but keep them small enough for lookup table
+            // let max_val = std::cmp::min(q_i - 1, 30); // Cap at 30 to stay within lookup table
+            // limits
+            let a_i = rng.random_range(0..q_i);
+            let b_i = rng.random_range(0..q_i);
+
+            values_a.push(a_i);
+            values_b.push(b_i);
+        }
+
+        let mut input_values = Vec::new();
+        let (_, crt_bits, _) = params.to_crt();
+
+        for (i, _mont_ctx) in crt_ctx.mont_ctxes.iter().enumerate() {
+            let val_a = values_a[i % values_a.len()];
+            let val_b = values_b[i % values_b.len()];
+
+            // Create limb values for each slot
+            input_values.extend(create_test_value_from_u64(&params, val_a));
+            input_values.extend(create_test_value_from_u64(&params, val_b));
+        }
+
+        // Evaluate the circuit
+        let plt_evaluator = PolyPltEvaluator::new();
+        let eval_result = circuit.eval(
+            &params,
+            &DCRTPoly::const_one(&params),
+            &input_values,
+            Some(plt_evaluator),
+        );
+
+        // Verify the results
+        assert_eq!(eval_result.len(), crt_ctx.mont_ctxes.len());
+
+        for (i, result_poly) in eval_result.iter().enumerate() {
+            let coeffs = result_poly.coeffs();
+
+            // Verify it's a constant polynomial (only first coefficient is non-zero)
+            for j in 1..coeffs.len() {
+                assert_eq!(*coeffs[j].value(), BigUint::from(0u32));
+            }
+
+            // Calculate expected value: (q/q_i) * ((sum of values in this slot) mod q_i)
+            let val_a = values_a[i % values_a.len()];
+            let val_b = values_b[i % values_b.len()];
+            let expected_slot_sum = val_a + val_b;
+
+            // Get the CRT modulus for this slot from params
+            let (moduli, _, _) = params.to_crt();
+            let q_i = BigUint::from(moduli[i]);
+            let expected_slot_sum_mod = BigUint::from(expected_slot_sum) % &q_i;
+            let expected_value = &crt_ctx.q_over_qis[i] * expected_slot_sum_mod;
+
+            assert_eq!(*coeffs[0].value(), expected_value);
+        }
+    }
+}
