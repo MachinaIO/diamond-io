@@ -201,7 +201,7 @@ pub fn build_poly_vec<M: PolyMatrix>(
 mod test {
     use mxx::{
         bgg::digits_to_int::DigitsToInt,
-        circuit::poly::PolyPltEvaluator,
+        lookup::poly::PolyPltEvaluator,
         poly::{
             dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
             PolyParams,

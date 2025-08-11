@@ -2,7 +2,8 @@ use diamond_io::{io::utils::build_final_digits_circuit, utils::init_tracing};
 use keccak_asm::Keccak256;
 use mxx::{
     bgg::{digits_to_int::DigitsToInt, public_key::BggPublicKey, sampler::BGGPublicKeySampler},
-    circuit::{bgg_public_key::BggPubKeyPltEvaluator, PolyCircuit},
+    circuit::PolyCircuit,
+    lookup::simple_eval::SimpleBggPubKeyEvaluator,
     matrix::dcrt_poly::DCRTPolyMatrix,
     poly::{
         dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
@@ -92,7 +93,7 @@ fn test_build_final_step_circuit() {
         &pubkeys[0],
         &pubkeys[1..],
         None::<
-            BggPubKeyPltEvaluator<
+            SimpleBggPubKeyEvaluator<
                 DCRTPolyMatrix,
                 DCRTPolyHashSampler<Keccak256>,
                 DCRTPolyUniformSampler,

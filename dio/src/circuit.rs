@@ -1,4 +1,4 @@
-use mxx::{circuit::PolyCircuit, lookup::public_lookup::PublicLut, poly::dcrt::poly::DCRTPoly};
+use mxx::{circuit::PolyCircuit, lookup::PublicLut, poly::dcrt::poly::DCRTPoly};
 
 pub enum BenchCircuit {
     AddMul(PolyCircuit<DCRTPoly>),

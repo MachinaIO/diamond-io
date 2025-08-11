@@ -13,8 +13,8 @@ use diamond_io::{
 };
 use mxx::{
     bgg::public_key::BggPublicKey,
-    circuit::poly::PolyPltEvaluator,
     element::{PolyElem, finite_ring::FinRingElem},
+    lookup::poly::PolyPltEvaluator,
     matrix::{PolyMatrix, dcrt_poly::DCRTPolyMatrix},
     poly::{
         Poly, PolyParams,

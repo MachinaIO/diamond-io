@@ -42,7 +42,7 @@ pub fn build_composite_circuit_from_public_and_fhe_dec<E: Evaluable>(
 mod tests {
     use mxx::{
         bgg::digits_to_int::DigitsToInt,
-        circuit::poly::PolyPltEvaluator,
+        lookup::poly::PolyPltEvaluator,
         poly::{
             dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
             Poly, PolyParams,

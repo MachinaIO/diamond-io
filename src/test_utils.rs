@@ -5,7 +5,7 @@ use crate::{
 use keccak_asm::Keccak256;
 use mxx::{
     circuit::PolyCircuit,
-    lookup::public_lookup::PublicLut,
+    lookup::PublicLut,
     matrix::dcrt_poly::DCRTPolyMatrix,
     poly::{
         dcrt::{params::DCRTPolyParams, poly::DCRTPoly},

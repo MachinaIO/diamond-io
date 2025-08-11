@@ -7,7 +7,7 @@ use itertools::Itertools;
 use mxx::parallel_iter;
 use mxx::{
     bgg::{digits_to_int::DigitsToInt, encoding::BggEncoding, sampler::BGGPublicKeySampler},
-    circuit::bgg_encoding::BggEncodingPltEvaluator,
+    lookup::simple_eval::SimpleBggEncodingPltEvaluator,
     matrix::PolyMatrix,
     poly::{Poly, PolyParams},
     sampler::{PolyHashSampler, PolyTrapdoorSampler},
@@ -341,7 +341,7 @@ where
         }
     }
     let bgg_encoding_plt_evaluator =
-        BggEncodingPltEvaluator::<M, SH>::new(hash_key, dir_path.clone(), p_l_plus_one);
+        SimpleBggEncodingPltEvaluator::<M, SH>::new(hash_key, dir_path.clone(), p_l_plus_one);
     let output_encodings = final_circuit.eval(
         params.as_ref(),
         &new_encodings[0],
