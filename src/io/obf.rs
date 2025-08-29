@@ -62,7 +62,8 @@ where
     let d = obf_params.d;
     let sampler_uniform = SU::new();
     let sampler_trapdoor = ST::new(&params, obf_params.trapdoor_sigma);
-    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+    // sample d+1 public keys explictly
+    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d + 1);
     let m_b = (1 + packed_input_size) * (d + 1) * (2 + log_base_q);
     let packed_output_size = public_data.packed_output_size;
 
@@ -80,9 +81,6 @@ where
     =============================================================================
     */
 
-    // Sample BGG+ encoding secret key
-    let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
-    log_mem("Sampled s_bars");
     // Sample FHE secret key t
     let t_bar = sampler_uniform.sample_uniform(&params, 1, 1, DistType::BitDist);
     log_mem("Sampled t_bar");
@@ -102,6 +100,9 @@ where
         reveals
     };
     let s_init = {
+        // Sample BGG+ encoding secret key
+        let s_bars = sampler_uniform.sample_uniform(&params, 1, d, DistType::BitDist).get_row(0);
+        log_mem("Sampled s_bars");
         let minus_one_poly = <SU::M as PolyMatrix>::P::const_minus_one(&params);
         let mut secrets = s_bars.to_vec();
         secrets.push(minus_one_poly);

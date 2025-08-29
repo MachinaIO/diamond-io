@@ -54,8 +54,8 @@ where
         hash_key.copy_from_slice(&bytes);
         hash_key
     };
-
-    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d);
+    // explictly sample d+1 public keys
+    let bgg_pubkey_sampler = BGGPublicKeySampler::<_, SH>::new(hash_key, d + 1);
     let public_data = PublicSampledData::<SH>::sample(&obf_params, hash_key);
     log_mem("Sampled public data");
     let packed_input_size = public_data.packed_input_size;
