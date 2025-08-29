@@ -3,7 +3,7 @@ use keccak_asm::Keccak256;
 use mxx::{
     bgg::{digits_to_int::DigitsToInt, public_key::BggPublicKey, sampler::BGGPublicKeySampler},
     circuit::PolyCircuit,
-    lookup::simple_eval::SimpleBggPubKeyEvaluator,
+    lookup::lwe_eval::LweBggPubKeyEvaluator,
     matrix::dcrt_poly::DCRTPolyMatrix,
     poly::{
         dcrt::{params::DCRTPolyParams, poly::DCRTPoly},
@@ -93,10 +93,9 @@ fn test_build_final_step_circuit() {
         &pubkeys[0],
         &pubkeys[1..],
         None::<
-            SimpleBggPubKeyEvaluator<
+            LweBggPubKeyEvaluator<
                 DCRTPolyMatrix,
                 DCRTPolyHashSampler<Keccak256>,
-                DCRTPolyUniformSampler,
                 DCRTPolyTrapdoorSampler,
             >,
         >,

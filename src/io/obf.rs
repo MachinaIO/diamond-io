@@ -11,7 +11,7 @@ use itertools::Itertools;
 use mxx::storage::store_and_drop_poly;
 use mxx::{
     bgg::{digits_to_int::DigitsToInt, public_key::BggPublicKey, sampler::BGGPublicKeySampler},
-    lookup::simple_eval::SimpleBggPubKeyEvaluator,
+    lookup::lwe_eval::LweBggPubKeyEvaluator,
     matrix::PolyMatrix,
     poly::{Poly, PolyParams},
     rlwe_enc::rlwe_encrypt,
@@ -401,7 +401,7 @@ where
         );
         log_mem("Computed final_circuit");
 
-        let bgg_plt_evaluator = SimpleBggPubKeyEvaluator::<M, SH, SU, ST>::new(
+        let bgg_plt_evaluator = LweBggPubKeyEvaluator::<M, SH, ST>::new(
             hash_key,
             sampler_trapdoor.clone(),
             b_l_plus_one.clone(),
