@@ -82,7 +82,7 @@ fn test_build_final_step_circuit() {
     let packed_input_size = input_size.div_ceil(dim) + 1;
 
     let bgg_pubkey_sampler =
-        BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(hash_key, d);
+        BGGPublicKeySampler::<_, DCRTPolyHashSampler<Keccak256>>::new(hash_key, d + 1);
     // consider inserting t on plaintext
     let reveal_plaintexts = [vec![true; packed_input_size], vec![false; 1]].concat();
     let pubkeys = bgg_pubkey_sampler.sample(&params, b"BGG_PUBKEY_INPUT:", &reveal_plaintexts);
