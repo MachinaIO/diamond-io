@@ -17,7 +17,7 @@ disk = ["libc", "memmap2", "tempfile"]
 cpu = []
 
 [dependencies]
-mxx = { git = "https://github.com/MachinaIO/mxx.git", branch = "feat/compatible-with-abe" }
+mxx = { git = "https://github.com/MachinaIO/mxx.git" }
 tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros"] }
 libc = { version = "0.2", optional = true }
 num-bigint = { version = "0.4", features = ["serde"] }
