@@ -4,33 +4,33 @@ on:
   workflow_dispatch:
     inputs:
       param_id:
-        description: 'Configuration ID (e.g. 36)'
+        description: "Configuration ID (e.g. 36)"
         required: true
-        default: '36'
+        default: "36"
       data_id:
-        description: 'Data ID (e.g. 53)'
+        description: "Data ID (e.g. 53)"
         required: true
-        default: '53'
+        default: "53"
       bench_type:
-        description: 'Benchmark type'
+        description: "Benchmark type"
         required: true
         type: choice
         options:
           - add-mul
           - plt
-        default: 'add-mul'
+        default: "add-mul"
       add_num:
-        description: 'Number of additions (add-mul only)'
+        description: "Number of additions (add-mul only)"
         required: false
-        default: '0'
+        default: "0"
       mul_num:
-        description: 'Number of multiplications (add-mul only)'
+        description: "Number of multiplications (add-mul only)"
         required: false
-        default: '0'
+        default: "0"
       t_num:
-        description: 't parameter (plt only)'
+        description: "t parameter (plt only)"
         required: false
-        default: '0'
+        default: "0"
 
 env:
   CARGO_TERM_COLOR: always
@@ -38,6 +38,7 @@ env:
 permissions:
   id-token: write
   contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
@@ -127,11 +128,18 @@ jobs:
       - name: Verify OpenFHE install
         run: ls -lah /usr/local/lib | grep OpenFHE
 
-      - name: Install dio
-        run: cargo install --path dio
+      # === changed: install abe instead of dio ===
+      - name: Checkout arithmetic-abe
+        uses: actions/checkout@v4
+        with:
+          repository: MachinaIO/arithmetic-abe
+          path: arithmetic-abe
 
-      - name: Verify dio
-        run: which dio
+      - name: Install abe
+        run: cargo install --path arithmetic-abe/abe
+
+      - name: Verify abe
+        run: which abe
 
       - name: Run benchmarks (stream + log)
         env:
@@ -140,27 +148,10 @@ jobs:
         run: |
           mkdir -p logs
 
-          case "${{ github.event.inputs.bench_type }}" in
-            "add-mul")
-              BENCH_FLAGS="--bench-type add-mul \
-                            --add-num ${{ github.event.inputs.add_num }} \
-                            --mul-num ${{ github.event.inputs.mul_num }}"
-              ;;
-            "plt")
-              BENCH_FLAGS="--bench-type plt \
-                            --t-num ${{ github.event.inputs.t_num }}"
-              ;;
-            *)
-              echo "Unknown bench_type"; exit 1
-              ;;
-          esac
-          echo "Using flags: $BENCH_FLAGS"
-
+          # Run abe with hardcoded config path as requested
           (
-            dio run-bench \
-              -c e2e/dio-config.${{ github.event.inputs.param_id }}.toml \
-              -o /tmp/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }} \
-              $BENCH_FLAGS \
+            abe run \
+              --config e2e/dummy.param.toml \
             2>&1 | tee logs/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }}.log
           ) &
           pid=$!
