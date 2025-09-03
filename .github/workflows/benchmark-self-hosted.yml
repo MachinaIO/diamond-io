@@ -128,11 +128,11 @@ jobs:
       - name: Verify OpenFHE install
         run: ls -lah /usr/local/lib | grep OpenFHE
 
-      # === changed: install abe instead of dio ===
       - name: Checkout arithmetic-abe
         uses: actions/checkout@v4
         with:
           repository: MachinaIO/arithmetic-abe
+          ref: fix/dir
           path: arithmetic-abe
 
       - name: Install abe
