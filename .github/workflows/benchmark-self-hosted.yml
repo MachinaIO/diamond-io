@@ -11,26 +11,10 @@ on:
         description: "Data ID (e.g. 53)"
         required: true
         default: "53"
-      bench_type:
-        description: "Benchmark type"
+      height:
+        description: "Height of binary tree"
         required: true
-        type: choice
-        options:
-          - add-mul
-          - plt
-        default: "add-mul"
-      add_num:
-        description: "Number of additions (add-mul only)"
-        required: false
-        default: "0"
-      mul_num:
-        description: "Number of multiplications (add-mul only)"
-        required: false
-        default: "0"
-      t_num:
-        description: "t parameter (plt only)"
-        required: false
-        default: "0"
+        default: "1"
 
 env:
   CARGO_TERM_COLOR: always
@@ -152,6 +136,8 @@ jobs:
           (
             abe run \
               --config e2e/dummy.param.toml \
+              -h ${{ github.event.inputs.height }} \
+              -d /tmp/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }} \
             2>&1 | tee logs/data_${{ github.event.inputs.data_id }}_param_${{ github.event.inputs.param_id }}.log
           ) &
           pid=$!
