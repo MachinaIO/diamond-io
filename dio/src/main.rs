@@ -12,6 +12,7 @@ use diamond_io::{
     utils::{calculate_directory_size, init_tracing},
 };
 use mxx::{
+    arithmetic::circuit::{ArithGateId, ArithmeticCircuit},
     bgg::public_key::BggPublicKey,
     element::{PolyElem, finite_ring::FinRingElem},
     lookup::poly::PolyPltEvaluator,
@@ -37,6 +38,8 @@ use std::{
     sync::Arc,
 };
 use tracing::info;
+
+use crate::config::SimABEConfig;
 
 pub mod circuit;
 pub mod config;
@@ -99,6 +102,13 @@ enum Commands {
 
         #[arg(long, requires_if("plt", "bench_type"))]
         t_num: Option<usize>,
+    },
+    SimABENorm {
+        #[arg(short, long)]
+        config: PathBuf,
+
+        #[arg(short, long)]
+        out_path: PathBuf,
     },
     BuildCircuit {
         #[arg(short, long)]
@@ -280,6 +290,35 @@ async fn main() {
 
             let packed_input_norms = vec![BigUint::one(), params.modulus().as_ref().clone()];
             let norms = final_circuit.simulate_bgg_norm(
+                params.ring_dimension(),
+                params.base_bits(),
+                packed_input_norms,
+            );
+            let norm_json = serde_json::to_string(&norms).unwrap();
+            fs::write(out_path, norm_json.as_bytes()).unwrap()
+        }
+        Commands::SimABENorm { config, out_path } => {
+            let dio_config: SimABEConfig =
+                serde_json::from_reader(fs::File::open(&config).unwrap()).unwrap();
+            let log_n = dio_config.log_ring_dim;
+            let n = 2u32.pow(log_n);
+            let max_crt_depth = dio_config.max_crt_depth;
+            let crt_bits = dio_config.crt_bits;
+            let base_bits = dio_config.base_bits;
+            let params = DCRTPolyParams::new(n, max_crt_depth, crt_bits, base_bits);
+            let mut arith = ArithmeticCircuit::<DCRTPoly>::setup(
+                &params,
+                dio_config.limb_bit_size,
+                dio_config.input_len,
+                false,
+                true,
+            );
+            let add_idx = arith.add(ArithGateId::new(0), ArithGateId::new(1)); // a + b
+            let mul_idx = arith.mul(add_idx, ArithGateId::new(2)); // (a + b) * c
+            let final_idx = arith.sub(mul_idx, ArithGateId::new(0)); // (a + b) * c - a
+            arith.output(final_idx);
+            let packed_input_norms = vec![BigUint::one(), params.modulus().as_ref().clone()];
+            let norms = arith.poly_circuit.simulate_bgg_norm(
                 params.ring_dimension(),
                 params.base_bits(),
                 packed_input_norms,
