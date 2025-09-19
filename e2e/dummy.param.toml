@@ -1,11 +1,8 @@
-num_inputs = 3
-num_packed_limbs = 1
-limb_bit_size = 3
-crt_depth = 2
+limb_bit_size = 5
+crt_depth = 3
 crt_bits = 17
-d = 1
-e_b_sigma = 1.2
-message = true
+e_b_sigma = 0.0
+message = [true, false, true, false]
 ring_dimension = 4
 base_bits = 17
-input = ["10", "3", "5"]
+input = [["10", "3", "5", "7"], ["2", "4", "6", "8"], ["1", "1", "1", "1"]]
