@@ -1,5 +1,12 @@
 # diamond-io
 
+> [!IMPORTANT]
+> **⚠️ This repository is ARCHIVED and no longer maintained.**
+>
+> **The latest Diamond iO implementation now lives in the [mxx repository](https://github.com/MachinaIO/mxx).**
+>
+> All active development, bug fixes, and new features happen there. **Please use [mxx](https://github.com/MachinaIO/mxx) instead of this repository.** The code here is kept only for historical reference.
+
 Implementation of [Diamond iO](https://eprint.iacr.org/2025/236), a straightforward construction of indistinguishability obfuscation (iO).
 
 ## Installation
