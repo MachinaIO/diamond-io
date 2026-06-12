@@ -1,0 +1,8 @@
+limb_bit_size = 5
+crt_depth = 3
+crt_bits = 17
+e_b_sigma = 0.0
+message = [true, false, true, false]
+ring_dimension = 4
+base_bits = 17
+input = [["10", "3", "5", "7"], ["2", "4", "6", "8"], ["1", "1", "1", "1"]]
